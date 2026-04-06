@@ -24,6 +24,7 @@ import Reports from '@/pages/Reports'
 import SmartAgents from '@/pages/SmartAgents'
 import VendorFinder from '@/pages/VendorFinder'
 import AdminSettings from '@/pages/AdminSettings'
+import WorkOrders from '@/pages/WorkOrders'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(
@@ -54,6 +55,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="vendor-finder" element={<VendorFinder />} />
               <Route path="smart-agents" element={<SmartAgents />} />
               <Route path="building-agent" element={<BuildingAgent />} />
+              <Route path="work-orders" element={<WorkOrders />} />
               <Route path="admin" element={<AdminSettings />} />
             </Route>
           </Route>

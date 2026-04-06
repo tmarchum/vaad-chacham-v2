@@ -7,7 +7,7 @@ import {
   Building2, LayoutDashboard, Home, CreditCard, Wallet,
   Wrench, Store, CalendarClock, ShieldCheck, Bot,
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
-  Users, Settings, LogOut, Menu, X, ChevronDown,
+  Users, Settings, LogOut, Menu, X, ChevronDown, ClipboardList,
 } from 'lucide-react'
 
 const NAV_SECTIONS = [
@@ -32,6 +32,7 @@ const NAV_SECTIONS = [
     label: 'תחזוקה',
     items: [
       { to: '/issues',        label: 'תקלות',          icon: Wrench },
+      { to: '/work-orders',   label: 'הזמנות עבודה',   icon: ClipboardList },
       { to: '/vendor-finder', label: 'מציאת ספקים',    icon: Search },
       { to: '/vendors',       label: 'ספקים',          icon: Store },
       { to: '/recurring-tasks', label: 'משימות חוזרות', icon: CalendarClock },

@@ -476,10 +476,10 @@ function MaintenanceTab({ issues, period, buildingId }) {
   }, [issues, buildingId, period])
 
   const openIssues = filtered.filter(
-    (i) => i.status !== 'resolved' && i.status !== 'closed'
+    (i) => !['completed', 'closed'].includes(i.status)
   )
   const resolvedIssues = filtered.filter(
-    (i) => i.status === 'resolved' || i.status === 'closed'
+    (i) => ['completed', 'closed'].includes(i.status)
   )
   const totalCost = sumBy(
     filtered.filter((i) => i.cost != null),
@@ -534,9 +534,18 @@ function MaintenanceTab({ issues, period, buildingId }) {
   const CATEGORY_COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#22c55e', '#06b6d4', '#a855f7']
 
   function statusBadge(status) {
-    if (status === 'open') return <Badge variant="danger">פתוחה</Badge>
-    if (status === 'in_progress') return <Badge variant="warning">בטיפול</Badge>
-    if (status === 'resolved' || status === 'closed') return <Badge variant="success">סגורה</Badge>
+    const STATUS_MAP = {
+      reported:     { label: 'דווח',       variant: 'default' },
+      acknowledged: { label: 'התקבל',      variant: 'info'    },
+      quoted:       { label: 'הוצע מחיר',  variant: 'info'    },
+      approved:     { label: 'אושר',       variant: 'warning' },
+      scheduled:    { label: 'מתוכנן',     variant: 'warning' },
+      in_progress:  { label: 'בטיפול',     variant: 'warning' },
+      completed:    { label: 'הושלם',      variant: 'success' },
+      closed:       { label: 'סגור',       variant: 'success' },
+    }
+    const s = STATUS_MAP[status]
+    if (s) return <Badge variant={s.variant}>{s.label}</Badge>
     return <Badge>{status}</Badge>
   }
 

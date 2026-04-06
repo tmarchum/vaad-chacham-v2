@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,7 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
-import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List } from 'lucide-react'
+import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -32,8 +33,10 @@ const CATEGORY_FILTERS = ['הכל', 'ביטוח', 'פרוטוקולים', 'תק�
 const EMPTY_FORM = {
   buildingId: '', title: '', type: '', category: '',
   uploadedAt: new Date().toISOString().slice(0, 10),
-  expiresAt: '', notes: '', fileSize: '',
+  expiresAt: '', notes: '', fileSize: '', fileUrl: '',
 }
+
+const STORAGE_BUCKET = 'documents'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -234,6 +237,9 @@ export default function Documents() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [detailDoc, setDetailDoc] = useState(null)
   const [deleteDoc, setDeleteDoc] = useState(null)
+  const [selectedFile, setSelectedFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
 
   // Building options for FormSelect
   const buildingOptions = useMemo(
@@ -303,6 +309,7 @@ export default function Documents() {
   function openCreate() {
     setEditingDoc(null)
     setForm(EMPTY_FORM)
+    setSelectedFile(null)
     setFormOpen(true)
   }
 
@@ -317,9 +324,33 @@ export default function Documents() {
       expiresAt:   doc.expiresAt   ?? '',
       notes:       doc.notes       ?? '',
       fileSize:    doc.fileSize    ?? '',
+      fileUrl:     doc.fileUrl     ?? doc.file_url ?? '',
     })
+    setSelectedFile(null)
     setDetailDoc(null)
     setFormOpen(true)
+  }
+
+  async function uploadFileToStorage(file, buildingId) {
+    const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `${buildingId || 'general'}/${Date.now()}_${sanitizedName}`
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(path, file, { cacheControl: '3600', upsert: false })
+    if (error) {
+      console.error('Storage upload error:', error)
+      return null
+    }
+    const { data: { publicUrl } } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(data.path)
+    return { url: publicUrl, size: formatFileSize(file.size) }
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   function handleFormChange(field, value) {
@@ -332,14 +363,31 @@ export default function Documents() {
     })
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (editingDoc) {
-      update(editingDoc.id, form)
-    } else {
-      create(form)
+    setUploading(true)
+    try {
+      let fileUrl = form.fileUrl
+      let fileSize = form.fileSize
+
+      if (selectedFile) {
+        const result = await uploadFileToStorage(selectedFile, form.buildingId)
+        if (result) {
+          fileUrl = result.url
+          fileSize = result.size
+        }
+      }
+
+      const docData = { ...form, fileUrl, file_url: fileUrl, fileSize }
+      if (editingDoc) {
+        update(editingDoc.id, docData)
+      } else {
+        create(docData)
+      }
+      setFormOpen(false)
+    } finally {
+      setUploading(false)
     }
-    setFormOpen(false)
   }
 
   function handleDelete() {
@@ -563,15 +611,56 @@ export default function Documents() {
               label="גודל קובץ"
               value={form.fileSize}
               onChange={(e) => handleFormChange('fileSize', e.target.value)}
-              placeholder="2.4MB"
+              placeholder="מחושב אוטומטית בעת העלאת קובץ"
             />
+
+            {/* File upload */}
+            <div>
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
+                העלאת קובץ
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-4 w-4 ml-1" />
+                  בחר קובץ
+                </Button>
+                {selectedFile && (
+                  <span className="text-sm text-[var(--text-secondary)] truncate">
+                    {selectedFile.name}
+                  </span>
+                )}
+                {!selectedFile && form.fileUrl && (
+                  <a
+                    href={form.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-[var(--primary)] underline flex items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    קובץ קיים
+                  </a>
+                )}
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 ביטול
               </Button>
-              <Button type="submit">
-                {editingDoc ? 'שמור שינויים' : 'הוסף מסמך'}
+              <Button type="submit" disabled={uploading}>
+                {uploading ? 'מעלה...' : editingDoc ? 'שמור שינויים' : 'הוסף מסמך'}
               </Button>
             </div>
           </form>
@@ -602,6 +691,22 @@ export default function Documents() {
           />
           <DetailRow label="גודל קובץ"            value={detailDoc.fileSize} />
           <DetailRow label="הערות"                value={detailDoc.notes} />
+          {(detailDoc.fileUrl || detailDoc.file_url) && (
+            <DetailRow
+              label="קובץ"
+              value={
+                <a
+                  href={detailDoc.fileUrl || detailDoc.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[var(--primary)] underline text-sm"
+                >
+                  <Download className="h-4 w-4" />
+                  הורד / צפה בקובץ
+                </a>
+              }
+            />
+          )}
         </DetailModal>
       )}
 
