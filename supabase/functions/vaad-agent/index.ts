@@ -61,6 +61,26 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   "legal_tip": "טיפ משפטי חשוב לבניין"
 }`,
 
+  issue_analysis: `אתה מומחה לניהול תחזוקה ותקלות בבתים משותפים בישראל.
+תפקידך: קבל תקלה, פרק אותה לאבחון מקצועי, והפק דרישה ברורה לספק ולועד הבית.
+אתה מכיר את כל תחומי המקצוע הרלוונטיים: אינסטלציה, חשמל, מעלית, בטיחות אש, בנייה, מיזוג אויר, גינון.
+אתה מכיר את ספקי השירות בישראל ואת טווחי המחירים הסבירים לכל עבודה.
+תמיד ענה בעברית. היה ספציפי — תן מספרים, מועדים, ופעולות ממשיות.
+פלט תשובתך כ-JSON בפורמט הבא בלבד:
+{
+  "diagnosis": "אבחון טכני מקצועי של התקלה — מה בדיוק הבעיה ומה גרם לה",
+  "scope": "היקף העבודה הנדרשת לתיקון",
+  "risks": "מה הסיכון אם לא מטפלים מיידית",
+  "urgency_reasoning": "הסבר מדוע דחיפות זו מוצדקת",
+  "recommended_vendor_category": "קטגוריית בעל מקצוע נדרשת",
+  "recommended_vendor_name": "שם ספק מהרשימה שסופקה אם מתאים, אחרת null",
+  "recommended_vendor_reason": "מדוע ספק זה (או קטגוריה זו) מתאים",
+  "estimated_cost_range": "טווח עלות משוער בש״ח",
+  "vendor_message": "הודעת וואטסאפ מוכנה לשליחה לספק — מקצועית, ברורה, כוללת כתובת ופרטי הבניין",
+  "committee_summary": "סיכום לפרוטוקול ועד הבית — פורמלי, תמציתי, מפרט את הבעיה, הפעולות הנדרשות, והעלות המשוערת",
+  "action_steps": ["צעד ראשון לביצוע מיידי", "צעד שני", "צעד שלישי"]
+}`,
+
   building_health: `אתה סוכן בריאות בניין חכם לניהול ועד בית בישראל.
 תפקידך לנתח את ציון הבריאות הכולל של הבניין על פי הנתונים שקיבלת, ולהגיש המלצות ממוקדות לשיפור.
 אתה מכיר את אתגרי הניהול של בתים משותפים בישראל: גבייה, תחזוקה, רגולציה, ועד ביתי.
@@ -153,6 +173,32 @@ ${Object.entries(byCategory as Record<string, number> ?? {}).map(([cat, amt]) =>
 ${(missingRequirements as Array<Record<string, unknown>>)?.map((r: Record<string, unknown>) => `- ${r.title} [${r.law}, עדיפות: ${r.priority}]`).join('\n') ?? 'אין'}
 
 נתח את עמידת הבניין ברגולציה ותן המלצות.`
+    }
+
+    case 'issue_analysis': {
+      const { issue, buildingAddress, availableVendors, buildingFloors, buildingUnits } = ctx
+      const iss = issue as Record<string, unknown>
+      const vendors = availableVendors as Array<Record<string, unknown>> ?? []
+      const vendorList = vendors.length > 0
+        ? vendors.map((v: Record<string, unknown>) => `- ${v.name} (${v.category}, דירוג: ${v.rating ?? 'לא ידוע'}, טלפון: ${v.phone ?? '—'})`).join('\n')
+        : 'אין ספקים רשומים'
+      return base + `פרטי התקלה:
+- כותרת: ${iss.title}
+- תיאור: ${iss.description || 'לא סופק'}
+- קטגוריה: ${iss.category || 'כללי'}
+- עדיפות: ${iss.priority}
+- סטטוס: ${iss.status}
+- תאריך דיווח: ${iss.reportedAt || 'לא ידוע'}
+
+פרטי הבניין:
+- כתובת: ${buildingAddress || 'לא ידוע'}
+- קומות: ${buildingFloors || 'לא ידוע'}
+- יחידות דיור: ${buildingUnits || 'לא ידוע'}
+
+ספקים רשומים בבניין:
+${vendorList}
+
+אנא פרק את התקלה לאבחון מקצועי ופק דרישה מפורטת לספק ולועד.`
     }
 
     case 'building_health': {

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { callVaadAgent } from '@/lib/vaadAgent'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,7 +15,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
   FileText, Calendar, DollarSign, Users, LayoutList, Columns3,
-  ArrowRight, Send, Check, X,
+  ArrowRight, Send, Check, X, Sparkles, Copy, CheckCheck, RefreshCw,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -180,6 +181,13 @@ function Issues() {
   const [vendorAssignIssue, setVendorAssignIssue] = useState(null)
   const [selectedVendorName, setSelectedVendorName] = useState('')
   const [showTemplates, setShowTemplates] = useState(false)
+
+  // AI issue analysis
+  const [aiAnalysisIssue, setAiAnalysisIssue] = useState(null)
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null)
+  const [aiAnalysisError, setAiAnalysisError] = useState(null)
+  const [copiedField, setCopiedField] = useState(null)
 
   // Maps
   const buildingMap = useMemo(() => {
@@ -398,6 +406,50 @@ function Issues() {
       remove(deleteTarget.id)
       setDeleteTarget(null)
     }
+  }
+
+  // AI issue analysis
+  const openAiAnalysis = async (iss) => {
+    setAiAnalysisIssue(iss)
+    setAiAnalysisResult(null)
+    setAiAnalysisError(null)
+    setAiAnalysisLoading(true)
+    const building = buildingMap[iss.buildingId]
+    const relevantVendors = allVendors.filter(
+      (v) => !iss.category || !v.category ||
+        v.category.toLowerCase().includes(iss.category.toLowerCase()) ||
+        iss.category.toLowerCase().includes(v.category.toLowerCase())
+    ).slice(0, 8)
+    try {
+      const result = await callVaadAgent('issue_analysis', building?.name ?? 'הבניין', {
+        issue: {
+          title: iss.title,
+          description: iss.description,
+          category: iss.category,
+          priority: iss.priority,
+          status: iss.status,
+          reportedAt: iss.reportedAt,
+        },
+        buildingAddress: [building?.address, building?.city].filter(Boolean).join(', '),
+        buildingFloors: building?.floors,
+        buildingUnits: building?.total_units,
+        availableVendors: relevantVendors.map((v) => ({
+          name: v.name, category: v.category, rating: v.rating, phone: v.phone,
+        })),
+      })
+      setAiAnalysisResult(result)
+    } catch (e) {
+      setAiAnalysisError(e.message)
+    } finally {
+      setAiAnalysisLoading(false)
+    }
+  }
+
+  const copyToClipboard = (text, field) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field)
+      setTimeout(() => setCopiedField(null), 2000)
+    })
   }
 
   // Quick actions
@@ -900,6 +952,14 @@ function Issues() {
 
               {/* Action buttons */}
               <div className="flex flex-wrap gap-2 pt-4">
+                <Button
+                  size="sm"
+                  onClick={() => openAiAnalysis(iss)}
+                  className="gap-1.5 bg-[var(--primary)] text-white hover:opacity-90"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  ניתוח AI
+                </Button>
                 {renderQuickActions(iss)}
                 <Button variant="outline" size="sm" onClick={() => openEdit(iss)}>
                   <Pencil className="h-3.5 w-3.5" />
@@ -929,6 +989,139 @@ function Issues() {
         onConfirm={handleDelete}
         itemName={deleteTarget ? (deleteTarget.title || 'תקלה') : ''}
       />
+
+      {/* AI Issue Analysis Dialog */}
+      <Dialog open={!!aiAnalysisIssue} onOpenChange={(open) => { if (!open) setAiAnalysisIssue(null) }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-[var(--primary)]" />
+              ניתוח תקלה — {aiAnalysisIssue?.title}
+            </DialogTitle>
+          </DialogHeader>
+
+          {aiAnalysisLoading && (
+            <div className="flex items-center gap-3 py-8 justify-center">
+              <RefreshCw className="h-5 w-5 animate-spin text-[var(--primary)]" />
+              <span className="text-[var(--text-secondary)]">Claude מנתח את התקלה...</span>
+            </div>
+          )}
+
+          {aiAnalysisError && (
+            <div className="py-4">
+              <p className="text-sm text-[var(--danger)]">שגיאה: {aiAnalysisError}</p>
+            </div>
+          )}
+
+          {aiAnalysisResult && (
+            <div className="space-y-5 py-2">
+
+              {/* Diagnosis */}
+              <div className="rounded-xl border border-[var(--border)] p-4 space-y-1">
+                <h4 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+                  🔍 אבחון מקצועי
+                </h4>
+                <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{aiAnalysisResult.diagnosis}</p>
+                {aiAnalysisResult.scope && (
+                  <p className="text-sm text-[var(--text-secondary)]"><span className="font-medium text-[var(--text-primary)]">היקף עבודה:</span> {aiAnalysisResult.scope}</p>
+                )}
+              </div>
+
+              {/* Risks + Urgency */}
+              {(aiAnalysisResult.risks || aiAnalysisResult.urgency_reasoning) && (
+                <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-1">
+                  <h4 className="text-sm font-bold text-red-700">⚠️ סיכונים ודחיפות</h4>
+                  {aiAnalysisResult.risks && (
+                    <p className="text-sm text-red-800">{aiAnalysisResult.risks}</p>
+                  )}
+                  {aiAnalysisResult.urgency_reasoning && (
+                    <p className="text-xs text-red-600 mt-1">{aiAnalysisResult.urgency_reasoning}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Vendor recommendation */}
+              <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
+                <h4 className="text-sm font-bold text-[var(--text-primary)]">🔧 המלצת ספק</h4>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <Badge variant="info">{aiAnalysisResult.recommended_vendor_category}</Badge>
+                  {aiAnalysisResult.recommended_vendor_name && (
+                    <Badge variant="success">{aiAnalysisResult.recommended_vendor_name}</Badge>
+                  )}
+                  {aiAnalysisResult.estimated_cost_range && (
+                    <Badge variant="warning">עלות משוערת: {aiAnalysisResult.estimated_cost_range}</Badge>
+                  )}
+                </div>
+                {aiAnalysisResult.recommended_vendor_reason && (
+                  <p className="text-xs text-[var(--text-secondary)]">{aiAnalysisResult.recommended_vendor_reason}</p>
+                )}
+              </div>
+
+              {/* Action steps */}
+              {aiAnalysisResult.action_steps?.length > 0 && (
+                <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
+                  <h4 className="text-sm font-bold text-[var(--text-primary)]">📋 צעדים לביצוע</h4>
+                  <ol className="space-y-1 mr-1">
+                    {aiAnalysisResult.action_steps.map((step, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                        <span className="shrink-0 w-5 h-5 rounded-full bg-[var(--primary)] text-white text-xs flex items-center justify-center mt-0.5">
+                          {i + 1}
+                        </span>
+                        {step}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* Vendor message */}
+              {aiAnalysisResult.vendor_message && (
+                <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-[var(--text-primary)]">💬 הודעה לספק</h4>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(aiAnalysisResult.vendor_message, 'vendor')}
+                    >
+                      {copiedField === 'vendor'
+                        ? <><CheckCheck className="h-3.5 w-3.5 text-green-600" /> הועתק</>
+                        : <><Copy className="h-3.5 w-3.5" /> העתק</>
+                      }
+                    </Button>
+                  </div>
+                  <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap font-sans leading-relaxed bg-[var(--surface-hover)] rounded-lg p-3">
+                    {aiAnalysisResult.vendor_message}
+                  </pre>
+                </div>
+              )}
+
+              {/* Committee summary */}
+              {aiAnalysisResult.committee_summary && (
+                <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-[var(--text-primary)]">📝 סיכום לועד הבית</h4>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(aiAnalysisResult.committee_summary, 'committee')}
+                    >
+                      {copiedField === 'committee'
+                        ? <><CheckCheck className="h-3.5 w-3.5 text-green-600" /> הועתק</>
+                        : <><Copy className="h-3.5 w-3.5" /> העתק</>
+                      }
+                    </Button>
+                  </div>
+                  <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap font-sans leading-relaxed bg-[var(--surface-hover)] rounded-lg p-3">
+                    {aiAnalysisResult.committee_summary}
+                  </pre>
+                </div>
+              )}
+
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Template Picker Dialog */}
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
