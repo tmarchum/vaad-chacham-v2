@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 import { callVaadAgent } from '@/lib/vaadAgent'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
@@ -22,11 +23,12 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STATUSES = ['reported', 'acknowledged', 'quoted', 'approved', 'scheduled', 'in_progress', 'completed', 'closed']
+const STATUSES = ['reported', 'pending_committee', 'acknowledged', 'quoted', 'approved', 'scheduled', 'in_progress', 'completed', 'closed']
 
 const STATUS_MAP = {
-  reported:     { label: 'דווח',       variant: 'danger' },
-  acknowledged: { label: 'אושר קבלה', variant: 'warning' },
+  reported:          { label: 'דווח',           variant: 'danger' },
+  pending_committee: { label: 'ממתין לועד',     variant: 'warning' },
+  acknowledged:      { label: 'אושר קבלה',      variant: 'warning' },
   quoted:       { label: 'הצעת מחיר', variant: 'info' },
   approved:     { label: 'מאושר',     variant: 'info' },
   scheduled:    { label: 'מתוזמן',    variant: 'default' },
@@ -188,6 +190,14 @@ function Issues() {
   const [aiAnalysisResult, setAiAnalysisResult] = useState(null)
   const [aiAnalysisError, setAiAnalysisError] = useState(null)
   const [copiedField, setCopiedField] = useState(null)
+
+  // Issue workflow
+  const [workflowIssue, setWorkflowIssue] = useState(null)
+  const [workflowStep, setWorkflowStep] = useState(1) // 1=analysis, 2=committee, 3=vendor
+  const [committeeMembers, setCommitteeMembers] = useState([])
+  const [vendorSearchLoading, setVendorSearchLoading] = useState(false)
+  const [externalVendors, setExternalVendors] = useState([])
+  const [quoteRequestCopied, setQuoteRequestCopied] = useState(null)
 
   // Maps
   const buildingMap = useMemo(() => {
@@ -450,6 +460,109 @@ function Issues() {
       setCopiedField(field)
       setTimeout(() => setCopiedField(null), 2000)
     })
+  }
+
+  // Open full workflow for an issue
+  const openWorkflow = async (iss) => {
+    setWorkflowIssue(iss)
+    setWorkflowStep(1)
+    setExternalVendors([])
+    setQuoteRequestCopied(null)
+
+    // Load committee members for this building
+    const { data: memberships } = await supabase
+      .from('building_memberships')
+      .select('*, profiles(first_name, last_name, email)')
+      .eq('building_id', iss.buildingId)
+      .in('role', ['committee_chair', 'committee', 'manager'])
+    setCommitteeMembers(memberships ?? [])
+
+    // If no AI analysis yet, trigger it
+    if (!aiAnalysisResult || aiAnalysisIssue?.id !== iss.id) {
+      openAiAnalysis(iss)
+    }
+  }
+
+  // Generate WhatsApp link for a phone number + message
+  const buildWhatsAppLink = (phone, message) => {
+    const cleaned = (phone || '').replace(/\D/g, '').replace(/^0/, '972')
+    const encoded = encodeURIComponent(message)
+    return `https://wa.me/${cleaned}?text=${encoded}`
+  }
+
+  // Generate committee notification message for an issue
+  const buildCommitteeMessage = (iss, analysis) => {
+    const building = buildingMap[iss.buildingId]
+    const priority = PRIORITY_MAP[iss.priority]?.label || iss.priority
+    return `*דיווח תקלה — ${building?.name || 'הבניין'}*
+
+📋 *כותרת:* ${iss.title}
+🔴 *עדיפות:* ${priority}
+📁 *קטגוריה:* ${iss.category || 'כללי'}
+📝 *תיאור:* ${iss.description || '—'}
+
+${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
+⚠️ *סיכון:* ${analysis.risks || '—'}
+💰 *עלות משוערת:* ${analysis.estimated_cost_range || 'לא ידוע'}` : ''}
+
+אנא אשרו: האם להמשיך לקבלת הצעות מחיר?
+✅ כן — נפתח פנייה לספקים
+❌ לא — נסגור את התקלה`
+  }
+
+  // Generate quote request message for a vendor
+  const buildVendorQuoteMessage = (iss, vendor, building) => {
+    return `שלום ${vendor.name || vendor.business_name || ''},
+
+אנו *ועד הבית* ב${building?.name || 'הבניין'}${building?.address ? `, ${building.address}` : ''}.
+
+נדרשת הצעת מחיר לעבודה הבאה:
+📋 *${iss.title}*
+🔧 קטגוריה: ${iss.category || 'כללי'}
+📝 ${iss.description || ''}
+
+אנא שלחו הצעת מחיר בהקדם. נשמח לתאם ביקור לסקירה.
+
+תודה`
+  }
+
+  // Search for external vendors via Madrag scraping
+  const searchExternalVendors = async (category, building) => {
+    setVendorSearchLoading(true)
+    setExternalVendors([])
+    try {
+      const result = await callVaadAgent('vendor_search', building?.name || 'הבניין', {
+        category,
+        city: building?.city || '',
+        address: building?.address || '',
+      })
+      setExternalVendors(result.vendors ?? [])
+    } catch (e) {
+      // Fallback: generate search links
+      setExternalVendors([])
+    } finally {
+      setVendorSearchLoading(false)
+    }
+  }
+
+  // Approve issue for quotes
+  const approveForQuotes = (iss) => {
+    update(iss.id, { status: 'approved_for_quotes' })
+    setWorkflowIssue((prev) => prev ? { ...prev, status: 'approved_for_quotes' } : prev)
+    setWorkflowStep(3)
+  }
+
+  // Reject/close issue by committee
+  const closeByCommittee = (iss) => {
+    update(iss.id, { status: 'closed' })
+    setWorkflowIssue(null)
+  }
+
+  // Mark as sent to committee
+  const markSentToCommittee = (iss) => {
+    update(iss.id, { status: 'pending_committee' })
+    setWorkflowIssue((prev) => prev ? { ...prev, status: 'pending_committee' } : prev)
+    setWorkflowStep(2)
   }
 
   // Quick actions
@@ -954,6 +1067,15 @@ function Issues() {
               <div className="flex flex-wrap gap-2 pt-4">
                 <Button
                   size="sm"
+                  onClick={() => openWorkflow(iss)}
+                  className="gap-1.5"
+                  style={{ background: 'var(--primary)', color: 'white' }}
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  תהליך מלא
+                </Button>
+                <Button
+                  size="sm"
                   onClick={() => openAiAnalysis(iss)}
                   className="gap-1.5 bg-[var(--primary)] text-white hover:opacity-90"
                 >
@@ -989,6 +1111,289 @@ function Issues() {
         onConfirm={handleDelete}
         itemName={deleteTarget ? (deleteTarget.title || 'תקלה') : ''}
       />
+
+      {/* Full Issue Workflow Dialog */}
+      <Dialog open={!!workflowIssue} onOpenChange={(open) => { if (!open) setWorkflowIssue(null) }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ArrowRight className="h-5 w-5 text-[var(--primary)]" />
+              תהליך טיפול — {workflowIssue?.title}
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-0 mb-4">
+            {['1. ניתוח', '2. ועד', '3. ספקים'].map((label, i) => (
+              <div key={i} className="flex items-center flex-1">
+                <div className="flex flex-col items-center flex-1">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors"
+                    style={{
+                      background: workflowStep > i + 1 ? 'var(--success, #22c55e)' : workflowStep === i + 1 ? 'var(--primary)' : 'var(--border)',
+                      color: workflowStep >= i + 1 ? 'white' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {workflowStep > i + 1 ? '✓' : i + 1}
+                  </div>
+                  <span className="text-xs mt-1 text-[var(--text-secondary)]">{label.split('. ')[1]}</span>
+                </div>
+                {i < 2 && (
+                  <div className="h-0.5 flex-1 mx-1 mb-4" style={{ background: workflowStep > i + 1 ? 'var(--success, #22c55e)' : 'var(--border)' }} />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* STEP 1: Analysis */}
+          {workflowStep === 1 && (
+            <div className="space-y-4">
+              {(aiAnalysisLoading || (!aiAnalysisResult && !aiAnalysisError)) && (
+                <div className="flex items-center gap-3 py-8 justify-center">
+                  <RefreshCw className="h-5 w-5 animate-spin text-[var(--primary)]" />
+                  <span className="text-[var(--text-secondary)]">Claude מנתח את התקלה...</span>
+                </div>
+              )}
+              {aiAnalysisError && (
+                <p className="text-sm text-[var(--danger)] py-4">{aiAnalysisError}</p>
+              )}
+              {aiAnalysisResult && (
+                <>
+                  <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
+                    <p className="text-xs font-bold text-[var(--text-secondary)]">🔍 אבחון</p>
+                    <p className="text-sm text-[var(--text-primary)]">{aiAnalysisResult.diagnosis}</p>
+                    {aiAnalysisResult.scope && <p className="text-xs text-[var(--text-secondary)]">היקף: {aiAnalysisResult.scope}</p>}
+                  </div>
+                  {aiAnalysisResult.risks && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 p-3">
+                      <p className="text-xs font-bold text-red-700">⚠️ סיכון</p>
+                      <p className="text-sm text-red-800">{aiAnalysisResult.risks}</p>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {aiAnalysisResult.recommended_vendor_category && (
+                      <Badge variant="info">{aiAnalysisResult.recommended_vendor_category}</Badge>
+                    )}
+                    {aiAnalysisResult.estimated_cost_range && (
+                      <Badge variant="warning">עלות: {aiAnalysisResult.estimated_cost_range}</Badge>
+                    )}
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button onClick={() => { markSentToCommittee(workflowIssue); setWorkflowStep(2) }} disabled={!workflowIssue}>
+                      המשך — הגשה לוועד
+                      <ArrowRight className="h-4 w-4 mr-1" />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* STEP 2: Committee */}
+          {workflowStep === 2 && workflowIssue && (() => {
+            const building = buildingMap[workflowIssue.buildingId]
+            const msg = buildCommitteeMessage(workflowIssue, aiAnalysisResult)
+            return (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-[var(--border)] p-4 space-y-2">
+                  <p className="text-sm font-bold text-[var(--text-primary)] mb-2">📨 הודעה לוועד הבית</p>
+                  <pre className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap font-sans leading-relaxed bg-[var(--surface-hover)] rounded-lg p-3 text-sm">{msg}</pre>
+                  <Button size="sm" variant="ghost" onClick={() => copyToClipboard(msg, 'committee_msg')}>
+                    {copiedField === 'committee_msg' ? <><CheckCheck className="h-3.5 w-3.5 text-green-600 ml-1" />הועתק</> : <><Copy className="h-3.5 w-3.5 ml-1" />העתק הודעה</>}
+                  </Button>
+                </div>
+
+                {/* Committee members with WhatsApp buttons */}
+                {committeeMembers.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">חברי ועד הבניין ({committeeMembers.length})</p>
+                    {committeeMembers.map((m) => {
+                      const profile = m.profiles
+                      const name = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.email : m.user_id
+                      const phone = profile?.phone || ''
+                      return (
+                        <div key={m.id} className="flex items-center justify-between p-2.5 rounded-lg border border-[var(--border)]">
+                          <div>
+                            <p className="text-sm font-medium text-[var(--text-primary)]">{name}</p>
+                            <p className="text-xs text-[var(--text-secondary)]">{m.role === 'committee_chair' ? 'יו"ר ועד' : m.role === 'committee' ? 'חבר ועד' : 'מנהל'}{phone ? ` · ${phone}` : ''}</p>
+                          </div>
+                          {phone ? (
+                            <a href={buildWhatsAppLink(phone, msg)} target="_blank" rel="noopener noreferrer">
+                              <Button size="sm" variant="outline">💬 שלח WhatsApp</Button>
+                            </a>
+                          ) : (
+                            <span className="text-xs text-[var(--text-secondary)]">אין טלפון</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--text-secondary)]">לא הוגדרו חברי ועד לבניין זה. ניתן להוסיף בהגדרות מערכת.</p>
+                )}
+
+                {/* Decision buttons */}
+                <div className="pt-2 border-t border-[var(--border)]">
+                  <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">החלטת ועד:</p>
+                  <div className="flex gap-3">
+                    <Button onClick={() => { approveForQuotes(workflowIssue) }} className="gap-1.5">
+                      <CheckCheck className="h-4 w-4" />
+                      אשר — קבל הצעות מחיר
+                    </Button>
+                    <Button variant="destructive" onClick={() => closeByCommittee(workflowIssue)}>
+                      סגור תקלה
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* STEP 3: Vendors */}
+          {workflowStep === 3 && workflowIssue && (() => {
+            const building = buildingMap[workflowIssue.buildingId]
+            const category = aiAnalysisResult?.recommended_vendor_category || workflowIssue.category || ''
+
+            // Find matching vendors from DB
+            const matchedVendors = allVendors.filter((v) => {
+              if (!v.category && !category) return true
+              const vc = (v.category || '').toLowerCase()
+              const ic = category.toLowerCase()
+              return vc.includes(ic) || ic.includes(vc)
+            }).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 6)
+
+            const totalVendors = matchedVendors.length + externalVendors.length
+            const needsMore = matchedVendors.length < 2
+
+            return (
+              <div className="space-y-4">
+                {/* Summary */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                      ספקים מתאימים — {category || 'כללי'}
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      {matchedVendors.length} במאגר{externalVendors.length > 0 ? ` + ${externalVendors.length} ממדרג` : ''}
+                    </p>
+                  </div>
+                  {needsMore && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => searchExternalVendors(category, building)}
+                      disabled={vendorSearchLoading}
+                    >
+                      {vendorSearchLoading ? <><RefreshCw className="h-3.5 w-3.5 animate-spin ml-1" />מחפש...</> : '🔍 חפש במדרג'}
+                    </Button>
+                  )}
+                </div>
+
+                {needsMore && externalVendors.length === 0 && !vendorSearchLoading && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                    נמצאו פחות מ-2 ספקים במאגר לקטגוריה זו. לחץ "חפש במדרג" לאיתור ספקים נוספים.
+                  </div>
+                )}
+
+                {/* DB vendors */}
+                {matchedVendors.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">ממאגר הספקים</p>
+                    {matchedVendors.map((v) => {
+                      const quoteMsg = buildVendorQuoteMessage(workflowIssue, v, building)
+                      return (
+                        <div key={v.id} className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm text-[var(--text-primary)]">{v.name}</p>
+                              <p className="text-xs text-[var(--text-secondary)]">{v.category}{v.rating ? ` · ⭐ ${v.rating}` : ''}{v.phone ? ` · ${v.phone}` : ''}</p>
+                            </div>
+                            <div className="flex gap-1.5">
+                              <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `vendor_${v.id}`)}>
+                                {quoteRequestCopied === `vendor_${v.id}` || copiedField === `vendor_${v.id}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                              </Button>
+                              {v.phone && (
+                                <a href={buildWhatsAppLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
+                                  <Button size="sm" variant="outline">💬 שלח</Button>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* External vendors from Madrag */}
+                {externalVendors.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">ממדרג / חיפוש חיצוני</p>
+                    {externalVendors.map((v, i) => {
+                      const quoteMsg = buildVendorQuoteMessage(workflowIssue, v, building)
+                      return (
+                        <div key={i} className="rounded-lg border border-[var(--border)] p-3 space-y-2 border-dashed">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-sm text-[var(--text-primary)]">{v.name || v.business_name}</p>
+                              <p className="text-xs text-[var(--text-secondary)]">
+                                {v.category || category}{v.rating ? ` · ⭐ ${v.rating}` : ''}{v.phone ? ` · ${v.phone}` : ''}
+                                {v.source && <span className="mr-1 text-[var(--text-muted)]">· {v.source}</span>}
+                              </p>
+                            </div>
+                            <div className="flex gap-1.5">
+                              <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `ext_${i}`)}>
+                                {copiedField === `ext_${i}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                              </Button>
+                              {v.phone && (
+                                <a href={buildWhatsAppLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
+                                  <Button size="sm" variant="outline">💬 שלח</Button>
+                                </a>
+                              )}
+                              {v.url && (
+                                <a href={v.url} target="_blank" rel="noopener noreferrer">
+                                  <Button size="sm" variant="ghost">🔗</Button>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* External search links if still not enough */}
+                {totalVendors < 2 && !vendorSearchLoading && (
+                  <div className="rounded-xl border border-[var(--border)] p-3 space-y-2">
+                    <p className="text-xs font-semibold text-[var(--text-secondary)]">חיפוש ידני:</p>
+                    <div className="flex flex-wrap gap-2">
+                      <a href={`https://www.madrag.co.il/search/?q=${encodeURIComponent(category)}&loc=${encodeURIComponent(building?.city || '')}`} target="_blank" rel="noopener noreferrer">
+                        <Button size="sm" variant="outline">🔍 מדרג</Button>
+                      </a>
+                      <a href={`https://www.google.com/search?q=${encodeURIComponent(`${category} ${building?.city || ''} ספק`)}`} target="_blank" rel="noopener noreferrer">
+                        <Button size="sm" variant="outline">🔍 Google</Button>
+                      </a>
+                      <a href={`https://www.d.co.il/search/?q=${encodeURIComponent(category)}`} target="_blank" rel="noopener noreferrer">
+                        <Button size="sm" variant="outline">🔍 דפי זהב</Button>
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-[var(--border)]">
+                  <Button
+                    onClick={() => { update(workflowIssue.id, { status: 'quoted' }); setWorkflowIssue(null) }}
+                    disabled={totalVendors < 1}
+                  >
+                    סיים — המשך למעקב הצעות
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* AI Issue Analysis Dialog */}
       <Dialog open={!!aiAnalysisIssue} onOpenChange={(open) => { if (!open) setAiAnalysisIssue(null) }}>

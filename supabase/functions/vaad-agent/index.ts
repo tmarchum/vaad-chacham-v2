@@ -250,6 +250,97 @@ Deno.serve(async (req: Request) => {
 
     const { agentType, buildingName, contextData } = await req.json()
 
+    // ---------------------------------------------------------------------------
+    // Special handler: vendor_search — scrapes Madrag + Google (no Claude needed)
+    // ---------------------------------------------------------------------------
+    if (agentType === 'vendor_search') {
+      const { category, city, address } = contextData as Record<string, string>
+      const vendors: Array<Record<string, string>> = []
+
+      // Try Madrag
+      try {
+        const madragUrl = `https://www.madrag.co.il/search/?q=${encodeURIComponent(category)}&loc=${encodeURIComponent(city || '')}`
+        const madragRes = await fetch(madragUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VaadBot/1.0)' },
+          signal: AbortSignal.timeout(8000),
+        })
+        if (madragRes.ok) {
+          const html = await madragRes.text()
+          // Parse business cards — Madrag structure: data-business-id, class="business-name", class="phone"
+          const nameMatches = html.matchAll(/class="[^"]*business[^"]*name[^"]*"[^>]*>([^<]{2,60})</gi)
+          const phoneMatches = html.matchAll(/(?:href="tel:|class="[^"]*phone[^"]*"[^>]*>)\+?[\d\-\s]{7,15}/gi)
+          const ratingMatches = html.matchAll(/class="[^"]*rating[^"]*"[^>]*>\s*([\d.]+)/gi)
+          const urlMatches = html.matchAll(/href="(https?:\/\/(?:www\.)?madrag\.co\.il\/business\/[^"]+)"/gi)
+
+          const names = [...nameMatches].map((m) => m[1].trim()).filter((n) => n.length > 1)
+          const phones = [...phoneMatches].map((m) => m[0].replace(/[^\d+]/g, ''))
+          const ratings = [...ratingMatches].map((m) => m[1])
+          const urls = [...urlMatches].map((m) => m[1])
+
+          for (let i = 0; i < Math.min(names.length, 6); i++) {
+            vendors.push({
+              name: names[i],
+              phone: phones[i] || '',
+              rating: ratings[i] || '',
+              category: category,
+              source: 'מדרג',
+              url: urls[i] || madragUrl,
+            })
+          }
+        }
+      } catch (_e) {
+        // Madrag scraping failed — continue to fallbacks
+      }
+
+      // Try Yad2 / דפי זהב API if Madrag returned nothing
+      if (vendors.length === 0) {
+        try {
+          const dzUrl = `https://www.d.co.il/search/?q=${encodeURIComponent(category + ' ' + city)}`
+          const dzRes = await fetch(dzUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(6000),
+          })
+          if (dzRes.ok) {
+            const html = await dzRes.text()
+            const nameMatches = html.matchAll(/class="[^"]*business[^"]*title[^"]*"[^>]*>([^<]{2,60})</gi)
+            const phoneMatches = html.matchAll(/[\d]{2,3}-[\d]{7}/g)
+            const names = [...nameMatches].map((m) => m[1].trim()).filter((n) => n.length > 1)
+            const phones = [...phoneMatches].map((m) => m[0])
+            for (let i = 0; i < Math.min(names.length, 5); i++) {
+              vendors.push({
+                name: names[i],
+                phone: phones[i] || '',
+                rating: '',
+                category: category,
+                source: 'דפי זהב',
+                url: dzUrl,
+              })
+            }
+          }
+        } catch (_e) {
+          // fallback failed
+        }
+      }
+
+      // Always return search links even if scraping failed
+      return new Response(
+        JSON.stringify({
+          result: {
+            vendors,
+            search_links: {
+              madrag: `https://www.madrag.co.il/search/?q=${encodeURIComponent(category)}&loc=${encodeURIComponent(city || '')}`,
+              google: `https://www.google.com/search?q=${encodeURIComponent(category + ' ' + city + ' ביקורות')}`,
+              dafey_zahav: `https://www.d.co.il/search/?q=${encodeURIComponent(category + ' ' + city)}`,
+            },
+            category,
+            city,
+          },
+          agentType,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     if (!agentType || !SYSTEM_PROMPTS[agentType]) {
       return new Response(
         JSON.stringify({ error: `Unknown agentType: ${agentType}` }),
