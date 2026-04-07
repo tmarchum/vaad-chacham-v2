@@ -6,9 +6,10 @@ import { Badge } from '@/components/ui/badge'
 import { TabGroup } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { callVaadAgent } from '@/lib/vaadAgent'
 import {
   Bot, Brain, Wrench, AlertTriangle, CheckCircle, TrendingUp,
-  Star, Zap, Shield, Activity, RefreshCw, PlusCircle,
+  Star, Zap, Shield, Activity, RefreshCw, PlusCircle, Sparkles,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,9 @@ function StarRating({ value = 0 }) {
 export default function BuildingAgent() {
   const { selectedBuilding } = useBuildingContext()
   const [activeTab, setActiveTab] = useState('health')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiResult, setAiResult] = useState(null)
+  const [aiError, setAiError] = useState(null)
 
   const { data: allIssues, create: createIssue } = useCollection('issues')
   const { data: allTasks } = useCollection('recurringTasks')
@@ -453,6 +457,37 @@ export default function BuildingAgent() {
   }
 
   // ---------------------------------------------------------------------------
+  // AI Health Analysis
+  // ---------------------------------------------------------------------------
+
+  async function runAiHealthAnalysis() {
+    if (!selectedBuilding || !healthScore) return
+    setAiLoading(true)
+    setAiResult(null)
+    setAiError(null)
+    try {
+      const result = await callVaadAgent('building_health', selectedBuilding.name, {
+        overallScore: healthScore.overall,
+        complianceScore: healthScore.complianceScore,
+        maintenanceScore: healthScore.maintenanceScore,
+        issueScore: healthScore.issueScore,
+        financialScore: healthScore.financialScore,
+        assetScore: healthScore.assetScore,
+        openIssues: healthScore.openIssues,
+        urgentIssues: healthScore.urgentIssues,
+        overdueTasks: healthScore.overdueTasks,
+        vendorCount: allVendors.length,
+        recommendations: recommendations.slice(0, 5),
+      })
+      setAiResult(result)
+    } catch (e) {
+      setAiError(e.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Tab definitions
   // ---------------------------------------------------------------------------
 
@@ -505,6 +540,14 @@ export default function BuildingAgent() {
             ניתוח חכם ל{selectedBuilding.name || 'בניין'}
           </p>
         </div>
+        <Button
+          onClick={runAiHealthAnalysis}
+          disabled={aiLoading || !healthScore}
+          className="gap-2"
+        >
+          <Sparkles className="h-4 w-4" />
+          {aiLoading ? 'מנתח...' : 'ניתוח AI'}
+        </Button>
       </div>
 
       {/* Hero Health Card */}
@@ -585,6 +628,83 @@ export default function BuildingAgent() {
           {/* ---------------------------------------------------------------- */}
           {/* Tab: בריאות הבניין                                               */}
           {/* ---------------------------------------------------------------- */}
+          {/* AI Analysis Panel */}
+          {(aiLoading || aiResult || aiError) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-[var(--primary)]" />
+                  ניתוח AI — בריאות הבניין
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {aiLoading && (
+                  <div className="flex items-center gap-3 py-4">
+                    <RefreshCw className="h-5 w-5 animate-spin text-[var(--primary)]" />
+                    <span className="text-[var(--text-secondary)]">Claude מנתח את הבניין...</span>
+                  </div>
+                )}
+                {aiError && (
+                  <p className="text-sm text-[var(--danger)]">שגיאה: {aiError}</p>
+                )}
+                {aiResult && (
+                  <div className="space-y-5">
+                    {/* Summary */}
+                    {aiResult.summary && (
+                      <p className="text-sm text-[var(--text-primary)] leading-relaxed bg-[var(--surface-hover)] rounded-lg p-3">
+                        {aiResult.summary}
+                      </p>
+                    )}
+
+                    {/* Top priorities */}
+                    {aiResult.top_priorities?.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">עדיפויות לטיפול מיידי</h4>
+                        <div className="space-y-2">
+                          {aiResult.top_priorities.map((p, i) => (
+                            <div key={i} className="flex items-start gap-2 p-2 rounded-lg border border-[var(--border)]">
+                              <Badge variant={p.urgency === 'high' ? 'danger' : p.urgency === 'medium' ? 'warning' : 'default'}>
+                                {p.urgency === 'high' ? 'דחוף' : p.urgency === 'medium' ? 'בינוני' : 'נמוך'}
+                              </Badge>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-[var(--text-primary)]">{p.title}</p>
+                                <p className="text-xs text-[var(--text-secondary)] mt-0.5">{p.action}</p>
+                                {p.impact && <p className="text-xs text-[var(--primary)] mt-0.5">השפעה: {p.impact}</p>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Quick wins */}
+                    {aiResult.quick_wins?.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">ניצחונות מהירים השבוע</h4>
+                        <ul className="space-y-1">
+                          {aiResult.quick_wins.map((w, i) => (
+                            <li key={i} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+                              <CheckCircle className="h-4 w-4 text-[var(--success,#22c55e)] shrink-0 mt-0.5" />
+                              {w}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Risk forecast */}
+                    {aiResult.risk_forecast && (
+                      <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
+                        <p className="text-xs font-semibold text-orange-700 mb-1">תחזית סיכונים 30 יום</p>
+                        <p className="text-sm text-orange-800">{aiResult.risk_forecast}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {activeTab === 'health' && healthScore && (
             <div className="grid grid-cols-1 gap-4">
               {[

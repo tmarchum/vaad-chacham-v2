@@ -196,8 +196,16 @@ function Payments() {
     setDetailPayment(null)
   }
 
+  const [formErrors, setFormErrors] = useState({})
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const errs = {}
+    if (!form.unitId) errs.unitId = 'חובה לבחור דירה'
+    if (!form.amount || isNaN(Number(form.amount))) errs.amount = 'חובה להזין סכום'
+    if (!form.month) errs.month = 'חובה לבחור חודש'
+    if (Object.keys(errs).length > 0) { setFormErrors(errs); return }
+    setFormErrors({})
     const unit = unitMap[form.unitId]
     const data = {
       ...form,
@@ -488,26 +496,26 @@ function Payments() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <FormSelect
-              label="דירה"
+              label="דירה *"
               value={form.unitId}
               onChange={setField('unitId')}
               options={allUnitOptions}
               placeholder="בחר דירה"
-              required
+              error={formErrors.unitId}
             />
             <FormField
-              label="סכום"
+              label="סכום *"
               type="number"
               value={form.amount}
               onChange={setField('amount')}
-              required
+              error={formErrors.amount}
             />
             <FormField
-              label="חודש (YYYY-MM)"
+              label="חודש (YYYY-MM) *"
               value={form.month}
               onChange={setField('month')}
               placeholder="2026-03"
-              required
+              error={formErrors.month}
             />
             <FormSelect
               label="סטטוס"

@@ -60,6 +60,20 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   "best_practices": [{ "title": "כותרת", "description": "תיאור", "benefit": "תועלת" }],
   "legal_tip": "טיפ משפטי חשוב לבניין"
 }`,
+
+  building_health: `אתה סוכן בריאות בניין חכם לניהול ועד בית בישראל.
+תפקידך לנתח את ציון הבריאות הכולל של הבניין על פי הנתונים שקיבלת, ולהגיש המלצות ממוקדות לשיפור.
+אתה מכיר את אתגרי הניהול של בתים משותפים בישראל: גבייה, תחזוקה, רגולציה, ועד ביתי.
+תמיד ענה בעברית. היה קונקרטי: תן מספרים, תאריכים, ופעולות ספציפיות.
+פלט תשובתך כ-JSON בפורמט הבא בלבד:
+{
+  "summary": "סיכום מצב הבניין בפסקה אחת קצרה",
+  "health_assessment": "good|warning|critical",
+  "top_priorities": [{ "title": "כותרת", "urgency": "high|medium|low", "action": "פעולה מומלצת ספציפית", "impact": "השפעה צפויה על ציון הבריאות" }],
+  "score_breakdown": [{ "category": "קטגוריה", "score": 85, "assessment": "הערכה קצרה", "improvement": "כיצד לשפר בקלות" }],
+  "quick_wins": ["פעולה מהירה שניתן לבצע השבוע 1", "פעולה מהירה 2", "פעולה מהירה 3"],
+  "risk_forecast": "תחזית סיכונים ל-30 הימים הקרובים אם לא יינקטו צעדים"
+}`,
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +153,30 @@ ${Object.entries(byCategory as Record<string, number> ?? {}).map(([cat, amt]) =>
 ${(missingRequirements as Array<Record<string, unknown>>)?.map((r: Record<string, unknown>) => `- ${r.title} [${r.law}, עדיפות: ${r.priority}]`).join('\n') ?? 'אין'}
 
 נתח את עמידת הבניין ברגולציה ותן המלצות.`
+    }
+
+    case 'building_health': {
+      const { overallScore, complianceScore, maintenanceScore, issueScore, financialScore, assetScore,
+              openIssues, urgentIssues, overdueTasks, recommendations, vendorCount } = ctx
+      return base + `ציון בריאות כולל: ${overallScore}/100
+
+פירוט ציונים:
+- עמידה ברגולציה: ${complianceScore}/100
+- תחזוקה שוטפת: ${maintenanceScore}/100
+- ניהול תקלות: ${issueScore}/100
+- מצב פיננסי (גבייה): ${financialScore}/100
+- מצב ציוד ומערכות: ${assetScore}/100
+
+נתונים נוספים:
+- תקלות פתוחות: ${openIssues}
+- תקלות דחופות: ${urgentIssues}
+- משימות באיחור: ${overdueTasks}
+- ספקים פעילים: ${vendorCount}
+
+המלצות מערכת בעדיפות גבוהה:
+${(recommendations as Array<Record<string, unknown>>)?.slice(0, 5).map((r: Record<string, unknown>) => `- [${r.urgency}] ${r.title}: ${r.reason}`).join('\n') ?? 'אין'}
+
+נתח את מצב הבניין ותן המלצות מעשיות.`
     }
 
     default:

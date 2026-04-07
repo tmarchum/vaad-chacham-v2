@@ -306,6 +306,7 @@ function Issues() {
 
   const openCreate = () => {
     setEditingId(null)
+    setFormErrors({})
     setForm({
       ...EMPTY_FORM,
       reportedAt: new Date().toISOString().slice(0, 10),
@@ -317,6 +318,7 @@ function Issues() {
 
   const openCreateFromTemplate = (template) => {
     setEditingId(null)
+    setFormErrors({})
     setForm({
       ...EMPTY_FORM,
       title: template.title,
@@ -331,6 +333,7 @@ function Issues() {
 
   const openEdit = (iss) => {
     setEditingId(iss.id)
+    setFormErrors({})
     setForm({
       buildingId: iss.buildingId || '',
       unitId: iss.unitId || iss.reportedBy || '',
@@ -350,8 +353,21 @@ function Issues() {
     setDetailIssue(null)
   }
 
+  const [formErrors, setFormErrors] = useState({})
+
+  const validateForm = () => {
+    const errs = {}
+    if (!form.buildingId) errs.buildingId = 'חובה לבחור בניין'
+    if (!form.title?.trim()) errs.title = 'חובה להזין כותרת'
+    if (!form.priority) errs.priority = 'חובה לבחור עדיפות'
+    return errs
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const errs = validateForm()
+    if (Object.keys(errs).length > 0) { setFormErrors(errs); return }
+    setFormErrors({})
     const data = {
       ...form,
       cost: form.cost !== '' ? Number(form.cost) : null,
@@ -1083,12 +1099,12 @@ function Issues() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <FormSelect
-              label="בניין"
+              label="בניין *"
               value={form.buildingId}
               onChange={setField('buildingId')}
               options={buildingOptions}
               placeholder="בחר בניין"
-              required
+              error={formErrors.buildingId}
             />
             <FormSelect
               label="דירה"
@@ -1098,10 +1114,10 @@ function Issues() {
               placeholder="בחר דירה"
             />
             <FormField
-              label="כותרת"
+              label="כותרת *"
               value={form.title}
               onChange={setField('title')}
-              required
+              error={formErrors.title}
             />
             <FormTextarea
               label="תיאור"
@@ -1117,10 +1133,11 @@ function Issues() {
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormSelect
-                label="עדיפות"
+                label="עדיפות *"
                 value={form.priority}
                 onChange={setField('priority')}
                 options={PRIORITY_OPTIONS}
+                error={formErrors.priority}
               />
               <FormSelect
                 label="סטטוס"

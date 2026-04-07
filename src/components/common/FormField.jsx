@@ -3,7 +3,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
-function FieldWrapper({ label, className, children }) {
+function FieldWrapper({ label, className, error, children }) {
   return (
     <div className={cn('space-y-1.5', className)}>
       {label && (
@@ -12,35 +12,39 @@ function FieldWrapper({ label, className, children }) {
         </label>
       )}
       {children}
+      {error && (
+        <p className="text-xs text-red-500 mt-1">{error}</p>
+      )}
     </div>
   )
 }
 
-function FormField({ label, className, ...props }) {
+function FormField({ label, className, error, ...props }) {
   return (
-    <FieldWrapper label={label} className={className}>
-      <Input {...props} />
+    <FieldWrapper label={label} className={className} error={error}>
+      <Input className={cn(error && 'border-red-400')} {...props} />
     </FieldWrapper>
   )
 }
 
-function FormSelect({ label, className, ...props }) {
+function FormSelect({ label, className, error, ...props }) {
   return (
-    <FieldWrapper label={label} className={className}>
-      <Select {...props} />
+    <FieldWrapper label={label} className={className} error={error}>
+      <Select className={cn(error && 'border-red-400')} {...props} />
     </FieldWrapper>
   )
 }
 
-function FormBool({ label, value, onChange, className, ...props }) {
+function FormBool({ label, value, onChange, className, error, ...props }) {
   const boolOptions = [
     { value: 'true', label: 'כן' },
     { value: 'false', label: 'לא' },
   ]
 
   return (
-    <FieldWrapper label={label} className={className}>
+    <FieldWrapper label={label} className={className} error={error}>
       <Select
+        className={cn(error && 'border-red-400')}
         value={value === true || value === 'true' ? 'true' : 'false'}
         onChange={(e) => {
           const boolVal = e.target.value === 'true'
@@ -53,10 +57,10 @@ function FormBool({ label, value, onChange, className, ...props }) {
   )
 }
 
-function FormTextarea({ label, className, ...props }) {
+function FormTextarea({ label, className, error, ...props }) {
   return (
-    <FieldWrapper label={label} className={className}>
-      <Textarea {...props} />
+    <FieldWrapper label={label} className={className} error={error}>
+      <Textarea className={cn(error && 'border-red-400')} {...props} />
     </FieldWrapper>
   )
 }

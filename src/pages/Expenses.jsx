@@ -164,8 +164,17 @@ function Expenses() {
     setDetailExpense(null)
   }
 
+  const [formErrors, setFormErrors] = useState({})
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const errs = {}
+    if (!form.buildingId) errs.buildingId = 'חובה לבחור בניין'
+    if (!form.description?.trim()) errs.description = 'חובה להזין תיאור'
+    if (!form.amount || isNaN(Number(form.amount))) errs.amount = 'חובה להזין סכום'
+    if (!form.date) errs.date = 'חובה להזין תאריך'
+    if (Object.keys(errs).length > 0) { setFormErrors(errs); return }
+    setFormErrors({})
     const data = {
       ...form,
       amount: form.amount !== '' ? Number(form.amount) : null,
@@ -384,17 +393,17 @@ function Expenses() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <FormField
-              label="תאריך"
+              label="תאריך *"
               type="date"
               value={form.date}
               onChange={setField('date')}
-              required
+              error={formErrors.date}
             />
             <FormField
-              label="תיאור"
+              label="תיאור *"
               value={form.description}
               onChange={setField('description')}
-              required
+              error={formErrors.description}
             />
             <FormSelect
               label="קטגוריה"
@@ -402,14 +411,13 @@ function Expenses() {
               onChange={setField('category')}
               options={CATEGORIES}
               placeholder="בחר קטגוריה"
-              required
             />
             <FormField
-              label="סכום"
+              label="סכום *"
               type="number"
               value={form.amount}
               onChange={setField('amount')}
-              required
+              error={formErrors.amount}
             />
             <FormField
               label="ספק"
@@ -417,11 +425,12 @@ function Expenses() {
               onChange={setField('vendor')}
             />
             <FormSelect
-              label="בניין"
+              label="בניין *"
               value={form.buildingId}
               onChange={setField('buildingId')}
               options={buildingOptions}
               placeholder="בחר בניין"
+              error={formErrors.buildingId}
             />
             <FormTextarea
               label="הערות"
