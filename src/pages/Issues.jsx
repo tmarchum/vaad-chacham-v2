@@ -388,6 +388,9 @@ function Issues() {
     setFormErrors({})
     const data = {
       ...form,
+      unitId: form.unitId || null,
+      category: form.category || null,
+      vendor_name: form.vendor_name || null,
       cost: form.cost !== '' ? Number(form.cost) : null,
       estimatedCost: form.estimatedCost !== '' ? Number(form.estimatedCost) : null,
       reportedAt: form.reportedAt ? new Date(form.reportedAt).toISOString() : null,
