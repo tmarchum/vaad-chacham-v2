@@ -35,6 +35,11 @@ const CATEGORY_OPTIONS = [
   { value: 'ריצוף', label: 'ריצוף' },
   { value: 'פסולת ופינוי', label: 'פסולת ופינוי' },
   { value: 'הדברה', label: 'הדברה' },
+  { value: 'דלתות וחלונות', label: 'דלתות וחלונות' },
+  { value: 'מסגרות', label: 'מסגרות' },
+  { value: 'מערכות בטיחות אש', label: 'מערכות בטיחות אש' },
+  { value: 'גגות', label: 'גגות' },
+  { value: 'שירותי חירום', label: 'שירותי חירום' },
   { value: 'אחר', label: 'אחר' },
 ]
 
@@ -60,6 +65,7 @@ const EMPTY_FORM = {
   is_blacklisted: false,
   sanctions: '',
   notes: '',
+  specialties: '',
 }
 
 const TABS = [
@@ -173,6 +179,15 @@ function VendorCard({ vendor, stats, onClick, compareMode, isSelected, onToggleC
         {/* Category */}
         {vendor.category && (
           <Badge variant="default" className="mb-2">{vendor.category}</Badge>
+        )}
+
+        {/* Specialties */}
+        {vendor.specialties && (
+          <div className="flex flex-wrap gap-1 mb-1">
+            {vendor.specialties.split(',').slice(0, 3).map((s, i) => (
+              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">{s.trim()}</span>
+            ))}
+          </div>
         )}
 
         {/* Tags */}
@@ -502,6 +517,7 @@ function Vendors() {
       is_blacklisted: vendor.is_blacklisted || false,
       sanctions: vendor.sanctions || '',
       notes: vendor.notes || '',
+      specialties: vendor.specialties || '',
     })
     setFormOpen(true)
     setDetailVendor(null)
@@ -766,6 +782,18 @@ function Vendors() {
             <DetailRow label="מספר רישיון" value={detailVendor.license_number} />
             <DetailRow label="תוקף ביטוח" value={detailVendor.insurance_expiry} />
             <DetailRow label="אזור שירות" value={detailVendor.service_area} />
+            {detailVendor.specialties && (
+              <DetailRow
+                label="התמחויות"
+                value={
+                  <div className="flex flex-wrap gap-1">
+                    {detailVendor.specialties.split(',').map((s, i) => (
+                      <Badge key={i} variant="info">{s.trim()}</Badge>
+                    ))}
+                  </div>
+                }
+              />
+            )}
             <DetailRow
               label="זמינות 24/7"
               value={detailVendor.available_24_7 ? <Badge variant="info">כן</Badge> : 'לא'}
@@ -942,6 +970,12 @@ function Vendors() {
               label="אזור שירות"
               value={form.service_area}
               onChange={setField('service_area')}
+            />
+            <FormTextarea
+              label="התמחויות (מופרד בפסיקים)"
+              value={form.specialties}
+              onChange={setField('specialties')}
+              placeholder="מחזירי דלתות, צירים, ידיות, סגרי שמן, תיקון מנעולים, התקנת דלתות"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormBool

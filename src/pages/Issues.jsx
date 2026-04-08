@@ -49,7 +49,8 @@ const SLA_HOURS = { urgent: 24, high: 48, medium: 7 * 24, low: 14 * 24 }
 
 const CATEGORIES = [
   'אינסטלציה', 'חשמל', 'מעלית', 'ניקיון', 'בטיחות',
-  'חניה', 'רעש', 'מבנה', 'גינון', 'אחר',
+  'חניה', 'רעש', 'מבנה', 'גינון', 'דלתות וחלונות',
+  'מסגרות', 'איטום', 'מיזוג אוויר', 'אחר',
 ]
 
 const CATEGORY_OPTIONS = CATEGORIES.map((c) => ({ value: c, label: c }))
@@ -428,11 +429,10 @@ function Issues() {
     setAiAnalysisError(null)
     setAiAnalysisLoading(true)
     const building = buildingMap[iss.buildingId]
+    // Send all non-blacklisted vendors to AI so it can match by specialties too
     const relevantVendors = allVendors.filter(
-      (v) => !iss.category || !v.category ||
-        v.category.toLowerCase().includes(iss.category.toLowerCase()) ||
-        iss.category.toLowerCase().includes(v.category.toLowerCase())
-    ).slice(0, 8)
+      (v) => !v.is_blacklisted
+    ).slice(0, 15)
     try {
       const result = await callVaadAgent('issue_analysis', building?.name ?? 'הבניין', {
         issue: {
@@ -448,9 +448,17 @@ function Issues() {
         buildingUnits: building?.total_units,
         availableVendors: relevantVendors.map((v) => ({
           name: v.name, category: v.category, rating: v.rating, phone: v.phone,
+          specialties: v.specialties || '',
         })),
       })
       setAiAnalysisResult(result)
+      // Save AI-recommended category and search terms to the issue
+      if (result.recommended_vendor_category || result.recommended_search_terms) {
+        update(iss.id, {
+          ai_category: result.recommended_vendor_category || null,
+          ai_search_terms: result.recommended_search_terms || null,
+        })
+      }
     } catch (e) {
       setAiAnalysisError(e.message)
     } finally {
@@ -529,13 +537,15 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 תודה`
   }
 
-  // Search for external vendors via Madrag scraping
+  // Search for external vendors via Madrag scraping — uses AI search terms when available
   const searchExternalVendors = async (category, building) => {
     setVendorSearchLoading(true)
     setExternalVendors([])
+    const searchTerms = aiAnalysisResult?.recommended_search_terms || category
     try {
       const result = await callVaadAgent('vendor_search', building?.name || 'הבניין', {
         category,
+        searchTerms,
         city: building?.city || '',
         address: building?.address || '',
       })
@@ -553,6 +563,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     update(iss.id, { status: 'approved_for_quotes' })
     setWorkflowIssue((prev) => prev ? { ...prev, status: 'approved_for_quotes' } : prev)
     setWorkflowStep(3)
+    // Auto-search externally if fewer than 2 local vendor matches
+    const category = aiAnalysisResult?.recommended_vendor_category || iss.category || ''
+    const ic = category.toLowerCase()
+    const localMatches = allVendors.filter((v) => {
+      if (v.is_blacklisted) return false
+      const vc = (v.category || '').toLowerCase()
+      return vc.includes(ic) || ic.includes(vc)
+    })
+    if (localMatches.length < 2) {
+      const building = buildingMap[iss.buildingId]
+      searchExternalVendors(category, building)
+    }
   }
 
   // Reject/close issue by committee
@@ -1181,6 +1203,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                       <Badge variant="warning">עלות: {aiAnalysisResult.estimated_cost_range}</Badge>
                     )}
                   </div>
+                  {aiAnalysisResult.recommended_search_terms && (
+                    <p className="text-xs text-[var(--text-secondary)] bg-[var(--surface-hover)] rounded-lg px-3 py-1.5">
+                      🔍 מונחי חיפוש: {aiAnalysisResult.recommended_search_terms}
+                    </p>
+                  )}
                   <div className="flex gap-2 pt-2">
                     <Button onClick={() => { markSentToCommittee(workflowIssue); setWorkflowStep(2) }} disabled={!workflowIssue}>
                       המשך — הגשה לוועד
@@ -1257,13 +1284,29 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             const building = buildingMap[workflowIssue.buildingId]
             const category = aiAnalysisResult?.recommended_vendor_category || workflowIssue.category || ''
 
-            // Find matching vendors from DB
+            // Find matching vendors from DB — multi-signal: category + specialties + AI terms
+            const issueText = `${workflowIssue.title} ${workflowIssue.description || ''} ${aiAnalysisResult?.recommended_search_terms || ''}`.toLowerCase()
             const matchedVendors = allVendors.filter((v) => {
-              if (!v.category && !category) return true
+              if (v.is_blacklisted) return false
               const vc = (v.category || '').toLowerCase()
               const ic = category.toLowerCase()
-              return vc.includes(ic) || ic.includes(vc)
-            }).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 6)
+              // Category match (existing logic)
+              const categoryMatch = ic && (vc.includes(ic) || ic.includes(vc))
+              // Specialties match: check if any specialty keyword appears in issue text or AI search terms
+              const specialties = (v.specialties || '').toLowerCase()
+              const specialtyMatch = specialties && specialties.split(',').some((s) => {
+                const term = s.trim()
+                return term && (issueText.includes(term) || term.includes(ic))
+              })
+              return categoryMatch || specialtyMatch
+            }).sort((a, b) => {
+              // Score-based: preferred first, then specialties relevance, then rating
+              let scoreA = (a.preferred ? 10 : 0) + (a.rating || 0)
+              let scoreB = (b.preferred ? 10 : 0) + (b.rating || 0)
+              if ((a.specialties || '').split(',').some((s) => s.trim() && issueText.includes(s.trim().toLowerCase()))) scoreA += 5
+              if ((b.specialties || '').split(',').some((s) => s.trim() && issueText.includes(s.trim().toLowerCase()))) scoreB += 5
+              return scoreB - scoreA
+            }).slice(0, 6)
 
             const totalVendors = matchedVendors.length + externalVendors.length
             const needsMore = matchedVendors.length < 2
@@ -1366,23 +1409,26 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </div>
                 )}
 
-                {/* External search links if still not enough */}
-                {totalVendors < 2 && !vendorSearchLoading && (
-                  <div className="rounded-xl border border-[var(--border)] p-3 space-y-2">
-                    <p className="text-xs font-semibold text-[var(--text-secondary)]">חיפוש ידני:</p>
-                    <div className="flex flex-wrap gap-2">
-                      <a href={`https://www.madrag.co.il/search/?q=${encodeURIComponent(category)}&loc=${encodeURIComponent(building?.city || '')}`} target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="outline">🔍 מדרג</Button>
-                      </a>
-                      <a href={`https://www.google.com/search?q=${encodeURIComponent(`${category} ${building?.city || ''} ספק`)}`} target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="outline">🔍 Google</Button>
-                      </a>
-                      <a href={`https://www.d.co.il/search/?q=${encodeURIComponent(category)}`} target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="outline">🔍 דפי זהב</Button>
-                      </a>
+                {/* External search links — always visible for manual search */}
+                {!vendorSearchLoading && (() => {
+                  const searchQuery = aiAnalysisResult?.recommended_search_terms || category
+                  return (
+                    <div className="rounded-xl border border-[var(--border)] p-3 space-y-2">
+                      <p className="text-xs font-semibold text-[var(--text-secondary)]">חיפוש ידני:</p>
+                      <div className="flex flex-wrap gap-2">
+                        <a href={`https://www.madrag.co.il/search/?q=${encodeURIComponent(searchQuery)}&loc=${encodeURIComponent(building?.city || '')}`} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="outline">🔍 מדרג</Button>
+                        </a>
+                        <a href={`https://www.google.com/search?q=${encodeURIComponent(`${searchQuery} ${building?.city || ''} ספק`)}`} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="outline">🔍 Google</Button>
+                        </a>
+                        <a href={`https://www.d.co.il/search/?q=${encodeURIComponent(searchQuery + ' ' + (building?.city || ''))}`} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="outline">🔍 דפי זהב</Button>
+                        </a>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
 
                 <div className="pt-2 border-t border-[var(--border)]">
                   <Button

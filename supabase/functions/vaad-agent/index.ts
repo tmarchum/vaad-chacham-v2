@@ -63,8 +63,26 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 
   issue_analysis: `אתה מומחה לניהול תחזוקה ותקלות בבתים משותפים בישראל.
 תפקידך: קבל תקלה, פרק אותה לאבחון מקצועי, והפק דרישה ברורה לספק ולועד הבית.
-אתה מכיר את כל תחומי המקצוע הרלוונטיים: אינסטלציה, חשמל, מעלית, בטיחות אש, בנייה, מיזוג אויר, גינון.
+אתה מכיר את כל תחומי המקצוע הרלוונטיים: אינסטלציה, חשמל, מעלית, בטיחות אש, בנייה, מיזוג אויר, גינון, דלתות וחלונות, מסגרות, איטום, גגות.
 אתה מכיר את ספקי השירות בישראל ואת טווחי המחירים הסבירים לכל עבודה.
+
+מילון מונחים חשוב — שים לב! אל תבלבל בין מונחים:
+- "מחזיר שמן" / "מחזיר שמן הידראולי" / "מחזיר דלת" / "סגר דלת" = סגר דלת הידראולי (door closer). התקן שמותקן בחלק העליון של דלת כניסה וסוגר אותה אוטומטית. לא קשור למעלית ולא למערכת הידראולית של מעלית!
+- "פלטה" / "פלטת דחיפה" = push plate על דלת
+- "מנגנון פניקה" / "בריח פניקה" = panic bar, מוט בריחה בדלת חירום
+- "ניאגרה" = מיכל הדחה לשירותים, לא מפל מים
+- "בויילר" / "דוד" = דוד שמש או דוד חשמל לחימום מים
+- "אינטרקום" / "דורפון" = מערכת אינטרקום כניסה לבניין
+- "ארון חשמל" / "לוח חשמל" = לוח חשמל ראשי
+- "הידראולי" — תלוי הקשר! בהקשר של דלת (מחזיר שמן, סגר) = מחזיר דלת הידראולי. רק בהקשר של מעלית = מערכת הידראולית של מעלית.
+- "צינור ביוב" = צינור ניקוז, לא צינור מים רגיל
+- "משאבת ביוב" = משאבה לניקוז שפכים בחניון או מרתף
+- "אוזר דלת" = door closer, זהה למחזיר שמן
+
+כשתציע ספק, התחשב בהתמחויות שלהם (שדה specialties) ולא רק בקטגוריה הכללית.
+התאם את הספק לפי רלוונטיות ההתמחות לתקלה הספציפית.
+אם אין ספק מתאים ברשימה — ציין זאת בבירור, תן מונחי חיפוש מדויקים לאיתור ספק ברשת, וכתוב הודעת וואטסאפ מוכנה לפנייה לספק חדש.
+
 תמיד ענה בעברית. היה ספציפי — תן מספרים, מועדים, ופעולות ממשיות.
 פלט תשובתך כ-JSON בפורמט הבא בלבד:
 {
@@ -72,11 +90,12 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   "scope": "היקף העבודה הנדרשת לתיקון",
   "risks": "מה הסיכון אם לא מטפלים מיידית",
   "urgency_reasoning": "הסבר מדוע דחיפות זו מוצדקת",
-  "recommended_vendor_category": "קטגוריית בעל מקצוע נדרשת",
+  "recommended_vendor_category": "קטגוריית בעל מקצוע נדרשת (מתוך: אינסטלציה, חשמל, מעליות, ניקיון, בנייה ושיפוצים, צבע, מיזוג אוויר, גינון, מנעולנות, אלומיניום וזכוכית, איטום, ריצוף, פסולת ופינוי, הדברה, דלתות וחלונות, מסגרות, מערכות בטיחות אש, גגות, שירותי חירום, אחר)",
   "recommended_vendor_name": "שם ספק מהרשימה שסופקה אם מתאים, אחרת null",
   "recommended_vendor_reason": "מדוע ספק זה (או קטגוריה זו) מתאים",
   "estimated_cost_range": "טווח עלות משוער בש״ח",
-  "vendor_message": "הודעת וואטסאפ מוכנה לשליחה לספק — מקצועית, ברורה, כוללת כתובת ופרטי הבניין",
+  "recommended_search_terms": "מונחי חיפוש מומלצים לאיתור ספק בגוגל/מדרג — כולל מילות מפתח ספציפיות לעבודה, למשל: סגר דלת הידראולי תיקון, מחזיר שמן החלפה",
+  "vendor_message": "הודעת וואטסאפ מוכנה לשליחה לספק — מקצועית, ברורה, כוללת כתובת ופרטי הבניין. הפנייה בשם ועד הבית.",
   "committee_summary": "סיכום לפרוטוקול ועד הבית — פורמלי, תמציתי, מפרט את הבעיה, הפעולות הנדרשות, והעלות המשוערת",
   "action_steps": ["צעד ראשון לביצוע מיידי", "צעד שני", "צעד שלישי"]
 }`,
@@ -180,7 +199,7 @@ ${(missingRequirements as Array<Record<string, unknown>>)?.map((r: Record<string
       const iss = issue as Record<string, unknown>
       const vendors = availableVendors as Array<Record<string, unknown>> ?? []
       const vendorList = vendors.length > 0
-        ? vendors.map((v: Record<string, unknown>) => `- ${v.name} (${v.category}, דירוג: ${v.rating ?? 'לא ידוע'}, טלפון: ${v.phone ?? '—'})`).join('\n')
+        ? vendors.map((v: Record<string, unknown>) => `- ${v.name} (${v.category}, דירוג: ${v.rating ?? 'לא ידוע'}, טלפון: ${v.phone ?? '—'}${v.specialties ? `, התמחויות: ${v.specialties}` : ''})`).join('\n')
         : 'אין ספקים רשומים'
       return base + `פרטי התקלה:
 - כותרת: ${iss.title}
@@ -254,12 +273,13 @@ Deno.serve(async (req: Request) => {
     // Special handler: vendor_search — scrapes Madrag + Google (no Claude needed)
     // ---------------------------------------------------------------------------
     if (agentType === 'vendor_search') {
-      const { category, city, address } = contextData as Record<string, string>
+      const { category, city, address, searchTerms } = contextData as Record<string, string>
+      const query = searchTerms || category
       const vendors: Array<Record<string, string>> = []
 
       // Try Madrag
       try {
-        const madragUrl = `https://www.madrag.co.il/search/?q=${encodeURIComponent(category)}&loc=${encodeURIComponent(city || '')}`
+        const madragUrl = `https://www.madrag.co.il/search/?q=${encodeURIComponent(query)}&loc=${encodeURIComponent(city || '')}`
         const madragRes = await fetch(madragUrl, {
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VaadBot/1.0)' },
           signal: AbortSignal.timeout(8000),
@@ -295,7 +315,7 @@ Deno.serve(async (req: Request) => {
       // Try Yad2 / דפי זהב API if Madrag returned nothing
       if (vendors.length === 0) {
         try {
-          const dzUrl = `https://www.d.co.il/search/?q=${encodeURIComponent(category + ' ' + city)}`
+          const dzUrl = `https://www.d.co.il/search/?q=${encodeURIComponent(query + ' ' + city)}`
           const dzRes = await fetch(dzUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(6000),
@@ -328,12 +348,13 @@ Deno.serve(async (req: Request) => {
           result: {
             vendors,
             search_links: {
-              madrag: `https://www.madrag.co.il/search/?q=${encodeURIComponent(category)}&loc=${encodeURIComponent(city || '')}`,
-              google: `https://www.google.com/search?q=${encodeURIComponent(category + ' ' + city + ' ביקורות')}`,
-              dafey_zahav: `https://www.d.co.il/search/?q=${encodeURIComponent(category + ' ' + city)}`,
+              madrag: `https://www.madrag.co.il/search/?q=${encodeURIComponent(query)}&loc=${encodeURIComponent(city || '')}`,
+              google: `https://www.google.com/search?q=${encodeURIComponent(query + ' ' + city + ' ביקורות')}`,
+              dafey_zahav: `https://www.d.co.il/search/?q=${encodeURIComponent(query + ' ' + city)}`,
             },
             category,
             city,
+            searchTerms: query,
           },
           agentType,
         }),
@@ -351,8 +372,8 @@ Deno.serve(async (req: Request) => {
     const anthropic = new Anthropic({ apiKey })
 
     const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
-      max_tokens: 1500,
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
       system: SYSTEM_PROMPTS[agentType],
       messages: [
         {
