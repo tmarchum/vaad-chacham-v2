@@ -364,17 +364,16 @@ Deno.serve(async (req: Request) => {
 
     const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
 
-    // Extract JSON from the response (Claude might wrap it in markdown code blocks)
-    // First strip markdown code fences if present, then extract JSON
-    const stripped = rawText.replace(/```(?:json)?\s*/g, '').replace(/```\s*$/g, '').trim()
+    // Extract JSON from the response (Claude often wraps it in ```json ... ```)
+    // Remove ALL backtick fences then extract the JSON object
+    const cleaned = rawText.replace(/```\w*/g, '').replace(/```/g, '').trim()
     let parsed: Record<string, unknown>
     try {
-      const jsonMatch = stripped.match(/\{[\s\S]*\}/)
-      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { summary: rawText }
+      parsed = JSON.parse(cleaned)
     } catch {
-      // If JSON parse fails, try the raw text directly
       try {
-        parsed = JSON.parse(stripped)
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+        parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { summary: rawText }
       } catch {
         parsed = { summary: rawText }
       }
