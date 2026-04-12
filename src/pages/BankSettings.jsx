@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
-import { Landmark, Plus, Pencil, Trash2, RefreshCw, Eye, EyeOff } from 'lucide-react'
+import { Landmark, Plus, Pencil, Trash2, RefreshCw, Eye, EyeOff, Play, Settings2, Clock } from 'lucide-react'
 
 // Supported banks with their credential fields
 const BANKS = {
@@ -25,6 +25,12 @@ const BANKS = {
 
 const BANK_OPTIONS = Object.entries(BANKS).map(([value, { name }]) => ({ value, label: name }))
 
+const FREQUENCY_OPTIONS = [
+  { value: 'daily', label: 'יומי (כל יום בשעה 06:00)' },
+  { value: 'weekly', label: 'שבועי (כל יום ראשון)' },
+  { value: 'manual', label: 'ידני בלבד' },
+]
+
 const EMPTY_FORM = {
   bank_type: '',
   label: '',
@@ -34,17 +40,48 @@ const EMPTY_FORM = {
 export default function BankSettings() {
   const { selectedBuilding } = useBuildingContext()
   const { data: accounts, create, update, remove, refresh, isSaving } = useCollection('bankAccounts')
+  const { data: allScrapeSettings, create: createSettings, update: updateSettings } = useCollection('scrapeSettings')
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [showPasswords, setShowPasswords] = useState({})
+  const [triggering, setTriggering] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const buildingAccounts = useMemo(() =>
     accounts.filter(a => a.building_id === selectedBuilding?.id),
     [accounts, selectedBuilding]
   )
+
+  const scrapeSettings = useMemo(() =>
+    allScrapeSettings.find(s => s.building_id === selectedBuilding?.id),
+    [allScrapeSettings, selectedBuilding]
+  )
+
+  const [settingsForm, setSettingsForm] = useState({
+    is_enabled: false,
+    frequency: 'daily',
+    days_back: 30,
+    github_owner: '',
+    github_repo: 'bank-scraper',
+    github_pat: '',
+  })
+
+  // Sync settings form when data loads
+  useEffect(() => {
+    if (scrapeSettings) {
+      setSettingsForm({
+        is_enabled: scrapeSettings.is_enabled ?? false,
+        frequency: scrapeSettings.frequency || 'daily',
+        days_back: scrapeSettings.days_back || 30,
+        github_owner: scrapeSettings.github_owner || '',
+        github_repo: scrapeSettings.github_repo || 'bank-scraper',
+        github_pat: scrapeSettings.github_pat || '',
+      })
+    }
+  }, [scrapeSettings])
 
   const openNew = () => {
     setEditingId(null)
@@ -64,7 +101,6 @@ export default function BankSettings() {
 
   const handleSave = async () => {
     if (!form.bank_type) return
-
     const payload = {
       building_id: selectedBuilding.id,
       bank_type: form.bank_type,
@@ -72,7 +108,6 @@ export default function BankSettings() {
       credentials: form.credentials,
       is_active: true,
     }
-
     if (editingId) {
       await update(editingId, payload)
     } else {
@@ -90,6 +125,75 @@ export default function BankSettings() {
     }
   }
 
+  const handleSaveSettings = async () => {
+    const payload = {
+      building_id: selectedBuilding.id,
+      ...settingsForm,
+    }
+    if (scrapeSettings) {
+      await updateSettings(scrapeSettings.id, payload)
+    } else {
+      await createSettings(payload)
+    }
+    setSettingsOpen(false)
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: 'הגדרות סקרייפר נשמרו', type: 'success' }
+    }))
+  }
+
+  // Trigger GitHub Actions workflow manually
+  const handleTriggerScrape = async () => {
+    const owner = scrapeSettings?.github_owner || settingsForm.github_owner
+    const repo = scrapeSettings?.github_repo || settingsForm.github_repo
+    const pat = scrapeSettings?.github_pat || settingsForm.github_pat
+
+    if (!owner || !repo || !pat) {
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'יש להגדיר קודם את פרטי GitHub בהגדרות', type: 'error' }
+      }))
+      setSettingsOpen(true)
+      return
+    }
+
+    setTriggering(true)
+    try {
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/scrape.yml/dispatches`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${pat}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ref: 'main',
+          inputs: { days_back: String(scrapeSettings?.days_back || 30) },
+        }),
+      })
+
+      if (res.status === 204) {
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: 'משיכת תנועות הופעלה! התוצאות יגיעו תוך דקות', type: 'success' }
+        }))
+        // Update last run
+        if (scrapeSettings) {
+          await updateSettings(scrapeSettings.id, {
+            last_run_at: new Date().toISOString(),
+            last_run_status: 'triggered',
+          })
+        }
+      } else {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || `HTTP ${res.status}`)
+      }
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: `שגיאה בהפעלת סקרייפר: ${err.message}`, type: 'error' }
+      }))
+    } finally {
+      setTriggering(false)
+    }
+  }
+
   const togglePassword = (fieldKey) => {
     setShowPasswords(prev => ({ ...prev, [fieldKey]: !prev[fieldKey] }))
   }
@@ -103,18 +207,52 @@ export default function BankSettings() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">חשבונות בנק</h1>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
             ניהול חשבונות בנק למשיכת תנועות אוטומטית
           </p>
         </div>
-        <Button onClick={openNew} className="gap-2">
-          <Plus className="h-4 w-4" />
-          הוסף חשבון
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setSettingsOpen(true)} className="gap-2">
+            <Settings2 className="h-4 w-4" />
+            הגדרות
+          </Button>
+          <Button variant="outline" onClick={handleTriggerScrape} disabled={triggering} className="gap-2">
+            {triggering ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            {triggering ? 'מפעיל...' : 'משוך תנועות עכשיו'}
+          </Button>
+          <Button onClick={openNew} className="gap-2">
+            <Plus className="h-4 w-4" />
+            הוסף חשבון
+          </Button>
+        </div>
       </div>
+
+      {/* Scrape status card */}
+      {scrapeSettings && (
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <Clock className="h-5 w-5 text-[var(--text-secondary)]" />
+              <div>
+                <p className="text-sm font-medium">
+                  תדירות: {FREQUENCY_OPTIONS.find(f => f.value === scrapeSettings.frequency)?.label || scrapeSettings.frequency}
+                </p>
+                {scrapeSettings.last_run_at && (
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    הפעלה אחרונה: {new Date(scrapeSettings.last_run_at).toLocaleString('he-IL')}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Badge variant={scrapeSettings.is_enabled ? 'success' : 'secondary'}>
+              {scrapeSettings.is_enabled ? 'פעיל' : 'מושבת'}
+            </Badge>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Account cards */}
       {buildingAccounts.length === 0 ? (
@@ -171,7 +309,7 @@ export default function BankSettings() {
         </div>
       )}
 
-      {/* Add/Edit Dialog */}
+      {/* Add/Edit Account Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -227,6 +365,81 @@ export default function BankSettings() {
               <Button onClick={handleSave} disabled={isSaving || !form.bank_type}>
                 {isSaving ? 'שומר...' : 'שמור'}
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scrape Settings Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>הגדרות משיכת תנועות</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-2">
+            <FormSelect
+              label="תדירות משיכה"
+              value={settingsForm.frequency}
+              onChange={(v) => setSettingsForm({ ...settingsForm, frequency: v })}
+              options={FREQUENCY_OPTIONS}
+            />
+
+            <FormField
+              label="ימים אחורה"
+              type="number"
+              value={settingsForm.days_back}
+              onChange={(v) => setSettingsForm({ ...settingsForm, days_back: Number(v) || 30 })}
+            />
+
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-medium text-[var(--text-secondary)]">חיבור GitHub (להפעלה אוטומטית)</p>
+
+              <FormField
+                label="GitHub Owner"
+                value={settingsForm.github_owner}
+                onChange={(v) => setSettingsForm({ ...settingsForm, github_owner: v })}
+                placeholder="tmarchum"
+              />
+
+              <FormField
+                label="GitHub Repo"
+                value={settingsForm.github_repo}
+                onChange={(v) => setSettingsForm({ ...settingsForm, github_repo: v })}
+                placeholder="bank-scraper"
+              />
+
+              <div className="relative">
+                <FormField
+                  label="Personal Access Token"
+                  value={settingsForm.github_pat}
+                  onChange={(v) => setSettingsForm({ ...settingsForm, github_pat: v })}
+                  type={showPasswords.github_pat ? 'text' : 'password'}
+                  placeholder="ghp_..."
+                />
+                <button
+                  type="button"
+                  onClick={() => togglePassword('github_pat')}
+                  className="absolute left-3 top-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                >
+                  {showPasswords.github_pat ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settingsForm.is_enabled}
+                onChange={(e) => setSettingsForm({ ...settingsForm, is_enabled: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm">הפעל משיכה אוטומטית</span>
+            </label>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setSettingsOpen(false)}>ביטול</Button>
+              <Button onClick={handleSaveSettings}>שמור הגדרות</Button>
             </div>
           </div>
         </DialogContent>

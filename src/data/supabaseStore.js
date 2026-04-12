@@ -12,6 +12,7 @@ const TABLE_MAP = {
   payments: 'payments',
   bankAccounts: 'bank_accounts',
   bankTransactions: 'bank_transactions',
+  scrapeSettings: 'scrape_settings',
   expenses: 'expenses',
   issues: 'issues',
   vendors: 'vendors',
