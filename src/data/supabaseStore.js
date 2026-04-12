@@ -10,7 +10,8 @@ const TABLE_MAP = {
   unitResidents: 'unit_residents',
   residents: 'unit_residents',  // alias
   payments: 'payments',
-  bankTransactions: 'payments', // deprecated, use payments
+  bankAccounts: 'bank_accounts',
+  bankTransactions: 'bank_transactions',
   expenses: 'expenses',
   issues: 'issues',
   vendors: 'vendors',
