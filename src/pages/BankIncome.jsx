@@ -28,6 +28,7 @@ export default function BankIncome() {
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))
+  const [viewMode, setViewMode] = useState('month') // 'month' or 'year'
   const [search, setSearch] = useState('')
   const [editTx, setEditTx] = useState(null)
   const [editNotes, setEditNotes] = useState('')
@@ -42,13 +43,14 @@ export default function BankIncome() {
     })
   }, [])
 
-  // Credits only for this building and month
+  // Credits only for this building, filtered by month or year
   const incomeList = useMemo(() => {
-    let result = allTx.filter(tx =>
-      tx.building_id === selectedBuilding?.id &&
-      tx.month === monthKey &&
-      Number(tx.credit) > 0
-    )
+    let result = allTx.filter(tx => {
+      if (tx.building_id !== selectedBuilding?.id) return false
+      if (Number(tx.credit) <= 0) return false
+      if (viewMode === 'month') return tx.month === monthKey
+      return tx.month?.startsWith(selectedYear)
+    })
 
     if (search) {
       const q = search.toLowerCase()
@@ -59,7 +61,7 @@ export default function BankIncome() {
     }
 
     return result.sort((a, b) => new Date(b.transaction_date) - new Date(a.transaction_date))
-  }, [allTx, selectedBuilding, monthKey, search])
+  }, [allTx, selectedBuilding, monthKey, selectedYear, viewMode, search])
 
   const summary = useMemo(() => {
     const total = incomeList.reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
@@ -97,13 +99,33 @@ export default function BankIncome() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
-        <FormSelect
-          label="חודש"
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          options={HEBREW_MONTHS}
-          className="w-36"
-        />
+        <div className="flex gap-1">
+          <button
+            onClick={() => setViewMode('month')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              viewMode === 'month'
+                ? 'bg-[var(--primary)] text-white'
+                : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
+            }`}
+          >חודשי</button>
+          <button
+            onClick={() => setViewMode('year')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              viewMode === 'year'
+                ? 'bg-[var(--primary)] text-white'
+                : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
+            }`}
+          >שנתי</button>
+        </div>
+        {viewMode === 'month' && (
+          <FormSelect
+            label="חודש"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            options={HEBREW_MONTHS}
+            className="w-36"
+          />
+        )}
         <FormSelect
           label="שנה"
           value={selectedYear}

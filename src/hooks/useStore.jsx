@@ -64,7 +64,7 @@ const BuildingContext = createContext(null)
 const SELECTED_BUILDING_KEY = 'vc_selectedBuilding'
 
 export function BuildingProvider({ children }) {
-  const { data: buildings, isLoading } = useCollection('buildings')
+  const { data: buildings, isLoading, refresh: refreshBuildings } = useCollection('buildings')
   const [selectedBuildingId, setSelectedBuildingId] = useState(() => {
     return localStorage.getItem(SELECTED_BUILDING_KEY) || null
   })
@@ -85,7 +85,7 @@ export function BuildingProvider({ children }) {
   }, [])
 
   return (
-    <BuildingContext.Provider value={{ selectedBuilding, setSelectedBuilding, buildings, isLoading }}>
+    <BuildingContext.Provider value={{ selectedBuilding, setSelectedBuilding, buildings, isLoading, refreshBuildings }}>
       {children}
     </BuildingContext.Provider>
   )

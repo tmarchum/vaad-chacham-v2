@@ -167,7 +167,7 @@ function fullName(p) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 function Units() {
-  const { buildings } = useBuildingContext()
+  const { buildings, selectedBuilding } = useBuildingContext()
   const { data: allUnits, create, update, remove } = useCollection('units')
   const {
     data: allResidents,
@@ -177,7 +177,7 @@ function Units() {
   } = useCollection('unitResidents')
 
   const [search, setSearch] = useState('')
-  const [buildingFilter, setBuildingFilter] = useState('all')
+  const [buildingFilter, setBuildingFilter] = useState(() => selectedBuilding?.id || 'all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)

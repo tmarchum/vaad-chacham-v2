@@ -64,6 +64,7 @@ function Expenses() {
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))
+  const [viewMode, setViewMode] = useState('month') // 'month' or 'year'
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
@@ -96,13 +97,15 @@ function Expenses() {
 
   const monthKey = `${selectedYear}-${selectedMonth}`
 
+  const datePrefix = viewMode === 'month' ? monthKey : selectedYear
+
   const filtered = useMemo(() => {
     let result = allExpenses
 
-    // Month filter — match by date string prefix
+    // Date filter — month or year
     result = result.filter((exp) => {
       if (!exp.date) return false
-      return exp.date.startsWith(monthKey)
+      return exp.date.startsWith(datePrefix)
     })
 
     // Building filter
@@ -125,18 +128,18 @@ function Expenses() {
     result = [...result].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
 
     return result
-  }, [allExpenses, monthKey, buildingFilter, search])
+  }, [allExpenses, datePrefix, buildingFilter, search])
 
   // Summary
   const summary = useMemo(() => {
-    const monthExpenses = allExpenses.filter((exp) => {
+    const periodExpenses = allExpenses.filter((exp) => {
       if (!exp.date) return false
-      if (!exp.date.startsWith(monthKey)) return false
+      if (!exp.date.startsWith(datePrefix)) return false
       if (buildingFilter !== 'all' && exp.buildingId !== buildingFilter) return false
       return true
     })
-    const total = monthExpenses.reduce((s, exp) => s + (Number(exp.amount) || 0), 0)
-    return { total, count: monthExpenses.length }
+    const total = periodExpenses.reduce((s, exp) => s + (Number(exp.amount) || 0), 0)
+    return { total, count: periodExpenses.length }
   }, [allExpenses, monthKey, buildingFilter])
 
   const openCreate = () => {
@@ -222,13 +225,33 @@ function Expenses() {
 
       {/* Month/Year selectors */}
       <div className="flex flex-wrap gap-3 items-end">
-        <FormSelect
-          label="חודש"
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          options={HEBREW_MONTHS}
-          className="w-36"
-        />
+        <div className="flex gap-1">
+          <button
+            onClick={() => setViewMode('month')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              viewMode === 'month'
+                ? 'bg-[var(--primary)] text-white'
+                : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
+            }`}
+          >חודשי</button>
+          <button
+            onClick={() => setViewMode('year')}
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+              viewMode === 'year'
+                ? 'bg-[var(--primary)] text-white'
+                : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
+            }`}
+          >שנתי</button>
+        </div>
+        {viewMode === 'month' && (
+          <FormSelect
+            label="חודש"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            options={HEBREW_MONTHS}
+            className="w-36"
+          />
+        )}
         <FormSelect
           label="שנה"
           value={selectedYear}
@@ -263,7 +286,7 @@ function Expenses() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
           <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">סה״כ הוצאות החודש</p>
+            <p className="text-sm text-[var(--text-secondary)]">{viewMode === 'month' ? 'סה״כ הוצאות החודש' : `סה״כ הוצאות ${selectedYear}`}</p>
             <p className="text-2xl font-bold text-[var(--danger)]">{formatCurrency(summary.total)}</p>
           </CardContent>
         </Card>

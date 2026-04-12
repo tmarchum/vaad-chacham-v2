@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useCollection } from '@/hooks/useStore'
+import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -123,6 +123,7 @@ function feeSummary(b) {
 // ── Component ─────────────────────────────────────────────────────────────────
 function Buildings() {
   const { data: buildings, create, update, remove, isSaving } = useCollection('buildings')
+  const { refreshBuildings } = useBuildingContext()
   const { data: allUnits } = useCollection('units')
   const [search, setSearch] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -240,6 +241,7 @@ function Buildings() {
     } else {
       await create(data)
     }
+    await refreshBuildings()
     setFormOpen(false)
   }
 
@@ -248,8 +250,12 @@ function Buildings() {
     setForm(prev => ({ ...prev, [field]: val }))
   }
 
-  const handleDelete = () => {
-    if (deleteTarget) { remove(deleteTarget.id); setDeleteTarget(null) }
+  const handleDelete = async () => {
+    if (deleteTarget) {
+      await remove(deleteTarget.id)
+      await refreshBuildings()
+      setDeleteTarget(null)
+    }
   }
 
   const FEE_MODES = [
