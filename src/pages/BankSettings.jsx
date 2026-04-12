@@ -13,16 +13,26 @@ import {
 } from 'lucide-react'
 
 const BANKS = {
-  beinleumi:   { name: 'בנק הבינלאומי',    fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
-  hapoalim:    { name: 'בנק הפועלים',       fields: [{ key: 'userCode', label: 'קוד משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
-  leumi:       { name: 'בנק לאומי',         fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
-  discount:    { name: 'בנק דיסקונט',       fields: [{ key: 'id', label: 'מספר זהות' }, { key: 'password', label: 'סיסמה', type: 'password' }, { key: 'num', label: 'מספר קוד' }] },
-  mercantile:  { name: 'בנק מרכנתיל',       fields: [{ key: 'id', label: 'מספר זהות' }, { key: 'password', label: 'סיסמה', type: 'password' }, { key: 'num', label: 'מספר קוד' }] },
-  mizrahi:     { name: 'בנק מזרחי',         fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
-  otsarHahayal:{ name: 'אוצר החייל',        fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
-  union:       { name: 'בנק איגוד',         fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
-  massad:      { name: 'בנק מסד',           fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
-  yahav:       { name: 'בנק יהב',           fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'nationalID', label: 'תעודת זהות' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  // בנקים
+  beinleumi:   { name: 'בנק הבינלאומי (פאגי)',  fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  hapoalim:    { name: 'בנק הפועלים',           fields: [{ key: 'userCode', label: 'קוד משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  leumi:       { name: 'בנק לאומי',             fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  discount:    { name: 'בנק דיסקונט',           fields: [{ key: 'id', label: 'מספר זהות' }, { key: 'password', label: 'סיסמה', type: 'password' }, { key: 'num', label: 'מספר קוד' }] },
+  mercantile:  { name: 'בנק מרכנתיל',           fields: [{ key: 'id', label: 'מספר זהות' }, { key: 'password', label: 'סיסמה', type: 'password' }, { key: 'num', label: 'מספר קוד' }] },
+  mizrahi:     { name: 'בנק מזרחי טפחות',       fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  otsarHahayal:{ name: 'אוצר החייל',            fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  union:       { name: 'בנק איגוד',             fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  massad:      { name: 'בנק מסד',               fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  yahav:       { name: 'בנק יהב',               fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'nationalID', label: 'תעודת זהות' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  pagi:        { name: 'פאגי (הבינלאומי הראשון)', fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  oneZero:     { name: 'OneZero (וואן זירו)',     fields: [{ key: 'email', label: 'אימייל' }, { key: 'password', label: 'סיסמה', type: 'password' }, { key: 'otpLongTermToken', label: 'OTP Token' }] },
+  pepper:      { name: 'פפפר (בנק לאומי)',       fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  behatsdaa:   { name: 'בהצדעה',                 fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }, { key: 'birthday', label: 'תאריך לידה' }] },
+  // כרטיסי אשראי
+  visaCal:     { name: 'ויזה כאל',               fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  max:         { name: 'מקס',                    fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  isracard:    { name: 'ישראכרט',                fields: [{ key: 'id', label: 'מספר זהות' }, { key: 'card6Digits', label: '6 ספרות אחרונות' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
+  amex:        { name: 'אמריקן אקספרס',          fields: [{ key: 'username', label: 'שם משתמש' }, { key: 'card6Digits', label: '6 ספרות אחרונות' }, { key: 'password', label: 'סיסמה', type: 'password' }] },
 }
 
 const BANK_OPTIONS = Object.entries(BANKS).map(([value, { name }]) => ({ value, label: name }))
