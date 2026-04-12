@@ -210,13 +210,13 @@ export default function BankTransactions() {
       <div className="flex flex-wrap items-center gap-3">
         <FormSelect
           value={selectedMonth}
-          onChange={setSelectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
           options={HEBREW_MONTHS}
           className="w-32"
         />
         <FormSelect
           value={selectedYear}
-          onChange={setSelectedYear}
+          onChange={(e) => setSelectedYear(e.target.value)}
           options={yearOptions}
           className="w-24"
         />

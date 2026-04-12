@@ -201,7 +201,7 @@ export default function BankSettings() {
                   label="תאריך התחלה"
                   type="date"
                   value={settingsForm.initial_pull_date}
-                  onChange={(v) => setSettingsForm({ ...settingsForm, initial_pull_date: v })}
+                  onChange={(e) => setSettingsForm({ ...settingsForm, initial_pull_date: e.target.value })}
                 />
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleInitialPull} className="gap-1">
@@ -328,8 +328,8 @@ export default function BankSettings() {
             <DialogTitle>{editingId ? 'עריכת חשבון בנק' : 'הוספת חשבון בנק'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <FormSelect label="בנק" value={form.bank_type} onChange={(v) => setForm({ ...form, bank_type: v, credentials: {} })} options={BANK_OPTIONS} placeholder="בחר בנק..." />
-            <FormField label="תיאור (אופציונלי)" value={form.label} onChange={(v) => setForm({ ...form, label: v })} placeholder="למשל: חשבון ועד ראשי" />
+            <FormSelect label="בנק" value={form.bank_type} onChange={(e) => setForm({ ...form, bank_type: e.target.value, credentials: {} })} options={BANK_OPTIONS} placeholder="בחר בנק..." />
+            <FormField label="תיאור (אופציונלי)" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="למשל: חשבון ועד ראשי" />
             {bankFields.length > 0 && (
               <div className="border-t pt-4 space-y-3">
                 <p className="text-sm font-medium text-[var(--text-secondary)]">פרטי התחברות</p>
@@ -338,7 +338,7 @@ export default function BankSettings() {
                     <FormField
                       label={field.label}
                       value={form.credentials[field.key] || ''}
-                      onChange={(v) => setForm({ ...form, credentials: { ...form.credentials, [field.key]: v } })}
+                      onChange={(e) => setForm({ ...form, credentials: { ...form.credentials, [field.key]: e.target.value } })}
                       type={field.type === 'password' && !showPasswords[field.key] ? 'password' : 'text'}
                     />
                     {field.type === 'password' && (
@@ -376,7 +376,7 @@ export default function BankSettings() {
             <FormSelect
               label="תדירות"
               value={settingsForm.frequency}
-              onChange={(v) => setSettingsForm({ ...settingsForm, frequency: v })}
+              onChange={(e) => setSettingsForm({ ...settingsForm, frequency: e.target.value })}
               options={[
                 { value: 'daily', label: 'יומי — כל לילה' },
                 { value: 'weekly', label: 'שבועי — כל מוצאי שבת' },
@@ -388,7 +388,7 @@ export default function BankSettings() {
               label="ימים אחורה לבדיקה"
               type="number"
               value={settingsForm.days_back}
-              onChange={(v) => setSettingsForm({ ...settingsForm, days_back: Number(v) || 7 })}
+              onChange={(e) => setSettingsForm({ ...settingsForm, days_back: Number(e.target.value) || 7 })}
             />
             <p className="text-xs text-[var(--text-secondary)] -mt-2">
               בכל הרצה, כמה ימים אחורה לחפש תנועות חדשות (ברירת מחדל: 7 לתהליך לילי)
