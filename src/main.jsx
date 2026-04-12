@@ -27,6 +27,8 @@ import AdminSettings from '@/pages/AdminSettings'
 import WorkOrders from '@/pages/WorkOrders'
 import BankSettings from '@/pages/BankSettings'
 import BankTransactions from '@/pages/BankTransactions'
+import BankIncome from '@/pages/BankIncome'
+import Balance from '@/pages/Balance'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(
@@ -60,6 +62,8 @@ createRoot(document.getElementById('root')).render(
               <Route path="work-orders" element={<WorkOrders />} />
               <Route path="bank-settings" element={<BankSettings />} />
               <Route path="bank-transactions" element={<BankTransactions />} />
+              <Route path="income" element={<BankIncome />} />
+              <Route path="balance" element={<Balance />} />
               <Route path="admin" element={<AdminSettings />} />
             </Route>
           </Route>

@@ -10,7 +10,7 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Receipt, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Receipt, Plus, Pencil, Trash2, Landmark } from 'lucide-react'
 
 const HEBREW_MONTHS = [
   { value: '01', label: 'ינואר' },
@@ -296,6 +296,7 @@ function Expenses() {
                   <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סכום</th>
                   <th className="text-right p-3 font-medium text-[var(--text-secondary)]">ספק</th>
                   <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בניין</th>
+                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">מקור</th>
                   <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פעולות</th>
                 </tr>
               </thead>
@@ -318,6 +319,16 @@ function Expenses() {
                     <td className="p-3">{formatCurrency(exp.amount || 0)}</td>
                     <td className="p-3">{exp.vendor || '-'}</td>
                     <td className="p-3">{buildingMap[exp.buildingId]?.name || '-'}</td>
+                    <td className="p-3">
+                      {exp.bank_transaction_id ? (
+                        <Badge variant="info" className="gap-1 text-xs">
+                          <Landmark className="h-3 w-3" />
+                          בנק
+                        </Badge>
+                      ) : (
+                        <Badge variant="default" className="text-xs">ידני</Badge>
+                      )}
+                    </td>
                     <td className="p-3">
                       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(exp)}>

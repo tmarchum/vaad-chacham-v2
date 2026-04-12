@@ -8,7 +8,7 @@ import {
   Wrench, Store, CalendarClock, ShieldCheck, Bot,
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, Menu, X, ChevronDown, ClipboardList,
-  Landmark, ArrowLeftRight,
+  Landmark, ArrowLeftRight, ArrowDownLeft, Scale,
 } from 'lucide-react'
 
 const NAV_SECTIONS = [
@@ -27,7 +27,9 @@ const NAV_SECTIONS = [
       { to: '/payments',          label: 'גבייה',           icon: CreditCard },
       { to: '/bank-transactions', label: 'תנועות בנק',     icon: ArrowLeftRight },
       { to: '/bank-settings',     label: 'חשבונות בנק',    icon: Landmark },
+      { to: '/income',             label: 'הכנסות',          icon: ArrowDownLeft },
       { to: '/expenses',          label: 'הוצאות',          icon: Wallet },
+      { to: '/balance',           label: 'מאזן',            icon: Scale },
       { to: '/reports',           label: 'דוחות',           icon: BarChart2 },
     ],
   },
