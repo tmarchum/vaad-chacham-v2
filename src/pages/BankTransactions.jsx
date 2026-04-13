@@ -194,6 +194,10 @@ export default function BankTransactions() {
     const nameParts = extractNameParts(matchDialog.description)
 
     if (nameParts.length >= 2) {
+      const unit = allUnits.find(u => u.id === unitId)
+      const building = selectedBuilding
+      const fee = unit && building ? calcUnitFee(unit, building) : 0
+
       const unmatchedCredits = allTx.filter(tx =>
         tx.building_id === selectedBuilding?.id &&
         tx.match_status === 'unmatched' &&
@@ -203,6 +207,9 @@ export default function BankTransactions() {
 
       let autoCount = 0
       for (const tx of unmatchedCredits) {
+        const credit = Number(tx.credit) || 0
+        // Skip if amount is more than 2x the unit's fee
+        if (fee > 0 && credit > fee * 2) continue
         const txParts = extractNameParts(tx.description)
         if (txParts.length < 2) continue // Skip generic descriptions
         const overlap = nameParts.filter(p =>
@@ -211,7 +218,7 @@ export default function BankTransactions() {
         if (overlap.length >= 2) {
           await updateTx(tx.id, { unit_id: unitId, match_status: 'matched' })
           const m = tx.month || monthKey
-          creditsByMonth[m] = (creditsByMonth[m] || 0) + (Number(tx.credit) || 0)
+          creditsByMonth[m] = (creditsByMonth[m] || 0) + credit
           autoCount++
         }
       }
