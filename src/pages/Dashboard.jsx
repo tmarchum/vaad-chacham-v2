@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { HDate, months, gematriya } from '@hebcal/core'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -14,6 +15,7 @@ import {
   Zap,
   Info,
   AlertCircle,
+  Calendar,
 } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -144,14 +146,43 @@ function Dashboard() {
     }
   }
 
+  // Hebrew date
+  const [hebrewDate, setHebrewDate] = useState('')
+  useEffect(() => {
+    function updateDate() {
+      const hd = new HDate()
+      setHebrewDate(hd.render('he'))
+    }
+    updateDate()
+    // Update at midnight
+    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
+    const timer = setTimeout(updateDate, msUntilMidnight)
+    return () => clearTimeout(timer)
+  }, [])
+
+  const WEEKDAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+  const dayOfWeek = WEEKDAYS_HE[now.getDay()]
+  const gregDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-        דשבורד {selectedBuilding ? `- ${selectedBuilding.name}` : ''}{' '}
-        <span className="text-base font-normal text-[var(--text-secondary)]">
-          {monthLabel} {now.getFullYear()}
-        </span>
-      </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+          דשבורד {selectedBuilding ? `- ${selectedBuilding.name}` : ''}
+        </h1>
+        <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-4 py-2">
+          <Calendar className="h-4 w-4 text-[var(--primary)]" />
+          <span>יום {dayOfWeek}</span>
+          <span className="text-[var(--text-muted)]">|</span>
+          <span>{gregDate}</span>
+          {hebrewDate && (
+            <>
+              <span className="text-[var(--text-muted)]">|</span>
+              <span className="font-medium text-[var(--text-primary)]">{hebrewDate}</span>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
