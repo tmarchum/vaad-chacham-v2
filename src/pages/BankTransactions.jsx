@@ -116,12 +116,8 @@ export default function BankTransactions() {
     })
   }, [units, transactions, allPayments, selectedBuilding, monthKey, residentMap])
 
-  // Sync payment record based on all matched transactions for a unit+month
-  const syncPayment = async (unitId, month) => {
-    const matchedForUnit = transactions.filter(tx =>
-      tx.match_status === 'matched' && tx.unit_id === unitId
-    )
-    const totalPaid = matchedForUnit.reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
+  // Sync payment record — totalPaid is passed directly to avoid stale closure
+  const syncPayment = async (unitId, month, totalPaid) => {
     const unit = units.find(u => u.id === unitId)
     const fee = calcUnitFee(unit, selectedBuilding)
     const status = totalPaid >= fee ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
@@ -171,9 +167,22 @@ export default function BankTransactions() {
       month: monthKey,
     })
 
+    // Track all matched credits per month so we can compute totals
+    // Start with existing matched transactions from state (still valid, we only added new ones)
+    const creditsByMonth = {}
+    allTx.filter(tx =>
+      tx.building_id === selectedBuilding?.id &&
+      tx.match_status === 'matched' &&
+      tx.unit_id === unitId
+    ).forEach(tx => {
+      const m = tx.month || monthKey
+      creditsByMonth[m] = (creditsByMonth[m] || 0) + (Number(tx.credit) || 0)
+    })
+    // Add the transaction we just matched
+    creditsByMonth[monthKey] = (creditsByMonth[monthKey] || 0) + (Number(matchDialog.credit) || 0)
+
     // Auto-match other unmatched transactions with same name parts
     const nameParts = extractNameParts(matchDialog.description)
-    const monthsToSync = new Set([monthKey])
 
     if (nameParts.length > 0) {
       const unmatchedCredits = allTx.filter(tx =>
@@ -186,12 +195,12 @@ export default function BankTransactions() {
       let autoCount = 0
       for (const tx of unmatchedCredits) {
         const txParts = extractNameParts(tx.description)
-        // Match if at least 2 name parts overlap (or all parts if only 1-2)
         const overlap = nameParts.filter(p => txParts.some(tp => tp.includes(p) || p.includes(tp)))
         const threshold = Math.min(nameParts.length, 2)
         if (overlap.length >= threshold) {
           await updateTx(tx.id, { unit_id: unitId, match_status: 'matched' })
-          if (tx.month) monthsToSync.add(tx.month)
+          const m = tx.month || monthKey
+          creditsByMonth[m] = (creditsByMonth[m] || 0) + (Number(tx.credit) || 0)
           autoCount++
         }
       }
@@ -206,9 +215,9 @@ export default function BankTransactions() {
     setMatchDialog(null)
     await refresh()
 
-    // Sync payments for all affected months
-    for (const month of monthsToSync) {
-      await syncPayment(unitId, month)
+    // Sync payments for all affected months with pre-computed totals
+    for (const [month, total] of Object.entries(creditsByMonth)) {
+      await syncPayment(unitId, month, total)
     }
   }
 
@@ -222,8 +231,21 @@ export default function BankTransactions() {
   const handleUnmatch = async (tx) => {
     const unitId = tx.unit_id
     await updateTx(tx.id, { unit_id: null, match_status: 'unmatched' })
-    await refresh()
-    if (unitId) await syncPayment(unitId, monthKey)
+
+    // Recalculate total for this unit, minus the unmatched tx
+    if (unitId) {
+      const remaining = allTx.filter(t =>
+        t.building_id === selectedBuilding?.id &&
+        t.match_status === 'matched' &&
+        t.unit_id === unitId &&
+        t.month === monthKey &&
+        t.id !== tx.id
+      ).reduce((s, t) => s + (Number(t.credit) || 0), 0)
+      await refresh()
+      await syncPayment(unitId, monthKey, remaining)
+    } else {
+      await refresh()
+    }
   }
 
   // Auto-match: try to match unmatched credits to units by resident name
