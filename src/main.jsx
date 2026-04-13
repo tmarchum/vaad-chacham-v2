@@ -30,6 +30,7 @@ import BankTransactions from '@/pages/BankTransactions'
 import BankIncome from '@/pages/BankIncome'
 import Balance from '@/pages/Balance'
 import ExpenseAnalysis from '@/pages/ExpenseAnalysis'
+import CollectionCases from '@/pages/CollectionCases'
 import './index.css'
 
 createRoot(document.getElementById('root')).render(
@@ -66,6 +67,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="income" element={<BankIncome />} />
               <Route path="balance" element={<Balance />} />
               <Route path="expense-analysis" element={<ExpenseAnalysis />} />
+              <Route path="collection-cases" element={<CollectionCases />} />
               <Route path="admin" element={<AdminSettings />} />
             </Route>
           </Route>
