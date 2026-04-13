@@ -265,12 +265,19 @@ export default function BankTransactions() {
 
     for (const tx of unmatched) {
       const desc = (tx.description || '').toLowerCase()
+      const fee = calcUnitFee(tx, selectedBuilding)
+      // Skip high-amount transactions (likely not regular payments)
+      if (Number(tx.credit) > 1500) continue
       // Try to find a unit whose resident name appears in the transaction description
       for (const unit of units) {
         const name = residentMap[unit.id]
         if (!name) continue
-        const parts = name.split(' ').filter(p => p.length > 2)
-        if (parts.some(part => desc.includes(part.toLowerCase()))) {
+        const parts = name.split(' ').filter(p => p.length >= 3)
+        const matchingParts = parts.filter(part => desc.includes(part.toLowerCase()))
+        // Require at least 2 matching name parts (first + last name)
+        if (parts.length >= 2 && matchingParts.length >= 2) {
+          const unitFee = calcUnitFee(unit, selectedBuilding)
+          if (Number(tx.credit) > unitFee * 2) continue
           await updateTx(tx.id, { unit_id: unit.id, match_status: 'matched', month: monthKey })
           matched++
           break
