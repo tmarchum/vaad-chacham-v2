@@ -25,6 +25,7 @@ const MATCH_STATUS = {
   unmatched: { label: 'לא משויך', variant: 'warning', icon: AlertCircle },
   matched:   { label: 'משויך',     variant: 'success', icon: CheckCircle2 },
   ignored:   { label: 'התעלם',     variant: 'secondary', icon: XIcon },
+  excluded:  { label: 'לא רלוונטי', variant: 'destructive', icon: XIcon },
 }
 
 const STATUS_FILTERS = [
@@ -32,6 +33,7 @@ const STATUS_FILTERS = [
   { key: 'unmatched', label: 'לא משויך' },
   { key: 'matched', label: 'משויך' },
   { key: 'ignored', label: 'התעלם' },
+  { key: 'excluded', label: 'לא רלוונטי' },
 ]
 
 export default function BankTransactions() {
@@ -85,13 +87,15 @@ export default function BankTransactions() {
     [transactions, statusFilter]
   )
 
-  // Summary
+  // Summary (exclude 'excluded' transactions from totals)
   const summary = useMemo(() => {
-    const totalCredit = transactions.reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
-    const totalDebit = transactions.reduce((s, tx) => s + (Number(tx.debit) || 0), 0)
+    const activeTx = transactions.filter(tx => tx.match_status !== 'excluded')
+    const totalCredit = activeTx.reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
+    const totalDebit = activeTx.reduce((s, tx) => s + (Number(tx.debit) || 0), 0)
     const matched = transactions.filter(tx => tx.match_status === 'matched').length
     const unmatched = transactions.filter(tx => tx.match_status === 'unmatched').length
-    return { totalCredit, totalDebit, matched, unmatched, total: transactions.length }
+    const excluded = transactions.filter(tx => tx.match_status === 'excluded').length
+    return { totalCredit, totalDebit, matched, unmatched, excluded, total: transactions.length }
   }, [transactions])
 
   // Payment tracking: which units paid this month
@@ -224,6 +228,12 @@ export default function BankTransactions() {
   // Ignore a transaction
   const handleIgnore = async (tx) => {
     await updateTx(tx.id, { match_status: 'ignored' })
+    refresh()
+  }
+
+  // Exclude a transaction (not relevant — returned check, fee, etc.)
+  const handleExclude = async (tx) => {
+    await updateTx(tx.id, { match_status: 'excluded', unit_id: null })
     refresh()
   }
 
@@ -444,6 +454,9 @@ export default function BankTransactions() {
                           <Button size="sm" variant="outline" onClick={() => handleIgnore(tx)} title="התעלם">
                             <XIcon className="h-3 w-3" />
                           </Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleExclude(tx)} title="לא רלוונטי">
+                            <XIcon className="h-3 w-3" />
+                          </Button>
                         </>
                       )}
                       {tx.match_status === 'matched' && (
@@ -451,7 +464,7 @@ export default function BankTransactions() {
                           <XIcon className="h-3 w-3" />
                         </Button>
                       )}
-                      {tx.match_status === 'ignored' && (
+                      {(tx.match_status === 'ignored' || tx.match_status === 'excluded') && (
                         <Button size="sm" variant="outline" onClick={() => handleUnmatch(tx)} title="החזר">
                           <Link2 className="h-3 w-3" />
                         </Button>

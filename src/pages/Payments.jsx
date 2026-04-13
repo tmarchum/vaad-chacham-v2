@@ -9,7 +9,7 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { formatCurrency, formatDate, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
-import { CreditCard, Plus, Pencil, Trash2, CalendarPlus } from 'lucide-react'
+import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3 } from 'lucide-react'
 
 const HEBREW_MONTHS = [
   { value: '01', label: 'ינואר' },
@@ -73,6 +73,7 @@ function Payments() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [detailPayment, setDetailPayment] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [viewMode, setViewMode] = useState('monthly') // 'monthly' | 'yearly'
 
   const yearOptions = useMemo(() => {
     const currentYear = now.getFullYear()
@@ -168,6 +169,40 @@ function Payments() {
     const overdue = monthPayments.filter((p) => p.status === 'overdue').length
     return { collected, partial, pending, overdue, total: monthPayments.length }
   }, [allPayments, monthKey, buildingUnitIds])
+
+  // Yearly cumulative gap per unit
+  const yearlySummary = useMemo(() => {
+    const targetUnits = buildingFilter === 'all'
+      ? allUnits
+      : allUnits.filter((u) => u.buildingId === buildingFilter)
+
+    const yearPayments = allPayments.filter((p) => p.month && p.month.startsWith(selectedYear + '-'))
+
+    // Count how many months have passed this year (for expected calculation)
+    const currentYear = new Date().getFullYear()
+    const currentMonth = new Date().getMonth() + 1
+    const totalMonths = String(currentYear) === selectedYear
+      ? currentMonth
+      : 12
+
+    return [...targetUnits].sort(sortByUnitNumber).map((unit) => {
+      const building = buildingMap[unit.buildingId || unit.building_id]
+      const fee = calcUnitFee(unit, building)
+      const expected = fee * totalMonths
+      const unitPayments = yearPayments.filter((p) => p.unit_id === unit.id || p.unitId === unit.id)
+      const collected = unitPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+      const gap = expected - collected
+      const paidMonths = unitPayments.filter((p) => p.status === 'paid').length
+      const partialMonths = unitPayments.filter((p) => p.status === 'partial').length
+      return { unit, fee, expected, collected, gap, totalMonths, paidMonths, partialMonths }
+    })
+  }, [allUnits, allPayments, selectedYear, buildingFilter, buildingMap, unitMap])
+
+  const yearlyTotals = useMemo(() => {
+    const expected = yearlySummary.reduce((s, r) => s + r.expected, 0)
+    const collected = yearlySummary.reduce((s, r) => s + r.collected, 0)
+    return { expected, collected, gap: expected - collected }
+  }, [yearlySummary])
 
   const getUnitDisplay = (unitId) => {
     const unit = unitMap[unitId]
@@ -302,26 +337,39 @@ function Payments() {
           <p className="text-sm text-[var(--text-secondary)]">{filtered.length} תשלומים</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleCreateMonthly}>
-            <CalendarPlus className="h-4 w-4" />
-            צור תשלומים חודשיים
+          <Button
+            variant={viewMode === 'yearly' ? 'default' : 'outline'}
+            onClick={() => setViewMode(viewMode === 'yearly' ? 'monthly' : 'yearly')}
+          >
+            <BarChart3 className="h-4 w-4" />
+            סיכום שנתי
           </Button>
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            תשלום חדש
-          </Button>
+          {viewMode === 'monthly' && (
+            <>
+              <Button variant="outline" onClick={handleCreateMonthly}>
+                <CalendarPlus className="h-4 w-4" />
+                צור תשלומים חודשיים
+              </Button>
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                תשלום חדש
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Month/Year selectors */}
       <div className="flex flex-wrap gap-3 items-end">
-        <FormSelect
-          label="חודש"
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          options={HEBREW_MONTHS}
-          className="w-36"
-        />
+        {viewMode === 'monthly' && (
+          <FormSelect
+            label="חודש"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            options={HEBREW_MONTHS}
+            className="w-36"
+          />
+        )}
         <FormSelect
           label="שנה"
           value={selectedYear}
@@ -352,113 +400,188 @@ function Payments() {
         ))}
       </div>
 
-      {/* Status filter pills */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((sf) => (
-          <Button
-            key={sf.key}
-            variant={statusFilter === sf.key ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter(sf.key)}
-          >
-            {sf.label}
-          </Button>
-        ))}
-      </div>
+      {viewMode === 'yearly' ? (
+        <>
+          {/* Yearly summary cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-[var(--text-secondary)]">צפי שנתי</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(yearlyTotals.expected)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-[var(--text-secondary)]">נגבה בפועל</p>
+                <p className="text-2xl font-bold text-[var(--success)]">{formatCurrency(yearlyTotals.collected)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-[var(--text-secondary)]">פער מצטבר</p>
+                <p className={`text-2xl font-bold ${yearlyTotals.gap > 0 ? 'text-red-500' : 'text-[var(--success)]'}`}>
+                  {formatCurrency(yearlyTotals.gap)}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">סה״כ נגבה</p>
-            <p className="text-2xl font-bold text-[var(--success)]">{formatCurrency(summary.collected)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">ממתינים לתשלום</p>
-            <p className="text-2xl font-bold text-[var(--warning)]">{summary.pending}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">סה״כ תשלומים</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.total}</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={CreditCard}
-          title="אין תשלומים"
-          description="לא נמצאו תשלומים לחודש הנבחר"
-          actionLabel="תשלום חדש"
-          onAction={openCreate}
-        />
-      ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בעלים</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סכום</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך תשלום</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">אמצעי תשלום</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סטטוס</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פעולות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p) => {
-                  const st = STATUS_MAP[p.status] || STATUS_MAP.pending
-                  return (
-                    <tr
-                      key={p.id}
-                      className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] cursor-pointer transition-colors"
-                      onClick={() => setDetailPayment(p)}
-                    >
-                      <td className="p-3">{getUnitDisplay(p.unitId)}</td>
-                      <td className="p-3">{getOwnerName(p.unitId)}</td>
+          {/* Yearly per-unit table */}
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
+                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בעלים</th>
+                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">חיוב חודשי</th>
+                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">צפי ({yearlySummary[0]?.totalMonths || 0} חודשים)</th>
+                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">נגבה</th>
+                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פער</th>
+                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">חודשים ששולמו</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {yearlySummary.map((row) => (
+                    <tr key={row.unit.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors">
+                      <td className="p-3">דירה {row.unit.unit_number || row.unit.number}</td>
+                      <td className="p-3">{row.unit.ownerName || ''}</td>
+                      <td className="p-3">{formatCurrency(row.fee)}</td>
+                      <td className="p-3">{formatCurrency(row.expected)}</td>
+                      <td className="p-3">{formatCurrency(row.collected)}</td>
                       <td className="p-3">
-                        {formatCurrency(p.amount || 0)}
-                        {p.status === 'partial' && (() => {
-                          const unit = unitMap[p.unitId]
-                          const building = buildingMap[unit?.buildingId || unit?.building_id]
-                          const fee = calcUnitFee(unit, building)
-                          const gap = fee - (Number(p.amount) || 0)
-                          return gap > 0 ? <span className="text-xs text-red-500 mr-1">(פער: {formatCurrency(gap)})</span> : null
-                        })()}
-                      </td>
-                      <td className="p-3">{p.paidAt ? formatDate(p.paidAt) : '-'}</td>
-                      <td className="p-3">{p.method || '-'}</td>
-                      <td className="p-3">
-                        <Badge variant={st.variant}>{st.label}</Badge>
+                        <span className={row.gap > 0 ? 'text-red-500 font-medium' : 'text-[var(--success)]'}>
+                          {row.gap > 0 ? `-${formatCurrency(row.gap)}` : formatCurrency(0)}
+                        </span>
                       </td>
                       <td className="p-3">
-                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTarget(p)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                          </Button>
-                        </div>
+                        {row.paidMonths}/{row.totalMonths}
+                        {row.partialMonths > 0 && <span className="text-xs text-[var(--warning)] mr-1">({row.partialMonths} חלקי)</span>}
                       </td>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      ) : (
+        <>
+          {/* Status filter pills */}
+          <div className="flex flex-wrap gap-2">
+            {STATUS_FILTERS.map((sf) => (
+              <Button
+                key={sf.key}
+                variant={statusFilter === sf.key ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter(sf.key)}
+              >
+                {sf.label}
+              </Button>
+            ))}
           </div>
-        </Card>
+
+          {/* Summary cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-[var(--text-secondary)]">סה״כ נגבה</p>
+                <p className="text-2xl font-bold text-[var(--success)]">{formatCurrency(summary.collected)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-[var(--text-secondary)]">ממתינים לתשלום</p>
+                <p className="text-2xl font-bold text-[var(--warning)]">{summary.pending}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-[var(--text-secondary)]">סה״כ תשלומים</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.total}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Table */}
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={CreditCard}
+              title="אין תשלומים"
+              description="לא נמצאו תשלומים לחודש הנבחר"
+              actionLabel="תשלום חדש"
+              onAction={openCreate}
+            />
+          ) : (
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--border)]">
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בעלים</th>
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סכום</th>
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך תשלום</th>
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">אמצעי תשלום</th>
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סטטוס</th>
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פעולות</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((p) => {
+                      const st = STATUS_MAP[p.status] || STATUS_MAP.pending
+                      return (
+                        <tr
+                          key={p.id}
+                          className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] cursor-pointer transition-colors"
+                          onClick={() => setDetailPayment(p)}
+                        >
+                          <td className="p-3">{getUnitDisplay(p.unitId)}</td>
+                          <td className="p-3">{getOwnerName(p.unitId)}</td>
+                          <td className="p-3">
+                            {(() => {
+                              const unit = unitMap[p.unitId]
+                              const building = buildingMap[unit?.buildingId || unit?.building_id]
+                              const fee = calcUnitFee(unit, building)
+                              const paid = Number(p.amount) || 0
+                              const gap = fee - paid
+                              return (
+                                <>
+                                  {formatCurrency(paid)}
+                                  <span className="text-xs text-[var(--text-secondary)] mr-1">/ {formatCurrency(fee)}</span>
+                                  {gap > 0 && <span className="text-xs text-red-500 mr-1">(פער: {formatCurrency(gap)})</span>}
+                                </>
+                              )
+                            })()}
+                          </td>
+                          <td className="p-3">{p.paidAt ? formatDate(p.paidAt) : '-'}</td>
+                          <td className="p-3">{p.method || '-'}</td>
+                          <td className="p-3">
+                            <Badge variant={st.variant}>{st.label}</Badge>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDeleteTarget(p)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
       )}
 
       {/* Detail Modal */}
