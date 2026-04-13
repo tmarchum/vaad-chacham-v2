@@ -154,14 +154,16 @@ export default function BankTransactions() {
   }
 
   // Extract name parts from a transaction description for matching
+  const GENERIC_WORDS = ['זיכוי', 'מיידי', 'מבנק', 'העברה', 'תשלום', 'הפקדה', 'שיק', 'צק']
   const extractNameParts = (desc) => {
     if (!desc) return []
     // Remove common prefixes like "זיכוי מבל"ל מ", "זיכוי מדיסקונט מ"
     const cleaned = desc
       .replace(/זיכוי\s+מ[^\s]*\s+מ/g, '')
       .replace(/[,."'\/\\]/g, ' ')
+      .replace(/\d{5,}/g, '') // remove long numbers (reference IDs)
       .trim()
-    return cleaned.split(/\s+/).filter(p => p.length > 2)
+    return cleaned.split(/\s+/).filter(p => p.length > 2 && !GENERIC_WORDS.includes(p))
   }
 
   // Match a transaction to a unit + auto-match related transactions by name
@@ -188,9 +190,10 @@ export default function BankTransactions() {
     creditsByMonth[monthKey] = (creditsByMonth[monthKey] || 0) + (Number(matchDialog.credit) || 0)
 
     // Auto-match other unmatched transactions with same name parts
+    // Only if we have at least 2 meaningful name parts (not generic descriptions)
     const nameParts = extractNameParts(matchDialog.description)
 
-    if (nameParts.length > 0) {
+    if (nameParts.length >= 2) {
       const unmatchedCredits = allTx.filter(tx =>
         tx.building_id === selectedBuilding?.id &&
         tx.match_status === 'unmatched' &&
@@ -201,9 +204,11 @@ export default function BankTransactions() {
       let autoCount = 0
       for (const tx of unmatchedCredits) {
         const txParts = extractNameParts(tx.description)
-        const overlap = nameParts.filter(p => txParts.some(tp => tp.includes(p) || p.includes(tp)))
-        const threshold = Math.min(nameParts.length, 2)
-        if (overlap.length >= threshold) {
+        if (txParts.length < 2) continue // Skip generic descriptions
+        const overlap = nameParts.filter(p =>
+          p.length >= 3 && txParts.some(tp => tp.length >= 3 && (tp.includes(p) || p.includes(tp)))
+        )
+        if (overlap.length >= 2) {
           await updateTx(tx.id, { unit_id: unitId, match_status: 'matched' })
           const m = tx.month || monthKey
           creditsByMonth[m] = (creditsByMonth[m] || 0) + (Number(tx.credit) || 0)
