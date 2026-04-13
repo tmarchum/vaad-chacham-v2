@@ -520,7 +520,7 @@ function Payments() {
                     <tr className="border-b border-[var(--border)]">
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בעלים</th>
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סכום</th>
+                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">נדרש | בפועל</th>
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך תשלום</th>
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">אמצעי תשלום</th>
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סטטוס</th>
@@ -547,8 +547,10 @@ function Payments() {
                               const gap = fee - paid
                               return (
                                 <>
-                                  {formatCurrency(paid)}
-                                  <span className="text-xs text-[var(--text-secondary)] mr-1">/ {formatCurrency(fee)}</span>
+                                  <span className="font-medium">{formatCurrency(fee)}</span>
+                                  <span className="text-xs text-[var(--text-secondary)] mr-1">נדרש</span>
+                                  <span className="mr-2">| {formatCurrency(paid)}</span>
+                                  <span className="text-xs text-[var(--text-secondary)]">בפועל</span>
                                   {gap > 0 && <span className="text-xs text-red-500 mr-1">(פער: {formatCurrency(gap)})</span>}
                                 </>
                               )
