@@ -35,7 +35,7 @@ function Dashboard() {
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const monthLabel = HEBREW_MONTHS[now.getMonth()]
 
-  const { units, payments, issues, expenses } = useMemo(() => {
+  const { units, payments, issues, expenses, agentAlerts } = useMemo(() => {
     const units = selectedBuilding
       ? allUnits.filter((u) => u.buildingId === selectedBuilding.id)
       : allUnits
