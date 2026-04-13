@@ -36,10 +36,10 @@ const STATUS_FILTERS = [
 
 export default function BankTransactions() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx, update, refresh } = useCollection('bankTransactions')
+  const { data: allTx, update: updateTx, refresh } = useCollection('bankTransactions')
   const { data: allUnits } = useCollection('units')
   const { data: allResidents } = useCollection('residents')
-  const { data: allPayments, create: createPayment } = useCollection('payments')
+  const { data: allPayments, create: createPayment, update: updatePayment, refresh: refreshPayments } = useCollection('payments')
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
@@ -116,28 +116,66 @@ export default function BankTransactions() {
     })
   }, [units, transactions, allPayments, selectedBuilding, monthKey, residentMap])
 
+  // Sync payment record based on all matched transactions for a unit+month
+  const syncPayment = async (unitId, month) => {
+    const matchedForUnit = transactions.filter(tx =>
+      tx.match_status === 'matched' && tx.unit_id === unitId
+    )
+    const totalPaid = matchedForUnit.reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
+    const unit = units.find(u => u.id === unitId)
+    const fee = calcUnitFee(unit, selectedBuilding)
+    const status = totalPaid >= fee ? 'paid' : totalPaid > 0 ? 'partial' : 'pending'
+
+    const existingPayment = allPayments.find(p =>
+      (p.unit_id || p.unitId) === unitId && p.month === month
+    )
+
+    if (existingPayment) {
+      await updatePayment(existingPayment.id, {
+        amount: totalPaid,
+        status,
+        paid_at: totalPaid > 0 ? new Date().toISOString().split('T')[0] : null,
+        method: 'הוראת קבע',
+      })
+    } else if (totalPaid > 0) {
+      await createPayment({
+        building_id: selectedBuilding.id,
+        unit_id: unitId,
+        amount: totalPaid,
+        month,
+        status,
+        paid_at: new Date().toISOString().split('T')[0],
+        method: 'הוראת קבע',
+      })
+    }
+    refreshPayments()
+  }
+
   // Match a transaction to a unit
   const handleMatch = async (unitId) => {
     if (!matchDialog) return
-    await update(matchDialog.id, {
+    await updateTx(matchDialog.id, {
       unit_id: unitId,
       match_status: 'matched',
       month: monthKey,
     })
     setMatchDialog(null)
-    refresh()
+    await refresh()
+    await syncPayment(unitId, monthKey)
   }
 
   // Ignore a transaction
   const handleIgnore = async (tx) => {
-    await update(tx.id, { match_status: 'ignored' })
+    await updateTx(tx.id, { match_status: 'ignored' })
     refresh()
   }
 
   // Unmatch a transaction
   const handleUnmatch = async (tx) => {
-    await update(tx.id, { unit_id: null, match_status: 'unmatched' })
-    refresh()
+    const unitId = tx.unit_id
+    await updateTx(tx.id, { unit_id: null, match_status: 'unmatched' })
+    await refresh()
+    if (unitId) await syncPayment(unitId, monthKey)
   }
 
   // Auto-match: try to match unmatched credits to units by resident name
@@ -153,7 +191,7 @@ export default function BankTransactions() {
         if (!name) continue
         const parts = name.split(' ').filter(p => p.length > 2)
         if (parts.some(part => desc.includes(part.toLowerCase()))) {
-          await update(tx.id, { unit_id: unit.id, match_status: 'matched', month: monthKey })
+          await updateTx(tx.id, { unit_id: unit.id, match_status: 'matched', month: monthKey })
           matched++
           break
         }
@@ -453,7 +491,7 @@ export default function BankTransactions() {
                       {formatCurrency(totalPaid)} / {formatCurrency(fee)}
                     </p>
                     <p className="text-xs text-[var(--text-secondary)]">
-                      {status === 'paid' ? 'שולם' : status === 'partial' ? 'חלקי' : 'לא שולם'}
+                      {status === 'paid' ? 'שולם' : status === 'partial' ? `חלקי (פער: ${formatCurrency(fee - totalPaid)})` : 'לא שולם'}
                     </p>
                   </div>
                 </div>

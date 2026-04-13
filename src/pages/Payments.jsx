@@ -28,6 +28,7 @@ const HEBREW_MONTHS = [
 
 const STATUS_MAP = {
   paid: { label: 'שולם', variant: 'success' },
+  partial: { label: 'חלקי', variant: 'warning' },
   pending: { label: 'ממתין', variant: 'warning' },
   overdue: { label: 'באיחור', variant: 'danger' },
 }
@@ -35,6 +36,7 @@ const STATUS_MAP = {
 const STATUS_FILTERS = [
   { key: 'all', label: 'הכל' },
   { key: 'paid', label: 'שולם' },
+  { key: 'partial', label: 'חלקי' },
   { key: 'pending', label: 'ממתין' },
   { key: 'overdue', label: 'באיחור' },
 ]
@@ -160,10 +162,11 @@ function Payments() {
       if (buildingUnitIds && !buildingUnitIds.has(p.unitId)) return false
       return true
     })
-    const collected = monthPayments.filter((p) => p.status === 'paid').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    const collected = monthPayments.filter((p) => p.status === 'paid' || p.status === 'partial').reduce((s, p) => s + (Number(p.amount) || 0), 0)
+    const partial = monthPayments.filter((p) => p.status === 'partial').length
     const pending = monthPayments.filter((p) => p.status === 'pending').length
     const overdue = monthPayments.filter((p) => p.status === 'overdue').length
-    return { collected, pending, overdue, total: monthPayments.length }
+    return { collected, partial, pending, overdue, total: monthPayments.length }
   }, [allPayments, monthKey, buildingUnitIds])
 
   const getUnitDisplay = (unitId) => {
@@ -420,7 +423,16 @@ function Payments() {
                     >
                       <td className="p-3">{getUnitDisplay(p.unitId)}</td>
                       <td className="p-3">{getOwnerName(p.unitId)}</td>
-                      <td className="p-3">{formatCurrency(p.amount || 0)}</td>
+                      <td className="p-3">
+                        {formatCurrency(p.amount || 0)}
+                        {p.status === 'partial' && (() => {
+                          const unit = unitMap[p.unitId]
+                          const building = buildingMap[unit?.buildingId || unit?.building_id]
+                          const fee = calcUnitFee(unit, building)
+                          const gap = fee - (Number(p.amount) || 0)
+                          return gap > 0 ? <span className="text-xs text-red-500 mr-1">(פער: {formatCurrency(gap)})</span> : null
+                        })()}
+                      </td>
                       <td className="p-3">{p.paidAt ? formatDate(p.paidAt) : '-'}</td>
                       <td className="p-3">{p.method || '-'}</td>
                       <td className="p-3">

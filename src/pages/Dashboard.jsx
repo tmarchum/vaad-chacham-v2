@@ -61,7 +61,7 @@ function Dashboard() {
 
   // KPI calculations
   const monthPayments = payments.filter((p) => p.month === currentMonth)
-  const paidPayments = monthPayments.filter((p) => p.status === 'paid')
+  const paidPayments = monthPayments.filter((p) => p.status === 'paid' || p.status === 'partial')
   const collected = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
   // Expected = sum of each unit's calculated fee (respects tiers)
   const expected = units.reduce((sum, u) => sum + calcUnitFee(u, selectedBuilding), 0)
