@@ -411,24 +411,40 @@ export default function BankTransactions() {
               </div>
               <p className="text-sm text-[var(--text-secondary)]">בחר דירה:</p>
               <div className="max-h-64 overflow-y-auto space-y-1">
-                {units.filter(unit => {
-                  // Hide units that already have a matched transaction this month
-                  const alreadyMatched = transactions.some(tx =>
+                {units.map(unit => {
+                  const fee = calcUnitFee(unit, selectedBuilding)
+                  const matchedTxForUnit = transactions.filter(tx =>
                     tx.match_status === 'matched' && tx.unit_id === unit.id
                   )
-                  return !alreadyMatched
-                }).map(unit => (
-                  <button
-                    key={unit.id}
-                    onClick={() => handleMatch(unit.id)}
-                    className="w-full flex items-center justify-between p-2.5 rounded-lg hover:bg-[var(--surface-hover)] transition-colors text-sm"
-                  >
-                    <span>דירה {unit.number} — {residentMap[unit.id] || 'ללא דייר'}</span>
-                    <span className="text-xs text-[var(--text-secondary)]">
-                      {formatCurrency(calcUnitFee(unit, selectedBuilding))}/חודש
-                    </span>
-                  </button>
-                ))}
+                  const alreadyPaid = matchedTxForUnit.reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
+                  const remaining = fee - alreadyPaid
+                  const isPaid = alreadyPaid >= fee
+
+                  return (
+                    <button
+                      key={unit.id}
+                      onClick={() => handleMatch(unit.id)}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-lg hover:bg-[var(--surface-hover)] transition-colors text-sm ${
+                        isPaid ? 'opacity-40' : ''
+                      }`}
+                    >
+                      <span>
+                        דירה {unit.number} — {residentMap[unit.id] || 'ללא דייר'}
+                        {alreadyPaid > 0 && !isPaid && (
+                          <span className="text-xs text-amber-500 mr-1">
+                            (שולם {formatCurrency(alreadyPaid)}, חסר {formatCurrency(remaining)})
+                          </span>
+                        )}
+                        {isPaid && (
+                          <span className="text-xs text-green-500 mr-1">(שולם מלא)</span>
+                        )}
+                      </span>
+                      <span className="text-xs text-[var(--text-secondary)]">
+                        {formatCurrency(fee)}/חודש
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
