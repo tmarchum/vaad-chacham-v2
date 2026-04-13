@@ -519,6 +519,7 @@ function Payments() {
                   <thead>
                     <tr className="border-b border-[var(--border)]">
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
+                      {buildingFilter === 'all' && <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בניין</th>}
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בעלים</th>
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">נדרש | בפועל</th>
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך תשלום</th>
@@ -537,6 +538,7 @@ function Payments() {
                           onClick={() => setDetailPayment(p)}
                         >
                           <td className="p-3">{getUnitDisplay(p.unitId)}</td>
+                          {buildingFilter === 'all' && <td className="p-3 text-xs">{getBuildingName(p.unitId)}</td>}
                           <td className="p-3">{getOwnerName(p.unitId)}</td>
                           <td className="p-3">
                             {(() => {
