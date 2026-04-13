@@ -38,14 +38,14 @@ export default function Balance() {
     return HEBREW_MONTHS.map(({ value: month, label }) => {
       const monthKey = `${selectedYear}-${month}`
 
-      // Bank income: credits (exclude 'excluded' transactions)
+      // Bank income: credits (exclude 'excluded' and 'suggested' transactions)
       const bankIncome = allTx
-        .filter(tx => tx.building_id === selectedBuilding.id && tx.match_status !== 'excluded' && tx.month === monthKey && Number(tx.credit) > 0)
+        .filter(tx => tx.building_id === selectedBuilding.id && tx.match_status !== 'excluded' && tx.match_status !== 'suggested' && tx.month === monthKey && Number(tx.credit) > 0)
         .reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
 
-      // Bank expenses: debits (exclude 'excluded' transactions)
+      // Bank expenses: debits (exclude 'excluded' and 'suggested' transactions)
       const bankExpenses = allTx
-        .filter(tx => tx.building_id === selectedBuilding.id && tx.match_status !== 'excluded' && tx.month === monthKey && Number(tx.debit) > 0)
+        .filter(tx => tx.building_id === selectedBuilding.id && tx.match_status !== 'excluded' && tx.match_status !== 'suggested' && tx.month === monthKey && Number(tx.debit) > 0)
         .reduce((s, tx) => s + (Number(tx.debit) || 0), 0)
 
       // Manual expenses (not from bank)

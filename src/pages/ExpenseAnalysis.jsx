@@ -66,7 +66,7 @@ export default function ExpenseAnalysis() {
 
     // Group income by month
     allTx
-      .filter(tx => tx.building_id === selectedBuilding.id && tx.match_status !== 'excluded' && tx.month?.startsWith(selectedYear) && Number(tx.credit) > 0)
+      .filter(tx => tx.building_id === selectedBuilding.id && tx.match_status !== 'excluded' && tx.match_status !== 'suggested' && tx.month?.startsWith(selectedYear) && Number(tx.credit) > 0)
       .forEach(tx => {
         const m = tx.month
         if (!incomeByMonth[m]) incomeByMonth[m] = { total: 0, count: 0 }

@@ -9,7 +9,7 @@ import { FormSelect } from '@/components/common/FormField'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import {
   ArrowDownLeft, ArrowUpRight, Landmark, Link2, X as XIcon,
-  CheckCircle2, AlertCircle, Filter, ChevronDown,
+  CheckCircle2, AlertCircle, Filter, ChevronDown, Check,
 } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -22,15 +22,17 @@ const HEBREW_MONTHS = [
 ]
 
 const MATCH_STATUS = {
-  unmatched: { label: 'לא משויך', variant: 'warning', icon: AlertCircle },
-  matched:   { label: 'משויך',     variant: 'success', icon: CheckCircle2 },
-  ignored:   { label: 'התעלם',     variant: 'secondary', icon: XIcon },
-  excluded:  { label: 'לא רלוונטי', variant: 'destructive', icon: XIcon },
+  unmatched:  { label: 'לא משויך', variant: 'warning', icon: AlertCircle },
+  suggested:  { label: 'הצעה',     variant: 'outline',  icon: AlertCircle },
+  matched:    { label: 'משויך',     variant: 'success', icon: CheckCircle2 },
+  ignored:    { label: 'התעלם',     variant: 'secondary', icon: XIcon },
+  excluded:   { label: 'לא רלוונטי', variant: 'destructive', icon: XIcon },
 }
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'הכל' },
   { key: 'unmatched', label: 'לא משויך' },
+  { key: 'suggested', label: 'הצעות' },
   { key: 'matched', label: 'משויך' },
   { key: 'ignored', label: 'התעלם' },
   { key: 'excluded', label: 'לא רלוונטי' },
@@ -87,15 +89,15 @@ export default function BankTransactions() {
     [transactions, statusFilter]
   )
 
-  // Summary (exclude 'excluded' transactions from totals)
+  // Summary (exclude 'excluded' and 'suggested' from totals)
   const summary = useMemo(() => {
-    const activeTx = transactions.filter(tx => tx.match_status !== 'excluded')
+    const activeTx = transactions.filter(tx => tx.match_status !== 'excluded' && tx.match_status !== 'suggested')
     const totalCredit = activeTx.reduce((s, tx) => s + (Number(tx.credit) || 0), 0)
     const totalDebit = activeTx.reduce((s, tx) => s + (Number(tx.debit) || 0), 0)
     const matched = transactions.filter(tx => tx.match_status === 'matched').length
     const unmatched = transactions.filter(tx => tx.match_status === 'unmatched').length
-    const excluded = transactions.filter(tx => tx.match_status === 'excluded').length
-    return { totalCredit, totalDebit, matched, unmatched, excluded, total: transactions.length }
+    const suggested = transactions.filter(tx => tx.match_status === 'suggested').length
+    return { totalCredit, totalDebit, matched, unmatched, suggested, total: transactions.length }
   }, [transactions])
 
   // Payment tracking: which units paid this month
@@ -234,6 +236,37 @@ export default function BankTransactions() {
   // Exclude a transaction (not relevant — returned check, fee, etc.)
   const handleExclude = async (tx) => {
     await updateTx(tx.id, { match_status: 'excluded', unit_id: null })
+    refresh()
+  }
+
+  // Approve a suggestion — convert to matched and sync payment
+  const handleApproveSuggestion = async (tx) => {
+    await updateTx(tx.id, { match_status: 'matched' })
+
+    // Compute total for this unit+month and sync payment
+    const unitId = tx.unit_id
+    const creditsByMonth = {}
+    allTx.filter(t =>
+      t.building_id === selectedBuilding?.id &&
+      t.match_status === 'matched' &&
+      t.unit_id === unitId
+    ).forEach(t => {
+      const m = t.month || monthKey
+      creditsByMonth[m] = (creditsByMonth[m] || 0) + (Number(t.credit) || 0)
+    })
+    // Add this tx
+    const m = tx.month || monthKey
+    creditsByMonth[m] = (creditsByMonth[m] || 0) + (Number(tx.credit) || 0)
+
+    await refresh()
+    for (const [month, total] of Object.entries(creditsByMonth)) {
+      await syncPayment(unitId, month, total)
+    }
+  }
+
+  // Reject a suggestion — revert to unmatched
+  const handleRejectSuggestion = async (tx) => {
+    await updateTx(tx.id, { match_status: 'unmatched', unit_id: null })
     refresh()
   }
 
@@ -463,6 +496,19 @@ export default function BankTransactions() {
                           </Button>
                           <Button size="sm" variant="destructive" onClick={() => handleExclude(tx)} title="לא רלוונטי">
                             <XIcon className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
+                      {tx.match_status === 'suggested' && (
+                        <>
+                          <Button size="sm" variant="default" onClick={() => handleApproveSuggestion(tx)} title="אשר הצעה">
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => handleRejectSuggestion(tx)} title="דחה הצעה">
+                            <XIcon className="h-3 w-3" />
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setMatchDialog(tx)} title="שייך לדירה אחרת">
+                            <Link2 className="h-3 w-3" />
                           </Button>
                         </>
                       )}

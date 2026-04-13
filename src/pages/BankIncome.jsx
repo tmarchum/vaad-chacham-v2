@@ -47,7 +47,7 @@ export default function BankIncome() {
   const incomeList = useMemo(() => {
     let result = allTx.filter(tx => {
       if (tx.building_id !== selectedBuilding?.id) return false
-      if (tx.match_status === 'excluded') return false
+      if (tx.match_status === 'excluded' || tx.match_status === 'suggested') return false
       if (Number(tx.credit) <= 0) return false
       if (viewMode === 'month') return tx.month === monthKey
       return tx.month?.startsWith(selectedYear)
