@@ -1,6 +1,30 @@
-import { StrictMode } from 'react'
+import { StrictMode, Component } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error, info) { console.error('App crash:', error, info) }
+  render() {
+    if (this.state.error) {
+      return (
+        <div dir="rtl" style={{ padding: 40, textAlign: 'center', color: '#fff', background: '#1e293b', minHeight: '100vh' }}>
+          <h1>שגיאה בטעינת האפליקציה</h1>
+          <pre style={{ color: '#f87171', marginTop: 20, textAlign: 'left', direction: 'ltr', whiteSpace: 'pre-wrap' }}>
+            {this.state.error.message}
+            {'\n'}
+            {this.state.error.stack}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 20, padding: '10px 24px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+            נסה שוב
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import { AuthProvider } from '@/hooks/useAuth'
 import { BuildingProvider } from '@/hooks/useStore'
 import { AuthGuard } from '@/components/layout/AuthGuard'
@@ -35,6 +59,7 @@ import './index.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
+    <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
@@ -74,5 +99,6 @@ createRoot(document.getElementById('root')).render(
         </Routes>
       </AuthProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 )
