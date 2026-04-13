@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
-import { Menu, X, AlertCircle, CheckCircle } from 'lucide-react'
+import { AlertsPanel } from './AlertsPanel'
+import { Menu, X, AlertCircle, CheckCircle, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useCollection, useBuildingContext } from '@/hooks/useStore'
 
 // ── Global toast system ──────────────────────────────────────────────────────
 // Other modules dispatch window events to show toasts:
@@ -41,7 +43,14 @@ function Toast({ toasts, onRemove }) {
 
 function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [alertsOpen, setAlertsOpen] = useState(false)
   const [toasts, setToasts] = useState([])
+  const { selectedBuilding } = useBuildingContext()
+  const { data: allAlerts, refresh: refreshAlerts } = useCollection('agentAlerts')
+  const alerts = selectedBuilding
+    ? allAlerts.filter(a => a.building_id === selectedBuilding.id)
+    : allAlerts
+  const unreadCount = alerts.filter(a => !a.is_read && !a.is_dismissed).length
 
   const addToast = (message, type = 'info') => {
     const id = Date.now() + Math.random()
@@ -62,15 +71,28 @@ function Layout() {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Mobile header */}
-        <header className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3 lg:hidden">
+        {/* Header */}
+        <header className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
           <button
-            className="p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+            className="p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors lg:hidden"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu className="h-5 w-5 text-[var(--text-primary)]" />
           </button>
-          <span className="font-semibold text-[var(--text-primary)]">ועד חכם</span>
+          <span className="font-semibold text-[var(--text-primary)] lg:hidden">ועד חכם</span>
+          <div className="mr-auto flex items-center gap-2">
+            <button
+              onClick={() => setAlertsOpen(!alertsOpen)}
+              className="relative p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+            >
+              <Bell className="h-5 w-5 text-[var(--text-secondary)]" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
         </header>
 
         {/* Page content */}
@@ -79,6 +101,12 @@ function Layout() {
         </main>
       </div>
 
+      <AlertsPanel
+        open={alertsOpen}
+        onClose={() => setAlertsOpen(false)}
+        alerts={alerts}
+        refreshAlerts={refreshAlerts}
+      />
       <Toast toasts={toasts} onRemove={removeToast} />
     </div>
   )

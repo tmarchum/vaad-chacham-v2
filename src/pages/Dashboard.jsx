@@ -11,6 +11,9 @@ import {
   Wrench,
   Wallet,
   ArrowLeft,
+  Zap,
+  Info,
+  AlertCircle,
 } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -24,6 +27,7 @@ function Dashboard() {
   const { data: allPayments } = useCollection('payments')
   const { data: allIssues } = useCollection('issues')
   const { data: allExpenses } = useCollection('expenses')
+  const { data: allAlerts } = useCollection('agentAlerts')
 
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -45,8 +49,12 @@ function Dashboard() {
       ? allExpenses.filter((e) => e.buildingId === selectedBuilding.id)
       : allExpenses
 
-    return { units, payments, issues, expenses }
-  }, [selectedBuilding, allUnits, allPayments, allIssues, allExpenses])
+    const agentAlerts = selectedBuilding
+      ? allAlerts.filter((a) => a.building_id === selectedBuilding.id && !a.is_dismissed)
+      : allAlerts.filter((a) => !a.is_dismissed)
+
+    return { units, payments, issues, expenses, agentAlerts }
+  }, [selectedBuilding, allUnits, allPayments, allIssues, allExpenses, allAlerts])
 
   // KPI calculations
   const monthPayments = payments.filter((p) => p.month === currentMonth)
@@ -331,6 +339,69 @@ function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Agent Alerts */}
+      {agentAlerts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-[var(--primary)]" />
+                התראות סוכנים חכמים
+              </CardTitle>
+              <Link
+                to="/smart-agents"
+                className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1"
+              >
+                לכל הסוכנים
+                <ArrowLeft className="h-3 w-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {agentAlerts.filter(a => !a.is_read).slice(0, 5).map((alert) => {
+                const sevIcon = alert.severity === 'high'
+                  ? <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                  : alert.severity === 'medium'
+                  ? <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                  : <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                const sevBg = alert.severity === 'high' ? 'bg-red-50 border-red-200'
+                  : alert.severity === 'medium' ? 'bg-amber-50 border-amber-200'
+                  : 'bg-blue-50 border-blue-200'
+                return (
+                  <div
+                    key={alert.id}
+                    className={`flex items-start gap-3 p-3 rounded-lg border ${sevBg}`}
+                  >
+                    {sevIcon}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{alert.title}</p>
+                      {alert.description && (
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{alert.description}</p>
+                      )}
+                      {alert.recommendation && (
+                        <p className="text-xs text-[var(--primary)] mt-1">💡 {alert.recommendation}</p>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-[var(--text-muted)] shrink-0 mt-0.5">
+                      {alert.agent_type === 'expense_analysis' ? 'הוצאות'
+                        : alert.agent_type === 'collection' ? 'גבייה'
+                        : alert.agent_type === 'budget' ? 'תקציב'
+                        : alert.agent_type}
+                    </span>
+                  </div>
+                )
+              })}
+              {agentAlerts.filter(a => !a.is_read).length > 5 && (
+                <p className="text-xs text-center text-[var(--text-muted)]">
+                  +{agentAlerts.filter(a => !a.is_read).length - 5} התראות נוספות
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
