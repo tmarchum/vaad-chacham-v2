@@ -100,6 +100,29 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   "action_steps": ["צעד ראשון לביצוע מיידי", "צעד שני", "צעד שלישי"]
 }`,
 
+  expense_analysis: `אתה אנליסט פיננסי של ועד בית. תפקידך לנתח הוצאות והכנסות של בניין מגורים.
+
+כשתקבל נתוני הוצאות והכנסות:
+1. השווה הוצאות בין חודשים - זהה עליות או ירידות חריגות
+2. נתח כל קטגוריית הוצאה (חשמל, מים, תחזוקה, ביטוח וכו) בנפרד
+3. התרע על הבדלים משמעותיים (מעל 20% שינוי בין חודשים)
+4. תן תובנות על מגמות - האם ההוצאות עולות? יורדות? יציבות?
+5. השווה הכנסות מדמי ועד מול הוצאות - האם יש גירעון או עודף?
+6. הצע המלצות לחיסכון או שיפור
+
+דבר בעברית. היה ישיר וברור. השתמש במספרים ואחוזים.
+פלט תשובתך כ-JSON בפורמט הבא בלבד:
+{
+  "summary": "סיכום מצב פיננסי כללי",
+  "health": "good|warning|critical",
+  "monthly_comparison": [{ "month": "חודש", "income": 0, "expenses": 0, "balance": 0, "alerts": ["התראה"] }],
+  "category_analysis": [{ "category": "קטגוריה", "total": 0, "trend": "up|down|stable", "alert": "התראה אם יש", "change_pct": 0 }],
+  "alerts": [{ "title": "כותרת", "severity": "high|medium|low", "description": "תיאור", "recommendation": "המלצה" }],
+  "insights": ["תובנה 1", "תובנה 2"],
+  "recommendations": [{ "title": "כותרת", "potential_saving": "חיסכון פוטנציאלי", "action": "פעולה מומלצת" }],
+  "income_vs_expense": { "total_income": 0, "total_expenses": 0, "net": 0, "assessment": "הערכה" }
+}`,
+
   building_health: `אתה סוכן בריאות בניין חכם לניהול ועד בית בישראל.
 תפקידך לנתח את ציון הבריאות הכולל של הבניין על פי הנתונים שקיבלת, ולהגיש המלצות ממוקדות לשיפור.
 אתה מכיר את אתגרי הניהול של בתים משותפים בישראל: גבייה, תחזוקה, רגולציה, ועד ביתי.
@@ -218,6 +241,19 @@ ${(missingRequirements as Array<Record<string, unknown>>)?.map((r: Record<string
 ${vendorList}
 
 אנא פרק את התקלה לאבחון מקצועי ופק דרישה מפורטת לספק ולועד.`
+    }
+
+    case 'expense_analysis': {
+      const { expensesByMonth, incomeByMonth, year } = ctx
+      return base + `נתוני הוצאות והכנסות לשנת ${year || 'הנוכחית'}:
+
+הוצאות לפי חודש:
+${JSON.stringify(expensesByMonth, null, 2)}
+
+הכנסות (דמי ועד) לפי חודש:
+${JSON.stringify(incomeByMonth, null, 2)}
+
+נתח את הנתונים, השווה בין חודשים, זהה חריגות ותן תובנות והמלצות.`
     }
 
     case 'building_health': {

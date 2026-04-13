@@ -8,7 +8,7 @@ import {
   Wrench, Store, CalendarClock, ShieldCheck, Bot,
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, Menu, X, ChevronDown, ClipboardList,
-  Landmark, ArrowLeftRight, ArrowDownLeft, Scale,
+  Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain,
 } from 'lucide-react'
 
 const NAV_SECTIONS = [
@@ -30,6 +30,7 @@ const NAV_SECTIONS = [
       { to: '/income',             label: 'הכנסות',          icon: ArrowDownLeft },
       { to: '/expenses',          label: 'הוצאות',          icon: Wallet },
       { to: '/balance',           label: 'מאזן',            icon: Scale },
+      { to: '/expense-analysis', label: 'ניתוח הוצאות AI', icon: Brain },
       { to: '/reports',           label: 'דוחות',           icon: BarChart2 },
     ],
   },
