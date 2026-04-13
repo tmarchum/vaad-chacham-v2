@@ -151,7 +151,18 @@ export default function BankTransactions() {
     refreshPayments()
   }
 
-  // Match a transaction to a unit
+  // Extract name parts from a transaction description for matching
+  const extractNameParts = (desc) => {
+    if (!desc) return []
+    // Remove common prefixes like "זיכוי מבל"ל מ", "זיכוי מדיסקונט מ"
+    const cleaned = desc
+      .replace(/זיכוי\s+מ[^\s]*\s+מ/g, '')
+      .replace(/[,."'\/\\]/g, ' ')
+      .trim()
+    return cleaned.split(/\s+/).filter(p => p.length > 2)
+  }
+
+  // Match a transaction to a unit + auto-match related transactions by name
   const handleMatch = async (unitId) => {
     if (!matchDialog) return
     await updateTx(matchDialog.id, {
@@ -159,9 +170,46 @@ export default function BankTransactions() {
       match_status: 'matched',
       month: monthKey,
     })
+
+    // Auto-match other unmatched transactions with same name parts
+    const nameParts = extractNameParts(matchDialog.description)
+    const monthsToSync = new Set([monthKey])
+
+    if (nameParts.length > 0) {
+      const unmatchedCredits = allTx.filter(tx =>
+        tx.building_id === selectedBuilding?.id &&
+        tx.match_status === 'unmatched' &&
+        Number(tx.credit) > 0 &&
+        tx.id !== matchDialog.id
+      )
+
+      let autoCount = 0
+      for (const tx of unmatchedCredits) {
+        const txParts = extractNameParts(tx.description)
+        // Match if at least 2 name parts overlap (or all parts if only 1-2)
+        const overlap = nameParts.filter(p => txParts.some(tp => tp.includes(p) || p.includes(tp)))
+        const threshold = Math.min(nameParts.length, 2)
+        if (overlap.length >= threshold) {
+          await updateTx(tx.id, { unit_id: unitId, match_status: 'matched' })
+          if (tx.month) monthsToSync.add(tx.month)
+          autoCount++
+        }
+      }
+
+      if (autoCount > 0) {
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: `שויכו ${autoCount} תנועות נוספות אוטומטית`, type: 'success' }
+        }))
+      }
+    }
+
     setMatchDialog(null)
     await refresh()
-    await syncPayment(unitId, monthKey)
+
+    // Sync payments for all affected months
+    for (const month of monthsToSync) {
+      await syncPayment(unitId, month)
+    }
   }
 
   // Ignore a transaction
