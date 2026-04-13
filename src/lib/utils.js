@@ -109,6 +109,12 @@ export function calcUnitFee(unit, building) {
 /**
  * Safely parse JSON, returning fallback on failure
  */
+export function sortByUnitNumber(a, b) {
+  const na = parseInt(a.number || a.unit_number || '0', 10)
+  const nb = parseInt(b.number || b.unit_number || '0', 10)
+  return na - nb
+}
+
 export function parseJson(str, fallback = null) {
   if (str == null) return fallback
   try {

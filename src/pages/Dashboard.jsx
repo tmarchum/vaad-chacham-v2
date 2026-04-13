@@ -5,7 +5,7 @@ import { HDate } from '@hebcal/core'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { formatCurrency, calcUnitFee } from '@/lib/utils'
+import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import {
   CreditCard,
   AlertTriangle,
@@ -36,9 +36,10 @@ function Dashboard() {
   const monthLabel = HEBREW_MONTHS[now.getMonth()]
 
   const { units, payments, issues, expenses, agentAlerts } = useMemo(() => {
-    const units = selectedBuilding
+    const units = (selectedBuilding
       ? allUnits.filter((u) => u.buildingId === selectedBuilding.id)
       : allUnits
+    ).sort(sortByUnitNumber)
     const unitIds = new Set(units.map((u) => u.id))
 
     const payments = selectedBuilding

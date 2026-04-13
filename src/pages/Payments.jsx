@@ -8,7 +8,7 @@ import { DetailModal, DetailRow } from '@/components/common/DetailModal'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
-import { formatCurrency, formatDate, calcUnitFee } from '@/lib/utils'
+import { formatCurrency, formatDate, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import { CreditCard, Plus, Pencil, Trash2, CalendarPlus } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -94,12 +94,12 @@ function Payments() {
 
   // Units filtered by building for form select
   const filteredUnitsForForm = useMemo(() => {
-    if (buildingFilter === 'all') return allUnits
-    return allUnits.filter((u) => u.buildingId === buildingFilter)
+    if (buildingFilter === 'all') return [...allUnits].sort(sortByUnitNumber)
+    return allUnits.filter((u) => u.buildingId === buildingFilter).sort(sortByUnitNumber)
   }, [allUnits, buildingFilter])
 
   const unitOptions = useMemo(
-    () => filteredUnitsForForm.map((u) => ({
+    () => [...filteredUnitsForForm].sort(sortByUnitNumber).map((u) => ({
       value: u.id,
       label: `דירה ${u.unit_number || u.number} - ${u.ownerName || ''}`,
     })),
@@ -107,7 +107,7 @@ function Payments() {
   )
 
   const allUnitOptions = useMemo(
-    () => allUnits.map((u) => ({
+    () => [...allUnits].sort(sortByUnitNumber).map((u) => ({
       value: u.id,
       label: `דירה ${u.unit_number || u.number} - ${u.ownerName || ''} (${buildingMap[u.buildingId]?.name || ''})`,
     })),
@@ -143,8 +143,15 @@ function Payments() {
       result = result.filter((p) => p.status === statusFilter)
     }
 
+    // Sort by unit number
+    result.sort((a, b) => {
+      const ua = unitMap[a.unitId]
+      const ub = unitMap[b.unitId]
+      return parseInt(ua?.number || ua?.unit_number || '0', 10) - parseInt(ub?.number || ub?.unit_number || '0', 10)
+    })
+
     return result
-  }, [allPayments, monthKey, buildingUnitIds, statusFilter])
+  }, [allPayments, monthKey, buildingUnitIds, statusFilter, unitMap])
 
   // Summary
   const summary = useMemo(() => {

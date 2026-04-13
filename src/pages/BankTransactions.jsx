@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormSelect } from '@/components/common/FormField'
-import { formatCurrency, calcUnitFee } from '@/lib/utils'
+import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import {
   ArrowDownLeft, ArrowUpRight, Landmark, Link2, X as XIcon,
   CheckCircle2, AlertCircle, Filter, ChevronDown,
@@ -50,9 +50,9 @@ export default function BankTransactions() {
 
   const monthKey = `${selectedYear}-${selectedMonth}`
 
-  // Building units
+  // Building units (sorted by number)
   const units = useMemo(() =>
-    allUnits.filter(u => u.building_id === selectedBuilding?.id),
+    allUnits.filter(u => u.building_id === selectedBuilding?.id).sort(sortByUnitNumber),
     [allUnits, selectedBuilding]
   )
 
@@ -373,7 +373,13 @@ export default function BankTransactions() {
               </div>
               <p className="text-sm text-[var(--text-secondary)]">בחר דירה:</p>
               <div className="max-h-64 overflow-y-auto space-y-1">
-                {units.map(unit => (
+                {units.filter(unit => {
+                  // Hide units that already have a matched transaction this month
+                  const alreadyMatched = transactions.some(tx =>
+                    tx.match_status === 'matched' && tx.unit_id === unit.id
+                  )
+                  return !alreadyMatched
+                }).map(unit => (
                   <button
                     key={unit.id}
                     onClick={() => handleMatch(unit.id)}
