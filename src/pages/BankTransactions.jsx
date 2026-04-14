@@ -38,6 +38,12 @@ const STATUS_FILTERS = [
   { key: 'excluded', label: 'לא רלוונטי' },
 ]
 
+const TYPE_FILTERS = [
+  { key: 'all', label: 'הכל' },
+  { key: 'credit', label: 'זיכויים' },
+  { key: 'debit', label: 'חיובים' },
+]
+
 export default function BankTransactions() {
   const { selectedBuilding } = useBuildingContext()
   const { data: allTx, update: updateTx, refresh } = useCollection('bankTransactions')
@@ -49,6 +55,7 @@ export default function BankTransactions() {
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))
   const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
   const [matchDialog, setMatchDialog] = useState(null) // transaction to match
   const [paymentSummaryOpen, setPaymentSummaryOpen] = useState(false)
 
@@ -82,12 +89,18 @@ export default function BankTransactions() {
   }, [allTx, selectedBuilding, monthKey])
 
   // Filtered transactions
-  const filteredTx = useMemo(() =>
-    statusFilter === 'all'
-      ? transactions
-      : transactions.filter(tx => tx.match_status === statusFilter),
-    [transactions, statusFilter]
-  )
+  const filteredTx = useMemo(() => {
+    let result = transactions
+    if (statusFilter !== 'all') {
+      result = result.filter(tx => tx.match_status === statusFilter)
+    }
+    if (typeFilter === 'credit') {
+      result = result.filter(tx => Number(tx.credit) > 0)
+    } else if (typeFilter === 'debit') {
+      result = result.filter(tx => Number(tx.debit) > 0)
+    }
+    return result
+  }, [transactions, statusFilter, typeFilter])
 
   // Summary (exclude 'excluded' and 'suggested' from totals)
   const summary = useMemo(() => {
@@ -390,13 +403,27 @@ export default function BankTransactions() {
           options={yearOptions}
           className="w-24"
         />
-        <div className="flex gap-1 mr-auto">
+        <div className="flex gap-1 mr-auto flex-wrap">
           {STATUS_FILTERS.map(f => (
             <button
               key={f.key}
               onClick={() => setStatusFilter(f.key)}
               className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
                 statusFilter === f.key
+                  ? 'bg-[var(--primary)] text-white'
+                  : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+          <span className="mx-1 border-r border-[var(--border)]" />
+          {TYPE_FILTERS.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setTypeFilter(f.key)}
+              className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                typeFilter === f.key
                   ? 'bg-[var(--primary)] text-white'
                   : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
               }`}
