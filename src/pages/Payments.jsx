@@ -235,7 +235,9 @@ function Payments() {
   const getUnitDisplay = (unitId) => {
     const unit = unitMap[unitId]
     if (!unit) return ''
-    return `דירה ${unit.unit_number || unit.number}`
+    const name = unit.ownerName || ''
+    const familyName = name.split(' ').slice(-1)[0] || ''
+    return `דירה ${unit.unit_number || unit.number}${familyName ? ` - ${familyName}` : ''}`
   }
 
   const getOwnerName = (unitId) => {
