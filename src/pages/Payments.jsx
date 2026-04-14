@@ -31,6 +31,7 @@ const STATUS_MAP = {
   partial: { label: 'חלקי', variant: 'warning' },
   pending: { label: 'ממתין', variant: 'warning' },
   overdue: { label: 'באיחור', variant: 'danger' },
+  unpaid: { label: 'לא שולם', variant: 'danger' },
 }
 
 const STATUS_FILTERS = [
@@ -39,6 +40,7 @@ const STATUS_FILTERS = [
   { key: 'partial', label: 'חלקי' },
   { key: 'pending', label: 'ממתין' },
   { key: 'overdue', label: 'באיחור' },
+  { key: 'unpaid', label: 'לא שולם' },
 ]
 
 const PAYMENT_METHODS = [
@@ -131,15 +133,36 @@ function Payments() {
   }, [allUnits, buildingFilter])
 
   const filtered = useMemo(() => {
-    let result = allPayments
-
-    // Month filter
-    result = result.filter((p) => p.month === monthKey)
-
-    // Building filter (via unit IDs)
+    // Get payments for this month
+    let monthPayments = allPayments.filter((p) => p.month === monthKey)
     if (buildingUnitIds) {
-      result = result.filter((p) => buildingUnitIds.has(p.unitId))
+      monthPayments = monthPayments.filter((p) => buildingUnitIds.has(p.unitId))
     }
+
+    // Build set of unit IDs that have payments
+    const paidUnitIds = new Set(monthPayments.map((p) => p.unitId))
+
+    // Get target units (filtered by building)
+    const targetUnits = buildingUnitIds
+      ? allUnits.filter((u) => buildingUnitIds.has(u.id))
+      : allUnits
+
+    // Create virtual "unpaid" entries for units without payments
+    const unpaidEntries = targetUnits
+      .filter((u) => !paidUnitIds.has(u.id))
+      .map((u) => ({
+        id: `unpaid-${u.id}`,
+        unitId: u.id,
+        buildingId: u.buildingId || u.building_id,
+        amount: 0,
+        month: monthKey,
+        status: 'unpaid',
+        paidAt: null,
+        method: null,
+        _virtual: true,
+      }))
+
+    let result = [...monthPayments, ...unpaidEntries]
 
     // Status filter
     if (statusFilter !== 'all') {
@@ -154,7 +177,7 @@ function Payments() {
     })
 
     return result
-  }, [allPayments, monthKey, buildingUnitIds, statusFilter, unitMap])
+  }, [allPayments, allUnits, monthKey, buildingUnitIds, statusFilter, unitMap])
 
   // Summary
   const summary = useMemo(() => {
@@ -163,12 +186,17 @@ function Payments() {
       if (buildingUnitIds && !buildingUnitIds.has(p.unitId)) return false
       return true
     })
+    const targetUnits = buildingUnitIds
+      ? allUnits.filter((u) => buildingUnitIds.has(u.id))
+      : allUnits
+    const paidUnitIds = new Set(monthPayments.map((p) => p.unitId))
+    const unpaid = targetUnits.filter((u) => !paidUnitIds.has(u.id)).length
     const collected = monthPayments.filter((p) => p.status === 'paid' || p.status === 'partial').reduce((s, p) => s + (Number(p.amount) || 0), 0)
     const partial = monthPayments.filter((p) => p.status === 'partial').length
     const pending = monthPayments.filter((p) => p.status === 'pending').length
     const overdue = monthPayments.filter((p) => p.status === 'overdue').length
-    return { collected, partial, pending, overdue, total: monthPayments.length }
-  }, [allPayments, monthKey, buildingUnitIds])
+    return { collected, partial, pending, overdue, unpaid, total: monthPayments.length, totalUnits: targetUnits.length }
+  }, [allPayments, allUnits, monthKey, buildingUnitIds])
 
   // Yearly cumulative gap per unit
   const yearlySummary = useMemo(() => {
@@ -482,11 +510,17 @@ function Payments() {
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <Card>
               <CardContent className="pt-5">
                 <p className="text-sm text-[var(--text-secondary)]">סה״כ נגבה</p>
                 <p className="text-2xl font-bold text-[var(--success)]">{formatCurrency(summary.collected)}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-5">
+                <p className="text-sm text-[var(--text-secondary)]">לא שולם</p>
+                <p className="text-2xl font-bold text-red-500">{summary.unpaid}</p>
               </CardContent>
             </Card>
             <Card>
@@ -497,8 +531,8 @@ function Payments() {
             </Card>
             <Card>
               <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">סה״כ תשלומים</p>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.total}</p>
+                <p className="text-sm text-[var(--text-secondary)]">סה״כ דירות</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.totalUnits}</p>
               </CardContent>
             </Card>
           </div>
@@ -531,11 +565,12 @@ function Payments() {
                   <tbody>
                     {filtered.map((p) => {
                       const st = STATUS_MAP[p.status] || STATUS_MAP.pending
+                      const isVirtual = p._virtual
                       return (
                         <tr
                           key={p.id}
-                          className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] cursor-pointer transition-colors"
-                          onClick={() => setDetailPayment(p)}
+                          className={`border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors ${isVirtual ? 'opacity-60' : 'cursor-pointer'}`}
+                          onClick={() => !isVirtual && setDetailPayment(p)}
                         >
                           <td className="p-3">{getUnitDisplay(p.unitId)}</td>
                           {buildingFilter === 'all' && <td className="p-3 text-xs">{getBuildingName(p.unitId)}</td>}
@@ -546,14 +581,17 @@ function Payments() {
                               const building = buildingMap[unit?.buildingId || unit?.building_id]
                               const fee = calcUnitFee(unit, building)
                               const paid = Number(p.amount) || 0
-                              const gap = fee - paid
                               return (
                                 <>
                                   <span className="font-medium">{formatCurrency(fee)}</span>
                                   <span className="text-xs text-[var(--text-secondary)] mr-1">נדרש</span>
-                                  <span className="mr-2">| {formatCurrency(paid)}</span>
-                                  <span className="text-xs text-[var(--text-secondary)]">בפועל</span>
-                                  {gap > 0 && <span className="text-xs text-red-500 mr-1">(פער: {formatCurrency(gap)})</span>}
+                                  {!isVirtual && (
+                                    <>
+                                      <span className="mr-2">| {formatCurrency(paid)}</span>
+                                      <span className="text-xs text-[var(--text-secondary)]">בפועל</span>
+                                      {fee - paid > 0 && <span className="text-xs text-red-500 mr-1">(פער: {formatCurrency(fee - paid)})</span>}
+                                    </>
+                                  )}
                                 </>
                               )
                             })()}
@@ -564,18 +602,33 @@ function Payments() {
                             <Badge variant={st.variant}>{st.label}</Badge>
                           </td>
                           <td className="p-3">
-                            <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
+                            {!isVirtual ? (
+                              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setDeleteTarget(p)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                                </Button>
+                              </div>
+                            ) : (
                               <Button
                                 variant="ghost"
-                                size="icon"
-                                onClick={() => setDeleteTarget(p)}
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditingId(null)
+                                  setForm({ ...EMPTY_FORM, unitId: p.unitId, month: monthKey })
+                                  setFormOpen(true)
+                                }}
                               >
-                                <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                                <Plus className="h-3.5 w-3.5" />
                               </Button>
-                            </div>
+                            )}
                           </td>
                         </tr>
                       )
