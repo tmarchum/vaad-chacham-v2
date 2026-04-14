@@ -64,6 +64,7 @@ function Payments() {
   const { buildings } = useBuildingContext()
   const { data: allPayments, create, update, remove, refresh, isSaving } = useCollection('payments')
   const { data: allUnits } = useCollection('units')
+  const { data: allResidents } = useCollection('residents')
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
@@ -90,6 +91,17 @@ function Payments() {
     allUnits.forEach((u) => { map[u.id] = u })
     return map
   }, [allUnits])
+
+  // Resident name map: unit_id -> full name (primary resident)
+  const residentMap = useMemo(() => {
+    const map = {}
+    allResidents.forEach(r => {
+      if (r.is_primary || !map[r.unit_id]) {
+        map[r.unit_id] = `${r.first_name || ''} ${r.last_name || ''}`.trim()
+      }
+    })
+    return map
+  }, [allResidents])
 
   const buildingMap = useMemo(() => {
     const map = {}
@@ -235,14 +247,13 @@ function Payments() {
   const getUnitDisplay = (unitId) => {
     const unit = unitMap[unitId]
     if (!unit) return ''
-    const name = unit.ownerName || ''
+    const name = residentMap[unitId] || unit.ownerName || ''
     const familyName = name.split(' ').slice(-1)[0] || ''
     return `דירה ${unit.unit_number || unit.number}${familyName ? ` - ${familyName}` : ''}`
   }
 
   const getOwnerName = (unitId) => {
-    const unit = unitMap[unitId]
-    return unit?.ownerName || ''
+    return residentMap[unitId] || unitMap[unitId]?.ownerName || ''
   }
 
   const getBuildingName = (unitId) => {
