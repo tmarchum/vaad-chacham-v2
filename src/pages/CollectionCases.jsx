@@ -36,8 +36,32 @@ function CollectionCases() {
   const { selectedBuilding } = useBuildingContext()
   const { data: allCases } = useCollection('collectionCases')
   const { data: allNotifications } = useCollection('notificationLog')
+  const { data: allUnits } = useCollection('units')
+  const { data: allResidents } = useCollection('residents')
   const [statusFilter, setStatusFilter] = useState('open')
   const [expandedId, setExpandedId] = useState(null)
+
+  // Live lookup: unit_id → { number, residentName, email, phone }
+  const unitInfo = useMemo(() => {
+    const info = {}
+    // Map primary resident per unit
+    const primary = {}
+    allResidents.forEach(r => {
+      if (r.is_primary || !primary[r.unit_id]) {
+        primary[r.unit_id] = r
+      }
+    })
+    allUnits.forEach(u => {
+      const r = primary[u.id]
+      info[u.id] = {
+        number: u.unit_number || u.number,
+        residentName: r ? `${r.first_name || ''} ${r.last_name || ''}`.trim() : '',
+        email: r?.email || '',
+        phone: r?.phone || '',
+      }
+    })
+    return info
+  }, [allUnits, allResidents])
 
   const cases = useMemo(() => {
     let filtered = selectedBuilding
@@ -126,6 +150,7 @@ function CollectionCases() {
             const LevelIcon = level.icon
             const expanded = expandedId === c.id
             const caseNotifs = allNotifications.filter(n => n.case_id === c.id)
+            const live = unitInfo[c.unit_id] || {}
 
             return (
               <Card key={c.id}>
@@ -138,12 +163,12 @@ function CollectionCases() {
                     <div className="flex items-center gap-2 shrink-0">
                       <LevelIcon className="h-5 w-5 text-[var(--text-secondary)]" />
                       <span className="text-lg font-bold text-[var(--text-primary)]">
-                        דירה {c.unit_number}
+                        דירה {live.number || c.unit_number}
                       </span>
                     </div>
 
                     <span className="text-sm text-[var(--text-secondary)]">
-                      {c.resident_name || '-'}
+                      {live.residentName || c.resident_name || '-'}
                     </span>
 
                     <div className="flex-1" />
@@ -169,11 +194,11 @@ function CollectionCases() {
                         </div>
                         <div>
                           <span className="text-[var(--text-muted)]">אימייל:</span>
-                          <p className="font-medium text-[var(--text-primary)]">{c.resident_email || '-'}</p>
+                          <p className="font-medium text-[var(--text-primary)]">{live.email || c.resident_email || '-'}</p>
                         </div>
                         <div>
                           <span className="text-[var(--text-muted)]">טלפון:</span>
-                          <p className="font-medium text-[var(--text-primary)]">{c.resident_phone || '-'}</p>
+                          <p className="font-medium text-[var(--text-primary)]">{live.phone || c.resident_phone || '-'}</p>
                         </div>
                         <div>
                           <span className="text-[var(--text-muted)]">פעולה הבאה:</span>
