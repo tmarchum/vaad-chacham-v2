@@ -115,6 +115,10 @@ function Residents() {
     e.preventDefault()
     const data = { ...form }
 
+    // Convert empty date strings to null (Postgres rejects "" for date fields)
+    if (data.move_in_date === '') data.move_in_date = null
+    if (data.move_out_date === '') data.move_out_date = null
+
     // If setting as primary, check if another primary exists in this unit
     if (data.is_primary) {
       const unitResidents = residentsByUnit[data.unitId] || []
