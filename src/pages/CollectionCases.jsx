@@ -209,13 +209,31 @@ function CollectionCases() {
                       {/* Unpaid months */}
                       {c.unpaid_months && c.unpaid_months.length > 0 && (
                         <div>
-                          <span className="text-sm text-[var(--text-muted)]">חודשים לא שולמו:</span>
+                          <span className="text-sm text-[var(--text-muted)]">פירוט חודשים:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {c.unpaid_months.map(m => (
-                              <span key={m} className="text-xs px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">
-                                {monthLabel(m)}
-                              </span>
-                            ))}
+                            {c.unpaid_months.map(m => {
+                              // Support both old string format and new object format
+                              const isObj = typeof m === 'object'
+                              const mk = isObj ? m.month : m
+                              const isDiff = isObj && m.type === 'diff'
+                              return (
+                                <span
+                                  key={mk}
+                                  className={`text-xs px-2 py-1 rounded border ${
+                                    isDiff
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                      : 'bg-red-50 text-red-700 border-red-200'
+                                  }`}
+                                >
+                                  {monthLabel(mk)}
+                                  {isDiff
+                                    ? ` — הפרש ${formatCurrency(m.diff)} (שולם ${formatCurrency(m.paid)})`
+                                    : isObj
+                                      ? ` — לא שולם (${formatCurrency(m.expected)})`
+                                      : ''}
+                                </span>
+                              )
+                            })}
                           </div>
                         </div>
                       )}
