@@ -102,8 +102,8 @@ function Sidebar({ open, onClose }) {
         open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
       )}>
         {/* Logo */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
-          <span className="text-xl font-bold tracking-tight">וועד<span className="text-[var(--primary)]">+</span></span>
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
+          <span className="text-2xl font-extrabold tracking-tight">וועד<span className="text-blue-400">+</span></span>
           <button className="mr-auto lg:hidden p-1 rounded hover:bg-white/10" onClick={onClose}>
             <X className="h-5 w-5" />
           </button>

@@ -11,12 +11,15 @@ export default function Login() {
   }, [user, loading, navigate])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800" dir="rtl">
-      <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-sm text-center space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-[#0f172a]" dir="rtl">
+      <div className="relative bg-white rounded-2xl shadow-2xl p-10 w-full max-w-sm text-center space-y-8">
+        {/* Accent line */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-blue-600 to-blue-400 rounded-t-2xl" />
+
         {/* Logo */}
-        <div className="flex flex-col items-center gap-3">
-          <h1 className="text-4xl font-extrabold text-gray-900">וועד<span className="text-blue-600">+</span></h1>
-          <p className="text-sm text-gray-500">ניהול בתים משותפים חכם</p>
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <h1 className="text-5xl font-extrabold text-gray-900 tracking-tight">וועד<span className="text-blue-600">+</span></h1>
+          <p className="text-sm text-gray-400 font-light">ניהול בתים משותפים חכם</p>
         </div>
 
         {/* Divider */}
@@ -24,7 +27,7 @@ export default function Login() {
 
         {/* Google Sign In */}
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 font-medium">כניסה באמצעות חשבון גוגל</p>
+          <p className="text-sm text-gray-500 font-medium">כניסה באמצעות חשבון גוגל</p>
           <button
             onClick={signInWithGoogle}
             disabled={loading}

@@ -191,70 +191,77 @@ function Dashboard() {
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Monthly Collection */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="pt-5">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
-                <CreditCard className="h-4 w-4" />
-                גבייה חודשית
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">גבייה חודשית</div>
+                <div className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(collected)}</div>
+                <div className="text-xs text-[var(--text-muted)] mt-1">מתוך {formatCurrency(expected)}</div>
               </div>
-              <Badge variant={pctVariant}>{collectionPct}%</Badge>
+              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                <CreditCard className="h-5 w-5 text-blue-600" />
+              </div>
             </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">
-              {formatCurrency(collected)}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              מתוך {formatCurrency(expected)}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-2 rounded-full bg-blue-100 overflow-hidden">
+                <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${Math.min(collectionPct, 100)}%` }} />
+              </div>
+              <span className="text-xs font-bold text-blue-600">{collectionPct}%</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Debtors */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="pt-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] mb-2">
-              <AlertTriangle className="h-4 w-4" />
-              חייבים החודש
-            </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">
-              {debtors.length}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              דירות שטרם שילמו
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">חייבים החודש</div>
+                <div className="text-2xl font-bold text-[var(--text-primary)]">{debtors.length}</div>
+                <div className="text-xs text-[var(--text-muted)] mt-1">דירות שטרם שילמו</div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Open Issues */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="pt-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] mb-2">
-              <Wrench className="h-4 w-4" />
-              תקלות פתוחות
-            </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">
-              {openIssues.length}
-            </div>
-            {urgentIssues.length > 0 && (
-              <div className="text-xs text-[var(--danger)] mt-1">
-                {urgentIssues.length} דחופות
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">תקלות פתוחות</div>
+                <div className="text-2xl font-bold text-[var(--text-primary)]">{openIssues.length}</div>
+                {urgentIssues.length > 0 ? (
+                  <div className="text-xs text-red-600 mt-1">{urgentIssues.length} דחופות</div>
+                ) : (
+                  <div className="text-xs text-[var(--text-muted)] mt-1">הכל תקין</div>
+                )}
               </div>
-            )}
+              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+                <Wrench className="h-5 w-5 text-purple-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         {/* Monthly Expenses */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="pt-5">
-            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] mb-2">
-              <Wallet className="h-4 w-4" />
-              הוצאות החודש
-            </div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">
-              {formatCurrency(totalExpenses)}
-            </div>
-            <div className="text-xs text-[var(--text-muted)] mt-1">
-              יתרה: {formatCurrency(balance)}
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">הוצאות החודש</div>
+                <div className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(totalExpenses)}</div>
+                <div className={`text-xs mt-1 ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  יתרה: {formatCurrency(balance)}
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+                <Wallet className="h-5 w-5 text-green-600" />
+              </div>
             </div>
           </CardContent>
         </Card>
