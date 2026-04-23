@@ -528,7 +528,7 @@ function Payments() {
             <StatCard label="סה״כ דירות" value={String(summary.totalUnits)} icon={Users} color="blue" />
           </div>
 
-          {/* Table */}
+          {/* Payment Cards */}
           {filtered.length === 0 ? (
             <EmptyState
               icon={CreditCard}
@@ -538,96 +538,140 @@ function Payments() {
               onAction={openCreate}
             />
           ) : (
-            <Card>
-              <div className="overflow-x-auto">
-                <table className="premium-table w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--border)]">
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
-                      {buildingFilter === 'all' && <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בניין</th>}
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בעלים</th>
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">נדרש | בפועל</th>
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך תשלום</th>
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">אמצעי תשלום</th>
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סטטוס</th>
-                      <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פעולות</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((p) => {
-                      const st = STATUS_MAP[p.status] || STATUS_MAP.pending
-                      const isVirtual = p._virtual
-                      return (
-                        <tr
-                          key={p.id}
-                          className={`border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors ${isVirtual ? 'opacity-60' : 'cursor-pointer'}`}
-                          onClick={() => !isVirtual && setDetailPayment(p)}
+            <div className="space-y-2">
+              {filtered.map((p) => {
+                const st = STATUS_MAP[p.status] || STATUS_MAP.pending
+                const isVirtual = p._virtual
+                const unit = unitMap[p.unitId]
+                const building = buildingMap[unit?.buildingId || unit?.building_id]
+                const fee = calcUnitFee(unit, building)
+                const paid = Number(p.amount) || 0
+                const pctPaid = fee > 0 ? Math.min(100, Math.round((paid / fee) * 100)) : 0
+                const unitNumber = unit?.unit_number || unit?.number || ''
+                const ownerName = getOwnerName(p.unitId)
+                const buildingName = buildingFilter === 'all' ? getBuildingName(p.unitId) : ''
+
+                // Gradient colors based on status
+                const gradientMap = {
+                  paid: 'from-emerald-500 to-emerald-600',
+                  partial: 'from-amber-400 to-amber-500',
+                  pending: 'from-amber-400 to-amber-500',
+                  overdue: 'from-red-500 to-red-600',
+                  unpaid: 'from-slate-400 to-slate-500',
+                }
+                const circleGradient = gradientMap[p.status] || gradientMap.pending
+
+                // Status dot colors
+                const dotColorMap = {
+                  paid: 'bg-emerald-500',
+                  partial: 'bg-amber-500',
+                  pending: 'bg-amber-500',
+                  overdue: 'bg-red-500',
+                  unpaid: 'bg-red-500',
+                }
+                const dotColor = dotColorMap[p.status] || dotColorMap.pending
+
+                // Status text colors
+                const textColorMap = {
+                  paid: 'text-emerald-700',
+                  partial: 'text-amber-700',
+                  pending: 'text-amber-700',
+                  overdue: 'text-red-700',
+                  unpaid: 'text-red-700',
+                }
+                const statusTextColor = textColorMap[p.status] || textColorMap.pending
+
+                // Progress bar color
+                const barColorMap = {
+                  paid: 'bg-emerald-500',
+                  partial: 'bg-amber-500',
+                  pending: 'bg-amber-400',
+                  overdue: 'bg-red-500',
+                  unpaid: 'bg-slate-300',
+                }
+                const barColor = barColorMap[p.status] || barColorMap.pending
+
+                return (
+                  <div
+                    key={p.id}
+                    className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all ${
+                      isVirtual ? 'opacity-60 border-dashed border-[var(--border)]' : 'border-[var(--border)] cursor-pointer'
+                    }`}
+                    onClick={() => !isVirtual && setDetailPayment(p)}
+                  >
+                    {/* Unit number circle */}
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                      {unitNumber}
+                    </div>
+
+                    {/* Main info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                          דירה {unitNumber}
+                        </span>
+                        {buildingName && (
+                          <span className="text-xs text-[var(--text-muted)]">{buildingName}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-[var(--text-muted)]">{ownerName}</span>
+                      </div>
+                    </div>
+
+                    {/* Amount section */}
+                    <div className="text-left min-w-[120px]">
+                      <div className="text-[15px] font-bold text-[var(--text-primary)]">
+                        {isVirtual ? formatCurrency(0) : formatCurrency(paid)}
+                      </div>
+                      <div className="text-[11px] text-[var(--text-muted)]">מתוך {formatCurrency(fee)}</div>
+                      <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${barColor}`}
+                          style={{ width: (isVirtual ? 0 : pctPaid) + '%' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    <div className="flex items-center gap-2 min-w-[80px]">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                      <span className={`text-[12px] font-medium ${statusTextColor}`}>{st.label}</span>
+                    </div>
+
+                    {/* Actions (visible on hover) */}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      {!isVirtual ? (
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeleteTarget(p)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingId(null)
+                            setForm({ ...EMPTY_FORM, unitId: p.unitId, month: monthKey })
+                            setFormOpen(true)
+                          }}
                         >
-                          <td className="p-3">{getUnitDisplay(p.unitId)}</td>
-                          {buildingFilter === 'all' && <td className="p-3 text-xs">{getBuildingName(p.unitId)}</td>}
-                          <td className="p-3">{getOwnerName(p.unitId)}</td>
-                          <td className="p-3">
-                            {(() => {
-                              const unit = unitMap[p.unitId]
-                              const building = buildingMap[unit?.buildingId || unit?.building_id]
-                              const fee = calcUnitFee(unit, building)
-                              const paid = Number(p.amount) || 0
-                              return (
-                                <>
-                                  <span className="font-medium">{formatCurrency(fee)}</span>
-                                  <span className="text-xs text-[var(--text-secondary)] mr-1">נדרש</span>
-                                  {!isVirtual && (
-                                    <>
-                                      <span className="mr-2">| {formatCurrency(paid)}</span>
-                                      <span className="text-xs text-[var(--text-secondary)]">בפועל</span>
-                                      {fee - paid > 0 && <span className="text-xs text-red-500 mr-1">(פער: {formatCurrency(fee - paid)})</span>}
-                                    </>
-                                  )}
-                                </>
-                              )
-                            })()}
-                          </td>
-                          <td className="p-3">{p.paidAt ? formatDate(p.paidAt) : '-'}</td>
-                          <td className="p-3">{p.method || '-'}</td>
-                          <td className="p-3">
-                            <Badge variant={st.variant}>{st.label}</Badge>
-                          </td>
-                          <td className="p-3">
-                            {!isVirtual ? (
-                              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setDeleteTarget(p)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setEditingId(null)
-                                  setForm({ ...EMPTY_FORM, unitId: p.unitId, month: monthKey })
-                                  setFormOpen(true)
-                                }}
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </>
       )}

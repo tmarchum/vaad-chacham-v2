@@ -761,50 +761,59 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     const issueQuotes = quotesByIssue[iss.id] || []
     const pendingCount = issueQuotes.filter((q) => q.status === 'pending').length
     const receivedCount = issueQuotes.filter((q) => q.status === 'received').length
+    const displayCost = iss.cost != null && iss.cost !== '' ? iss.cost : (iss.estimatedCost != null && iss.estimatedCost !== '' ? iss.estimatedCost : null)
 
     return (
-      <Card
+      <div
         key={iss.id}
-        className="cursor-pointer"
+        className="rounded-xl border border-[var(--border)] bg-white p-4 hover:shadow-md hover:border-slate-300 transition-all group relative overflow-hidden cursor-pointer"
         onClick={() => setDetailIssue(iss)}
       >
-        <CardContent className="pt-5">
-          <div className="flex items-start justify-between mb-2">
-            <h3 className="text-base font-semibold text-[var(--text-primary)] leading-tight">
-              {iss.title}
-            </h3>
-            <AlertTriangle className="h-5 w-5 text-[var(--text-muted)] shrink-0" />
-          </div>
+        {/* Priority accent bar at top */}
+        <div className={`absolute top-0 left-0 right-0 h-1 ${
+          iss.priority === 'urgent' ? 'bg-red-500' : iss.priority === 'high' ? 'bg-orange-500' : iss.priority === 'medium' ? 'bg-amber-400' : 'bg-slate-300'
+        }`} />
 
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            <Badge variant={priority.variant}>{priority.label}</Badge>
+        <div className="pt-1">
+          {/* Header with priority + status */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Badge variant={priority.variant}>{priority.label}</Badge>
+              {iss.category && <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">{iss.category}</span>}
+            </div>
             <Badge variant={status.variant}>{status.label}</Badge>
-            {iss.category && <Badge variant="default">{iss.category}</Badge>}
           </div>
 
-          <div className="text-xs text-[var(--text-secondary)] space-y-1">
-            <p>{buildingMap[iss.buildingId]?.name || ''} {iss.unitId || iss.reportedBy ? `- ${getUnitDisplay(iss.unitId || iss.reportedBy)}` : ''}</p>
-            {iss.description && <p className="line-clamp-2">{iss.description}</p>}
-            {iss.vendor_name && <p>ספק: {iss.vendor_name}</p>}
-            {iss.estimatedCost != null && iss.estimatedCost !== '' && <p>עלות משוערת: {formatCurrency(iss.estimatedCost)}</p>}
-            {iss.cost != null && iss.cost !== '' && <p>עלות בפועל: {formatCurrency(iss.cost)}</p>}
-            {iss.reportedAt && (
-              <div className="flex items-center justify-between">
-                <span>{timeAgo(iss.reportedAt)}</span>
-                {renderSLABadge(iss)}
-              </div>
-            )}
+          {/* Title */}
+          <h3 className="text-[14px] font-semibold text-[var(--text-primary)] mb-2 line-clamp-2">{iss.title}</h3>
+
+          {/* Description preview */}
+          {iss.description && <p className="text-[12px] text-[var(--text-muted)] line-clamp-2 mb-3">{iss.description}</p>}
+
+          {/* SLA + Quotes row */}
+          <div className="flex items-center gap-3 mb-3">
+            {iss.reportedAt && renderSLABadge(iss)}
             {issueQuotes.length > 0 && (
-              <p className="text-[var(--primary)]">
-                הצעות: {pendingCount > 0 && `${pendingCount} ממתינות`}{pendingCount > 0 && receivedCount > 0 && ', '}{receivedCount > 0 && `${receivedCount} התקבלו`}
-                {pendingCount === 0 && receivedCount === 0 && `${issueQuotes.length} סה"כ`}
-              </p>
+              <span className="text-[11px] text-[var(--primary)] font-medium">
+                {pendingCount > 0 && `${pendingCount} ממתינות`}{pendingCount > 0 && receivedCount > 0 && ', '}{receivedCount > 0 && `${receivedCount} התקבלו`}
+                {pendingCount === 0 && receivedCount === 0 && `${issueQuotes.length} הצעות`}
+              </span>
             )}
+          </div>
+
+          {/* Footer with meta */}
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--border-light,var(--border))]">
+            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+              {iss.reportedAt && <span>{timeAgo(iss.reportedAt)}</span>}
+              {iss.vendor_name && <span>{iss.reportedAt ? '·' : ''} {iss.vendor_name}</span>}
+              {buildingMap[iss.buildingId]?.name && <span>· {buildingMap[iss.buildingId].name}</span>}
+            </div>
+            {displayCost != null && <span className="text-[12px] font-semibold text-[var(--text-primary)]">{formatCurrency(displayCost)}</span>}
           </div>
 
           {renderQuickActions(iss)}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
@@ -968,13 +977,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             const columnIssues = filtered.filter((iss) => iss.status === statusKey)
             return (
               <div key={statusKey} className="min-w-[280px] max-w-[320px] flex-shrink-0">
-                <div className="flex items-center gap-2 mb-3 px-1">
+                <div className="flex items-center gap-2 mb-3 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200">
                   <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-                  <span className="text-xs text-[var(--text-muted)]">({columnIssues.length})</span>
+                  <span className="text-[11px] font-medium text-[var(--text-muted)] bg-white px-1.5 py-0.5 rounded-full">{columnIssues.length}</span>
                 </div>
                 <div className="space-y-3">
                   {columnIssues.length === 0 ? (
-                    <div className="text-center text-xs text-[var(--text-muted)] py-8 border border-dashed border-[var(--border)] rounded-lg">
+                    <div className="text-center text-xs text-[var(--text-muted)] py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
                       אין תקלות
                     </div>
                   ) : (

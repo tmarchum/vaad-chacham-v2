@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
-import { Plus, Star, User, Phone, Mail, Home, ChevronDown, ChevronUp, Pencil, Trash2, Users } from 'lucide-react'
+import { Plus, Star, User, Phone, Mail, Home, ChevronDown, Pencil, Trash2, Users } from 'lucide-react'
 
 const EMPTY_FORM = {
   unitId: '', first_name: '', last_name: '', email: '', phone: '',
@@ -205,40 +205,41 @@ function Residents() {
               <Card key={unit.id}>
                 {/* Unit header row */}
                 <div
-                  className="flex items-center justify-between px-5 py-4 cursor-pointer select-none"
+                  className="flex items-center justify-between px-5 py-4 cursor-pointer select-none hover:bg-[var(--surface-secondary)] transition-colors rounded-t-xl"
                   onClick={() => toggleUnit(unit.id)}
                 >
                   <div className="flex items-center gap-3">
-                    <Home className="h-4 w-4 text-[var(--text-muted)]" />
-                    <span className="font-semibold text-[var(--text-primary)]">
-                      דירה {getUnitNumber(unit)}
-                    </span>
-                    <Badge variant="default" className="text-xs">
-                      {unitResidents.length} דיירים
-                    </Badge>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
+                      {getUnitNumber(unit)}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-[var(--text-primary)] text-[14px]">
+                        דירה {getUnitNumber(unit)}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[12px] text-[var(--text-muted)]">
+                          {unitResidents.length} דיירים
+                        </span>
+                        {unitResidents.some(r => r.is_primary) && (
+                          <span className="text-[11px] text-emerald-600 font-medium">
+                            • {getResidentFullName(unitResidents.find(r => r.is_primary))}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openCreateForUnit(unit)
-                      }}
-                    >
+                    <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openCreateForUnit(unit) }}>
                       <Plus className="h-3.5 w-3.5" />
                       הוסף דייר
                     </Button>
-                    {isExpanded
-                      ? <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
-                      : <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
-                    }
+                    <ChevronDown className={`h-4 w-4 text-[var(--text-muted)] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                   </div>
                 </div>
 
                 {/* Resident cards */}
                 {isExpanded && (
-                  <div className="px-5 pb-5 space-y-3 border-t border-[var(--border)] pt-4">
+                  <div className="px-4 pb-4 space-y-2 border-t border-[var(--border-light)] pt-3 bg-[var(--surface-secondary)]/50">
                     {unitResidents.length === 0 ? (
                       <p className="text-sm text-[var(--text-muted)] text-center py-4">
                         אין דיירים רשומים לדירה זו
@@ -253,79 +254,43 @@ function Residents() {
                         )
 
                         return (
-                          <Card key={resident.id} className="bg-[var(--surface-hover)]">
-                            <CardContent className="pt-4">
-                              {/* Resident header */}
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <User className="h-4 w-4 text-[var(--text-muted)] shrink-0" />
-                                  <span className="font-semibold text-[var(--text-primary)]">
-                                    {getResidentFullName(resident) || '—'}
-                                  </span>
-                                  <Badge variant={isTenant ? 'info' : 'success'}>
-                                    {isTenant ? 'שוכר' : 'בעלים'}
-                                  </Badge>
-                                  {resident.is_primary && (
-                                    <Badge variant="warning" className="flex items-center gap-1">
-                                      <Star className="h-3 w-3" />
-                                      דייר ראשי
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => openEdit(resident)}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setDeleteTarget(resident)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                                  </Button>
-                                </div>
-                              </div>
+                          <div key={resident.id} className="flex items-start gap-3 p-4 rounded-xl bg-white border border-[var(--border-light)] hover:border-[var(--border)] hover:shadow-sm transition-all group">
+                            {/* Avatar */}
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm ${
+                              isTenant ? 'bg-gradient-to-br from-cyan-500 to-cyan-600' : 'bg-gradient-to-br from-emerald-500 to-emerald-600'
+                            }`}>
+                              {(resident.first_name?.[0] || '?').toUpperCase()}
+                            </div>
 
-                              {/* Contact info */}
-                              <div className="space-y-1 text-sm text-[var(--text-secondary)] mt-2">
-                                {resident.email && (
-                                  <div className="flex items-center gap-2">
-                                    <Mail className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                                    <span>{resident.email}</span>
-                                  </div>
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-[14px] font-semibold text-[var(--text-primary)]">
+                                  {getResidentFullName(resident) || '—'}
+                                </span>
+                                <Badge variant={isTenant ? 'info' : 'success'}>{isTenant ? 'שוכר' : 'בעלים'}</Badge>
+                                {resident.is_primary && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md ring-1 ring-inset ring-amber-600/10">
+                                    <Star className="h-3 w-3" />
+                                    ראשי
+                                  </span>
                                 )}
-                                {resident.phone && (
-                                  <div className="flex items-center gap-2">
-                                    <Phone className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-                                    <span>{resident.phone}</span>
-                                  </div>
-                                )}
-                                {resident.move_in_date && (
-                                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                                    <span>כניסה: {formatDate(resident.move_in_date)}</span>
-                                    {resident.move_out_date && (
-                                      <span>• יציאה: {formatDate(resident.move_out_date)}</span>
-                                    )}
-                                  </div>
-                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--text-muted)]">
+                                {resident.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{resident.phone}</span>}
+                                {resident.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{resident.email}</span>}
+                                {resident.move_in_date && <span>כניסה: {formatDate(resident.move_in_date)}</span>}
                               </div>
 
                               {/* Owner info (for tenants) */}
                               {hasOwnerInfo && (
-                                <div className="mt-3">
+                                <div className="mt-2">
                                   <button
                                     type="button"
                                     className="flex items-center gap-1 text-xs font-medium text-[var(--primary)] hover:underline"
                                     onClick={() => toggleOwnerInfo(resident.id)}
                                   >
-                                    {ownerInfoExpanded
-                                      ? <ChevronUp className="h-3 w-3" />
-                                      : <ChevronDown className="h-3 w-3" />
-                                    }
+                                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${ownerInfoExpanded ? 'rotate-180' : ''}`} />
                                     פרטי בעלים
                                   </button>
                                   {ownerInfoExpanded && (
@@ -354,8 +319,14 @@ function Residents() {
                                   )}
                                 </div>
                               )}
-                            </CardContent>
-                          </Card>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button size="sm" variant="ghost" onClick={() => openEdit(resident)}><Pencil className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(resident)}><Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" /></Button>
+                            </div>
+                          </div>
                         )
                       })
                     )}

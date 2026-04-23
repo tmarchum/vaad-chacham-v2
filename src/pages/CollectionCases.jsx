@@ -79,6 +79,7 @@ function CollectionCases() {
   const totalDebt = cases.reduce((s, c) => s + (c.total_debt || 0), 0)
   const openCount = cases.filter(c => c.status === 'open').length
   const highEscalation = cases.filter(c => c.escalation_level === 'formal' || c.escalation_level === 'legal').length
+  const maxDebt = Math.max(...cases.map(c => c.total_debt || 0), 1)
 
   const formatDate = (d) => {
     if (!d) return '-'
@@ -119,142 +120,226 @@ function CollectionCases() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {cases.map(c => {
             const level = LEVEL_CONFIG[c.escalation_level] || LEVEL_CONFIG.none
             const status = STATUS_CONFIG[c.status] || STATUS_CONFIG.open
-            const LevelIcon = level.icon
             const expanded = expandedId === c.id
             const caseNotifs = allNotifications.filter(n => n.case_id === c.id)
             const live = unitInfo[c.unit_id] || {}
+            const unitNumber = live.number || c.unit_number
+            const residentName = live.residentName || c.resident_name || '-'
+            const debtPct = ((c.total_debt || 0) / maxDebt) * 100
+            const escalationLevels = ['none', 'reminder', 'warning', 'formal', 'legal']
+            const escalationIdx = escalationLevels.indexOf(c.escalation_level || 'none')
 
             return (
-              <Card key={c.id}>
-                <CardContent className="py-4">
-                  {/* Main row */}
-                  <button
-                    onClick={() => setExpandedId(expanded ? null : c.id)}
-                    className="w-full flex items-center gap-4 text-right"
-                  >
-                    <div className="flex items-center gap-2 shrink-0">
-                      <LevelIcon className="h-5 w-5 text-[var(--text-secondary)]" />
-                      <span className="text-lg font-bold text-[var(--text-primary)]">
-                        דירה {live.number || c.unit_number}
-                      </span>
+              <div
+                key={c.id}
+                className="rounded-xl border border-[var(--border)] bg-white p-5 hover:shadow-md hover:border-blue-200 transition-all group cursor-pointer"
+                onClick={() => setExpandedId(expanded ? null : c.id)}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Avatar + unit info */}
+                  <div className="shrink-0">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm ${
+                      c.status === 'closed'
+                        ? 'bg-gradient-to-br from-green-500 to-green-600'
+                        : (c.total_debt || 0) > 2000
+                          ? 'bg-gradient-to-br from-red-500 to-red-600'
+                          : 'bg-gradient-to-br from-blue-500 to-blue-600'
+                    }`}>
+                      {unitNumber}
                     </div>
+                  </div>
 
-                    <span className="text-sm text-[var(--text-secondary)]">
-                      {live.residentName || c.resident_name || '-'}
-                    </span>
-
-                    <div className="flex-1" />
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-red-600">
-                        {formatCurrency(c.total_debt || 0)}
-                      </span>
-                      <Badge variant={level.variant}>{level.label}</Badge>
-                      <Badge variant={status.variant}>{status.label}</Badge>
-                      {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </div>
-                  </button>
-
-                  {/* Expanded details */}
-                  {expanded && (
-                    <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-4">
-                      {/* Info grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <span className="text-[var(--text-muted)]">חודשים חייבים:</span>
-                          <p className="font-medium text-[var(--text-primary)]">{c.months_overdue || 0}</p>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-muted)]">אימייל:</span>
-                          <p className="font-medium text-[var(--text-primary)]">{live.email || c.resident_email || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-muted)]">טלפון:</span>
-                          <p className="font-medium text-[var(--text-primary)]">{live.phone || c.resident_phone || '-'}</p>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-muted)]">פעולה הבאה:</span>
-                          <p className="font-medium text-[var(--text-primary)]">{formatDate(c.next_action_date)}</p>
+                  {/* Main content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
+                          דירה {unitNumber} — {residentName}
+                        </h3>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                          <span className="text-[11px] text-[var(--text-muted)] flex items-center gap-1">
+                            הסלמה:
+                            {escalationLevels.slice(0, -1).map((_, i) => (
+                              <span
+                                key={i}
+                                className={`inline-block w-1.5 h-1.5 rounded-full ${
+                                  i <= escalationIdx
+                                    ? escalationIdx >= 3
+                                      ? 'bg-red-500'
+                                      : escalationIdx >= 1
+                                        ? 'bg-amber-500'
+                                        : 'bg-gray-300'
+                                    : 'bg-gray-200'
+                                }`}
+                              />
+                            ))}
+                            <span className="mr-0.5">{level.label}</span>
+                          </span>
                         </div>
                       </div>
-
-                      {/* Unpaid months */}
-                      {c.unpaid_months && c.unpaid_months.length > 0 && (
-                        <div>
-                          <span className="text-sm text-[var(--text-muted)]">פירוט חודשים:</span>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {c.unpaid_months.map(m => {
-                              // Support both old string format and new object format
-                              const isObj = typeof m === 'object'
-                              const mk = isObj ? m.month : m
-                              const isDiff = isObj && m.type === 'diff'
-                              return (
-                                <span
-                                  key={mk}
-                                  className={`text-xs px-2 py-1 rounded border ${
-                                    isDiff
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                      : 'bg-red-50 text-red-700 border-red-200'
-                                  }`}
-                                >
-                                  {monthLabel(mk)}
-                                  {isDiff
-                                    ? ` — הפרש ${formatCurrency(m.diff)} (שולם ${formatCurrency(m.paid)})`
-                                    : isObj
-                                      ? ` — לא שולם (${formatCurrency(m.expected)})`
-                                      : ''}
-                                </span>
-                              )
-                            })}
-                          </div>
+                      <div className="text-left">
+                        <div className={`text-xl font-extrabold ${
+                          c.status === 'closed'
+                            ? 'text-green-600'
+                            : (c.total_debt || 0) > 2000
+                              ? 'text-red-600'
+                              : 'text-amber-600'
+                        }`}>
+                          {formatCurrency(c.total_debt || 0)}
                         </div>
-                      )}
-
-                      {/* History timeline */}
-                      {c.history && c.history.length > 0 && (
-                        <div>
-                          <span className="text-sm font-medium text-[var(--text-primary)]">היסטוריה:</span>
-                          <div className="mt-2 space-y-2">
-                            {[...c.history].reverse().map((h, i) => (
-                              <div key={i} className="flex items-start gap-2 text-xs">
-                                <span className="text-[var(--text-muted)] shrink-0 w-24">
-                                  {formatDate(h.date)}
-                                </span>
-                                <span className="text-[var(--text-primary)]">{h.note}</span>
-                              </div>
-                            ))}
-                          </div>
+                        <div className="text-[11px] text-[var(--text-muted)]">
+                          {c.months_overdue || 0} חודשים
                         </div>
-                      )}
-
-                      {/* Notifications sent */}
-                      {caseNotifs.length > 0 && (
-                        <div>
-                          <span className="text-sm font-medium text-[var(--text-primary)]">
-                            הודעות שנשלחו ({caseNotifs.length}):
-                          </span>
-                          <div className="mt-2 space-y-1">
-                            {caseNotifs.map(n => (
-                              <div key={n.id} className="flex items-center gap-2 text-xs">
-                                <Mail className="h-3 w-3 text-[var(--text-muted)]" />
-                                <span className="text-[var(--text-muted)]">{formatDate(n.created_at)}</span>
-                                <span className="text-[var(--text-primary)]">{n.subject}</span>
-                                <Badge variant={n.status === 'sent' ? 'success' : 'danger'}>
-                                  {n.status === 'sent' ? 'נשלח' : 'נכשל'}
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+
+                    {/* Debt bar */}
+                    <div className={`h-1.5 w-full rounded-full overflow-hidden mb-3 ${
+                      c.status === 'closed' ? 'bg-green-100' : 'bg-red-100'
+                    }`}>
+                      <div
+                        className={`h-full rounded-full ${
+                          c.status === 'closed'
+                            ? 'bg-gradient-to-l from-green-500 to-green-400'
+                            : 'bg-gradient-to-l from-red-500 to-red-400'
+                        }`}
+                        style={{ width: Math.min(100, debtPct) + '%' }}
+                      />
+                    </div>
+
+                    {/* Month chips */}
+                    {c.unpaid_months && c.unpaid_months.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {c.unpaid_months.map(m => {
+                          const isObj = typeof m === 'object'
+                          const mk = isObj ? m.month : m
+                          const isDiff = isObj && m.type === 'diff'
+                          return (
+                            <span
+                              key={mk}
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                isDiff
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-red-50 text-red-700 border border-red-200'
+                              }`}
+                            >
+                              {monthLabel(mk)}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Expand indicator */}
+                  <div className="shrink-0 mt-1">
+                    {expanded ? (
+                      <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Expanded details */}
+                {expanded && (
+                  <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-4">
+                    {/* Info grid */}
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-[var(--text-muted)]">חודשים חייבים:</span>
+                        <p className="font-medium text-[var(--text-primary)]">{c.months_overdue || 0}</p>
+                      </div>
+                      <div>
+                        <span className="text-[var(--text-muted)]">אימייל:</span>
+                        <p className="font-medium text-[var(--text-primary)] truncate">{live.email || c.resident_email || '-'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[var(--text-muted)]">טלפון:</span>
+                        <p className="font-medium text-[var(--text-primary)]">{live.phone || c.resident_phone || '-'}</p>
+                      </div>
+                      <div>
+                        <span className="text-[var(--text-muted)]">פעולה הבאה:</span>
+                        <p className="font-medium text-[var(--text-primary)]">{formatDate(c.next_action_date)}</p>
+                      </div>
+                    </div>
+
+                    {/* Unpaid months detail */}
+                    {c.unpaid_months && c.unpaid_months.length > 0 && (
+                      <div>
+                        <span className="text-sm text-[var(--text-muted)]">פירוט חודשים:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {c.unpaid_months.map(m => {
+                            const isObj = typeof m === 'object'
+                            const mk = isObj ? m.month : m
+                            const isDiff = isObj && m.type === 'diff'
+                            return (
+                              <span
+                                key={mk}
+                                className={`text-xs px-2 py-1 rounded border ${
+                                  isDiff
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-red-50 text-red-700 border-red-200'
+                                }`}
+                              >
+                                {monthLabel(mk)}
+                                {isDiff
+                                  ? ` — הפרש ${formatCurrency(m.diff)} (שולם ${formatCurrency(m.paid)})`
+                                  : isObj
+                                    ? ` — לא שולם (${formatCurrency(m.expected)})`
+                                    : ''}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* History timeline */}
+                    {c.history && c.history.length > 0 && (
+                      <div>
+                        <span className="text-sm font-medium text-[var(--text-primary)]">היסטוריה:</span>
+                        <div className="mt-2 space-y-2">
+                          {[...c.history].reverse().map((h, i) => (
+                            <div key={i} className="flex items-start gap-2 text-xs">
+                              <span className="text-[var(--text-muted)] shrink-0 w-24">
+                                {formatDate(h.date)}
+                              </span>
+                              <span className="text-[var(--text-primary)]">{h.note}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Notifications sent */}
+                    {caseNotifs.length > 0 && (
+                      <div>
+                        <span className="text-sm font-medium text-[var(--text-primary)]">
+                          הודעות שנשלחו ({caseNotifs.length}):
+                        </span>
+                        <div className="mt-2 space-y-1">
+                          {caseNotifs.map(n => (
+                            <div key={n.id} className="flex items-center gap-2 text-xs">
+                              <Mail className="h-3 w-3 text-[var(--text-muted)]" />
+                              <span className="text-[var(--text-muted)]">{formatDate(n.created_at)}</span>
+                              <span className="text-[var(--text-primary)]">{n.subject}</span>
+                              <Badge variant={n.status === 'sent' ? 'success' : 'danger'}>
+                                {n.status === 'sent' ? 'נשלח' : 'נכשל'}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
