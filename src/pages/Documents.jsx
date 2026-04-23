@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
-import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink, FolderOpen } from 'lucide-react'
+import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink, FolderOpen, AlertTriangle } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -61,17 +61,19 @@ function getTypeIcon(type) {
 // Summary stat card
 // ---------------------------------------------------------------------------
 
-function StatCard({ label, value, color }) {
+function DocStatCard({ label, value, icon: Icon, gradient }) {
   return (
-    <Card>
-      <CardContent className="py-4">
-        <p className="text-sm text-[var(--text-secondary)]">{label}</p>
-        <p
-          className="text-2xl font-bold mt-1"
-          style={{ color: color ?? 'var(--text-primary)' }}
-        >
-          {value}
-        </p>
+    <Card className="border-0 shadow-sm">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-sm`}>
+            <Icon className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <p className="text-xs text-[var(--text-secondary)]">{label}</p>
+            <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
@@ -81,75 +83,97 @@ function StatCard({ label, value, color }) {
 // Document Grid Card
 // ---------------------------------------------------------------------------
 
+// Gradient map for document types
+const DOC_TYPE_GRADIENTS = {
+  insurance:  'from-sky-500 to-sky-600',
+  protocol:   'from-violet-500 to-violet-600',
+  bylaws:     'from-indigo-500 to-indigo-600',
+  inspection: 'from-amber-500 to-amber-600',
+  contract:   'from-blue-500 to-blue-600',
+  other:      'from-slate-500 to-slate-600',
+}
+
 function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
-  const [hovered, setHovered] = useState(false)
   const TypeIcon = getTypeIcon(doc.type)
   const expiry = getExpiryStatus(doc.expiresAt)
+  const gradient = DOC_TYPE_GRADIENTS[doc.type] || DOC_TYPE_GRADIENTS.other
+
+  // Expiry dot color
+  const expiryDotColor = expiry
+    ? expiry.variant === 'danger' ? 'bg-red-500'
+      : expiry.variant === 'warning' ? 'bg-amber-500'
+      : 'bg-emerald-500'
+    : null
+  const expiryTextColor = expiry
+    ? expiry.variant === 'danger' ? 'text-red-700'
+      : expiry.variant === 'warning' ? 'text-amber-700'
+      : 'text-emerald-700'
+    : null
 
   return (
-    <Card
-      className="relative cursor-pointer"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <div
+      className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
       onClick={() => onView(doc)}
     >
-      <CardContent className="flex flex-col items-center gap-2 py-6 text-center">
-        {/* Large icon */}
-        <div className="rounded-full bg-[var(--primary-bg)] p-4 mb-1">
-          <TypeIcon className="h-8 w-8 text-[var(--primary)]" />
+      {/* Gradient top accent */}
+      <div className={`h-1.5 bg-gradient-to-l ${gradient}`} />
+
+      <div className="p-5 flex flex-col items-center gap-3 text-center">
+        {/* Gradient icon circle */}
+        <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-sm`}>
+          <TypeIcon className="h-7 w-7" />
         </div>
 
         {/* Title */}
-        <p className="font-semibold text-[var(--text-primary)] line-clamp-2 leading-tight">
+        <p className="font-semibold text-[var(--text-primary)] line-clamp-2 leading-tight text-[14px]">
           {doc.title}
         </p>
 
         {/* Category badge */}
         {doc.category && (
-          <Badge variant="default">{doc.category}</Badge>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+            {doc.category}
+          </span>
         )}
 
-        {/* Upload date */}
-        {doc.uploadedAt && (
-          <p className="text-xs text-[var(--text-secondary)]">
-            הועלה: {formatDate(doc.uploadedAt)}
-          </p>
-        )}
+        {/* Meta info row */}
+        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+          {doc.uploadedAt && <span>{formatDate(doc.uploadedAt)}</span>}
+          {doc.fileSize && <span>{doc.fileSize}</span>}
+        </div>
 
-        {/* Expiry badge */}
+        {/* Expiry status */}
         {expiry && (
-          <Badge variant={expiry.variant}>{expiry.label}</Badge>
-        )}
-
-        {/* File size */}
-        {doc.fileSize && (
-          <p className="text-xs text-[var(--text-secondary)]">{doc.fileSize}</p>
-        )}
-
-        {/* Hover actions overlay */}
-        {hovered && (
-          <div
-            className="absolute inset-0 flex items-center justify-center gap-2 rounded-xl bg-black/10"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => { e.stopPropagation(); onEdit(doc) }}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(doc) }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+          <div className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 rounded-full ${expiryDotColor}`} />
+            <span className={`text-[11px] font-medium ${expiryTextColor}`}>{expiry.label}</span>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Hover actions */}
+      <div
+        className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 bg-white/80 backdrop-blur-sm shadow-sm"
+          onClick={(e) => { e.stopPropagation(); onEdit(doc) }}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 bg-white/80 backdrop-blur-sm shadow-sm"
+          onClick={(e) => { e.stopPropagation(); onDelete(doc) }}
+        >
+          <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -160,58 +184,70 @@ function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
 function DocumentListRow({ doc, onEdit, onDelete, onView }) {
   const TypeIcon = getTypeIcon(doc.type)
   const expiry = getExpiryStatus(doc.expiresAt)
+  const gradient = DOC_TYPE_GRADIENTS[doc.type] || DOC_TYPE_GRADIENTS.other
+
+  // Expiry dot
+  const expiryDotColor = expiry
+    ? expiry.variant === 'danger' ? 'bg-red-500'
+      : expiry.variant === 'warning' ? 'bg-amber-500'
+      : 'bg-emerald-500'
+    : null
+  const expiryTextColor = expiry
+    ? expiry.variant === 'danger' ? 'text-red-700'
+      : expiry.variant === 'warning' ? 'text-amber-700'
+      : 'text-emerald-700'
+    : null
 
   return (
     <div
-      className="flex items-center gap-4 px-4 py-3 border-b border-[var(--border)] hover:bg-[var(--surface-hover)] cursor-pointer transition-colors last:border-0"
+      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
       onClick={() => onView(doc)}
     >
-      {/* Icon */}
-      <div className="shrink-0 rounded-full bg-[var(--primary-bg)] p-2">
-        <TypeIcon className="h-5 w-5 text-[var(--primary)]" />
+      {/* Gradient type circle */}
+      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+        <TypeIcon className="h-5 w-5" />
       </div>
 
-      {/* Title */}
+      {/* Title + category */}
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-[var(--text-primary)] truncate">{doc.title}</p>
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+            {doc.title}
+          </span>
+          {doc.category && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 shrink-0">
+              {doc.category}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+          {doc.uploadedAt && <span>{formatDate(doc.uploadedAt)}</span>}
+          {doc.fileSize && <span>{doc.fileSize}</span>}
+        </div>
       </div>
 
-      {/* Category */}
-      <div className="w-28 shrink-0">
-        {doc.category
-          ? <Badge variant="default">{doc.category}</Badge>
-          : <span className="text-sm text-[var(--text-secondary)]">—</span>
-        }
+      {/* Expiry status */}
+      <div className="hidden sm:flex items-center gap-2 min-w-[100px]">
+        {expiry ? (
+          <>
+            <div className={`w-2 h-2 rounded-full shrink-0 ${expiryDotColor}`} />
+            <span className={`text-[12px] font-medium ${expiryTextColor}`}>{expiry.label}</span>
+          </>
+        ) : (
+          <span className="text-xs text-[var(--text-muted)]">—</span>
+        )}
       </div>
 
-      {/* Upload date */}
-      <div className="w-28 shrink-0 text-sm text-[var(--text-secondary)]">
-        {doc.uploadedAt ? formatDate(doc.uploadedAt) : '—'}
-      </div>
-
-      {/* Expiry */}
-      <div className="w-36 shrink-0">
-        {expiry
-          ? <Badge variant={expiry.variant}>{expiry.label}</Badge>
-          : <span className="text-sm text-[var(--text-secondary)]">—</span>
-        }
-      </div>
-
-      {/* File size */}
-      <div className="w-20 shrink-0 text-sm text-[var(--text-secondary)]">
-        {doc.fileSize || '—'}
-      </div>
-
-      {/* Actions */}
+      {/* Actions (visible on hover) */}
       <div
-        className="flex items-center gap-1 shrink-0"
+        className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
-        <Button size="sm" variant="ghost" onClick={() => onEdit(doc)}>
-          <Pencil className="h-4 w-4" />
+        <Button size="icon" variant="ghost" onClick={() => onEdit(doc)}>
+          <Pencil className="h-3.5 w-3.5" />
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => onDelete(doc)}>
-          <Trash2 className="h-4 w-4 text-[var(--danger)]" />
+        <Button size="icon" variant="ghost" onClick={() => onDelete(doc)}>
+          <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
         </Button>
       </div>
     </div>
@@ -420,10 +456,10 @@ export default function Documents() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="סה״כ מסמכים"        value={summary.total} />
-        <StatCard label="פגים בעוד 30 יום"   value={summary.expiringSoon} color="var(--warning)" />
-        <StatCard label="פג תוקף"             value={summary.expired}     color="var(--danger)" />
-        <StatCard label="קטגוריות"            value={summary.categories} />
+        <DocStatCard label="סה״כ מסמכים" value={summary.total} icon={FolderOpen} gradient="from-blue-500 to-blue-600" />
+        <DocStatCard label="פגים בעוד 30 יום" value={summary.expiringSoon} icon={AlertTriangle} gradient="from-amber-400 to-amber-500" />
+        <DocStatCard label="פג תוקף" value={summary.expired} icon={AlertTriangle} gradient="from-red-500 to-red-600" />
+        <DocStatCard label="קטגוריות" value={summary.categories} icon={LayoutGrid} gradient="from-indigo-500 to-indigo-600" />
       </div>
 
       {/* Search + view toggle */}
@@ -520,18 +556,8 @@ export default function Documents() {
           ))}
         </div>
       ) : (
-        /* List view — divs, not actual table */
-        <Card>
-          {/* List header row */}
-          <div className="flex items-center gap-4 px-4 py-2 border-b border-[var(--border)] rounded-t-xl bg-[var(--surface-hover)]">
-            <div className="w-9 shrink-0" />
-            <div className="flex-1 text-xs font-semibold text-[var(--text-secondary)]">כותרת</div>
-            <div className="w-28 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">קטגוריה</div>
-            <div className="w-28 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">תאריך העלאה</div>
-            <div className="w-36 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">תוקף</div>
-            <div className="w-20 shrink-0 text-xs font-semibold text-[var(--text-secondary)]">גודל</div>
-            <div className="w-20 shrink-0" />
-          </div>
+        /* List view — premium card rows */
+        <div className="space-y-2">
           {filtered.map((doc) => (
             <DocumentListRow
               key={doc.id}
@@ -541,7 +567,7 @@ export default function Documents() {
               onView={setDetailDoc}
             />
           ))}
-        </Card>
+        </div>
       )}
 
       {/* ------------------------------------------------------------------ */}

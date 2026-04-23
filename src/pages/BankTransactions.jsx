@@ -436,28 +436,59 @@ export default function BankTransactions() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-[var(--text-secondary)]">סה"כ זכות</p>
-            <p className="text-lg font-bold text-green-600">{formatCurrency(summary.totalCredit)}</p>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm">
+                <ArrowDownLeft className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-[var(--text-secondary)]">סה"כ זכות</p>
+                <p className="text-lg font-bold text-emerald-600">{formatCurrency(summary.totalCredit)}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-[var(--text-secondary)]">סה"כ חובה</p>
-            <p className="text-lg font-bold text-red-600">{formatCurrency(summary.totalDebit)}</p>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm">
+                <ArrowUpRight className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-[var(--text-secondary)]">סה"כ חובה</p>
+                <p className="text-lg font-bold text-red-600">{formatCurrency(summary.totalDebit)}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-[var(--text-secondary)]">משויכות</p>
-            <p className="text-lg font-bold text-blue-600">{summary.matched} / {summary.total}</p>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                <CheckCircle2 className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-[var(--text-secondary)]">משויכות</p>
+                <p className="text-lg font-bold text-blue-600">{summary.matched} / {summary.total}</p>
+                <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                  <div className="h-full rounded-full bg-blue-500" style={{ width: summary.total > 0 ? `${Math.round((summary.matched / summary.total) * 100)}%` : '0%' }} />
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-[var(--text-secondary)]">ממתינות לשיוך</p>
-            <p className="text-lg font-bold text-amber-600">{summary.unmatched}</p>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-sm">
+                <AlertCircle className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-[var(--text-secondary)]">ממתינות לשיוך</p>
+                <p className="text-lg font-bold text-amber-600">{summary.unmatched}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -475,96 +506,128 @@ export default function BankTransactions() {
             const isCredit = Number(tx.credit) > 0
             const amount = isCredit ? tx.credit : tx.debit
             const status = MATCH_STATUS[tx.match_status] || MATCH_STATUS.unmatched
-            const StatusIcon = status.icon
             const matchedUnit = tx.unit_id ? units.find(u => u.id === tx.unit_id) : null
             const matchedResident = matchedUnit ? residentMap[matchedUnit.id] : null
 
+            // Gradient colors based on type
+            const circleGradient = isCredit
+              ? 'from-emerald-500 to-emerald-600'
+              : 'from-red-500 to-red-600'
+
+            // Status dot colors
+            const dotColorMap = {
+              matched: 'bg-emerald-500',
+              suggested: 'bg-blue-500',
+              unmatched: 'bg-amber-500',
+              ignored: 'bg-slate-400',
+              excluded: 'bg-red-400',
+            }
+            const dotColor = dotColorMap[tx.match_status] || dotColorMap.unmatched
+
+            // Status text colors
+            const statusTextColorMap = {
+              matched: 'text-emerald-700',
+              suggested: 'text-blue-700',
+              unmatched: 'text-amber-700',
+              ignored: 'text-slate-600',
+              excluded: 'text-red-600',
+            }
+            const statusTextColor = statusTextColorMap[tx.match_status] || statusTextColorMap.unmatched
+
             return (
-              <Card key={tx.id} className="hover:shadow-sm transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    {/* Icon */}
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                      isCredit ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'
-                    }`}>
-                      {isCredit
-                        ? <ArrowDownLeft className="h-4 w-4 text-green-600" />
-                        : <ArrowUpRight className="h-4 w-4 text-red-600" />
-                      }
-                    </div>
+              <div
+                key={tx.id}
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+              >
+                {/* Type circle */}
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                  {isCredit
+                    ? <ArrowDownLeft className="h-5 w-5" />
+                    : <ArrowUpRight className="h-5 w-5" />
+                  }
+                </div>
 
-                    {/* Details */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{tx.description}</p>
-                      <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-                        <span>{new Date(tx.transaction_date).toLocaleDateString('he-IL')}</span>
-                        {tx.transaction_time && <span>{tx.transaction_time}</span>}
-                        {tx.source && <span>| {tx.source}</span>}
-                      </div>
-                    </div>
-
-                    {/* Match info */}
-                    <div className="flex items-center gap-2">
-                      {matchedUnit && (
-                        <Badge variant="outline" className="text-xs">
-                          דירה {matchedUnit.number} {matchedResident ? `- ${matchedResident}` : ''}
-                        </Badge>
-                      )}
-                      <Badge variant={status.variant} className="gap-1">
-                        <StatusIcon className="h-3 w-3" />
-                        {status.label}
-                      </Badge>
-                    </div>
-
-                    {/* Amount */}
-                    <p className={`text-sm font-bold min-w-[80px] text-left ${
-                      isCredit ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {isCredit ? '+' : '-'}{formatCurrency(amount)}
-                    </p>
-
-                    {/* Actions */}
-                    <div className="flex gap-1 shrink-0">
-                      {tx.match_status === 'unmatched' && (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => setMatchDialog(tx)} title="שייך לדירה">
-                            <Link2 className="h-3 w-3" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleIgnore(tx)} title="התעלם">
-                            <XIcon className="h-3 w-3" />
-                          </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleExclude(tx)} title="לא רלוונטי">
-                            <XIcon className="h-3 w-3" />
-                          </Button>
-                        </>
-                      )}
-                      {tx.match_status === 'suggested' && (
-                        <>
-                          <Button size="sm" variant="default" onClick={() => handleApproveSuggestion(tx)} title="אשר הצעה">
-                            <Check className="h-3 w-3" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleRejectSuggestion(tx)} title="דחה הצעה">
-                            <XIcon className="h-3 w-3" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => setMatchDialog(tx)} title="שייך לדירה אחרת">
-                            <Link2 className="h-3 w-3" />
-                          </Button>
-                        </>
-                      )}
-                      {tx.match_status === 'matched' && (
-                        <Button size="sm" variant="outline" onClick={() => handleUnmatch(tx)} title="בטל שיוך">
-                          <XIcon className="h-3 w-3" />
-                        </Button>
-                      )}
-                      {(tx.match_status === 'ignored' || tx.match_status === 'excluded') && (
-                        <Button size="sm" variant="outline" onClick={() => handleUnmatch(tx)} title="החזר">
-                          <Link2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
+                {/* Details */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                      {tx.description}
+                    </span>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    <span>{new Date(tx.transaction_date).toLocaleDateString('he-IL')}</span>
+                    {tx.transaction_time && <span>{tx.transaction_time}</span>}
+                    {tx.source && <span>{tx.source}</span>}
+                  </div>
+                </div>
+
+                {/* Match info */}
+                {matchedUnit && (
+                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <span className="text-xs font-medium text-emerald-700">
+                      דירה {matchedUnit.number}
+                    </span>
+                    {matchedResident && (
+                      <span className="text-xs text-emerald-600">- {matchedResident}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Amount */}
+                <div className="text-left min-w-[90px]">
+                  <p className={`text-[15px] font-bold ${
+                    isCredit ? 'text-emerald-600' : 'text-red-600'
+                  }`}>
+                    {isCredit ? '+' : '-'}{formatCurrency(amount)}
+                  </p>
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center gap-2 min-w-[80px]">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{status.label}</span>
+                </div>
+
+                {/* Actions (visible on hover) */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  {tx.match_status === 'unmatched' && (
+                    <>
+                      <Button size="icon" variant="ghost" onClick={() => setMatchDialog(tx)} title="שייך לדירה">
+                        <Link2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleIgnore(tx)} title="התעלם">
+                        <XIcon className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleExclude(tx)} title="לא רלוונטי">
+                        <XIcon className="h-3.5 w-3.5 text-[var(--danger)]" />
+                      </Button>
+                    </>
+                  )}
+                  {tx.match_status === 'suggested' && (
+                    <>
+                      <Button size="icon" variant="ghost" onClick={() => handleApproveSuggestion(tx)} title="אשר הצעה">
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleRejectSuggestion(tx)} title="דחה הצעה">
+                        <XIcon className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setMatchDialog(tx)} title="שייך לדירה אחרת">
+                        <Link2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
+                  {tx.match_status === 'matched' && (
+                    <Button size="icon" variant="ghost" onClick={() => handleUnmatch(tx)} title="בטל שיוך">
+                      <XIcon className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {(tx.match_status === 'ignored' || tx.match_status === 'excluded') && (
+                    <Button size="icon" variant="ghost" onClick={() => handleUnmatch(tx)} title="החזר">
+                      <Link2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
             )
           })}
         </div>

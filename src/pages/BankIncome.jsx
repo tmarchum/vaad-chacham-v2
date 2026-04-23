@@ -133,16 +133,30 @@ export default function BankIncome() {
 
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">סה״כ הכנסות החודש</p>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(summary.total)}</p>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm">
+                <ArrowDownLeft className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-[var(--text-secondary)]">סה״כ הכנסות</p>
+                <p className="text-2xl font-bold text-emerald-600">{formatCurrency(summary.total)}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">מספר תנועות</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.count}</p>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                <Landmark className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-xs text-[var(--text-secondary)]">מספר תנועות</p>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.count}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -155,52 +169,61 @@ export default function BankIncome() {
           description={`לא נמצאו הכנסות ל${HEBREW_MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear}`}
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תיאור</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סכום</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">שיוך</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">הערות</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פעולות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {incomeList.map(tx => {
-                  const isMatched = tx.match_status === 'matched'
-                  return (
-                    <tr key={tx.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors">
-                      <td className="p-3">{tx.transaction_date ? formatDate(tx.transaction_date) : '-'}</td>
-                      <td className="p-3">{tx.description || '-'}</td>
-                      <td className="p-3 font-bold text-green-600">+{formatCurrency(tx.credit)}</td>
-                      <td className="p-3">
-                        {isMatched ? (
-                          <Badge variant="success" className="gap-1">
-                            <CheckCircle2 className="h-3 w-3" />
-                            משויך
-                          </Badge>
-                        ) : (
-                          <Badge variant="warning">לא משויך</Badge>
-                        )}
-                      </td>
-                      <td className="p-3 text-xs text-[var(--text-secondary)] max-w-[200px] truncate">
-                        {tx.notes || '-'}
-                      </td>
-                      <td className="p-3">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(tx)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="space-y-2">
+          {incomeList.map(tx => {
+            const isMatched = tx.match_status === 'matched'
+            const dotColor = isMatched ? 'bg-emerald-500' : 'bg-amber-500'
+            const statusTextColor = isMatched ? 'text-emerald-700' : 'text-amber-700'
+            const statusLabel = isMatched ? 'משויך' : 'לא משויך'
+
+            return (
+              <div
+                key={tx.id}
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+              >
+                {/* Emerald gradient circle */}
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shrink-0 shadow-sm">
+                  <ArrowDownLeft className="h-5 w-5" />
+                </div>
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                      {tx.description || '-'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    <span>{tx.transaction_date ? formatDate(tx.transaction_date) : '-'}</span>
+                    {tx.notes && (
+                      <span className="truncate max-w-[200px]">{tx.notes}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="text-left min-w-[100px]">
+                  <p className="text-[15px] font-bold text-emerald-600">
+                    +{formatCurrency(tx.credit)}
+                  </p>
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center gap-2 min-w-[80px]">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusLabel}</span>
+                </div>
+
+                {/* Actions (visible on hover) */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(tx)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {/* Edit Notes Dialog */}

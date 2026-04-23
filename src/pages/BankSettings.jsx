@@ -179,22 +179,22 @@ export default function BankSettings() {
       {/* Initial Pull / Nightly Status */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Initial Pull Card */}
-        <Card className={!scrapeSettings?.initial_pull_done ? 'ring-2 ring-blue-500/30' : ''}>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">משיכה ראשונית</h3>
-                <p className="text-xs text-[var(--text-secondary)]">משיכת תנועות חד-פעמית מתאריך שנבחר</p>
-              </div>
+        <div className={`rounded-xl border bg-white overflow-hidden ${!scrapeSettings?.initial_pull_done ? 'ring-2 ring-blue-500/30' : 'border-[var(--border)]'}`}>
+          {/* Gradient header */}
+          <div className="bg-gradient-to-l from-blue-500 to-blue-600 px-5 py-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
+              <Calendar className="h-5 w-5 text-white" />
             </div>
-
+            <div>
+              <h3 className="font-semibold text-white">משיכה ראשונית</h3>
+              <p className="text-xs text-blue-100">משיכת תנועות חד-פעמית מתאריך שנבחר</p>
+            </div>
+          </div>
+          <div className="p-5">
             {scrapeSettings?.initial_pull_done ? (
-              <div className="flex items-center gap-2 text-green-600 text-sm">
-                <CheckCircle2 className="h-4 w-4" />
-                <span>הושלמה{scrapeSettings.initial_pull_date ? ` (מ-${scrapeSettings.initial_pull_date})` : ''}</span>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="text-emerald-700 font-medium">הושלמה{scrapeSettings.initial_pull_date ? ` (מ-${scrapeSettings.initial_pull_date})` : ''}</span>
                 <span className="text-[var(--text-secondary)] mr-auto">{txCount} תנועות נקלטו</span>
               </div>
             ) : (
@@ -218,47 +218,49 @@ export default function BankSettings() {
                   )}
                 </div>
                 {scrapeSettings?.last_run_status === 'pending_initial' && (
-                  <p className="text-xs text-amber-600 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
+                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                     ממתין להרצה — הסקרייפר ימשוך מ-{scrapeSettings.initial_pull_date}
-                  </p>
+                  </div>
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Nightly Process Card */}
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                <Moon className="h-5 w-5 text-indigo-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold">תהליך לילי</h3>
-                <p className="text-xs text-[var(--text-secondary)]">משיכת תנועות אוטומטית כל לילה</p>
-              </div>
-              <Badge variant={scrapeSettings?.is_enabled ? 'success' : 'secondary'}>
-                {scrapeSettings?.is_enabled ? 'פעיל' : 'מושבת'}
-              </Badge>
+        <div className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
+          {/* Gradient header */}
+          <div className="bg-gradient-to-l from-indigo-500 to-indigo-600 px-5 py-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
+              <Moon className="h-5 w-5 text-white" />
             </div>
-
-            <div className="space-y-2 text-sm">
+            <div className="flex-1">
+              <h3 className="font-semibold text-white">תהליך לילי</h3>
+              <p className="text-xs text-indigo-100">משיכת תנועות אוטומטית כל לילה</p>
+            </div>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20">
+              <div className={`w-2 h-2 rounded-full ${scrapeSettings?.is_enabled ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+              <span className="text-xs font-medium text-white">
+                {scrapeSettings?.is_enabled ? 'פעיל' : 'מושבת'}
+              </span>
+            </div>
+          </div>
+          <div className="p-5">
+            <div className="space-y-2.5 text-sm">
               {scrapeSettings?.last_run_at && (
-                <p className="text-[var(--text-secondary)] flex items-center gap-2">
-                  <Clock className="h-3.5 w-3.5" />
-                  הרצה אחרונה: {new Date(scrapeSettings.last_run_at).toLocaleString('he-IL')}
-                </p>
+                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  <span>הרצה אחרונה: {new Date(scrapeSettings.last_run_at).toLocaleString('he-IL')}</span>
+                </div>
               )}
               {scrapeSettings?.last_run_status && !['pending_initial', 'initial_complete'].includes(scrapeSettings.last_run_status) && (
-                <p className="text-[var(--text-secondary)] flex items-center gap-2">
-                  {scrapeSettings.last_run_status === 'success'
-                    ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                    : <AlertCircle className="h-3.5 w-3.5 text-red-500" />
-                  }
-                  סטטוס: {scrapeSettings.last_run_status === 'success' ? 'הצליח' : scrapeSettings.last_run_status}
-                </p>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${scrapeSettings.last_run_status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                  <span className={`text-sm font-medium ${scrapeSettings.last_run_status === 'success' ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {scrapeSettings.last_run_status === 'success' ? 'הצליח' : scrapeSettings.last_run_status}
+                  </span>
+                </div>
               )}
               <Button
                 size="sm"
@@ -270,8 +272,8 @@ export default function BankSettings() {
                 {scrapeSettings?.is_enabled ? 'שנה הגדרות' : 'הפעל תהליך לילי'}
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Account cards */}
@@ -283,41 +285,65 @@ export default function BankSettings() {
           action={<Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />הוסף חשבון</Button>}
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
           {buildingAccounts.map((account) => {
             const bankInfo = BANKS[account.bank_type]
+            // Assign gradient colors to different bank types for variety
+            const bankGradients = {
+              hapoalim: 'from-red-500 to-red-600',
+              leumi: 'from-blue-500 to-blue-600',
+              discount: 'from-emerald-500 to-emerald-600',
+              mizrahi: 'from-purple-500 to-purple-600',
+              beinleumi: 'from-amber-500 to-amber-600',
+              mercantile: 'from-cyan-500 to-cyan-600',
+              otsarHahayal: 'from-indigo-500 to-indigo-600',
+            }
+            const gradient = bankGradients[account.bank_type] || 'from-slate-500 to-slate-600'
+            const dotColor = account.is_active ? 'bg-emerald-500' : 'bg-slate-400'
+            const statusText = account.is_active ? 'פעיל' : 'מושבת'
+            const statusTextColor = account.is_active ? 'text-emerald-700' : 'text-slate-600'
+
             return (
-              <Card key={account.id}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                        <Landmark className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold">{bankInfo?.name || account.bank_type}</h3>
-                        {account.label && <p className="text-xs text-[var(--text-secondary)]">{account.label}</p>}
-                      </div>
-                    </div>
-                    <Badge variant={account.is_active ? 'success' : 'secondary'}>
-                      {account.is_active ? 'פעיל' : 'מושבת'}
-                    </Badge>
+              <div
+                key={account.id}
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+              >
+                {/* Bank gradient circle */}
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                  <Landmark className="h-5 w-5" />
+                </div>
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                      {bankInfo?.name || account.bank_type}
+                    </span>
                   </div>
-                  {account.last_scraped_at && (
-                    <p className="text-xs text-[var(--text-secondary)] mb-3">
-                      משיכה אחרונה: {new Date(account.last_scraped_at).toLocaleDateString('he-IL')}
-                    </p>
-                  )}
-                  <div className="flex gap-2 mt-3">
-                    <Button size="sm" variant="outline" onClick={() => openEdit(account)} className="gap-1">
-                      <Pencil className="h-3 w-3" /> ערוך
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-red-500 gap-1" onClick={() => setDeleteTarget(account)}>
-                      <Trash2 className="h-3 w-3" /> מחק
-                    </Button>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+                    {account.label && <span>{account.label}</span>}
+                    {account.last_scraped_at && (
+                      <span>משיכה אחרונה: {new Date(account.last_scraped_at).toLocaleDateString('he-IL')}</span>
+                    )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center gap-2 min-w-[60px]">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusText}</span>
+                </div>
+
+                {/* Actions (visible on hover) */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button size="icon" variant="ghost" onClick={() => openEdit(account)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(account)}>
+                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                  </Button>
+                </div>
+              </div>
             )
           })}
         </div>
