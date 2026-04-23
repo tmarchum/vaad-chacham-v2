@@ -852,7 +852,7 @@ export default function BuildingAgent() {
                       </div>
                     </div>
                   )
-                }))
+                })
               )}
             </div>
           )}
