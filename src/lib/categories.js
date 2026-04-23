@@ -13,6 +13,7 @@ export const EXPENSE_CATEGORIES = [
   { value: 'הדברה', label: 'הדברה', group: 'שוטף', color: 'orange', icon: '🪲' },
   { value: 'הסקה', label: 'הסקה / חימום מים', group: 'שוטף', color: 'red', icon: '🔥' },
   { value: 'גז', label: 'גז מרכזי', group: 'שוטף', color: 'slate', icon: '🔵' },
+  { value: 'תקשורת', label: 'טלפון / אינטרנט', group: 'שוטף', color: 'violet', icon: '📞' },
 
   // ביטוח
   { value: 'ביטוח_מבנה', label: 'ביטוח מבנה', group: 'ביטוח', color: 'purple', icon: '🛡️' },
