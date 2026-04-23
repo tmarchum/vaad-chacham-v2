@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { useAuth } from '@/hooks/useAuth'
 import { HDate } from '@hebcal/core'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import {
   CreditCard,
@@ -16,6 +16,15 @@ import {
   Info,
   AlertCircle,
   Calendar,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  FileText,
+  ClipboardList,
+  Megaphone,
+  BarChart2,
+  ChevronLeft,
+  Building2,
 } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -23,8 +32,27 @@ const HEBREW_MONTHS = [
   'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
 ]
 
+/* ── Circular progress ring ─────────────────────────────────────────── */
+function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#3b82f6' }) {
+  const r = (size - strokeWidth) / 2
+  const circ = 2 * Math.PI * r
+  const offset = circ - (Math.min(value, 100) / 100) * circ
+  return (
+    <svg width={size} height={size} className="shrink-0 -rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke="currentColor" strokeWidth={strokeWidth}
+        className="text-slate-100" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={color} strokeWidth={strokeWidth}
+        strokeDasharray={circ} strokeDashoffset={offset}
+        strokeLinecap="round" className="transition-all duration-700 ease-out" />
+    </svg>
+  )
+}
+
 function Dashboard() {
   const { selectedBuilding } = useBuildingContext()
+  const { profile } = useAuth()
   const { data: allUnits } = useCollection('units')
   const { data: allPayments } = useCollection('payments')
   const { data: allIssues } = useCollection('issues')
@@ -63,7 +91,6 @@ function Dashboard() {
   const monthPayments = payments.filter((p) => p.month === currentMonth)
   const paidPayments = monthPayments.filter((p) => p.status === 'paid' || p.status === 'partial')
   const collected = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
-  // Expected = sum of each unit's calculated fee (respects tiers)
   const expected = units.reduce((sum, u) => sum + calcUnitFee(u, selectedBuilding), 0)
     || monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0) || 1
   const collectionPct = expected > 0 ? Math.round((collected / expected) * 100) : 0
@@ -77,20 +104,9 @@ function Dashboard() {
   const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'in_progress')
   const urgentIssues = openIssues.filter((i) => i.priority === 'high' || i.priority === 'urgent')
 
-  const monthExpenses = expenses.filter((e) => {
-    if (!e.date) return false
-    return e.date.startsWith(currentMonth)
-  })
+  const monthExpenses = expenses.filter((e) => e.date?.startsWith(currentMonth))
   const totalExpenses = monthExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
   const balance = selectedBuilding?.balance ?? 0
-
-  const pctVariant = collectionPct >= 80 ? 'success' : collectionPct >= 50 ? 'warning' : 'danger'
-  const pctColor =
-    collectionPct >= 80
-      ? 'var(--success, #16a34a)'
-      : collectionPct >= 50
-        ? 'var(--warning, #d97706)'
-        : 'var(--danger, #dc2626)'
 
   const statusLabel = (status) => {
     switch (status) {
@@ -156,7 +172,6 @@ function Dashboard() {
     } catch (e) {
       console.warn('Hebrew date error:', e)
     }
-    // Update at midnight
     const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
     const timer = setTimeout(() => {
       try { setHebrewDate(new HDate().render('he')) } catch {}
@@ -167,146 +182,247 @@ function Dashboard() {
   const WEEKDAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
   const dayOfWeek = WEEKDAYS_HE[now.getDay()]
   const gregDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
+  const hour = now.getHours()
+  const greeting = hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : 'ערב טוב'
+  const firstName = profile?.first_name || ''
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-          דשבורד {selectedBuilding ? `- ${selectedBuilding.name}` : ''}
-        </h1>
-        <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] bg-[var(--surface)] border border-[var(--border)] rounded-lg px-4 py-2">
-          <Calendar className="h-4 w-4 text-[var(--primary)]" />
-          <span>יום {dayOfWeek}</span>
-          <span className="text-[var(--text-muted)]">|</span>
-          <span>{gregDate}</span>
-          {hebrewDate && (
-            <>
-              <span className="text-[var(--text-muted)]">|</span>
-              <span className="font-medium text-[var(--text-primary)]">{hebrewDate}</span>
-            </>
-          )}
+    <div className="space-y-6 max-w-7xl mx-auto">
+
+      {/* ═══════════════════════════════════════════════════════════════
+          ── Welcome banner ──
+          ═══════════════════════════════════════════════════════════ */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-blue-600 via-blue-700 to-indigo-800 p-6 lg:p-8 text-white shadow-xl shadow-blue-600/10 animate-fade-in-up">
+        {/* Background decoration */}
+        <div className="absolute top-0 left-0 w-72 h-72 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 right-0 w-48 h-48 bg-white/5 rounded-full translate-x-1/4 translate-y-1/4" />
+
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-extrabold mb-1">
+              {greeting}{firstName ? `, ${firstName}` : ''} 👋
+            </h1>
+            <p className="text-blue-100 text-sm lg:text-base">
+              {selectedBuilding ? (
+                <>
+                  <Building2 className="inline h-4 w-4 ml-1 -mt-0.5" />
+                  {selectedBuilding.name}
+                  <span className="mx-2 opacity-40">|</span>
+                </>
+              ) : null}
+              יום {dayOfWeek}, {gregDate}
+              {hebrewDate && (
+                <>
+                  <span className="mx-2 opacity-40">|</span>
+                  <span className="font-medium">{hebrewDate}</span>
+                </>
+              )}
+            </p>
+          </div>
+
+          {/* Quick stats in banner */}
+          <div className="flex items-center gap-5">
+            <div className="text-center">
+              <div className="text-2xl font-black">{units.length}</div>
+              <div className="text-[11px] text-blue-200">דירות</div>
+            </div>
+            <div className="w-px h-8 bg-white/20" />
+            <div className="text-center">
+              <div className="text-2xl font-black">{collectionPct}%</div>
+              <div className="text-[11px] text-blue-200">גבייה</div>
+            </div>
+            <div className="w-px h-8 bg-white/20" />
+            <div className="text-center">
+              <div className="text-2xl font-black">{openIssues.length}</div>
+              <div className="text-[11px] text-blue-200">תקלות</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* KPI Grid */}
+      {/* ═══════════════════════════════════════════════════════════════
+          ── KPI cards ──
+          ═══════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Monthly Collection */}
-        <Card className="overflow-hidden">
-          <CardContent className="pt-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">גבייה חודשית</div>
-                <div className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(collected)}</div>
-                <div className="text-xs text-[var(--text-muted)] mt-1">מתוך {formatCurrency(expected)}</div>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-                <CreditCard className="h-5 w-5 text-blue-600" />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 rounded-full bg-blue-100 overflow-hidden">
-                <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${Math.min(collectionPct, 100)}%` }} />
-              </div>
-              <span className="text-xs font-bold text-blue-600">{collectionPct}%</span>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Debtors */}
-        <Card className="overflow-hidden">
-          <CardContent className="pt-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">חייבים החודש</div>
-                <div className="text-2xl font-bold text-[var(--text-primary)]">{debtors.length}</div>
-                <div className="text-xs text-[var(--text-muted)] mt-1">דירות שטרם שילמו</div>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-              </div>
+        {/* Collection KPI */}
+        <div className="kpi-card kpi-blue rounded-xl border border-[var(--border)] bg-white p-5 animate-fade-in-up animate-fade-in-up-delay-1">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <p className="text-[13px] font-medium text-[var(--text-muted)] mb-1">גבייה חודשית</p>
+              <p className="text-[28px] font-extrabold text-[var(--text-primary)] leading-none tracking-tight">
+                {formatCurrency(collected)}
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-1.5">
+                מתוך {formatCurrency(expected)}
+              </p>
             </div>
-          </CardContent>
-        </Card>
+            <CircleProgress value={collectionPct} color="#3b82f6" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 rounded-full bg-blue-100 overflow-hidden">
+              <div className="h-full rounded-full bg-blue-500 transition-all duration-700" style={{ width: `${Math.min(collectionPct, 100)}%` }} />
+            </div>
+            <span className="text-xs font-bold text-blue-600 min-w-[36px] text-left">{collectionPct}%</span>
+          </div>
+        </div>
 
-        {/* Open Issues */}
-        <Card className="overflow-hidden">
-          <CardContent className="pt-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">תקלות פתוחות</div>
-                <div className="text-2xl font-bold text-[var(--text-primary)]">{openIssues.length}</div>
-                {urgentIssues.length > 0 ? (
-                  <div className="text-xs text-red-600 mt-1">{urgentIssues.length} דחופות</div>
-                ) : (
-                  <div className="text-xs text-[var(--text-muted)] mt-1">הכל תקין</div>
-                )}
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
-                <Wrench className="h-5 w-5 text-purple-600" />
-              </div>
+        {/* Debtors KPI */}
+        <div className="kpi-card kpi-amber rounded-xl border border-[var(--border)] bg-white p-5 animate-fade-in-up animate-fade-in-up-delay-2">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className="text-[13px] font-medium text-[var(--text-muted)] mb-1">חייבים</p>
+              <p className="text-[28px] font-extrabold text-[var(--text-primary)] leading-none tracking-tight">
+                {debtors.length}
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-1.5">דירות שטרם שילמו</p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-50 to-amber-100 flex items-center justify-center shrink-0">
+              <AlertTriangle className="h-6 w-6 text-amber-500" />
+            </div>
+          </div>
+          {debtors.length > 0 ? (
+            <div className="flex items-center gap-1.5 mt-3">
+              <div className="status-dot warning" />
+              <span className="text-xs text-amber-600 font-medium">נדרש מעקב</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 mt-3">
+              <div className="status-dot success" />
+              <span className="text-xs text-green-600 font-medium">הכל שולם</span>
+            </div>
+          )}
+        </div>
 
-        {/* Monthly Expenses */}
-        <Card className="overflow-hidden">
-          <CardContent className="pt-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="text-sm font-medium text-[var(--text-secondary)] mb-1">הוצאות החודש</div>
-                <div className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(totalExpenses)}</div>
-                <div className={`text-xs mt-1 ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  יתרה: {formatCurrency(balance)}
-                </div>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
-                <Wallet className="h-5 w-5 text-green-600" />
-              </div>
+        {/* Issues KPI */}
+        <div className="kpi-card kpi-purple rounded-xl border border-[var(--border)] bg-white p-5 animate-fade-in-up animate-fade-in-up-delay-3">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className="text-[13px] font-medium text-[var(--text-muted)] mb-1">תקלות פתוחות</p>
+              <p className="text-[28px] font-extrabold text-[var(--text-primary)] leading-none tracking-tight">
+                {openIssues.length}
+              </p>
+              {urgentIssues.length > 0 ? (
+                <p className="text-xs text-red-500 font-semibold mt-1.5">{urgentIssues.length} דחופות</p>
+              ) : (
+                <p className="text-xs text-[var(--text-muted)] mt-1.5">הכל תקין</p>
+              )}
             </div>
-          </CardContent>
-        </Card>
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-50 to-purple-100 flex items-center justify-center shrink-0">
+              <Wrench className="h-6 w-6 text-purple-500" />
+            </div>
+          </div>
+          {urgentIssues.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-3">
+              <div className="status-dot danger" />
+              <span className="text-xs text-red-600 font-medium">דורש טיפול מיידי</span>
+            </div>
+          )}
+        </div>
+
+        {/* Expenses + Balance KPI */}
+        <div className="kpi-card kpi-emerald rounded-xl border border-[var(--border)] bg-white p-5 animate-fade-in-up animate-fade-in-up-delay-4">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className="text-[13px] font-medium text-[var(--text-muted)] mb-1">הוצאות {monthLabel}</p>
+              <p className="text-[28px] font-extrabold text-[var(--text-primary)] leading-none tracking-tight">
+                {formatCurrency(totalExpenses)}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center shrink-0">
+              <Wallet className="h-6 w-6 text-emerald-500" />
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+            <span className="text-xs text-[var(--text-muted)]">יתרה</span>
+            <span className={`text-sm font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {balance >= 0 ? (
+                <TrendingUp className="inline h-3.5 w-3.5 ml-1 -mt-0.5" />
+              ) : (
+                <TrendingDown className="inline h-3.5 w-3.5 ml-1 -mt-0.5" />
+              )}
+              {formatCurrency(Math.abs(balance))}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Side-by-side lists */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Debtors List */}
-        <Card>
+      {/* ═══════════════════════════════════════════════════════════════
+          ── Quick actions ──
+          ═══════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-in-up">
+        {[
+          { to: '/payments',     icon: CreditCard,  label: 'גבייה',        color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
+          { to: '/issues',       icon: Wrench,      label: 'תקלה חדשה',    color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
+          { to: '/expenses',     icon: Wallet,      label: 'הוצאות',       color: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' },
+          { to: '/announcements', icon: Megaphone,  label: 'הודעות',       color: 'text-amber-600 bg-amber-50 hover:bg-amber-100' },
+        ].map(({ to, icon: Icon, label, color }) => (
+          <Link
+            key={to}
+            to={to}
+            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-[13px] font-semibold transition-all border border-transparent hover:border-[var(--border)] hover:shadow-sm ${color}`}
+          >
+            <Icon className="h-4.5 w-4.5 shrink-0" />
+            {label}
+          </Link>
+        ))}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          ── Main content grid ──
+          ═══════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
+        {/* ── Debtors list (3 cols) ── */}
+        <Card className="lg:col-span-3">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>חייבים החודש</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-1 h-5 rounded-full bg-amber-400" />
+                חייבים החודש — {monthLabel}
+              </CardTitle>
               <Link
                 to="/payments"
-                className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1"
+                className="text-xs text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium flex items-center gap-1 transition-colors"
               >
                 לכל הגבייה
-                <ArrowLeft className="h-3 w-3" />
+                <ChevronLeft className="h-3.5 w-3.5" />
               </Link>
             </div>
           </CardHeader>
           <CardContent>
             {debtorUnits.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                כל הדירות שילמו החודש
-              </p>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center mb-3">
+                  <CreditCard className="h-7 w-7 text-green-400" />
+                </div>
+                <p className="text-sm font-medium text-[var(--text-secondary)]">כל הדירות שילמו החודש</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">מצוין!</p>
+              </div>
             ) : (
-              <div className="space-y-3">
-                {debtorUnits.map((d) => (
+              <div className="divide-y divide-[var(--border-light)]">
+                {debtorUnits.slice(0, 8).map((d, i) => (
                   <div
                     key={d.id}
-                    className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0"
+                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0 group"
                   >
-                    <div>
-                      <span className="text-sm font-medium text-[var(--text-primary)]">
-                        דירה {d.unit?.number || '?'}
-                      </span>
-                      {d.unit?.ownerName && (
-                        <span className="text-xs text-[var(--text-secondary)] mr-2">
-                          {d.unit.ownerName}
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
+                        {d.unit?.number || '?'}
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-[var(--text-primary)] block">
+                          דירה {d.unit?.number || '?'}
                         </span>
-                      )}
+                        {d.unit?.ownerName && (
+                          <span className="text-xs text-[var(--text-muted)]">
+                            {d.unit.ownerName}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-[var(--text-primary)]">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-[var(--text-primary)]">
                         {formatCurrency(d.amount)}
                       </span>
                       <Badge variant={statusVariant(d.status)}>
@@ -315,130 +431,183 @@ function Dashboard() {
                     </div>
                   </div>
                 ))}
+                {debtorUnits.length > 8 && (
+                  <div className="pt-3 text-center">
+                    <Link to="/payments" className="text-xs text-[var(--primary)] font-medium hover:underline">
+                      +{debtorUnits.length - 8} נוספים
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Open Issues List */}
-        <Card>
+        {/* ── Issues list (2 cols) ── */}
+        <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>תקלות פתוחות</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-1 h-5 rounded-full bg-purple-400" />
+                תקלות פתוחות
+              </CardTitle>
               <Link
                 to="/issues"
-                className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1"
+                className="text-xs text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium flex items-center gap-1 transition-colors"
               >
-                לכל התקלות
-                <ArrowLeft className="h-3 w-3" />
+                הכל
+                <ChevronLeft className="h-3.5 w-3.5" />
               </Link>
             </div>
           </CardHeader>
           <CardContent>
             {openIssues.length === 0 ? (
-              <p className="text-sm text-[var(--text-muted)] text-center py-4">
-                אין תקלות פתוחות
-              </p>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center mb-3">
+                  <Wrench className="h-7 w-7 text-green-400" />
+                </div>
+                <p className="text-sm font-medium text-[var(--text-secondary)]">אין תקלות פתוחות</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">הכל תקין</p>
+              </div>
             ) : (
-              <div className="space-y-3">
-                {openIssues.map((issue) => (
+              <div className="space-y-2">
+                {openIssues.slice(0, 6).map((issue) => (
                   <div
                     key={issue.id}
-                    className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0"
+                    className="flex items-start gap-3 p-3 rounded-xl bg-[var(--surface-secondary)] hover:bg-[var(--surface-hover)] transition-colors group"
                   >
-                    <span className="text-sm font-medium text-[var(--text-primary)]">
-                      {issue.title}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={priorityVariant(issue.priority)}>
-                        {priorityLabel(issue.priority)}
-                      </Badge>
-                      <Badge variant={issueStatusVariant(issue.status)}>
-                        {issueStatusLabel(issue.status)}
-                      </Badge>
+                    <div className={`status-dot mt-1.5 ${
+                      issue.priority === 'high' || issue.priority === 'urgent' ? 'danger' :
+                      issue.priority === 'medium' ? 'warning' : 'success'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
+                        {issue.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant={priorityVariant(issue.priority)} className="text-[10px] px-1.5 py-0">
+                          {priorityLabel(issue.priority)}
+                        </Badge>
+                        <span className="text-[11px] text-[var(--text-muted)]">
+                          {issueStatusLabel(issue.status)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
+                {openIssues.length > 6 && (
+                  <Link to="/issues" className="block text-center text-xs text-[var(--primary)] font-medium py-2 hover:underline">
+                    +{openIssues.length - 6} תקלות נוספות
+                  </Link>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Collection Progress */}
-      <Card>
+      {/* ═══════════════════════════════════════════════════════════════
+          ── Collection progress bar ──
+          ═══════════════════════════════════════════════════════════ */}
+      <Card className="animate-fade-in-up">
         <CardContent className="pt-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-[var(--text-secondary)]">
-              התקדמות גבייה - {monthLabel}
+            <span className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <BarChart2 className="h-4 w-4 text-[var(--primary)]" />
+              התקדמות גבייה — {monthLabel}
             </span>
-            <span className="text-sm font-bold text-[var(--text-primary)]">{collectionPct}%</span>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-[var(--text-muted)]">
+                נגבה: <span className="font-semibold text-[var(--text-primary)]">{formatCurrency(collected)}</span>
+              </span>
+              <span className="text-[var(--text-muted)]">
+                צפוי: <span className="font-semibold text-[var(--text-primary)]">{formatCurrency(expected)}</span>
+              </span>
+            </div>
           </div>
-          <Progress value={collectionPct} color={pctColor} />
-          <div className="flex justify-between mt-2 text-xs text-[var(--text-muted)]">
-            <span>נגבה: {formatCurrency(collected)}</span>
-            <span>צפוי: {formatCurrency(expected)}</span>
+          <div className="relative h-3 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="absolute inset-y-0 right-0 rounded-full bg-gradient-to-l from-blue-500 to-blue-600 transition-all duration-700 ease-out"
+              style={{ width: `${Math.min(collectionPct, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-2">
+            <span className="text-xs font-bold text-blue-600">{collectionPct}%</span>
+            <span className="text-[11px] text-[var(--text-muted)]">
+              {paidPayments.length} מתוך {monthPayments.length || units.length} דירות
+            </span>
           </div>
         </CardContent>
       </Card>
 
-      {/* Agent Alerts */}
+      {/* ═══════════════════════════════════════════════════════════════
+          ── Agent alerts ──
+          ═══════════════════════════════════════════════════════════ */}
       {agentAlerts.length > 0 && (
-        <Card>
+        <Card className="animate-fade-in-up">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-[var(--primary)]" />
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <Zap className="h-4 w-4 text-white" />
+                </div>
                 התראות סוכנים חכמים
+                {agentAlerts.filter(a => !a.is_read).length > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white px-1.5">
+                    {agentAlerts.filter(a => !a.is_read).length}
+                  </span>
+                )}
               </CardTitle>
               <Link
                 to="/smart-agents"
-                className="text-xs text-[var(--primary)] hover:underline flex items-center gap-1"
+                className="text-xs text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium flex items-center gap-1 transition-colors"
               >
                 לכל הסוכנים
-                <ArrowLeft className="h-3 w-3" />
+                <ChevronLeft className="h-3.5 w-3.5" />
               </Link>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {agentAlerts.filter(a => !a.is_read).slice(0, 5).map((alert) => {
                 const sevIcon = alert.severity === 'high'
-                  ? <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                  ? <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                   : alert.severity === 'medium'
-                  ? <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
-                  : <Info className="h-4 w-4 text-blue-500 shrink-0" />
-                const sevBg = alert.severity === 'high' ? 'bg-red-50 border-red-200'
-                  : alert.severity === 'medium' ? 'bg-amber-50 border-amber-200'
-                  : 'bg-blue-50 border-blue-200'
+                  ? <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  : <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                const sevClass = alert.severity === 'high' ? 'severity-high'
+                  : alert.severity === 'medium' ? 'severity-medium' : 'severity-low'
                 return (
                   <div
                     key={alert.id}
-                    className={`flex items-start gap-3 p-3 rounded-lg border ${sevBg}`}
+                    className={`alert-item ${sevClass} flex items-start gap-3 p-3.5 rounded-xl bg-[var(--surface-secondary)]`}
                   >
                     {sevIcon}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--text-primary)]">{alert.title}</p>
+                      <p className="text-[13px] font-semibold text-[var(--text-primary)]">{alert.title}</p>
                       {alert.description && (
-                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">{alert.description}</p>
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">{alert.description}</p>
                       )}
                       {alert.recommendation && (
-                        <p className="text-xs text-[var(--primary)] mt-1">💡 {alert.recommendation}</p>
+                        <p className="text-xs text-blue-600 mt-1.5 font-medium">💡 {alert.recommendation}</p>
                       )}
                     </div>
-                    <span className="text-[10px] text-[var(--text-muted)] shrink-0 mt-0.5">
+                    <Badge variant="default" className="shrink-0 text-[10px]">
                       {alert.agent_type === 'expense_analysis' ? 'הוצאות'
                         : alert.agent_type === 'collection' ? 'גבייה'
                         : alert.agent_type === 'budget' ? 'תקציב'
                         : alert.agent_type}
-                    </span>
+                    </Badge>
                   </div>
                 )
               })}
               {agentAlerts.filter(a => !a.is_read).length > 5 && (
-                <p className="text-xs text-center text-[var(--text-muted)]">
+                <Link
+                  to="/smart-agents"
+                  className="block text-center text-xs text-[var(--primary)] font-medium py-2 hover:underline"
+                >
                   +{agentAlerts.filter(a => !a.is_read).length - 5} התראות נוספות
-                </p>
+                </Link>
               )}
             </div>
           </CardContent>

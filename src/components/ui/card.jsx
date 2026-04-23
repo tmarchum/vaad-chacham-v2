@@ -5,8 +5,8 @@ const Card = forwardRef(({ className, children, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      'rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm',
-      'transition-shadow hover:shadow-md',
+      'rounded-xl border border-[var(--border)] bg-[var(--surface)]',
+      'shadow-[var(--shadow)] transition-shadow duration-200',
       className
     )}
     {...props}
@@ -30,7 +30,7 @@ CardHeader.displayName = 'CardHeader'
 const CardTitle = forwardRef(({ className, children, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn('text-lg font-semibold text-[var(--text-primary)]', className)}
+    className={cn('text-[15px] font-bold text-[var(--text-primary)]', className)}
     {...props}
   >
     {children}
