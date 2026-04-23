@@ -286,28 +286,37 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
     <div className="space-y-4">
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5">
+        <div className="relative rounded-xl border bg-white overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
+          <div className="p-4">
             <p className="text-xs text-[var(--text-secondary)] mb-1">אחוז גבייה חודש נוכחי</p>
             <p className="text-2xl font-bold mb-2" style={{ color: rateColor }}>{collectionRate}%</p>
             <Progress value={collectionRate} color={rateColor} />
             <p className="text-xs text-[var(--text-secondary)] mt-1">{thisMonthPaid} מתוך {thisMonthTotal} שילמו</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">חייבים פעילים</p>
+          </div>
+        </div>
+        <div className="relative rounded-xl border bg-white overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-red-500 to-red-600" />
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+              <p className="text-xs text-[var(--text-secondary)]">חייבים פעילים</p>
+            </div>
             <p className="text-2xl font-bold text-red-500">{debtors.length}</p>
             <p className="text-xs text-[var(--text-secondary)] mt-1">ב-3 חודשים אחרונים</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">סה"כ חוב פתוח</p>
+          </div>
+        </div>
+        <div className="relative rounded-xl border bg-white overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-orange-500 to-red-500" />
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-red-600 shrink-0" />
+              <p className="text-xs text-[var(--text-secondary)]">סה"כ חוב פתוח</p>
+            </div>
             <p className="text-2xl font-bold text-red-600">{formatCurrency(totalOutstanding)}</p>
             <p className="text-xs text-[var(--text-secondary)] mt-1">לגבייה</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Actions bar */}
@@ -335,61 +344,72 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <h3 className="font-semibold text-[var(--text-primary)] text-sm">רשימת חייבים</h3>
           {debtors.map((debtor, idx) => (
-            <Card key={idx} className="border-red-100">
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-[var(--text-primary)]">
-                        דירה {debtor.unit.number}
-                      </span>
-                      {(debtor.unit.ownerName || debtor.unit.tenant_name) && (
-                        <span className="text-sm text-[var(--text-secondary)]">
-                          — {debtor.unit.ownerName || debtor.unit.tenant_name}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      {debtor.months.map(m => (
-                        <Badge key={m} variant="danger" className="text-xs">{m}</Badge>
-                      ))}
-                    </div>
-                    <p className="text-sm text-[var(--text-secondary)]">
-                      {debtor.unpaidCount} חודשים שלא שולמו · חוב כולל:{' '}
-                      <span className="font-semibold text-red-600">{formatCurrency(debtor.totalDebt)}</span>
-                    </p>
-                    {debtor.oldestUnpaid && (
-                      <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                        חוב ישן מ: {debtor.oldestUnpaid}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onShowMessage(debtor)}
-                      className="gap-1.5"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      צפה בהודעה
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => onMarkOverdue(debtor)}
-                      className="gap-1.5"
-                    >
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      סמן כבאיחור
-                    </Button>
-                  </div>
+            <div
+              key={idx}
+              className="group flex items-center gap-4 p-4 rounded-xl border border-red-100 bg-white hover:shadow-md hover:border-red-200 transition-all"
+            >
+              {/* Unit number circle */}
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm">
+                {debtor.unit.number}
+              </div>
+
+              {/* Main info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                    דירה {debtor.unit.number}
+                  </span>
+                  {(debtor.unit.ownerName || debtor.unit.tenant_name) && (
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {debtor.unit.ownerName || debtor.unit.tenant_name}
+                    </span>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {debtor.months.map(m => (
+                    <Badge key={m} variant="danger" className="text-xs">{m}</Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  {debtor.unpaidCount} חודשים שלא שולמו
+                  {debtor.oldestUnpaid && <span> · חוב ישן מ: {debtor.oldestUnpaid}</span>}
+                </p>
+              </div>
+
+              {/* Debt amount */}
+              <div className="text-left min-w-[90px]">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full shrink-0 bg-red-500" />
+                  <span className="text-[15px] font-bold text-red-600">{formatCurrency(debtor.totalDebt)}</span>
+                </div>
+                <span className="text-[11px] text-[var(--text-muted)]">חוב כולל</span>
+              </div>
+
+              {/* Actions (visible on hover) */}
+              <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onShowMessage(debtor)}
+                  className="gap-1.5"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  צפה בהודעה
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => onMarkOverdue(debtor)}
+                  className="gap-1.5"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  סמן כבאיחור
+                </Button>
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -486,41 +506,70 @@ function VendorAgentPanel({ analysis, onAddVendor }) {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {suggestions.map((vendor, idx) => (
-              <Card key={idx}>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-sm text-[var(--text-primary)]">{vendor.name}</span>
-                        {vendor.available_24_7 && (
-                          <Badge variant="success" className="text-xs">24/7</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-[var(--text-secondary)] mb-1">{vendor.description}</p>
-                      <div className="flex flex-wrap gap-2 text-xs text-[var(--text-secondary)]">
-                        <span>
-                          <Badge variant="default" className="text-xs">{vendor.category}</Badge>
-                        </span>
-                        <span>אזור: {vendor.area}</span>
-                        <span>דירוג: {'★'.repeat(Math.round(vendor.rating))} ({vendor.rating})</span>
-                        <span>טל׳: {vendor.phone}</span>
-                      </div>
+          <div className="space-y-2">
+            {suggestions.map((vendor, idx) => {
+              const vendorGradients = [
+                'from-blue-500 to-blue-600',
+                'from-emerald-500 to-emerald-600',
+                'from-purple-500 to-purple-600',
+                'from-amber-500 to-amber-600',
+                'from-cyan-500 to-cyan-600',
+                'from-pink-500 to-pink-600',
+                'from-indigo-500 to-indigo-600',
+                'from-teal-500 to-teal-600',
+                'from-orange-500 to-orange-600',
+                'from-rose-500 to-rose-600',
+              ]
+              const vendorGradient = vendorGradients[idx % vendorGradients.length]
+              const initials = vendor.name.split(' ').map(w => w[0]).slice(0, 2).join('')
+              return (
+                <div
+                  key={idx}
+                  className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                >
+                  {/* Vendor initial circle */}
+                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${vendorGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                    {initials}
+                  </div>
+
+                  {/* Main info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{vendor.name}</span>
+                      {vendor.available_24_7 && (
+                        <Badge variant="success" className="text-xs">24/7</Badge>
+                      )}
                     </div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-1">{vendor.description}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
+                      <Badge variant="default" className="text-xs">{vendor.category}</Badge>
+                      <span>אזור: {vendor.area}</span>
+                    </div>
+                  </div>
+
+                  {/* Rating & phone */}
+                  <div className="text-left min-w-[80px] shrink-0">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="text-amber-500 text-sm">{'★'.repeat(Math.round(vendor.rating))}</span>
+                      <span className="text-xs text-[var(--text-secondary)]">({vendor.rating})</span>
+                    </div>
+                    <span className="text-[11px] text-[var(--text-muted)]" dir="ltr">{vendor.phone}</span>
+                  </div>
+
+                  {/* Add button (visible on hover) */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <Button
                       size="sm"
-                      variant="outline"
                       onClick={() => onAddVendor(vendor)}
-                      className="shrink-0 gap-1.5"
+                      className="gap-1.5"
                     >
                       <Plus className="h-3.5 w-3.5" />
                       הוסף
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -563,32 +612,20 @@ function BudgetAgentPanel({ analysis, onCreateAlert, onExportReport }) {
     <div className="space-y-4">
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">תקציב חודשי</p>
-            <p className="text-lg font-bold text-[var(--text-primary)]">{formatCurrency(monthlyBudget)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">הוצאות מצטברות</p>
-            <p className="text-lg font-bold text-red-500">{formatCurrency(totalExpensesYTD)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">הכנסות מצטברות</p>
-            <p className="text-lg font-bold text-green-600">{formatCurrency(ytdIncome)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">מאזן נוכחי</p>
-            <p className={`text-lg font-bold ${ytdNet >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {formatCurrency(ytdNet)}
-            </p>
-          </CardContent>
-        </Card>
+        {[
+          { label: 'תקציב חודשי', value: formatCurrency(monthlyBudget), gradient: 'from-purple-500 to-purple-600', color: 'text-[var(--text-primary)]' },
+          { label: 'הוצאות מצטברות', value: formatCurrency(totalExpensesYTD), gradient: 'from-red-500 to-red-600', color: 'text-red-500' },
+          { label: 'הכנסות מצטברות', value: formatCurrency(ytdIncome), gradient: 'from-emerald-500 to-emerald-600', color: 'text-green-600' },
+          { label: 'מאזן נוכחי', value: formatCurrency(ytdNet), gradient: ytdNet >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600', color: ytdNet >= 0 ? 'text-green-600' : 'text-red-500' },
+        ].map((stat) => (
+          <div key={stat.label} className="relative rounded-xl border bg-white overflow-hidden">
+            <div className={`h-1 w-full bg-gradient-to-r ${stat.gradient}`} />
+            <div className="p-4">
+              <p className="text-xs text-[var(--text-secondary)] mb-1">{stat.label}</p>
+              <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Projected year-end */}
@@ -622,30 +659,48 @@ function BudgetAgentPanel({ analysis, onCreateAlert, onExportReport }) {
           <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-2">חודשים בחריגת תקציב</h3>
           <div className="space-y-2">
             {overrunMonths.map((m, idx) => (
-              <Card key={idx} className="border-red-200">
-                <CardContent className="pt-3 pb-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-[var(--text-primary)] text-sm">{monthLabel(m.month)}</span>
-                      <span className="text-xs text-red-500 mr-2">
-                        חריגה של {formatCurrency(m.expenses - monthlyBudget)}
-                      </span>
-                      <div className="text-xs text-[var(--text-secondary)] mt-0.5">
-                        הוצאות: {formatCurrency(m.expenses)} · הכנסות: {formatCurrency(m.income)}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onCreateAlert(m)}
-                      className="gap-1.5 shrink-0"
-                    >
-                      <Bell className="h-3.5 w-3.5" />
-                      צור התראה
-                    </Button>
+              <div
+                key={idx}
+                className="group flex items-center gap-4 p-4 rounded-xl border border-red-200 bg-white hover:shadow-md hover:border-red-300 transition-all"
+              >
+                {/* Month circle */}
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+                  {monthLabel(m.month).slice(0, 3)}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <span className="text-[14px] font-semibold text-[var(--text-primary)]">{monthLabel(m.month)}</span>
+                  <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)] mt-0.5">
+                    <span>הוצאות: {formatCurrency(m.expenses)}</span>
+                    <span>הכנסות: {formatCurrency(m.income)}</span>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+
+                {/* Overrun amount */}
+                <div className="text-left min-w-[90px]">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full shrink-0 bg-red-500" />
+                    <span className="text-[13px] font-bold text-red-500">
+                      {formatCurrency(m.expenses - monthlyBudget)}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-[var(--text-muted)]">חריגה</span>
+                </div>
+
+                {/* Action (hover) */}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onCreateAlert(m)}
+                    className="gap-1.5"
+                  >
+                    <Bell className="h-3.5 w-3.5" />
+                    צור התראה
+                  </Button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -761,22 +816,30 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
   return (
     <div className="space-y-4">
       {/* Coverage score */}
-      <Card>
-        <CardContent className="pt-5 pb-5">
+      <div className="relative rounded-xl border bg-white overflow-hidden">
+        <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 to-amber-600" />
+        <div className="p-5">
           <div className="flex items-center gap-4">
-            <div className="text-center shrink-0">
-              <p className="text-4xl font-bold" style={{ color: coverageColor }}>{coverageRate}%</p>
-              <p className="text-xs text-[var(--text-secondary)]">כיסוי רגולטורי</p>
+            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-sm">
+              {coverageRate}%
             </div>
             <div className="flex-1">
+              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">כיסוי רגולטורי</p>
               <Progress value={coverageRate} color={coverageColor} className="mb-2" />
-              <p className="text-sm text-[var(--text-secondary)]">
-                {covered.length} מתוך {requirements.length} דרישות מכוסות · {missing.length} חסרות
-              </p>
+              <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>{covered.length} מכוסות</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span>{missing.length} חסרות</span>
+                </div>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Expired and overdue alerts */}
       {(expired.length > 0 || overdue.length > 0) && (
@@ -818,33 +881,52 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
             דרישות חסרות ({missing.length})
           </h3>
           <div className="space-y-2">
-            {missing.map((req, idx) => (
-              <Card key={idx} className={priorityBorderClass(req.priority)}>
-                <CardContent className="pt-3 pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-medium text-sm text-[var(--text-primary)]">{req.title}</span>
-                        <Badge variant={priorityBadgeVariant(req.priority)}>{priorityLabel(req.priority)}</Badge>
-                        <Badge variant="default">{req.category}</Badge>
-                      </div>
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        {req.law} · {frequencyLabel(req.frequency)}
-                      </p>
+            {missing.map((req, idx) => {
+              const priorityGradient = req.priority === 'high' ? 'from-red-500 to-red-600' : req.priority === 'medium' ? 'from-amber-500 to-amber-600' : 'from-emerald-500 to-emerald-600'
+              const priorityDot = req.priority === 'high' ? 'bg-red-500' : req.priority === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+              return (
+                <div
+                  key={idx}
+                  className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md transition-all ${priorityBorderClass(req.priority)} hover:border-blue-200`}
+                >
+                  {/* Category icon circle */}
+                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${priorityGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{req.title}</span>
+                      <Badge variant={priorityBadgeVariant(req.priority)}>{priorityLabel(req.priority)}</Badge>
+                      <Badge variant="default">{req.category}</Badge>
                     </div>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      {req.law} · {frequencyLabel(req.frequency)}
+                    </p>
+                  </div>
+
+                  {/* Status dot */}
+                  <div className="flex items-center gap-2 min-w-[60px] shrink-0">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${priorityDot}`} />
+                    <span className="text-[12px] font-medium text-red-600">חסר</span>
+                  </div>
+
+                  {/* Action (hover) */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => req.type === 'task' ? onAddTask(req) : onAddCompliance(req)}
-                      className="gap-1.5 shrink-0"
+                      className="gap-1.5"
                     >
                       <Plus className="h-3.5 w-3.5" />
-                      {req.type === 'task' ? 'הוסף כמשימה חוזרת' : 'הוסף לרגולציה'}
+                      {req.type === 'task' ? 'הוסף כמשימה' : 'הוסף לרגולציה'}
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -862,16 +944,25 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
           {showCovered && (
             <div className="mt-2 space-y-2">
               {covered.map((req, idx) => (
-                <Card key={idx} className="border-green-100 bg-green-50/50">
-                  <CardContent className="pt-3 pb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                      <span className="text-sm text-[var(--text-primary)]">{req.title}</span>
+                <div
+                  key={idx}
+                  className="flex items-center gap-4 p-3 rounded-xl border border-green-100 bg-green-50/30 transition-all"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shrink-0 shadow-sm">
+                    <CheckCircle className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-[var(--text-primary)]">{req.title}</span>
+                    <div className="flex items-center gap-2 mt-0.5">
                       <Badge variant="success">{req.category}</Badge>
                       <span className="text-xs text-[var(--text-secondary)]">{req.law}</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-xs font-medium text-emerald-600">מכוסה</span>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -1273,50 +1364,77 @@ export default function SmartAgents() {
 
       {/* Agent selector cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {AGENTS.map(agent => (
-          <Card
-            key={agent.id}
-            className={`cursor-pointer border-2 transition-all ${
-              activeAgent === agent.id
-                ? `${agent.borderClass} ${agent.bgClass}`
-                : 'border-transparent hover:border-gray-200'
-            }`}
-            onClick={() => setActiveAgent(activeAgent === agent.id ? null : agent.id)}
-          >
-            <CardContent className="pt-5 pb-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`p-2 rounded-lg ${agent.bgClass}`}>
-                  <agent.icon className={`h-5 w-5 ${agent.iconClass}`} />
+        {AGENTS.map(agent => {
+          const isActive = activeAgent === agent.id
+          const gradientMap = {
+            blue: 'from-blue-500 to-blue-600',
+            emerald: 'from-emerald-500 to-emerald-600',
+            purple: 'from-purple-500 to-purple-600',
+            amber: 'from-amber-500 to-amber-600',
+          }
+          const gradient = gradientMap[agent.color] || gradientMap.blue
+          return (
+            <div
+              key={agent.id}
+              className={`group relative rounded-xl border-2 bg-white overflow-hidden cursor-pointer transition-all hover:shadow-md ${
+                isActive
+                  ? `${agent.borderClass} shadow-md`
+                  : 'border-[var(--border)] hover:border-blue-200'
+              }`}
+              onClick={() => setActiveAgent(isActive ? null : agent.id)}
+            >
+              {/* Gradient accent bar */}
+              <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-sm shrink-0`}>
+                    <agent.icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-semibold text-sm text-[var(--text-primary)]">{agent.title}</h3>
                 </div>
-                <h3 className="font-semibold text-sm text-[var(--text-primary)]">{agent.title}</h3>
+                <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
+                  {agent.description}
+                </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {isActive ? (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-medium text-emerald-600">פעיל</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-slate-300" />
+                        <span className="text-xs text-[var(--text-secondary)]">כבוי</span>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={isActive ? 'default' : 'outline'}
+                    className="gap-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveAgent(isActive ? null : agent.id)
+                    }}
+                  >
+                    {isActive ? (
+                      <>
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        פעיל
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-3.5 w-3.5" />
+                        הפעל
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
-              <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
-                {agent.description}
-              </p>
-              <Button
-                size="sm"
-                variant={activeAgent === agent.id ? 'default' : 'outline'}
-                className="w-full gap-1.5"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setActiveAgent(activeAgent === agent.id ? null : agent.id)
-                }}
-              >
-                {activeAgent === agent.id ? (
-                  <>
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    פעיל
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-3.5 w-3.5" />
-                    הפעל
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+            </div>
+          )
+        })}
       </div>
 
       {/* Active agent panels */}

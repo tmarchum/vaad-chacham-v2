@@ -142,46 +142,49 @@ const STATUS_VARIANTS = { open: 'default', in_progress: 'warning', completed: 's
 
 function StepProgress({ currentStep }) {
   return (
-    <div className="flex items-center justify-between mb-6 overflow-x-auto pb-1">
-      {WORKFLOW_STAGES.map((stage, idx) => {
-        const done = idx < currentStep
-        const active = idx === currentStep
-        const Icon = stage.icon
-        return (
-          <div key={stage.key} className="flex items-center shrink-0">
-            <div className="flex flex-col items-center gap-1">
-              <div
-                className={[
-                  'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-colors',
-                  done
-                    ? 'bg-[var(--success)] border-[var(--success)] text-white'
-                    : active
-                      ? 'bg-[var(--primary)] border-[var(--primary)] text-white'
-                      : 'bg-transparent border-[var(--border)] text-[var(--text-secondary)]',
-                ].join(' ')}
-              >
-                {done ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-3.5 w-3.5" />}
+    <div className="relative rounded-xl border bg-white overflow-hidden mb-6">
+      <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-blue-500" />
+      <div className="flex items-center justify-between p-4 overflow-x-auto">
+        {WORKFLOW_STAGES.map((stage, idx) => {
+          const done = idx < currentStep
+          const active = idx === currentStep
+          const Icon = stage.icon
+          return (
+            <div key={stage.key} className="flex items-center shrink-0">
+              <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className={[
+                    'w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition-all shadow-sm',
+                    done
+                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+                      : active
+                        ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
+                        : 'bg-slate-100 text-[var(--text-secondary)]',
+                  ].join(' ')}
+                >
+                  {done ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                </div>
+                <span
+                  className={[
+                    'text-[10px] text-center max-w-[56px] leading-tight',
+                    active ? 'text-blue-600 font-semibold' : done ? 'text-emerald-600 font-medium' : 'text-[var(--text-secondary)]',
+                  ].join(' ')}
+                >
+                  {stage.label}
+                </span>
               </div>
-              <span
-                className={[
-                  'text-[10px] text-center max-w-[56px] leading-tight',
-                  active ? 'text-[var(--primary)] font-semibold' : 'text-[var(--text-secondary)]',
-                ].join(' ')}
-              >
-                {stage.label}
-              </span>
+              {idx < WORKFLOW_STAGES.length - 1 && (
+                <div
+                  className={[
+                    'h-0.5 w-6 sm:w-10 mx-1 mb-5 shrink-0 rounded-full',
+                    done ? 'bg-emerald-500' : 'bg-slate-200',
+                  ].join(' ')}
+                />
+              )}
             </div>
-            {idx < WORKFLOW_STAGES.length - 1 && (
-              <div
-                className={[
-                  'h-0.5 w-6 sm:w-10 mx-1 mb-5 shrink-0',
-                  done ? 'bg-[var(--success)]' : 'bg-[var(--border)]',
-                ].join(' ')}
-              />
-            )}
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -234,26 +237,35 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
   return (
     <div className="space-y-4">
       {/* Issue summary */}
-      <Card>
-        <CardContent className="pt-5">
-          <h3 className="font-semibold text-[var(--text-primary)] mb-2">{issue.title}</h3>
-          {issue.description && (
-            <p className="text-sm text-[var(--text-secondary)] mb-3">{issue.description}</p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {issue.category && <Badge>{issue.category}</Badge>}
-            {issue.priority && (
-              <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
-                {PRIORITY_LABELS[issue.priority] || issue.priority}
-              </Badge>
-            )}
+      <div className="relative rounded-xl border bg-white overflow-hidden">
+        <div className={`h-1.5 w-full bg-gradient-to-r ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'}`} />
+        <div className="p-4">
+          <div className="flex items-start gap-3">
+            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+              <Wrench className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-[var(--text-primary)] mb-1">{issue.title}</h3>
+              {issue.description && (
+                <p className="text-sm text-[var(--text-secondary)] mb-2">{issue.description}</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {issue.category && <Badge>{issue.category}</Badge>}
+                {issue.priority && (
+                  <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
+                    {PRIORITY_LABELS[issue.priority] || issue.priority}
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Directory links */}
-      <Card>
-        <CardContent className="pt-5">
+      <div className="relative rounded-xl border bg-white overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-indigo-500" />
+        <div className="p-4">
           <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">חפש ספקים בספריות ישראליות</p>
           <div className="flex flex-wrap gap-2">
             <a href={dirUrls.madrag} target="_blank" rel="noopener noreferrer">
@@ -284,8 +296,8 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
               </Button>
             </a>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Select from existing vendors */}
       {filteredExisting.length > 0 && (
@@ -358,31 +370,45 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
 
       {/* Selected vendors list */}
       {pendingVendors.length > 0 && (
-        <Card>
-          <CardContent className="pt-5">
+        <div className="relative rounded-xl border bg-white overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-blue-500" />
+          <div className="p-4">
             <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">ספקים שנבחרו ({pendingVendors.length})</p>
             <div className="space-y-2">
-              {pendingVendors.map((v) => (
-                <div key={v.id} className="flex items-center justify-between rounded-lg border border-[var(--border)] px-3 py-2 bg-[var(--surface)]">
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
-                    <span className="text-sm font-medium text-[var(--text-primary)]">{v.name}</span>
-                    <span className="text-xs text-[var(--text-secondary)]" dir="ltr">{v.phone}</span>
-                    {v.fromExisting && <Badge variant="info" className="text-[10px]">קיים</Badge>}
+              {pendingVendors.map((v, idx) => {
+                const vGradients = ['from-cyan-500 to-cyan-600', 'from-blue-500 to-blue-600', 'from-indigo-500 to-indigo-600', 'from-purple-500 to-purple-600', 'from-teal-500 to-teal-600']
+                const vGradient = vGradients[idx % vGradients.length]
+                const initials = v.name.split(' ').map(w => w[0]).slice(0, 2).join('')
+                return (
+                  <div key={v.id} className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-white hover:shadow-sm hover:border-blue-200 transition-all">
+                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${vGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                      {initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">{v.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-[var(--text-secondary)]" dir="ltr">{v.phone}</span>
+                        {v.fromExisting && <Badge variant="info" className="text-[10px]">קיים</Badge>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="text-[11px] text-emerald-600">נבחר</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => removeVendor(v.id)}
+                      className="text-[var(--danger)] hover:text-[var(--danger)] h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      ✕
+                    </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => removeVendor(v.id)}
-                    className="text-[var(--danger)] hover:text-[var(--danger)] h-7 w-7 p-0"
-                  >
-                    ✕
-                  </Button>
-                </div>
-              ))}
+                )
+              })}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       <div className="flex justify-start">
@@ -575,30 +601,45 @@ function StepQuotes({ issue, buildingName, pendingVendors, quotesCollection, loc
       })}
 
       {localQuotes.length > 0 && (
-        <Card>
-          <CardContent className="pt-5">
+        <div className="relative rounded-xl border bg-white overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-emerald-500 to-emerald-600" />
+          <div className="p-4">
             <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">בחר הצעה לאישור</p>
             <div className="space-y-2">
-              {localQuotes.map((q) => (
-                <label key={q.id} className="flex items-center gap-3 cursor-pointer rounded-lg border border-[var(--border)] px-3 py-2 hover:bg-[var(--surface-hover)] transition-colors">
-                  <input
-                    type="radio"
-                    name="selectedQuote"
-                    value={q.id}
-                    checked={selectedQuoteId === q.id}
-                    onChange={() => setSelectedQuoteId(q.id)}
-                    className="accent-[var(--primary)]"
-                  />
-                  <div className="flex-1">
-                    <span className="font-medium text-[var(--text-primary)]">{q.vendorName}</span>
-                    <span className="mx-2 text-[var(--text-secondary)]">·</span>
-                    <span className="text-[var(--primary)] font-semibold">{formatCurrency(q.amount)}</span>
-                    {q.amount === minAmount && (
-                      <Badge variant="success" className="mr-2 text-[10px]">הזול ביותר</Badge>
-                    )}
-                  </div>
-                </label>
-              ))}
+              {localQuotes.map((q) => {
+                const isSelected = selectedQuoteId === q.id
+                const isCheapest = q.amount === minAmount
+                return (
+                  <label
+                    key={q.id}
+                    className={`flex items-center gap-3 cursor-pointer rounded-xl border p-3 transition-all hover:shadow-sm ${
+                      isSelected ? 'border-blue-300 bg-blue-50/50 shadow-sm' : 'border-[var(--border)] bg-white hover:border-blue-200'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="selectedQuote"
+                      value={q.id}
+                      checked={isSelected}
+                      onChange={() => setSelectedQuoteId(q.id)}
+                      className="accent-[var(--primary)]"
+                    />
+                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${isCheapest ? 'from-emerald-500 to-emerald-600' : 'from-blue-500 to-blue-600'} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                      {isCheapest ? <Award className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[14px] font-medium text-[var(--text-primary)]">{q.vendorName}</span>
+                      {isCheapest && (
+                        <Badge variant="success" className="mr-2 text-[10px]">הזול ביותר</Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className={`w-2 h-2 rounded-full ${isCheapest ? 'bg-emerald-500' : 'bg-blue-400'}`} />
+                      <span className="text-[15px] font-bold text-[var(--primary)]">{formatCurrency(q.amount)}</span>
+                    </div>
+                  </label>
+                )
+              })}
             </div>
             <div className="mt-4 flex justify-start">
               <Button onClick={handleSelectAndContinue} disabled={!selectedQuoteId} className="gap-1.5">
@@ -606,8 +647,8 @@ function StepQuotes({ issue, buildingName, pendingVendors, quotesCollection, loc
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -1019,16 +1060,19 @@ export default function VendorFinder() {
 
       {/* Success message */}
       {success && (
-        <Card>
-          <CardContent className="pt-5 flex flex-col items-center text-center gap-3">
-            <CheckCircle className="h-12 w-12 text-[var(--success)]" />
+        <div className="relative rounded-xl border bg-white overflow-hidden">
+          <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 to-emerald-600" />
+          <div className="p-6 flex flex-col items-center text-center gap-3">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-sm">
+              <CheckCircle className="h-8 w-8" />
+            </div>
             <p className="text-lg font-semibold text-[var(--text-primary)]">התקלה טופלה בהצלחה!</p>
             <p className="text-sm text-[var(--text-secondary)]">הספק דורג והודעה נשלחה לדיירים.</p>
-            <Button onClick={resetWorkflow} variant="outline">
+            <Button onClick={resetWorkflow} variant="outline" className="gap-1.5">
               חזור לרשימת תקלות
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {!success && (
@@ -1044,38 +1088,50 @@ export default function VendorFinder() {
                   description="כל התקלות בבניין זה טופלו"
                 />
               ) : (
-                openIssues.map((issue) => (
-                  <Card
-                    key={issue.id}
-                    className="cursor-pointer border-[var(--border)] hover:border-[var(--primary)] transition-colors"
-                    onClick={() => selectIssue(issue)}
-                  >
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-[var(--text-primary)] mb-1 truncate">{issue.title}</p>
-                          {issue.description && (
-                            <p className="text-sm text-[var(--text-secondary)] line-clamp-2 mb-2">{issue.description}</p>
-                          )}
-                          <div className="flex flex-wrap gap-1.5">
-                            {issue.category && <Badge>{issue.category}</Badge>}
-                            {issue.priority && (
-                              <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
-                                {PRIORITY_LABELS[issue.priority] || issue.priority}
-                              </Badge>
-                            )}
-                            {issue.status && (
-                              <Badge variant={STATUS_VARIANTS[issue.status] || 'default'}>
-                                {STATUS_LABELS[issue.status] || issue.status}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-[var(--text-secondary)] shrink-0 mt-0.5" />
+                openIssues.map((issue) => {
+                  const issueGradient = issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : issue.priority === 'medium' ? 'from-blue-500 to-blue-600' : 'from-slate-400 to-slate-500'
+                  const issueDot = issue.priority === 'urgent' ? 'bg-red-500 animate-pulse' : issue.priority === 'high' ? 'bg-amber-500' : issue.priority === 'medium' ? 'bg-blue-400' : 'bg-slate-400'
+                  const catInitials = issue.category ? issue.category.substring(0, 2) : ''
+                  return (
+                    <div
+                      key={issue.id}
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+                      onClick={() => selectIssue(issue)}
+                    >
+                      {/* Category circle */}
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${issueGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                        {catInitials || <Wrench className="h-5 w-5" />}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold text-[var(--text-primary)] mb-0.5 truncate">{issue.title}</p>
+                        {issue.description && (
+                          <p className="text-xs text-[var(--text-secondary)] line-clamp-1 mb-1">{issue.description}</p>
+                        )}
+                        <div className="flex flex-wrap gap-1.5">
+                          {issue.category && <Badge>{issue.category}</Badge>}
+                          {issue.priority && (
+                            <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
+                              {PRIORITY_LABELS[issue.priority] || issue.priority}
+                            </Badge>
+                          )}
+                          {issue.status && (
+                            <Badge variant={STATUS_VARIANTS[issue.status] || 'default'}>
+                              {STATUS_LABELS[issue.status] || issue.status}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Status dot & arrow */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className={`w-2 h-2 rounded-full ${issueDot}`} />
+                        <ChevronRight className="h-5 w-5 text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                    </div>
+                  )
+                })
               )}
             </div>
           ) : (

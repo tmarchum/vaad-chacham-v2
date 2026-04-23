@@ -549,8 +549,9 @@ export default function BuildingAgent() {
 
       {/* Hero Health Card */}
       {healthScore && (
-        <Card>
-          <CardContent className="pt-6">
+        <div className="relative rounded-xl border bg-white overflow-hidden">
+          <div className="h-1.5 w-full bg-gradient-to-r from-purple-500 to-indigo-500" />
+          <div className="p-6">
             <div className="flex flex-col md:flex-row items-center gap-8">
               {/* Circle */}
               <div className="flex-shrink-0 flex flex-col items-center gap-2">
@@ -586,20 +587,18 @@ export default function BuildingAgent() {
               {/* Quick stats */}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1 w-full">
                 {[
-                  { label: 'תחזוקות באיחור', value: healthScore.overdueTasks, icon: <Wrench className="h-4 w-4" />, danger: healthScore.overdueTasks > 0 },
-                  { label: 'תקלות פתוחות', value: healthScore.openIssues, icon: <AlertTriangle className="h-4 w-4" />, danger: healthScore.openIssues > 3 },
-                  { label: 'תקלות דחופות', value: healthScore.urgentIssues, icon: <Zap className="h-4 w-4" />, danger: healthScore.urgentIssues > 0 },
+                  { label: 'תחזוקות באיחור', value: healthScore.overdueTasks, icon: <Wrench className="h-4 w-4" />, danger: healthScore.overdueTasks > 0, gradient: 'from-amber-500 to-amber-600' },
+                  { label: 'תקלות פתוחות', value: healthScore.openIssues, icon: <AlertTriangle className="h-4 w-4" />, danger: healthScore.openIssues > 3, gradient: 'from-orange-500 to-orange-600' },
+                  { label: 'תקלות דחופות', value: healthScore.urgentIssues, icon: <Zap className="h-4 w-4" />, danger: healthScore.urgentIssues > 0, gradient: 'from-red-500 to-red-600' },
                 ].map((stat) => (
                   <div
                     key={stat.label}
-                    className="flex flex-col items-center justify-center rounded-xl p-3 gap-1"
-                    style={{ background: 'var(--surface-hover, var(--surface))' }}
+                    className="relative flex flex-col items-center justify-center rounded-xl p-4 gap-1 border bg-white overflow-hidden"
                   >
-                    <span
-                      style={{ color: stat.danger ? 'var(--danger)' : 'var(--text-secondary)' }}
-                    >
+                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
+                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${stat.gradient} flex items-center justify-center text-white shadow-sm`}>
                       {stat.icon}
-                    </span>
+                    </div>
                     <span
                       className="text-2xl font-bold"
                       style={{ color: stat.danger ? 'var(--danger)' : 'var(--text-primary)' }}
@@ -613,8 +612,8 @@ export default function BuildingAgent() {
                 ))}
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Tabs */}
@@ -703,12 +702,13 @@ export default function BuildingAgent() {
           )}
 
           {activeTab === 'health' && healthScore && (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
               {[
                 {
                   label: 'תקינה',
                   score: healthScore.complianceScore,
                   icon: <Shield className="h-5 w-5" />,
+                  gradient: 'from-blue-500 to-blue-600',
                   finding:
                     healthScore.complianceScore < 80
                       ? 'ישנם מסמכי תקינות שפג תוקפם'
@@ -718,6 +718,7 @@ export default function BuildingAgent() {
                   label: 'תחזוקה',
                   score: healthScore.maintenanceScore,
                   icon: <Wrench className="h-5 w-5" />,
+                  gradient: 'from-amber-500 to-amber-600',
                   finding:
                     healthScore.overdueTasks > 0
                       ? `${healthScore.overdueTasks} משימות תחזוקה באיחור`
@@ -727,6 +728,7 @@ export default function BuildingAgent() {
                   label: 'תקלות',
                   score: healthScore.issueScore,
                   icon: <AlertTriangle className="h-5 w-5" />,
+                  gradient: 'from-red-500 to-red-600',
                   finding:
                     healthScore.openIssues > 0
                       ? `${healthScore.openIssues} תקלות פתוחות, ${healthScore.urgentIssues} דחופות`
@@ -736,6 +738,7 @@ export default function BuildingAgent() {
                   label: 'גבייה',
                   score: healthScore.financialScore,
                   icon: <TrendingUp className="h-5 w-5" />,
+                  gradient: 'from-emerald-500 to-emerald-600',
                   finding:
                     healthScore.financialScore < 80
                       ? 'שיעור הגבייה החודשי נמוך מהמצופה'
@@ -745,6 +748,7 @@ export default function BuildingAgent() {
                   label: 'ציוד',
                   score: healthScore.assetScore,
                   icon: <Activity className="h-5 w-5" />,
+                  gradient: 'from-purple-500 to-purple-600',
                   finding:
                     healthScore.assetScore < 80
                       ? 'ציוד מסוים דורש טיפול שירות'
@@ -752,22 +756,40 @@ export default function BuildingAgent() {
                 },
               ].map((item) => {
                 const color = scoreColorVar(item.score)
+                const dotColor = item.score >= 80 ? 'bg-emerald-500' : item.score >= 60 ? 'bg-amber-500' : 'bg-red-500'
                 return (
-                  <Card key={item.label}>
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <span style={{ color }}>{item.icon}</span>
-                        <span className="font-semibold text-[var(--text-primary)]">
+                  <div key={item.label} className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all">
+                    {/* Score circle */}
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                      {item.icon}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)]">
                           {item.label}
                         </span>
-                        <span className="mr-auto font-bold text-lg" style={{ color }}>
-                          {item.score}
-                        </span>
                       </div>
-                      <Progress value={item.score} color={color} />
-                      <p className="text-xs text-[var(--text-secondary)] mt-2">{item.finding}</p>
-                    </CardContent>
-                  </Card>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 max-w-[200px] rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${item.score}%`, backgroundColor: color }}
+                          />
+                        </div>
+                        <span className="text-xs text-[var(--text-secondary)]">{item.finding}</span>
+                      </div>
+                    </div>
+
+                    {/* Score & status dot */}
+                    <div className="flex items-center gap-2 min-w-[60px] shrink-0">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                      <span className="text-lg font-bold" style={{ color }}>
+                        {item.score}
+                      </span>
+                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -786,39 +808,51 @@ export default function BuildingAgent() {
                   </CardContent>
                 </Card>
               ) : (
-                recommendations.map((rec) => (
-                  <Card key={rec.id}>
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <Badge variant={urgencyVariant(rec.urgency)}>
-                              {urgencyLabel(rec.urgency)}
-                            </Badge>
-                            {rec.category && (
-                              <Badge variant="default">{rec.category}</Badge>
-                            )}
-                          </div>
-                          <p className="font-semibold text-[var(--text-primary)] text-sm mt-1">
-                            {rec.title}
-                          </p>
-                          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                            {rec.reason}
-                          </p>
+                recommendations.map((rec) => {
+                  const recGradient = rec.urgency === 'high' ? 'from-red-500 to-red-600' : rec.urgency === 'medium' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'
+                  const urgDot = rec.urgency === 'high' ? 'bg-red-500 animate-pulse' : rec.urgency === 'medium' ? 'bg-amber-500' : 'bg-blue-400'
+                  return (
+                    <div
+                      key={rec.id}
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                    >
+                      {/* Type icon */}
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${recGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                        {rec.type === 'asset' ? <Activity className="h-5 w-5" /> : rec.type === 'compliance' ? <Shield className="h-5 w-5" /> : <Wrench className="h-5 w-5" />}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                          <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{rec.title}</span>
+                          <Badge variant={urgencyVariant(rec.urgency)}>{urgencyLabel(rec.urgency)}</Badge>
+                          {rec.category && <Badge variant="default">{rec.category}</Badge>}
                         </div>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {rec.reason}
+                        </p>
+                      </div>
+
+                      {/* Urgency dot */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${urgDot}`} />
+                      </div>
+
+                      {/* Action (hover) */}
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="flex-shrink-0"
                           onClick={() => createTaskFromRec(rec)}
+                          className="gap-1.5"
                         >
                           <PlusCircle className="h-3.5 w-3.5" />
                           צור משימה
                         </Button>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))
+                    </div>
+                  )
+                }))
               )}
             </div>
           )}
@@ -831,19 +865,17 @@ export default function BuildingAgent() {
               {/* Stats row */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" /> },
-                  { label: 'פתוחות', value: issueAnalysis.open, icon: <AlertTriangle className="h-4 w-4" />, color: 'var(--danger)' },
-                  { label: 'סגורות', value: issueAnalysis.resolved, icon: <CheckCircle className="h-4 w-4" />, color: 'var(--success,#22c55e)' },
-                  { label: 'ימי טיפול ממוצע', value: issueAnalysis.avgResolutionDays || '—', icon: <RefreshCw className="h-4 w-4" /> },
+                  { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" />, gradient: 'from-blue-500 to-blue-600' },
+                  { label: 'פתוחות', value: issueAnalysis.open, icon: <AlertTriangle className="h-4 w-4" />, gradient: 'from-red-500 to-red-600', color: 'var(--danger)' },
+                  { label: 'סגורות', value: issueAnalysis.resolved, icon: <CheckCircle className="h-4 w-4" />, gradient: 'from-emerald-500 to-emerald-600', color: 'var(--success,#22c55e)' },
+                  { label: 'ימי טיפול ממוצע', value: issueAnalysis.avgResolutionDays || '—', icon: <RefreshCw className="h-4 w-4" />, gradient: 'from-purple-500 to-purple-600' },
                 ].map((s) => (
-                  <Card key={s.label}>
-                    <CardContent className="pt-4 pb-4 text-center">
-                      <span
-                        className="flex justify-center mb-1"
-                        style={{ color: s.color || 'var(--text-secondary)' }}
-                      >
+                  <div key={s.label} className="relative rounded-xl border bg-white overflow-hidden">
+                    <div className={`h-1 w-full bg-gradient-to-r ${s.gradient}`} />
+                    <div className="p-4 text-center">
+                      <div className={`w-8 h-8 mx-auto mb-2 rounded-lg bg-gradient-to-br ${s.gradient} flex items-center justify-center text-white shadow-sm`}>
                         {s.icon}
-                      </span>
+                      </div>
                       <div
                         className="text-2xl font-bold"
                         style={{ color: s.color || 'var(--text-primary)' }}
@@ -851,8 +883,8 @@ export default function BuildingAgent() {
                         {s.value}
                       </div>
                       <div className="text-xs text-[var(--text-secondary)] mt-0.5">{s.label}</div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 ))}
               </div>
 
@@ -888,23 +920,29 @@ export default function BuildingAgent() {
 
               {/* Recurring issues */}
               {issueAnalysis.recurringTitles.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>תקלות חוזרות</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {issueAnalysis.recurringTitles.map((r) => (
-                      <div
-                        key={r.title}
-                        className="flex items-center justify-between p-2 rounded-lg"
-                        style={{ background: 'var(--surface-hover, #f9f9f9)' }}
-                      >
-                        <span className="text-sm text-[var(--text-primary)]">{r.title}</span>
-                        <Badge variant="warning">חוזרת × {r.count}</Badge>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                <div className="relative rounded-xl border bg-white overflow-hidden">
+                  <div className="h-1 w-full bg-gradient-to-r from-amber-500 to-amber-600" />
+                  <div className="p-4">
+                    <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">תקלות חוזרות</h3>
+                    <div className="space-y-2">
+                      {issueAnalysis.recurringTitles.map((r) => (
+                        <div
+                          key={r.title}
+                          className="flex items-center gap-3 p-3 rounded-xl border border-amber-100 bg-white hover:shadow-sm transition-all"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+                            {r.count}x
+                          </div>
+                          <span className="text-sm text-[var(--text-primary)] flex-1">{r.title}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="w-2 h-2 rounded-full bg-amber-500" />
+                            <Badge variant="warning">חוזרת</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Monthly trend */}
@@ -957,105 +995,119 @@ export default function BuildingAgent() {
           {activeTab === 'vendors' && vendorIntel && (
             <div className="space-y-4">
               {/* Top performers */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>ספקים מובילים</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+              <div className="relative rounded-xl border bg-white overflow-hidden">
+                <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 to-emerald-600" />
+                <div className="p-4">
+                  <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">ספקים מובילים</h3>
                   {vendorIntel.topVendors.length === 0 ? (
                     <p className="text-sm text-[var(--text-secondary)]">אין נתוני ספקים</p>
                   ) : (
-                    vendorIntel.topVendors.map((v, idx) => (
-                      <div
-                        key={v.id}
-                        className="flex items-center gap-3 p-3 rounded-xl"
-                        style={{ background: 'var(--surface-hover, #f9f9f9)' }}
-                      >
-                        <span
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-                          style={{
-                            background: idx === 0 ? '#fef3c7' : idx === 1 ? '#f1f5f9' : '#fde8d8',
-                            color: idx === 0 ? '#d97706' : idx === 1 ? '#64748b' : '#c2410c',
-                          }}
-                        >
-                          {idx + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-[var(--text-primary)]">
-                            {v.name}
-                          </p>
-                          {v.category && (
-                            <p className="text-xs text-[var(--text-secondary)]">{v.category}</p>
-                          )}
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <StarRating value={v.rating} />
-                          <span className="text-xs text-[var(--text-secondary)]">
-                            {v.jobCount} עבודות
-                          </span>
-                        </div>
-                      </div>
-                    ))
+                    <div className="space-y-2">
+                      {vendorIntel.topVendors.map((v, idx) => {
+                        const medalGradient = idx === 0 ? 'from-amber-400 to-amber-500' : idx === 1 ? 'from-slate-400 to-slate-500' : 'from-orange-400 to-orange-500'
+                        return (
+                          <div
+                            key={v.id}
+                            className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                          >
+                            {/* Rank circle */}
+                            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${medalGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                              #{idx + 1}
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                                {v.name}
+                              </p>
+                              {v.category && (
+                                <p className="text-xs text-[var(--text-secondary)]">{v.category}</p>
+                              )}
+                            </div>
+
+                            {/* Rating & jobs */}
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <StarRating value={v.rating} />
+                              <span className="text-xs text-[var(--text-secondary)]">
+                                {v.jobCount} עבודות
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* Issue matching */}
               {vendorIntel.matchedIssues.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>התאמת תקלות לספקים</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {vendorIntel.matchedIssues.map(({ issue, vendor }) => (
-                      <div
-                        key={issue.id}
-                        className="flex items-center gap-2 p-2 rounded-lg text-sm"
-                        style={{ background: 'var(--surface-hover, #f9f9f9)' }}
-                      >
-                        <span className="flex-1 text-[var(--text-primary)] truncate">
-                          {issue.title}
-                        </span>
-                        <span className="text-[var(--text-secondary)]">→</span>
-                        {vendor ? (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[var(--text-primary)] font-medium">
-                              {vendor.name}
-                            </span>
-                            <StarRating value={vendor.rating} />
+                <div className="relative rounded-xl border bg-white overflow-hidden">
+                  <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
+                  <div className="p-4">
+                    <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">התאמת תקלות לספקים</h3>
+                    <div className="space-y-2">
+                      {vendorIntel.matchedIssues.map(({ issue, vendor }) => (
+                        <div
+                          key={issue.id}
+                          className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-white hover:shadow-sm transition-all"
+                        >
+                          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${vendor ? 'from-emerald-500 to-emerald-600' : 'from-slate-400 to-slate-500'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                            <Wrench className="h-4 w-4" />
                           </div>
-                        ) : (
-                          <span className="text-[var(--text-secondary)] text-xs">אין ספק מתאים</span>
-                        )}
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                          <span className="flex-1 text-sm text-[var(--text-primary)] truncate">
+                            {issue.title}
+                          </span>
+                          {vendor ? (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span className="text-sm text-[var(--text-primary)] font-medium">
+                                {vendor.name}
+                              </span>
+                              <StarRating value={vendor.rating} />
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="w-2 h-2 rounded-full bg-slate-400" />
+                              <span className="text-xs text-[var(--text-secondary)]">אין ספק מתאים</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* Expiring insurance */}
               {vendorIntel.expiringInsurance.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>ביטוח ספקים שפג עד 60 יום</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {vendorIntel.expiringInsurance.map((v) => (
-                      <div
-                        key={v.id}
-                        className="flex items-center justify-between p-2 rounded-lg"
-                        style={{ background: '#fef9ec' }}
-                      >
-                        <span className="text-sm font-medium text-[var(--text-primary)]">
-                          {v.name}
-                        </span>
-                        <Badge variant="warning">
-                          פג תוקף: {formatDate(v.insurance_expiry)}
-                        </Badge>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                <div className="relative rounded-xl border bg-white overflow-hidden">
+                  <div className="h-1 w-full bg-gradient-to-r from-amber-500 to-amber-600" />
+                  <div className="p-4">
+                    <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">ביטוח ספקים שפג עד 60 יום</h3>
+                    <div className="space-y-2">
+                      {vendorIntel.expiringInsurance.map((v) => (
+                        <div
+                          key={v.id}
+                          className="flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:shadow-sm transition-all"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-sm">
+                            <AlertTriangle className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-medium text-[var(--text-primary)] flex-1">
+                            {v.name}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="w-2 h-2 rounded-full bg-amber-500" />
+                            <Badge variant="warning">
+                              פג תוקף: {formatDate(v.insurance_expiry)}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -1066,14 +1118,12 @@ export default function BuildingAgent() {
           {activeTab === 'forecast' && forecast && (
             <div className="space-y-4">
               {/* Prediction banner */}
-              <Card>
-                <CardContent className="pt-5 pb-5">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'var(--primary-bg, #eff6ff)' }}
-                    >
-                      <Brain className="h-5 w-5" style={{ color: 'var(--primary)' }} />
+              <div className="relative rounded-xl border bg-white overflow-hidden">
+                <div className="h-1.5 w-full bg-gradient-to-r from-indigo-500 to-purple-500" />
+                <div className="p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+                      <Brain className="h-6 w-6" />
                     </div>
                     <div>
                       <p className="text-xs text-[var(--text-secondary)]">תחזית הוצאות חודש הבא</p>
@@ -1087,14 +1137,17 @@ export default function BuildingAgent() {
                     {forecast.reserveFund > 0 && (
                       <div className="mr-auto text-left">
                         <p className="text-xs text-[var(--text-secondary)]">קרן רזרבה מומלצת (10%)</p>
-                        <p className="text-lg font-bold" style={{ color: '#f59e0b' }}>
-                          {formatCurrency(forecast.reserveFund)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-amber-500" />
+                          <p className="text-lg font-bold text-amber-500">
+                            {formatCurrency(forecast.reserveFund)}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* Payment collection trend */}
               <Card>

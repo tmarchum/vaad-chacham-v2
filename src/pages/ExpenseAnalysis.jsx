@@ -160,58 +160,52 @@ export default function ExpenseAnalysis() {
       {result && (
         <div className="space-y-6">
           {/* Summary & Health */}
-          <Card>
-            <CardContent className="p-5">
+          <div className="relative rounded-xl border bg-white overflow-hidden">
+            <div className={`h-1.5 w-full bg-gradient-to-r ${
+              result.health === 'good' ? 'from-emerald-500 to-emerald-600' :
+              result.health === 'warning' ? 'from-amber-500 to-amber-600' :
+              result.health === 'critical' ? 'from-red-500 to-red-600' : 'from-purple-500 to-purple-600'
+            }`} />
+            <div className="p-5">
               <div className="flex items-start gap-4">
                 {healthStyle && (
-                  <div className={`px-3 py-1.5 rounded-full text-sm font-medium ${healthStyle.bg} ${healthStyle.color}`}>
+                  <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${healthStyle.bg} ${healthStyle.color}`}>
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${
+                      result.health === 'good' ? 'bg-emerald-500' :
+                      result.health === 'warning' ? 'bg-amber-500' : 'bg-red-500'
+                    }`} />
                     {healthStyle.label}
                   </div>
                 )}
-                <p className="text-sm leading-relaxed flex-1">{result.summary}</p>
+                <p className="text-sm leading-relaxed flex-1 text-[var(--text-primary)]">{result.summary}</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Income vs Expense */}
           {result.income_vs_expense && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Card>
-                <CardContent className="pt-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                    <p className="text-sm text-[var(--text-secondary)]">סה״כ הכנסות</p>
+              {[
+                { label: 'סה״כ הכנסות', value: formatCurrency(result.income_vs_expense.total_income), icon: <TrendingUp className="h-5 w-5" />, gradient: 'from-emerald-500 to-emerald-600', color: 'text-green-600' },
+                { label: 'סה״כ הוצאות', value: formatCurrency(result.income_vs_expense.total_expenses), icon: <TrendingDown className="h-5 w-5" />, gradient: 'from-red-500 to-red-600', color: 'text-red-600' },
+                { label: 'מאזן', value: `${result.income_vs_expense.net >= 0 ? '+' : ''}${formatCurrency(result.income_vs_expense.net)}`, icon: <Scale className="h-5 w-5" />, gradient: result.income_vs_expense.net >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600', color: result.income_vs_expense.net >= 0 ? 'text-green-600' : 'text-red-600', subtitle: result.income_vs_expense.assessment },
+              ].map((stat) => (
+                <div key={stat.label} className="relative rounded-xl border bg-white overflow-hidden hover:shadow-md transition-all">
+                  <div className={`h-1 w-full bg-gradient-to-r ${stat.gradient}`} />
+                  <div className="p-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                        {stat.icon}
+                      </div>
+                      <p className="text-sm text-[var(--text-secondary)]">{stat.label}</p>
+                    </div>
+                    <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
+                    {stat.subtitle && (
+                      <p className="text-xs text-[var(--text-secondary)] mt-1">{stat.subtitle}</p>
+                    )}
                   </div>
-                  <p className="text-xl font-bold text-green-600">
-                    {formatCurrency(result.income_vs_expense.total_income)}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <TrendingDown className="h-4 w-4 text-red-600" />
-                    <p className="text-sm text-[var(--text-secondary)]">סה״כ הוצאות</p>
-                  </div>
-                  <p className="text-xl font-bold text-red-600">
-                    {formatCurrency(result.income_vs_expense.total_expenses)}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Scale className="h-4 w-4 text-blue-600" />
-                    <p className="text-sm text-[var(--text-secondary)]">מאזן</p>
-                  </div>
-                  <p className={`text-xl font-bold ${result.income_vs_expense.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {result.income_vs_expense.net >= 0 ? '+' : ''}{formatCurrency(result.income_vs_expense.net)}
-                  </p>
-                  {result.income_vs_expense.assessment && (
-                    <p className="text-xs text-[var(--text-secondary)] mt-1">{result.income_vs_expense.assessment}</p>
-                  )}
-                </CardContent>
-              </Card>
+                </div>
+              ))}
             </div>
           )}
 
@@ -222,27 +216,38 @@ export default function ExpenseAnalysis() {
                 <ShieldAlert className="h-5 w-5 text-red-500" />
                 התראות
               </h2>
-              {result.alerts.map((alert, i) => (
-                <Card key={i} className={`border ${SEVERITY_STYLES[alert.severity] || SEVERITY_STYLES.medium}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="h-5 w-5 mt-0.5 shrink-0" />
-                      <div className="flex-1">
+              <div className="space-y-2">
+                {result.alerts.map((alert, i) => {
+                  const alertGradient = alert.severity === 'high' ? 'from-red-500 to-red-600' : alert.severity === 'medium' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'
+                  const alertDot = alert.severity === 'high' ? 'bg-red-500 animate-pulse' : alert.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-400'
+                  const alertBorder = alert.severity === 'high' ? 'border-red-200' : alert.severity === 'medium' ? 'border-amber-200' : 'border-blue-200'
+                  return (
+                    <div key={i} className={`flex items-start gap-4 p-4 rounded-xl border bg-white hover:shadow-md transition-all ${alertBorder}`}>
+                      {/* Severity circle */}
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${alertGradient} flex items-center justify-center text-white shrink-0 shadow-sm mt-0.5`}>
+                        <AlertTriangle className="h-5 w-5" />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold">{alert.title}</p>
+                          <p className="text-[14px] font-semibold text-[var(--text-primary)]">{alert.title}</p>
                           <Badge variant={alert.severity === 'high' ? 'danger' : alert.severity === 'medium' ? 'warning' : 'info'}>
                             {alert.severity === 'high' ? 'גבוה' : alert.severity === 'medium' ? 'בינוני' : 'נמוך'}
                           </Badge>
                         </div>
-                        <p className="text-sm">{alert.description}</p>
+                        <p className="text-sm text-[var(--text-secondary)]">{alert.description}</p>
                         {alert.recommendation && (
-                          <p className="text-sm mt-2 font-medium">המלצה: {alert.recommendation}</p>
+                          <p className="text-sm mt-2 font-medium text-[var(--text-primary)]">המלצה: {alert.recommendation}</p>
                         )}
                       </div>
+
+                      {/* Status dot */}
+                      <div className={`w-2.5 h-2.5 rounded-full shrink-0 mt-2 ${alertDot}`} />
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -250,42 +255,60 @@ export default function ExpenseAnalysis() {
           {result.category_analysis?.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">ניתוח לפי קטגוריה</h2>
-              <Card>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--border)]">
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">קטגוריה</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סה״כ</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">מגמה</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">שינוי</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">התראה</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.category_analysis.map((cat, i) => (
-                        <tr key={i} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)]">
-                          <td className="p-3 font-medium">{cat.category}</td>
-                          <td className="p-3">{formatCurrency(cat.total)}</td>
-                          <td className="p-3">
-                            {cat.trend === 'up' && <Badge variant="danger" className="gap-1"><TrendingUp className="h-3 w-3" />עולה</Badge>}
-                            {cat.trend === 'down' && <Badge variant="success" className="gap-1"><TrendingDown className="h-3 w-3" />יורד</Badge>}
-                            {cat.trend === 'stable' && <Badge variant="default">יציב</Badge>}
-                          </td>
-                          <td className="p-3">
-                            {cat.change_pct != null && (
-                              <span className={cat.change_pct > 0 ? 'text-red-600' : 'text-green-600'}>
-                                {cat.change_pct > 0 ? '+' : ''}{cat.change_pct}%
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3 text-xs">{cat.alert || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
+              <div className="space-y-2">
+                {result.category_analysis.map((cat, i) => {
+                  const catGradients = [
+                    'from-blue-500 to-blue-600', 'from-purple-500 to-purple-600', 'from-emerald-500 to-emerald-600',
+                    'from-amber-500 to-amber-600', 'from-cyan-500 to-cyan-600', 'from-pink-500 to-pink-600',
+                    'from-indigo-500 to-indigo-600', 'from-teal-500 to-teal-600',
+                  ]
+                  const catGradient = catGradients[i % catGradients.length]
+                  const trendDot = cat.trend === 'up' ? 'bg-red-500' : cat.trend === 'down' ? 'bg-emerald-500' : 'bg-blue-400'
+                  const maxTotal = Math.max(...result.category_analysis.map(c => c.total), 1)
+                  const barPct = Math.round((cat.total / maxTotal) * 100)
+                  return (
+                    <div
+                      key={i}
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                    >
+                      {/* Category circle */}
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${catGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                        {cat.category?.substring(0, 2)}
+                      </div>
+
+                      {/* Info with progress bar */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[14px] font-semibold text-[var(--text-primary)]">{cat.category}</span>
+                          {cat.trend === 'up' && <Badge variant="danger" className="gap-1 text-[10px]"><TrendingUp className="h-3 w-3" />עולה</Badge>}
+                          {cat.trend === 'down' && <Badge variant="success" className="gap-1 text-[10px]"><TrendingDown className="h-3 w-3" />יורד</Badge>}
+                          {cat.trend === 'stable' && <Badge variant="default" className="text-[10px]">יציב</Badge>}
+                        </div>
+                        <div className="h-1.5 w-full max-w-[200px] rounded-full bg-slate-100 mt-1 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full bg-gradient-to-r ${catGradient} transition-all duration-500`}
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                        {cat.alert && <p className="text-[11px] text-[var(--text-muted)] mt-1">{cat.alert}</p>}
+                      </div>
+
+                      {/* Amount & change */}
+                      <div className="text-left min-w-[100px] shrink-0">
+                        <p className="text-[15px] font-bold text-[var(--text-primary)]">{formatCurrency(cat.total)}</p>
+                        {cat.change_pct != null && (
+                          <div className="flex items-center gap-1.5">
+                            <div className={`w-2 h-2 rounded-full shrink-0 ${trendDot}`} />
+                            <span className={`text-xs font-medium ${cat.change_pct > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {cat.change_pct > 0 ? '+' : ''}{cat.change_pct}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -293,36 +316,48 @@ export default function ExpenseAnalysis() {
           {result.monthly_comparison?.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-lg font-semibold">השוואה חודשית</h2>
-              <Card>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--border)]">
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">חודש</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">הכנסות</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">הוצאות</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">מאזן</th>
-                        <th className="text-right p-3 font-medium text-[var(--text-secondary)]">התראות</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.monthly_comparison.map((m, i) => (
-                        <tr key={i} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)]">
-                          <td className="p-3 font-medium">{m.month}</td>
-                          <td className="p-3 text-green-600">{formatCurrency(m.income)}</td>
-                          <td className="p-3 text-red-600">{formatCurrency(m.expenses)}</td>
-                          <td className={`p-3 font-bold ${m.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <div className="space-y-2">
+                {result.monthly_comparison.map((m, i) => {
+                  const balanceGradient = m.balance >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600'
+                  const balanceDot = m.balance >= 0 ? 'bg-emerald-500' : 'bg-red-500'
+                  return (
+                    <div
+                      key={i}
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                    >
+                      {/* Month circle */}
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${balanceGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                        {m.month?.substring(0, 3) || `${i + 1}`}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)]">{m.month}</span>
+                        <div className="flex items-center gap-4 text-xs mt-0.5">
+                          <span className="text-green-600">הכנסות: {formatCurrency(m.income)}</span>
+                          <span className="text-red-600">הוצאות: {formatCurrency(m.expenses)}</span>
+                        </div>
+                        {m.alerts?.length > 0 && (
+                          <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                            {m.alerts.map((a, j) => <span key={j} className="block">{a}</span>)}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Balance */}
+                      <div className="text-left min-w-[100px] shrink-0">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${balanceDot}`} />
+                          <span className={`text-[15px] font-bold ${m.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {m.balance >= 0 ? '+' : ''}{formatCurrency(m.balance)}
-                          </td>
-                          <td className="p-3 text-xs">
-                            {m.alerts?.map((a, j) => <span key={j} className="block">{a}</span>)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[var(--text-muted)]">מאזן</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -335,12 +370,13 @@ export default function ExpenseAnalysis() {
               </h2>
               <div className="space-y-2">
                 {result.insights.map((insight, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-4 flex items-start gap-3">
-                      <Lightbulb className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                      <p className="text-sm">{insight}</p>
-                    </CardContent>
-                  </Card>
+                  <div key={i} className="flex items-start gap-4 p-4 rounded-xl border border-amber-100 bg-white hover:shadow-sm transition-all">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center text-white shrink-0 shadow-sm mt-0.5">
+                      <Lightbulb className="h-4 w-4" />
+                    </div>
+                    <p className="text-sm text-[var(--text-primary)] flex-1 leading-relaxed">{insight}</p>
+                    <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-2" />
+                  </div>
                 ))}
               </div>
             </div>
@@ -355,15 +391,26 @@ export default function ExpenseAnalysis() {
               </h2>
               <div className="space-y-2">
                 {result.recommendations.map((rec, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-4">
-                      <p className="font-semibold text-sm">{rec.title}</p>
-                      {rec.potential_saving && (
-                        <p className="text-xs text-green-600 mt-1">חיסכון פוטנציאלי: {rec.potential_saving}</p>
-                      )}
-                      <p className="text-sm text-[var(--text-secondary)] mt-1">{rec.action}</p>
-                    </CardContent>
-                  </Card>
+                  <div key={i} className="relative rounded-xl border border-[var(--border)] bg-white overflow-hidden hover:shadow-md hover:border-blue-200 transition-all">
+                    <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-indigo-500" />
+                    <div className="p-4">
+                      <div className="flex items-start gap-4">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+                          <Zap className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[14px] font-semibold text-[var(--text-primary)]">{rec.title}</p>
+                          {rec.potential_saving && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <p className="text-xs font-medium text-green-600">חיסכון פוטנציאלי: {rec.potential_saving}</p>
+                            </div>
+                          )}
+                          <p className="text-sm text-[var(--text-secondary)] mt-1">{rec.action}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
