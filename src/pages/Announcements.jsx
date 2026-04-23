@@ -319,25 +319,22 @@ function Announcements() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-            הודעות ופרוטוקולים
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-            {activeTab === 'announcements'
-              ? `${filteredAnnouncements.length} הודעות`
-              : `${filteredMinutes.length} פרוטוקולים`}
-          </p>
-        </div>
-        <Button
-          onClick={activeTab === 'announcements' ? openCreateAnnouncement : openCreateMinutes}
-        >
-          <Plus className="h-4 w-4" />
-          {activeTab === 'announcements' ? 'הודעה חדשה' : 'פרוטוקול חדש'}
-        </Button>
-      </div>
+      <PageHeader
+        icon={Megaphone}
+        iconColor="amber"
+        title="הודעות ופרוטוקולים"
+        subtitle={activeTab === 'announcements'
+          ? `${filteredAnnouncements.length} הודעות`
+          : `${filteredMinutes.length} פרוטוקולים`}
+        actions={
+          <Button
+            onClick={activeTab === 'announcements' ? openCreateAnnouncement : openCreateMinutes}
+          >
+            <Plus className="h-4 w-4" />
+            {activeTab === 'announcements' ? 'הודעה חדשה' : 'פרוטוקול חדש'}
+          </Button>
+        }
+      />
 
       {/* Tabs */}
       <TabGroup tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />

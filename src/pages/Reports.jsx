@@ -891,19 +891,12 @@ export default function Reports() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6" dir="rtl">
-      {/* Page header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-            דוחות וניתוחים
-          </h1>
-          <p className="mt-0.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
-            סקירה כללית של פעילות הבניין
-          </p>
-        </div>
-
-        {/* Building filter */}
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader
+        icon={BarChart2}
+        iconColor="blue"
+        title="דוחות וניתוחים"
+        subtitle="סקירה כללית של פעילות הבניין"
+        actions={
           <select
             value={buildingFilter}
             onChange={(e) => setBuildingFilter(e.target.value)}
@@ -921,8 +914,8 @@ export default function Reports() {
               </option>
             ))}
           </select>
-        </div>
-      </div>
+        }
+      />
 
       {/* Period selector (visible on financial & maintenance tabs) */}
       {(activeTab === 'financial' || activeTab === 'maintenance') && (

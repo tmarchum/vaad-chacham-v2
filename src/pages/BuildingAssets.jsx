@@ -224,17 +224,18 @@ function BuildingAssets() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">ציוד ומערכות בניין</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{filtered.length} פריטים</p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          הוסף ציוד
-        </Button>
-      </div>
+      <PageHeader
+        icon={Cog}
+        iconColor="slate"
+        title="ציוד ומערכות בניין"
+        subtitle={`${filtered.length} פריטים`}
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            הוסף ציוד
+          </Button>
+        }
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

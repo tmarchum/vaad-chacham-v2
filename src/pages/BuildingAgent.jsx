@@ -530,26 +530,22 @@ export default function BuildingAgent() {
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <Bot className="h-7 w-7" />
-            סוכן AI חכם
-          </h1>
-          <p className="text-sm text-[var(--text-secondary)]">
-            ניתוח חכם ל{selectedBuilding.name || 'בניין'}
-          </p>
-        </div>
-        <Button
-          onClick={runAiHealthAnalysis}
-          disabled={aiLoading || !healthScore}
-          className="gap-2"
-        >
-          <Sparkles className="h-4 w-4" />
-          {aiLoading ? 'מנתח...' : 'ניתוח AI'}
-        </Button>
-      </div>
+      <PageHeader
+        icon={Bot}
+        iconColor="purple"
+        title="סוכן AI חכם"
+        subtitle={`ניתוח חכם ל${selectedBuilding.name || 'בניין'}`}
+        actions={
+          <Button
+            onClick={runAiHealthAnalysis}
+            disabled={aiLoading || !healthScore}
+            className="gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            {aiLoading ? 'מנתח...' : 'ניתוח AI'}
+          </Button>
+        }
+      />
 
       {/* Hero Health Card */}
       {healthScore && (

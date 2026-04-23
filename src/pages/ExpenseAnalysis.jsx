@@ -110,28 +110,27 @@ export default function ExpenseAnalysis() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">ניתוח הוצאות AI</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">
-            השוואה חודשית, זיהוי חריגות, תובנות והמלצות
-          </p>
-        </div>
-        <div className="flex gap-3 items-end">
-          <FormSelect
-            label="שנה"
-            value={selectedYear}
-            onChange={(e) => { setSelectedYear(e.target.value); setResult(null) }}
-            options={yearOptions}
-            className="w-28"
-          />
-          <Button onClick={runAnalysis} disabled={loading} className="gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-            {loading ? 'מנתח...' : 'הפעל ניתוח'}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={Brain}
+        iconColor="purple"
+        title="ניתוח הוצאות AI"
+        subtitle="השוואה חודשית, זיהוי חריגות, תובנות והמלצות"
+        actions={
+          <div className="flex gap-3 items-end">
+            <FormSelect
+              label="שנה"
+              value={selectedYear}
+              onChange={(e) => { setSelectedYear(e.target.value); setResult(null) }}
+              options={yearOptions}
+              className="w-28"
+            />
+            <Button onClick={runAnalysis} disabled={loading} className="gap-2">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+              {loading ? 'מנתח...' : 'הפעל ניתוח'}
+            </Button>
+          </div>
+        }
+      />
 
       {/* Error */}
       {error && (
