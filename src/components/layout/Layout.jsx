@@ -79,7 +79,7 @@ function Layout() {
           >
             <Menu className="h-5 w-5 text-[var(--text-primary)]" />
           </button>
-          <span className="font-semibold text-[var(--text-primary)] lg:hidden">ועד חכם</span>
+          <span className="font-semibold text-[var(--text-primary)] lg:hidden">וועד<span className="text-[var(--primary)]">+</span></span>
           <div className="mr-auto flex items-center gap-2">
             <button
               onClick={() => setAlertsOpen(!alertsOpen)}

@@ -103,8 +103,7 @@ function Sidebar({ open, onClose }) {
       )}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
-          <Building2 className="h-7 w-7 text-[var(--primary)]" />
-          <span className="text-xl font-bold tracking-tight">ועד חכם</span>
+          <span className="text-xl font-bold tracking-tight">וועד<span className="text-[var(--primary)]">+</span></span>
           <button className="mr-auto lg:hidden p-1 rounded hover:bg-white/10" onClick={onClose}>
             <X className="h-5 w-5" />
           </button>

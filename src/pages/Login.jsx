@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { Building2 } from 'lucide-react'
 
 export default function Login() {
   const { user, loading, signInWithGoogle } = useAuth()
@@ -16,11 +15,8 @@ export default function Login() {
       <div className="bg-white rounded-2xl shadow-2xl p-10 w-full max-w-sm text-center space-y-8">
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center">
-            <Building2 className="h-9 w-9 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">ועד חכם</h1>
-          <p className="text-sm text-gray-500">מערכת ניהול בתים משותפים</p>
+          <h1 className="text-4xl font-extrabold text-gray-900">וועד<span className="text-blue-600">+</span></h1>
+          <p className="text-sm text-gray-500">ניהול בתים משותפים חכם</p>
         </div>
 
         {/* Divider */}
