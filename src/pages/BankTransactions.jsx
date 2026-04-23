@@ -358,9 +358,30 @@ export default function BankTransactions() {
     refresh()
   }
 
-  // Assign a category to a transaction
+  // Assign a category to a transaction + auto-apply to all matching descriptions
   const handleSetCategory = async (txId, category) => {
+    const tx = categoryDialog
     await updateTx(txId, { category })
+
+    // Auto-categorize all transactions with the same description across all months
+    if (category && tx?.description) {
+      const desc = tx.description.trim()
+      const matching = allTx.filter(t =>
+        t.id !== txId &&
+        t.building_id === selectedBuilding?.id &&
+        t.description?.trim() === desc &&
+        !t.category
+      )
+      for (const m of matching) {
+        await updateTx(m.id, { category })
+      }
+      if (matching.length > 0) {
+        window.dispatchEvent(new CustomEvent('app-toast', {
+          detail: { message: `עודכנו ${matching.length} תנועות נוספות עם אותו תיאור`, type: 'success' }
+        }))
+      }
+    }
+
     setCategoryDialog(null)
     refresh()
   }
