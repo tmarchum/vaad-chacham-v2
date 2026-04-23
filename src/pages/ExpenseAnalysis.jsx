@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormSelect } from '@/components/common/FormField'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   Brain, Loader2, AlertTriangle, TrendingUp, TrendingDown,
   Lightbulb, ShieldAlert, Scale, Zap,

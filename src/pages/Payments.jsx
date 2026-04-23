@@ -4,12 +4,15 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PageHeader } from '@/components/common/PageHeader'
+import { StatCard } from '@/components/common/StatCard'
+import { FilterPills } from '@/components/common/FilterPills'
 import { DetailModal, DetailRow } from '@/components/common/DetailModal'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { formatCurrency, formatDate, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
-import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3 } from 'lucide-react'
+import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3, Users, AlertTriangle, Wallet } from 'lucide-react'
 
 const HEBREW_MONTHS = [
   { value: '01', label: 'ינואר' },
@@ -372,33 +375,35 @@ function Payments() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">תשלומים</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{filtered.length} תשלומים</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant={viewMode === 'yearly' ? 'default' : 'outline'}
-            onClick={() => setViewMode(viewMode === 'yearly' ? 'monthly' : 'yearly')}
-          >
-            <BarChart3 className="h-4 w-4" />
-            סיכום שנתי
-          </Button>
-          {viewMode === 'monthly' && (
-            <>
-              <Button variant="outline" onClick={handleCreateMonthly}>
-                <CalendarPlus className="h-4 w-4" />
-                צור תשלומים חודשיים
-              </Button>
-              <Button onClick={openCreate}>
-                <Plus className="h-4 w-4" />
-                תשלום חדש
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={CreditCard}
+        iconColor="blue"
+        title="תשלומים"
+        subtitle={`${filtered.length} תשלומים`}
+        actions={
+          <div className="flex gap-2">
+            <Button
+              variant={viewMode === 'yearly' ? 'default' : 'outline'}
+              onClick={() => setViewMode(viewMode === 'yearly' ? 'monthly' : 'yearly')}
+            >
+              <BarChart3 className="h-4 w-4" />
+              סיכום שנתי
+            </Button>
+            {viewMode === 'monthly' && (
+              <>
+                <Button variant="outline" onClick={handleCreateMonthly}>
+                  <CalendarPlus className="h-4 w-4" />
+                  צור תשלומים חודשיים
+                </Button>
+                <Button onClick={openCreate}>
+                  <Plus className="h-4 w-4" />
+                  תשלום חדש
+                </Button>
+              </>
+            )}
+          </div>
+        }
+      />
 
       {/* Month/Year selectors */}
       <div className="flex flex-wrap gap-3 items-end">
@@ -470,7 +475,7 @@ function Payments() {
           {/* Yearly per-unit table */}
           <Card>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="premium-table w-full text-sm">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
                     <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
@@ -509,45 +514,18 @@ function Payments() {
       ) : (
         <>
           {/* Status filter pills */}
-          <div className="flex flex-wrap gap-2">
-            {STATUS_FILTERS.map((sf) => (
-              <Button
-                key={sf.key}
-                variant={statusFilter === sf.key ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setStatusFilter(sf.key)}
-              >
-                {sf.label}
-              </Button>
-            ))}
-          </div>
+          <FilterPills
+            options={STATUS_FILTERS.map(f => ({ key: f.key, label: f.label }))}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
 
           {/* Summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">סה״כ נגבה</p>
-                <p className="text-2xl font-bold text-[var(--success)]">{formatCurrency(summary.collected)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">לא שולם</p>
-                <p className="text-2xl font-bold text-red-500">{summary.unpaid}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">ממתינים לתשלום</p>
-                <p className="text-2xl font-bold text-[var(--warning)]">{summary.pending}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">סה״כ דירות</p>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.totalUnits}</p>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard label="סה״כ נגבה" value={formatCurrency(summary.collected)} icon={CreditCard} color="emerald" />
+            <StatCard label="לא שולם" value={String(summary.unpaid)} icon={AlertTriangle} color="red" />
+            <StatCard label="ממתינים" value={String(summary.pending)} icon={Wallet} color="amber" />
+            <StatCard label="סה״כ דירות" value={String(summary.totalUnits)} icon={Users} color="blue" />
           </div>
 
           {/* Table */}
@@ -562,7 +540,7 @@ function Payments() {
           ) : (
             <Card>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="premium-table w-full text-sm">
                   <thead>
                     <tr className="border-b border-[var(--border)]">
                       <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>

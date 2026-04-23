@@ -13,7 +13,10 @@ import { FormField, FormSelect, FormTextarea } from '@/components/common/FormFie
 import { DeleteConfirm } from '@/components/common/DeleteConfirm';
 import { EmptyState } from '@/components/common/EmptyState';
 import { SearchBar } from '@/components/common/SearchBar';
+import { StatCard } from '@/components/common/StatCard';
+import { FilterPills } from '@/components/common/FilterPills';
 import { formatDate } from '@/lib/utils';
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus,
   Pencil,
@@ -49,21 +52,21 @@ const PRIORITY_CONFIG = {
 const STATUS_PROGRESSION = ['pending', 'approved', 'scheduled', 'in_progress', 'completed'];
 
 const STATUS_FILTERS = [
-  { value: 'all',         label: 'הכל'      },
-  { value: 'pending',     label: 'ממתין'    },
-  { value: 'approved',    label: 'מאושר'    },
-  { value: 'scheduled',   label: 'מתוכנן'   },
-  { value: 'in_progress', label: 'בביצוע'   },
-  { value: 'completed',   label: 'הושלם'    },
-  { value: 'cancelled',   label: 'בוטל'     },
+  { key: 'all',         label: 'הכל'      },
+  { key: 'pending',     label: 'ממתין'    },
+  { key: 'approved',    label: 'מאושר'    },
+  { key: 'scheduled',   label: 'מתוכנן'   },
+  { key: 'in_progress', label: 'בביצוע'   },
+  { key: 'completed',   label: 'הושלם'    },
+  { key: 'cancelled',   label: 'בוטל'     },
 ];
 
 const PRIORITY_FILTERS = [
-  { value: 'all',    label: 'הכל'   },
-  { value: 'low',    label: 'נמוך'  },
-  { value: 'medium', label: 'בינוני' },
-  { value: 'high',   label: 'גבוה'  },
-  { value: 'urgent', label: 'דחוף'  },
+  { key: 'all',    label: 'הכל'   },
+  { key: 'low',    label: 'נמוך'  },
+  { key: 'medium', label: 'בינוני' },
+  { key: 'high',   label: 'גבוה'  },
+  { key: 'urgent', label: 'דחוף'  },
 ];
 
 const EMPTY_FORM = {
@@ -96,46 +99,6 @@ function formatCost(val) {
   const n = Number(val);
   if (!n) return null;
   return `₪${n.toLocaleString()}`;
-}
-
-// ─── Stat Card ──────────────────────────────────────────────────────────────
-
-function StatCard({ icon: Icon, label, value, color }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-4 p-5">
-        <div className={`rounded-full p-3 ${color}`}>
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">{label}</p>
-          <p className="text-2xl font-bold">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Filter Pills ───────────────────────────────────────────────────────────
-
-function FilterPills({ options, value, onChange }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-            value === opt.value
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 // ─── Work Order Card ─────────────────────────────────────────────────────────
@@ -514,23 +477,25 @@ export default function WorkOrders() {
   return (
     <div className="space-y-6 p-4 sm:p-6" dir="rtl">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">הזמנות עבודה</h1>
-          <p className="mt-1 text-sm text-gray-500">ניהול הזמנות עבודה לספקים ואנשי מקצוע</p>
-        </div>
-        <Button onClick={openCreate} className="gap-2 shrink-0">
-          <Plus className="h-4 w-4" />
-          הזמנה חדשה
-        </Button>
-      </div>
+      <PageHeader
+        icon={ClipboardList}
+        iconColor="purple"
+        title="הזמנות עבודה"
+        subtitle={`${stats.total} הזמנות עבודה`}
+        actions={
+          <Button onClick={openCreate} className="gap-2 shrink-0">
+            <Plus className="h-4 w-4" />
+            הזמנה חדשה
+          </Button>
+        }
+      />
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard icon={ClipboardList} label="סה״כ הזמנות"  value={stats.total}       color="bg-blue-500"   />
-        <StatCard icon={Clock}         label="פתוחות"        value={stats.open}        color="bg-amber-500"  />
-        <StatCard icon={Wrench}        label="בביצוע"        value={stats.in_progress} color="bg-orange-500" />
-        <StatCard icon={CheckCircle2}  label="הושלמו"        value={stats.completed}   color="bg-green-500"  />
+        <StatCard icon={ClipboardList} label="סה״כ הזמנות"  value={stats.total}       color="blue"    />
+        <StatCard icon={Clock}         label="פתוחות"        value={stats.open}        color="amber"   />
+        <StatCard icon={Wrench}        label="בביצוע"        value={stats.in_progress} color="purple"  />
+        <StatCard icon={CheckCircle2}  label="הושלמו"        value={stats.completed}   color="emerald" />
       </div>
 
       {/* Filters */}

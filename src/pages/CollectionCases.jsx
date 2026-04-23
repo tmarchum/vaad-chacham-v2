@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
+import { StatCard } from '@/components/common/StatCard'
+import { FilterPills } from '@/components/common/FilterPills'
 import {
   AlertTriangle, CheckCircle, Clock, ChevronDown, ChevronUp,
-  Mail, Phone, FileText, Scale,
+  Mail, Phone, FileText, Scale, UserCheck, DollarSign, FolderOpen,
 } from 'lucide-react'
 
 const LEVEL_CONFIG = {
@@ -85,52 +88,25 @@ function CollectionCases() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-        מעקב גבייה חכם
-      </h1>
+      <PageHeader icon={UserCheck} iconColor="red" title="מעקב גבייה חכם" />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <div className="text-sm text-[var(--text-secondary)] mb-1">סה"כ חוב פתוח</div>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalDebt)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <div className="text-sm text-[var(--text-secondary)] mb-1">תיקים פתוחים</div>
-            <div className="text-2xl font-bold text-[var(--text-primary)]">{openCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <div className="text-sm text-[var(--text-secondary)] mb-1">הסלמה גבוהה</div>
-            <div className="text-2xl font-bold text-amber-600">{highEscalation}</div>
-          </CardContent>
-        </Card>
+        <StatCard label="סה״כ חוב פתוח" value={formatCurrency(totalDebt)} icon={DollarSign} color="red" />
+        <StatCard label="תיקים פתוחים" value={openCount} icon={FolderOpen} color="blue" />
+        <StatCard label="הסלמה גבוהה" value={highEscalation} icon={AlertTriangle} color="amber" />
       </div>
 
       {/* Filter */}
-      <div className="flex gap-2">
-        {[
+      <FilterPills
+        options={[
           { key: 'all', label: 'הכל' },
           { key: 'open', label: 'פתוחים' },
           { key: 'closed', label: 'נסגרו' },
-        ].map(f => (
-          <button
-            key={f.key}
-            onClick={() => setStatusFilter(f.key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              statusFilter === f.key
-                ? 'bg-[var(--primary)] text-white'
-                : 'bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+        ]}
+        value={statusFilter}
+        onChange={setStatusFilter}
+      />
 
       {/* Cases list */}
       {cases.length === 0 ? (

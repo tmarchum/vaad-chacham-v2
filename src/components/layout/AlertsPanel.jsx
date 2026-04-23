@@ -46,11 +46,11 @@ function AlertsPanel({ open, onClose, alerts, refreshAlerts }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] bg-black/30" onClick={onClose} />
-      <div className="fixed top-0 left-0 z-[70] h-full w-96 max-w-[90vw] bg-[var(--surface)] border-r border-[var(--border)] shadow-xl flex flex-col" dir="rtl">
+      <div className="fixed inset-0 z-[60] bg-black/30 premium-dialog-overlay" onClick={onClose} />
+      <div className="fixed top-0 left-0 z-[70] h-full w-96 max-w-[90vw] bg-[var(--surface)] border-r border-[var(--border)] shadow-2xl flex flex-col animate-fade-in-up" dir="rtl">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
-          <h2 className="text-lg font-bold text-[var(--text-primary)]">התראות סוכנים</h2>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
+          <h2 className="text-[15px] font-bold text-[var(--text-primary)]">התראות סוכנים</h2>
           <div className="flex items-center gap-2">
             {unread.length > 0 && (
               <button

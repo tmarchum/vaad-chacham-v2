@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormSelect } from '@/components/common/FormField'
 import { formatCurrency } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import { Scale, TrendingUp, TrendingDown, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -86,13 +87,7 @@ export default function Balance() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">מאזן</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">
-          סיכום הכנסות מול הוצאות לפי חודשים
-        </p>
-      </div>
+      <PageHeader icon={Scale} iconColor="blue" title="מאזן" subtitle="סיכום הכנסות מול הוצאות לפי חודשים" />
 
       {/* Year selector */}
       <div className="flex flex-wrap gap-3 items-end">

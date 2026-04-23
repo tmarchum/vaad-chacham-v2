@@ -11,7 +11,8 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
-import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink } from 'lucide-react'
+import { PageHeader } from '@/components/common/PageHeader'
+import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink, FolderOpen } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -404,19 +405,18 @@ export default function Documents() {
   return (
     <div dir="rtl" className="space-y-6 p-6">
 
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">ארכיון מסמכים</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-0.5">
-            ניהול מסמכים ותיקים של הבניין
-          </p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          מסמך חדש
-        </Button>
-      </div>
+      <PageHeader
+        icon={FolderOpen}
+        iconColor="blue"
+        title="ארכיון מסמכים"
+        subtitle="ניהול מסמכים ותיקים של הבניין"
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            מסמך חדש
+          </Button>
+        }
+      />
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

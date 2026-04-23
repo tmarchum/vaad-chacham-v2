@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormSelect, FormTextarea } from '@/components/common/FormField'
 import { SearchBar } from '@/components/common/SearchBar'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   ArrowDownLeft, Landmark, Pencil, CheckCircle2,
 } from 'lucide-react'
@@ -87,13 +88,7 @@ export default function BankIncome() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">הכנסות</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">
-          זיכויים מתנועות בנק — דמי ועד ותשלומים נכנסים
-        </p>
-      </div>
+      <PageHeader icon={ArrowDownLeft} iconColor="emerald" title="הכנסות" subtitle="זיכויים מתנועות בנק — דמי ועד ותשלומים נכנסים" />
 
       {/* Search */}
       <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי תיאור..." />

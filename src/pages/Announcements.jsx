@@ -9,6 +9,7 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus, Megaphone, FileText, AlertTriangle, Calendar,
   Users, Pencil, Trash2, Wrench,

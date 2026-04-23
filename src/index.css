@@ -198,3 +198,85 @@ body {
 .alert-item.severity-high   { border-right-color: var(--danger); }
 .alert-item.severity-medium { border-right-color: var(--warning); }
 .alert-item.severity-low    { border-right-color: var(--info); }
+
+/* ── Premium table styling ───────────────────────────────────── */
+.premium-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.premium-table thead th {
+  background: var(--surface-secondary);
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border);
+}
+.premium-table thead th:first-child { border-radius: 0 8px 0 0; }
+.premium-table thead th:last-child  { border-radius: 8px 0 0 0; }
+.premium-table tbody tr {
+  transition: background 0.1s ease;
+}
+.premium-table tbody tr:hover {
+  background: var(--surface-secondary);
+}
+.premium-table tbody td {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+.premium-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Card grid items ─────────────────────────────────────────── */
+.premium-card-item {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.premium-card-item:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Enhanced dialogs ────────────────────────────────────────── */
+.premium-dialog-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ── Enhanced form inputs ────────────────────────────────────── */
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary-light) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* ── Empty state refinement ──────────────────────────────────── */
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-secondary);
+  margin-bottom: 12px;
+}
+
+/* ── Page transitions ────────────────────────────────────────── */
+main > div {
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+/* ── Gradient text utility ───────────────────────────────────── */
+.text-gradient {
+  background: linear-gradient(135deg, var(--primary), #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

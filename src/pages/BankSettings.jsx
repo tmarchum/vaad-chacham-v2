@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   Landmark, Plus, Pencil, Trash2, RefreshCw, Eye, EyeOff,
   Play, Settings2, Clock, Calendar, Moon, CheckCircle2, AlertCircle,
@@ -156,23 +157,24 @@ export default function BankSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">חשבונות בנק</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">ניהול חשבונות בנק ותזמון משיכת תנועות</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setSettingsOpen(true)} className="gap-2">
-            <Settings2 className="h-4 w-4" />
-            הגדרות
-          </Button>
-          <Button onClick={openNew} className="gap-2">
-            <Plus className="h-4 w-4" />
-            הוסף חשבון
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={Landmark}
+        iconColor="slate"
+        title="חשבונות בנק"
+        subtitle="ניהול חשבונות בנק ותזמון משיכת תנועות"
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setSettingsOpen(true)} className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              הגדרות
+            </Button>
+            <Button onClick={openNew} className="gap-2">
+              <Plus className="h-4 w-4" />
+              הוסף חשבון
+            </Button>
+          </div>
+        }
+      />
 
       {/* Initial Pull / Nightly Status */}
       <div className="grid gap-4 sm:grid-cols-2">

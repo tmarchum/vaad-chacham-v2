@@ -10,7 +10,8 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
-import { Plus, Pencil, Trash2, Wrench, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import { PageHeader } from '@/components/common/PageHeader'
+import { Plus, Pencil, Trash2, Wrench, AlertTriangle, CheckCircle, Clock, Cog } from 'lucide-react'
 
 const CATEGORY_OPTIONS = [
   { value: 'מעלית', label: 'מעלית' },

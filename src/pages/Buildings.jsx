@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
 import { Input } from '@/components/ui/input'
 import { formatCurrency, cn } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import { Building2, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 const ELEVATOR_OPTIONS = [0,1,2,3,4,5].map(n => ({ value: String(n), label: String(n) }))
@@ -266,13 +267,13 @@ function Buildings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">בניינים</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{buildings.length} בניינים</p>
-        </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" />בניין חדש</Button>
-      </div>
+      <PageHeader
+        icon={Building2}
+        iconColor="slate"
+        title="בניינים"
+        subtitle={`${buildings.length} בניינים`}
+        actions={<Button onClick={openCreate}><Plus className="h-4 w-4" />בניין חדש</Button>}
+      />
 
       <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי שם או כתובת..." />
 

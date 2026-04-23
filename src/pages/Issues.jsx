@@ -12,6 +12,9 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
+import { PageHeader } from '@/components/common/PageHeader'
+import { StatCard } from '@/components/common/StatCard'
+import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
@@ -812,49 +815,31 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">תקלות</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{filtered.length} תקלות</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowTemplates(true)}>
-            <FileText className="h-4 w-4" />
-            מתבנית
-          </Button>
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            תקלה חדשה
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={AlertTriangle}
+        iconColor="purple"
+        title="תקלות"
+        subtitle={`${filtered.length} תקלות`}
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setShowTemplates(true)}>
+              <FileText className="h-4 w-4" />
+              מתבנית
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              תקלה חדשה
+            </Button>
+          </>
+        }
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-[var(--text-secondary)]">תקלות פתוחות</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.open}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-[var(--text-secondary)]">חריגת SLA</p>
-            <p className={`text-2xl font-bold ${stats.overdue > 0 ? 'text-red-600' : 'text-green-600'}`}>{stats.overdue}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-[var(--text-secondary)]">הצעות ממתינות</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.pendingQuotes}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-[var(--text-secondary)]">זמן פתרון ממוצע</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.avgDays} ימים</p>
-          </CardContent>
-        </Card>
+        <StatCard label="תקלות פתוחות" value={String(stats.open)} icon={AlertTriangle} color="red" />
+        <StatCard label="חריגת SLA" value={String(stats.overdue)} color={stats.overdue > 0 ? 'red' : 'emerald'} icon={Clock} />
+        <StatCard label="הצעות ממתינות" value={String(stats.pendingQuotes)} icon={FileText} color="amber" />
+        <StatCard label="זמן פתרון ממוצע" value={`${stats.avgDays} ימים`} icon={Calendar} color="blue" />
       </div>
 
       {/* Search */}
@@ -886,34 +871,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       </div>
 
       {/* Status filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <span className="text-sm text-[var(--text-secondary)] self-center ml-2">סטטוס:</span>
-        {STATUS_FILTERS.map((sf) => (
-          <Button
-            key={sf.key}
-            variant={statusFilter === sf.key ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter(sf.key)}
-          >
-            {sf.label}
-          </Button>
-        ))}
-      </div>
+      <FilterPills
+        options={STATUS_FILTERS.map(f => ({ key: f.key, label: f.label }))}
+        value={statusFilter}
+        onChange={setStatusFilter}
+      />
 
       {/* Priority filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <span className="text-sm text-[var(--text-secondary)] self-center ml-2">עדיפות:</span>
-        {PRIORITY_FILTERS.map((pf) => (
-          <Button
-            key={pf.key}
-            variant={priorityFilter === pf.key ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setPriorityFilter(pf.key)}
-          >
-            {pf.label}
-          </Button>
-        ))}
-      </div>
+      <FilterPills
+        options={PRIORITY_FILTERS.map(f => ({ key: f.key, label: f.label }))}
+        value={priorityFilter}
+        onChange={setPriorityFilter}
+      />
 
       {/* Extra filters row */}
       <div className="flex flex-wrap gap-3 items-end">

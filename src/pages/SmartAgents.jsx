@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { callVaadAgent } from '@/lib/vaadAgent'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   CreditCard, Store, PiggyBank, ShieldCheck,
   Play, CheckCircle, AlertTriangle, XCircle,
@@ -1254,16 +1255,7 @@ export default function SmartAgents() {
   // -------------------------------------------------------------------------
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-          <Zap className="h-7 w-7 text-[var(--primary)]" />
-          סוכנים חכמים
-        </h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">
-          סוכני AI שמנתחים את נתוני {selectedBuilding?.name || 'הבניין'} ומייצרים פעולות מומלצות
-        </p>
-      </div>
+      <PageHeader icon={Zap} iconColor="amber" title="סוכנים חכמים" subtitle={`סוכני AI שמנתחים את נתוני ${selectedBuilding?.name || 'הבניין'} ומייצרים פעולות מומלצות`} />
 
       {/* No building selected warning */}
       {!selectedBuilding && (

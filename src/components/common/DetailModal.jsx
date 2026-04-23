@@ -7,11 +7,11 @@ function DetailRow({ label, value, className }) {
   if (value === null || value === undefined || value === '') return null
 
   return (
-    <div className={cn('flex items-start gap-2 py-2 border-b border-[var(--border)] last:border-0', className)}>
-      <span className="text-sm font-medium text-[var(--text-secondary)] min-w-[100px] shrink-0">
+    <div className={cn('flex items-start gap-3 py-2.5 border-b border-[var(--border-light)] last:border-0', className)}>
+      <span className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide min-w-[100px] shrink-0 pt-0.5">
         {label}
       </span>
-      <span className="text-sm text-[var(--text-primary)]">{value}</span>
+      <span className="text-[13px] text-[var(--text-primary)] font-medium">{value}</span>
     </div>
   )
 }

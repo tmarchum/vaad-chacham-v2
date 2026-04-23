@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormSelect } from '@/components/common/FormField'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
-  ArrowDownLeft, ArrowUpRight, Landmark, Link2, X as XIcon,
+  ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Landmark, Link2, X as XIcon,
   CheckCircle2, AlertCircle, Filter, ChevronDown, Check,
 } from 'lucide-react'
 
@@ -369,25 +370,24 @@ export default function BankTransactions() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">תנועות בנק</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">
-            צפייה בתנועות, שיוך לדירות ומעקב תשלומים
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleAutoMatch} className="gap-2">
-            <Link2 className="h-4 w-4" />
-            שיוך אוטומטי
-          </Button>
-          <Button variant="outline" onClick={() => setPaymentSummaryOpen(true)} className="gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            סיכום תשלומים
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={ArrowLeftRight}
+        iconColor="indigo"
+        title="תנועות בנק"
+        subtitle="צפייה בתנועות, שיוך לדירות ומעקב תשלומים"
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleAutoMatch} className="gap-2">
+              <Link2 className="h-4 w-4" />
+              שיוך אוטומטי
+            </Button>
+            <Button variant="outline" onClick={() => setPaymentSummaryOpen(true)} className="gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              סיכום תשלומים
+            </Button>
+          </div>
+        }
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">

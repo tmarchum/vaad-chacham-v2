@@ -7,6 +7,7 @@ import { TabGroup } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { callVaadAgent } from '@/lib/vaadAgent'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   Bot, Brain, Wrench, AlertTriangle, CheckCircle, TrendingUp,
   Star, Zap, Shield, Activity, RefreshCw, PlusCircle, Sparkles,

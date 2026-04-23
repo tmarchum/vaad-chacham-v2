@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { TabGroup } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank } from 'lucide-react'
 
 // ---------------------------------------------------------------------------

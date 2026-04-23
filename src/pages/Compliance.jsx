@@ -10,6 +10,7 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import { Plus, Pencil, Trash2, ShieldCheck } from 'lucide-react'
 
 const TYPE_OPTIONS = [
@@ -147,17 +148,18 @@ function Compliance() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">תקינה ורגולציה</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{filtered.length} רישומים</p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          רישום חדש
-        </Button>
-      </div>
+      <PageHeader
+        icon={ShieldCheck}
+        iconColor="emerald"
+        title="תקינה ורגולציה"
+        subtitle={`${filtered.length} רישומים`}
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            רישום חדש
+          </Button>
+        }
+      />
 
       {/* Search */}
       <SearchBar

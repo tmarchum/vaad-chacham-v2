@@ -10,7 +10,9 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Receipt, Plus, Pencil, Trash2, Landmark } from 'lucide-react'
+import { Receipt, Plus, Pencil, Trash2, Landmark, Wallet, BarChart2 } from 'lucide-react'
+import { PageHeader } from '@/components/common/PageHeader'
+import { StatCard } from '@/components/common/StatCard'
 
 const HEBREW_MONTHS = [
   { value: '01', label: 'ינואר' },
@@ -205,16 +207,13 @@ function Expenses() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">הוצאות</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{filtered.length} הוצאות</p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          הוצאה חדשה
-        </Button>
-      </div>
+      <PageHeader
+        icon={Wallet}
+        iconColor="emerald"
+        title="הוצאות"
+        subtitle={`${filtered.length} הוצאות`}
+        actions={<Button onClick={openCreate}><Plus className="h-4 w-4" />הוצאה חדשה</Button>}
+      />
 
       {/* Search */}
       <SearchBar
@@ -283,19 +282,14 @@ function Expenses() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">{viewMode === 'month' ? 'סה״כ הוצאות החודש' : `סה״כ הוצאות ${selectedYear}`}</p>
-            <p className="text-2xl font-bold text-[var(--danger)]">{formatCurrency(summary.total)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm text-[var(--text-secondary)]">מספר הוצאות</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{summary.count}</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <StatCard
+          label={viewMode === 'month' ? 'סה״כ הוצאות החודש' : `סה״כ הוצאות ${selectedYear}`}
+          value={formatCurrency(summary.total)}
+          color="red"
+          icon={Wallet}
+        />
+        <StatCard label="מספר הוצאות" value={String(summary.count)} color="blue" icon={BarChart2} />
       </div>
 
       {/* Table */}
@@ -310,7 +304,7 @@ function Expenses() {
       ) : (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm premium-table">
               <thead>
                 <tr className="border-b border-[var(--border)]">
                   <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך</th>

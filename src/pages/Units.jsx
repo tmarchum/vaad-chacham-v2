@@ -11,6 +11,8 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
 import { formatCurrency, calcUnitFee, cn } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
+import { FilterPills } from '@/components/common/FilterPills'
 import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users } from 'lucide-react'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
@@ -477,16 +479,18 @@ function Units() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">דירות</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{allUnits.length} דירות</p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          דירה חדשה
-        </Button>
-      </div>
+      <PageHeader
+        icon={Home}
+        iconColor="indigo"
+        title="דירות"
+        subtitle={`${allUnits.length} דירות`}
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            דירה חדשה
+          </Button>
+        }
+      />
 
       {/* Building filter */}
       <div className="flex flex-wrap gap-2">
@@ -503,22 +507,15 @@ function Units() {
       </div>
 
       {/* Type filter */}
-      <div className="flex gap-2">
-        {[
+      <FilterPills
+        options={[
           { key: 'all', label: 'הכל' },
           { key: 'owned', label: 'בעלים' },
           { key: 'rented', label: 'שוכרים' },
-        ].map(f => (
-          <Button
-            key={f.key}
-            variant={typeFilter === f.key ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setTypeFilter(f.key)}
-          >
-            {f.label}
-          </Button>
-        ))}
-      </div>
+        ]}
+        value={typeFilter}
+        onChange={setTypeFilter}
+      />
 
       <SearchBar
         value={search}

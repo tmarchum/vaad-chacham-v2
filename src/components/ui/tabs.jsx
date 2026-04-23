@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 function TabGroup({ tabs = [], activeTab, onChange, className, ...props }) {
   return (
     <div
-      className={cn('flex gap-1 border-b border-[var(--border)]', className)}
+      className={cn('flex gap-0.5 border-b border-[var(--border)]', className)}
       role="tablist"
       {...props}
     >
@@ -14,14 +14,17 @@ function TabGroup({ tabs = [], activeTab, onChange, className, ...props }) {
           aria-selected={activeTab === tab.key}
           onClick={() => onChange?.(tab.key)}
           className={cn(
-            'px-4 py-2.5 text-sm font-medium transition-colors cursor-pointer',
-            '-mb-px border-b-2',
+            'px-4 py-2.5 text-[13px] font-semibold transition-all duration-150 cursor-pointer',
+            '-mb-px border-b-2 rounded-t-lg',
             activeTab === tab.key
-              ? 'border-[var(--primary)] text-[var(--primary)]'
-              : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border)]'
+              ? 'border-[var(--primary)] text-[var(--primary)] bg-blue-50/50'
+              : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]'
           )}
         >
-          {tab.label}
+          <span className="flex items-center gap-1.5">
+            {tab.icon && <tab.icon className="h-3.5 w-3.5" />}
+            {tab.label}
+          </span>
         </button>
       ))}
     </div>

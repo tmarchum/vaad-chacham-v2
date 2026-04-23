@@ -7,7 +7,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { PageHeader } from '@/components/common/PageHeader'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
+import { Settings } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -566,10 +568,7 @@ export default function AdminSettings() {
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6" dir="rtl">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">הגדרות מערכת</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-1">ניהול משתמשים, שדות מותאמים ובניינים</p>
-      </div>
+      <PageHeader icon={Settings} iconColor="slate" title="הגדרות מערכת" subtitle="ניהול משתמשים, שדות מותאמים ובניינים" />
 
       <TabGroup tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 

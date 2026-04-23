@@ -8,6 +8,7 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import { Plus, Star, User, Phone, Mail, Home, ChevronDown, ChevronUp, Pencil, Trash2, Users } from 'lucide-react'
 
 const EMPTY_FORM = {
@@ -163,12 +164,7 @@ function Residents() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">דיירים</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{allResidents.length} דיירים</p>
-        </div>
-      </div>
+      <PageHeader icon={Users} iconColor="cyan" title="דיירים" subtitle={`${allResidents.length} דיירים`} />
 
       {/* Building selector */}
       {buildings.length > 1 && (

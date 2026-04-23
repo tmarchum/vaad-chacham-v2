@@ -8,6 +8,7 @@ import { FormField, FormSelect, FormTextarea, FormBool } from '@/components/comm
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   Search, MessageCircle, Star, CheckCircle, ExternalLink,
   Phone, Plus, ChevronRight, Clock, ThumbsUp, ThumbsDown,
@@ -1014,11 +1015,7 @@ export default function VendorFinder() {
 
   return (
     <div dir="rtl" className="p-4 max-w-2xl mx-auto space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">מציאת ספקים</h1>
-        <p className="text-sm text-[var(--text-secondary)] mt-0.5">{buildingName}</p>
-      </div>
+      <PageHeader icon={Search} iconColor="cyan" title="מציאת ספקים" subtitle={buildingName} />
 
       {/* Success message */}
       {success && (

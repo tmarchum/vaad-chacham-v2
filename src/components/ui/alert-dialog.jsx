@@ -20,10 +20,10 @@ function AlertDialog({
         </DialogHeader>
 
         {description && (
-          <p className="text-sm text-[var(--text-secondary)] mb-6">{description}</p>
+          <p className="text-[13px] text-[var(--text-muted)] mb-6 leading-relaxed">{description}</p>
         )}
 
-        <div className="flex gap-3 justify-start">
+        <div className="flex gap-2 justify-start">
           <Button
             variant="destructive"
             onClick={() => {

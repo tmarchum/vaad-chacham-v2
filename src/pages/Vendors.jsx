@@ -10,10 +10,11 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
+import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
   Shield, Clock, CheckCircle, Search, BarChart3, GitCompare,
-  Award, Wrench, MapPin, UserPlus,
+  Award, Wrench, MapPin, UserPlus, Store,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -579,16 +580,18 @@ function Vendors() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">ספקים</h1>
-          <p className="text-sm text-[var(--text-secondary)]">{allVendors.length} ספקים במערכת</p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus className="h-4 w-4" />
-          ספק חדש
-        </Button>
-      </div>
+      <PageHeader
+        icon={Store}
+        iconColor="amber"
+        title="ספקים"
+        subtitle={`${allVendors.length} ספקים במערכת`}
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            ספק חדש
+          </Button>
+        }
+      />
 
       {/* Tabs */}
       <TabGroup tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
