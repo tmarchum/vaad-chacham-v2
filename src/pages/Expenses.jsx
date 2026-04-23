@@ -292,7 +292,7 @@ function Expenses() {
         <StatCard label="מספר הוצאות" value={String(summary.count)} color="blue" icon={BarChart2} />
       </div>
 
-      {/* Table */}
+      {/* Expense Cards */}
       {filtered.length === 0 ? (
         <EmptyState
           icon={Receipt}
@@ -302,70 +302,88 @@ function Expenses() {
           onAction={!search ? openCreate : undefined}
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm premium-table">
-              <thead>
-                <tr className="border-b border-[var(--border)]">
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תאריך</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">תיאור</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">קטגוריה</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סכום</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">ספק</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בניין</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">מקור</th>
-                  <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פעולות</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((exp) => (
-                  <tr
-                    key={exp.id}
-                    className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] cursor-pointer transition-colors"
-                    onClick={() => setDetailExpense(exp)}
+        <div className="space-y-2">
+          {filtered.map((exp) => {
+            const categoryGradients = {
+              'תחזוקה': 'from-blue-500 to-blue-600',
+              'חשמל': 'from-amber-400 to-amber-500',
+              'מים': 'from-cyan-500 to-cyan-600',
+              'ניקיון': 'from-emerald-500 to-emerald-600',
+              'ביטוח': 'from-purple-500 to-purple-600',
+              'משפטי': 'from-red-500 to-red-600',
+              'אחר': 'from-slate-400 to-slate-500',
+            }
+            const gradient = categoryGradients[exp.category] || categoryGradients['אחר']
+            const categoryLetter = exp.category ? exp.category.charAt(0) : '?'
+
+            return (
+              <div
+                key={exp.id}
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+                onClick={() => setDetailExpense(exp)}
+              >
+                {/* Category gradient circle */}
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                  {categoryLetter}
+                </div>
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                      {exp.description || '-'}
+                    </span>
+                    {exp.bank_transaction_id && (
+                      <Badge variant="info" className="gap-1 text-[10px] px-1.5 py-0">
+                        <Landmark className="h-3 w-3" />
+                        בנק
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {exp.vendor && <span className="text-xs text-[var(--text-muted)]">{exp.vendor}</span>}
+                    {buildingMap[exp.buildingId]?.name && (
+                      <span className="text-xs text-[var(--text-muted)]">{buildingMap[exp.buildingId].name}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="text-left min-w-[100px]">
+                  <div className="text-[15px] font-bold text-[var(--text-primary)]">
+                    {formatCurrency(exp.amount || 0)}
+                  </div>
+                </div>
+
+                {/* Category chip */}
+                {exp.category && (
+                  <Badge variant={CATEGORY_VARIANTS[exp.category] || 'default'} className="shrink-0">
+                    {exp.category}
+                  </Badge>
+                )}
+
+                {/* Date */}
+                <span className="text-xs text-[var(--text-muted)] min-w-[70px] shrink-0">
+                  {exp.date ? formatDate(exp.date) : '-'}
+                </span>
+
+                {/* Hover-reveal actions */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(exp)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteTarget(exp)}
                   >
-                    <td className="p-3">{exp.date ? formatDate(exp.date) : '-'}</td>
-                    <td className="p-3">{exp.description || '-'}</td>
-                    <td className="p-3">
-                      {exp.category && (
-                        <Badge variant={CATEGORY_VARIANTS[exp.category] || 'default'}>
-                          {exp.category}
-                        </Badge>
-                      )}
-                    </td>
-                    <td className="p-3">{formatCurrency(exp.amount || 0)}</td>
-                    <td className="p-3">{exp.vendor || '-'}</td>
-                    <td className="p-3">{buildingMap[exp.buildingId]?.name || '-'}</td>
-                    <td className="p-3">
-                      {exp.bank_transaction_id ? (
-                        <Badge variant="info" className="gap-1 text-xs">
-                          <Landmark className="h-3 w-3" />
-                          בנק
-                        </Badge>
-                      ) : (
-                        <Badge variant="default" className="text-xs">ידני</Badge>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(exp)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteTarget(exp)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {/* Detail Modal */}

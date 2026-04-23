@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/common/EmptyState'
+import { StatCard } from '@/components/common/StatCard'
 import { FormSelect } from '@/components/common/FormField'
 import { formatCurrency } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -100,115 +101,134 @@ export default function Balance() {
         />
       </div>
 
-      {/* Year summary cards */}
+      {/* Year summary stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="h-4 w-4 text-green-600" />
-              <p className="text-sm text-[var(--text-secondary)]">סה״כ הכנסות {selectedYear}</p>
-            </div>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(yearTotals.income)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingDown className="h-4 w-4 text-red-600" />
-              <p className="text-sm text-[var(--text-secondary)]">סה״כ הוצאות {selectedYear}</p>
-            </div>
-            <p className="text-2xl font-bold text-red-600">{formatCurrency(yearTotals.expenses)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-2 mb-1">
-              <Scale className="h-4 w-4 text-blue-600" />
-              <p className="text-sm text-[var(--text-secondary)]">מאזן {selectedYear}</p>
-            </div>
-            <p className={`text-2xl font-bold ${yearTotals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {yearTotals.balance >= 0 ? '+' : ''}{formatCurrency(yearTotals.balance)}
-            </p>
-          </CardContent>
-        </Card>
+        <StatCard
+          label={`סה״כ הכנסות ${selectedYear}`}
+          value={formatCurrency(yearTotals.income)}
+          icon={TrendingUp}
+          color="emerald"
+        />
+        <StatCard
+          label={`סה״כ הוצאות ${selectedYear}`}
+          value={formatCurrency(yearTotals.expenses)}
+          icon={TrendingDown}
+          color="red"
+        />
+        <StatCard
+          label={`מאזן ${selectedYear}`}
+          value={`${yearTotals.balance >= 0 ? '+' : ''}${formatCurrency(yearTotals.balance)}`}
+          icon={Scale}
+          color={yearTotals.balance >= 0 ? 'emerald' : 'red'}
+        />
       </div>
 
-      {/* Monthly breakdown table */}
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)]">
-                <th className="text-right p-3 font-medium text-[var(--text-secondary)]">חודש</th>
-                <th className="text-right p-3 font-medium text-[var(--text-secondary)]">
-                  <div className="flex items-center gap-1">
-                    <ArrowDownLeft className="h-3.5 w-3.5 text-green-600" />
-                    הכנסות
+      {/* Monthly breakdown cards */}
+      <div className="space-y-2">
+        {monthlyData.map(m => {
+          const hasData = m.income > 0 || m.expenses > 0
+          const maxAmount = Math.max(m.income, m.expenses) || 1
+          const incomePct = Math.round((m.income / maxAmount) * 100)
+          const expensesPct = Math.round((m.expenses / maxAmount) * 100)
+
+          // Month gradient based on balance
+          const monthGradient = !hasData
+            ? 'from-slate-300 to-slate-400'
+            : m.balance >= 0
+              ? 'from-emerald-500 to-emerald-600'
+              : 'from-red-500 to-red-600'
+
+          return (
+            <div
+              key={m.month}
+              className={`group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white transition-all ${
+                hasData ? 'hover:shadow-md hover:border-blue-200' : 'opacity-50'
+              }`}
+            >
+              {/* Month gradient circle */}
+              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${monthGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                {m.label.slice(0, 3)}
+              </div>
+
+              {/* Month name */}
+              <div className="min-w-[70px]">
+                <span className="text-[14px] font-semibold text-[var(--text-primary)]">{m.label}</span>
+              </div>
+
+              {/* Income section */}
+              <div className="flex-1 min-w-[120px]">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <ArrowDownLeft className="h-3 w-3 text-emerald-600 shrink-0" />
+                  <span className="text-xs text-[var(--text-muted)]">הכנסות</span>
+                </div>
+                <span className="text-[13px] font-bold text-emerald-600">
+                  {m.income > 0 ? formatCurrency(m.income) : '-'}
+                </span>
+                {hasData && (
+                  <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: incomePct + '%' }} />
                   </div>
-                </th>
-                <th className="text-right p-3 font-medium text-[var(--text-secondary)]">
-                  <div className="flex items-center gap-1">
-                    <ArrowUpRight className="h-3.5 w-3.5 text-red-600" />
-                    הוצאות בנק
+                )}
+              </div>
+
+              {/* Expenses section */}
+              <div className="flex-1 min-w-[120px]">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <ArrowUpRight className="h-3 w-3 text-red-600 shrink-0" />
+                  <span className="text-xs text-[var(--text-muted)]">הוצאות</span>
+                </div>
+                <span className="text-[13px] font-bold text-red-600">
+                  {m.expenses > 0 ? formatCurrency(m.expenses) : '-'}
+                </span>
+                {m.bankExpenses > 0 && m.manualExpenses > 0 && (
+                  <div className="text-[10px] text-[var(--text-muted)]">
+                    בנק: {formatCurrency(m.bankExpenses)} | ידני: {formatCurrency(m.manualExpenses)}
                   </div>
-                </th>
-                <th className="text-right p-3 font-medium text-[var(--text-secondary)]">הוצאות ידניות</th>
-                <th className="text-right p-3 font-medium text-[var(--text-secondary)]">סה״כ הוצאות</th>
-                <th className="text-right p-3 font-medium text-[var(--text-secondary)]">מאזן</th>
-              </tr>
-            </thead>
-            <tbody>
-              {monthlyData.map(m => {
-                const hasData = m.income > 0 || m.expenses > 0
-                return (
-                  <tr
-                    key={m.month}
-                    className={`border-b border-[var(--border)] last:border-0 transition-colors ${
-                      hasData ? 'hover:bg-[var(--surface-hover)]' : 'opacity-40'
-                    }`}
-                  >
-                    <td className="p-3 font-medium">{m.label}</td>
-                    <td className="p-3 text-green-600 font-medium">
-                      {m.income > 0 ? formatCurrency(m.income) : '-'}
-                    </td>
-                    <td className="p-3 text-red-600">
-                      {m.bankExpenses > 0 ? formatCurrency(m.bankExpenses) : '-'}
-                    </td>
-                    <td className="p-3 text-red-500">
-                      {m.manualExpenses > 0 ? formatCurrency(m.manualExpenses) : '-'}
-                    </td>
-                    <td className="p-3 text-red-600 font-medium">
-                      {m.expenses > 0 ? formatCurrency(m.expenses) : '-'}
-                    </td>
-                    <td className={`p-3 font-bold ${m.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {hasData ? (
-                        <>
-                          {m.balance >= 0 ? '+' : ''}{formatCurrency(m.balance)}
-                        </>
-                      ) : '-'}
-                    </td>
-                  </tr>
-                )
-              })}
-              {/* Totals row */}
-              <tr className="bg-[var(--surface-hover)] font-bold">
-                <td className="p-3">סה״כ</td>
-                <td className="p-3 text-green-600">{formatCurrency(yearTotals.income)}</td>
-                <td className="p-3 text-red-600">
-                  {formatCurrency(monthlyData.reduce((s, m) => s + m.bankExpenses, 0))}
-                </td>
-                <td className="p-3 text-red-500">
-                  {formatCurrency(monthlyData.reduce((s, m) => s + m.manualExpenses, 0))}
-                </td>
-                <td className="p-3 text-red-600">{formatCurrency(yearTotals.expenses)}</td>
-                <td className={`p-3 ${yearTotals.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {yearTotals.balance >= 0 ? '+' : ''}{formatCurrency(yearTotals.balance)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                )}
+                {hasData && (
+                  <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                    <div className="h-full rounded-full bg-red-500" style={{ width: expensesPct + '%' }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Balance with dot */}
+              <div className="flex items-center gap-2 min-w-[100px] shrink-0">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${
+                  !hasData ? 'bg-slate-300' : m.balance >= 0 ? 'bg-emerald-500' : 'bg-red-500'
+                }`} />
+                <span className={`text-[13px] font-bold ${
+                  !hasData ? 'text-[var(--text-muted)]' : m.balance >= 0 ? 'text-emerald-700' : 'text-red-700'
+                }`}>
+                  {hasData ? `${m.balance >= 0 ? '+' : ''}${formatCurrency(m.balance)}` : '-'}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Totals card */}
+        <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-[var(--border)] bg-[var(--surface-hover)]">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+            {selectedYear.slice(2)}
+          </div>
+          <div className="min-w-[70px]">
+            <span className="text-[14px] font-bold text-[var(--text-primary)]">סה״כ</span>
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <span className="text-[13px] font-bold text-emerald-600">{formatCurrency(yearTotals.income)}</span>
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <span className="text-[13px] font-bold text-red-600">{formatCurrency(yearTotals.expenses)}</span>
+          </div>
+          <div className="flex items-center gap-2 min-w-[100px] shrink-0">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${yearTotals.balance >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className={`text-[14px] font-bold ${yearTotals.balance >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+              {yearTotals.balance >= 0 ? '+' : ''}{formatCurrency(yearTotals.balance)}
+            </span>
+          </div>
         </div>
-      </Card>
+      </div>
     </div>
   )
 }

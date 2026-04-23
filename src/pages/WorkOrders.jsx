@@ -110,97 +110,157 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
   const vendorName  = vendorsMap[order.vendorId]?.name  || null;
   const issueTitle  = issuesMap[order.issueId]?.title   || null;
 
+  // Status-based gradient for the circle
+  const statusGradients = {
+    pending:     'from-slate-400 to-slate-500',
+    approved:    'from-blue-500 to-blue-600',
+    scheduled:   'from-amber-400 to-amber-500',
+    in_progress: 'from-purple-500 to-purple-600',
+    completed:   'from-emerald-500 to-emerald-600',
+    cancelled:   'from-red-400 to-red-500',
+  };
+  const circleGradient = statusGradients[order.status] || statusGradients.pending;
+
+  // Status dot colors
+  const statusDotColors = {
+    pending:     'bg-slate-400',
+    approved:    'bg-blue-500',
+    scheduled:   'bg-amber-500',
+    in_progress: 'bg-purple-500',
+    completed:   'bg-emerald-500',
+    cancelled:   'bg-red-500',
+  };
+  const dotColor = statusDotColors[order.status] || statusDotColors.pending;
+
+  // Status text colors
+  const statusTextColors = {
+    pending:     'text-slate-600',
+    approved:    'text-blue-700',
+    scheduled:   'text-amber-700',
+    in_progress: 'text-purple-700',
+    completed:   'text-emerald-700',
+    cancelled:   'text-red-700',
+  };
+  const statusTextColor = statusTextColors[order.status] || statusTextColors.pending;
+
+  // Priority accent bar colors
+  const priorityBarColors = {
+    low:    'bg-slate-300',
+    medium: 'bg-blue-400',
+    high:   'bg-amber-500',
+    urgent: 'bg-red-500',
+  };
+  const priorityBar = priorityBarColors[order.priority] || priorityBarColors.medium;
+
+  // Progress: how far in the status progression
+  const statusIdx = STATUS_PROGRESSION.indexOf(order.status);
+  const progressPct = order.status === 'cancelled' ? 0 : statusIdx >= 0 ? Math.round(((statusIdx + 1) / STATUS_PROGRESSION.length) * 100) : 0;
+
+  const titleInitial = (order.title || '?').charAt(0);
+
   return (
-    <Card className="flex flex-col gap-0">
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base leading-snug">{order.title}</CardTitle>
-          <div className="flex shrink-0 flex-col gap-1 items-end">
-            <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
-            <Badge variant={priorityCfg.variant}>{priorityCfg.label}</Badge>
+    <div className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
+      onClick={() => onEdit(order)}
+    >
+      {/* Priority accent bar at top */}
+      <div className={`h-1 w-full ${priorityBar}`} />
+
+      <div className="p-4">
+        <div className="flex items-start gap-4">
+          {/* Status gradient circle */}
+          <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+            {titleInitial}
+          </div>
+
+          {/* Main info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                {order.title}
+              </span>
+              <Badge variant={priorityCfg.variant} className="text-[10px] px-1.5 py-0 shrink-0">{priorityCfg.label}</Badge>
+            </div>
+            {order.description && (
+              <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-1">{order.description}</p>
+            )}
+            <div className="flex items-center gap-3 flex-wrap text-xs text-[var(--text-secondary)]">
+              {vendorName && (
+                <div className="flex items-center gap-1">
+                  <User className="h-3 w-3 text-[var(--text-muted)]" />
+                  <span>{vendorName}</span>
+                </div>
+              )}
+              {issueTitle && (
+                <div className="flex items-center gap-1">
+                  <ClipboardList className="h-3 w-3 text-[var(--text-muted)]" />
+                  <span className="truncate max-w-[120px]">{issueTitle}</span>
+                </div>
+              )}
+              {order.scheduledDate && (
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-[var(--text-muted)]" />
+                  <span>{formatDate(order.scheduledDate)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Cost section */}
+          {(order.estimatedCost || order.actualCost) && (
+            <div className="text-left min-w-[90px] shrink-0">
+              {order.actualCost ? (
+                <>
+                  <div className="text-[14px] font-bold text-[var(--text-primary)]">{formatCost(order.actualCost)}</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">בפועל</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-[14px] font-bold text-[var(--text-primary)]">{formatCost(order.estimatedCost)}</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">הערכה</div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Status with dot */}
+          <div className="flex items-center gap-2 min-w-[80px] shrink-0">
+            <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+            <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusCfg.label}</span>
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent className="flex flex-col gap-3 pt-0">
-        {order.description && (
-          <p className="text-sm text-gray-600 line-clamp-2">{order.description}</p>
-        )}
-
-        <div className="space-y-1.5 text-sm text-gray-600">
-          {issueTitle && (
-            <div className="flex items-center gap-1.5">
-              <ClipboardList className="h-4 w-4 shrink-0 text-gray-400" />
-              <span className="truncate">{issueTitle}</span>
-            </div>
-          )}
-          {vendorName && (
-            <div className="flex items-center gap-1.5">
-              <User className="h-4 w-4 shrink-0 text-gray-400" />
-              <span className="truncate">{vendorName}</span>
-            </div>
-          )}
-          {order.scheduledDate && (
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 shrink-0 text-gray-400" />
-              <span>{formatDate(order.scheduledDate)}</span>
-            </div>
-          )}
-          {(order.estimatedCost || order.actualCost) && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {order.estimatedCost && (
-                <span className="text-gray-500">
-                  הערכה: <span className="font-medium text-gray-700">{formatCost(order.estimatedCost)}</span>
-                </span>
-              )}
-              {order.actualCost && (
-                <span className="text-gray-500">
-                  בפועל: <span className="font-medium text-gray-700">{formatCost(order.actualCost)}</span>
-                </span>
-              )}
-            </div>
-          )}
+        {/* Progress bar + rating row */}
+        <div className="mt-3 flex items-center gap-3">
+          <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
+            <div className={`h-full rounded-full ${dotColor}`} style={{ width: progressPct + '%' }} />
+          </div>
           {order.rating && (
-            <div className="flex items-center gap-1.5">
-              <Star className="h-4 w-4 shrink-0 text-yellow-400 fill-yellow-400" />
-              <span>{order.rating}/5</span>
+            <div className="flex items-center gap-1 shrink-0">
+              <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+              <span className="text-[11px] text-[var(--text-secondary)]">{order.rating}/5</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-gray-100">
+        {/* Hover-reveal actions */}
+        <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
           {nextStatus && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1 text-xs"
-              onClick={() => onAdvanceStatus(order, nextStatus)}
-            >
+            <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => onAdvanceStatus(order, nextStatus)}>
               <ArrowRight className="h-3 w-3" />
               קדם סטטוס
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onEdit(order)}
-            className="gap-1 text-xs"
-          >
+          <Button size="sm" variant="ghost" onClick={() => onEdit(order)} className="gap-1 text-xs h-7">
             <Pencil className="h-3 w-3" />
             עריכה
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => onDelete(order)}
-            className="gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-          >
+          <Button size="sm" variant="ghost" onClick={() => onDelete(order)} className="gap-1 text-xs h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
             <Trash2 className="h-3 w-3" />
             מחיקה
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -530,7 +590,7 @@ export default function WorkOrders() {
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-2">
           {filtered.map((order) => (
             <WorkOrderCard
               key={order.id}

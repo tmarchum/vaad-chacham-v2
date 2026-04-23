@@ -283,25 +283,74 @@ function Buildings() {
           actionLabel={!search ? 'הוסף בניין' : undefined} onAction={!search ? openCreate : undefined} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(b => (
-            <Card key={b.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailBuilding(b)}>
-              <CardContent className="pt-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-[var(--text-primary)]">{b.name}</h3>
-                    {b.alias && <p className="text-xs text-[var(--text-muted)]">{b.alias}</p>}
-                    <p className="text-sm text-[var(--text-secondary)]">{buildAddress(b)}</p>
+          {filtered.map(b => {
+            const unitCount = unitCountMap[b.id] || b.total_units || b.totalUnits || 0
+            const address = buildAddress(b)
+            const fee = feeSummary(b)
+            const initial = (b.name || '?').charAt(0)
+
+            return (
+              <div
+                key={b.id}
+                className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
+                onClick={() => setDetailBuilding(b)}
+              >
+                {/* Top gradient accent bar */}
+                <div className="h-1 w-full bg-gradient-to-l from-blue-500 to-indigo-600" />
+
+                <div className="p-5">
+                  <div className="flex items-start gap-4 mb-4">
+                    {/* Building gradient circle */}
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-sm">
+                      {initial}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[15px] font-semibold text-[var(--text-primary)] truncate">{b.name}</h3>
+                      {b.alias && <p className="text-xs text-[var(--text-muted)]">{b.alias}</p>}
+                      {address && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{address}</p>}
+                    </div>
+
+                    {/* Hover-reveal actions */}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(b)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => { setDeleteTarget(b) }}>
+                        <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                      </Button>
+                    </div>
                   </div>
-                  <Building2 className="h-5 w-5 text-[var(--text-muted)] shrink-0" />
+
+                  {/* Stats row */}
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      <span className="text-[var(--text-secondary)]">{unitCount} דירות</span>
+                    </div>
+                    {b.floors && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-slate-400" />
+                        <span className="text-[var(--text-secondary)]">{b.floors} קומות</span>
+                      </div>
+                    )}
+                    {fee && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                        <span className="text-[var(--text-secondary)]">ועד: {fee}</span>
+                      </div>
+                    )}
+                    {b.elevators > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2 h-2 rounded-full bg-amber-500" />
+                        <span className="text-[var(--text-secondary)]">{b.elevators} מעליות</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-3 text-xs text-[var(--text-secondary)]">
-                  <span>{unitCountMap[b.id] || b.total_units || b.totalUnits || 0} דירות</span>
-                  {feeSummary(b) && <span>ועד: {feeSummary(b)}</span>}
-                  {b.residents_room && <span>✓ חדר דיירים</span>}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            )
+          })}
         </div>
       )}
 
