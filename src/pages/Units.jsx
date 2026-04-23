@@ -544,25 +544,41 @@ function Units() {
             const owners = unitType === 'rented'
               ? unitResidents.filter(r => (r.resident_type || r.residentType) === 'owner')
               : []
+            const unitGradient = unitType === 'rented' ? 'from-cyan-500 to-cyan-600' : 'from-indigo-500 to-indigo-600'
+            const unitNumber = u.number || u.unit_number
+
             return (
-              <Card key={u.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setDetailUnit(u)}>
-                <CardContent className="pt-5">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-                          דירה {u.number || u.unit_number}
+              <Card
+                key={u.id}
+                className="group cursor-pointer overflow-hidden border border-[var(--border)] hover:shadow-lg hover:border-blue-200 transition-all bg-white"
+                onClick={() => setDetailUnit(u)}
+              >
+                {/* Gradient accent bar */}
+                <div className={`h-1 bg-gradient-to-r ${unitGradient}`} />
+                <CardContent className="pt-4 pb-4">
+                  {/* Top row: unit circle + info + edit action */}
+                  <div className="flex items-start gap-3 mb-3">
+                    {/* Large gradient circle with unit number */}
+                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${unitGradient} flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-md`}>
+                      {unitNumber}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <h3 className="text-base font-bold text-[var(--text-primary)]">
+                          דירה {unitNumber}
                         </h3>
-                        <Badge variant={unitType === 'rented' ? 'info' : 'default'}>
-                          {unitType === 'rented' ? 'שכירות' : 'בעלים'}
-                        </Badge>
-                        {u.board_member && <Badge variant="success">חבר ועד</Badge>}
+                        {u.board_member && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow-sm">
+                            <Star className="h-3 w-3 fill-white" />
+                            ועד
+                          </span>
+                        )}
                       </div>
+                      {/* Primary resident name */}
                       {primary && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                          <p className="text-sm text-[var(--text-secondary)]">{fullName(primary)}</p>
-                        </div>
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                          {fullName(primary)}
+                        </p>
                       )}
                       {tenants.length > 1 && (
                         <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
@@ -571,32 +587,52 @@ function Units() {
                         </p>
                       )}
                     </div>
-                    <Home className="h-5 w-5 text-[var(--text-muted)] shrink-0" />
+                    {/* Edit icon on hover */}
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => { e.stopPropagation(); openEdit(u) }}>
+                      <div className="w-8 h-8 rounded-lg border border-[var(--border)] flex items-center justify-center hover:bg-slate-50 cursor-pointer">
+                        <Pencil className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)] mt-2">
-                    {u.floor != null && <span>קומה {u.floor}</span>}
-                    {u.rooms != null && <span>{u.rooms} חד׳</span>}
-                    {(u.area) && <span>{u.area} מ"ר</span>}
-                    {Array.isArray(u.parkingSpots || u.parking_spots) && (u.parkingSpots || u.parking_spots).length > 0 && (
-                      <span>חניות: {(u.parkingSpots || u.parking_spots).join(', ')}</span>
+
+                  {/* Stats badges row */}
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <Badge variant={unitType === 'rented' ? 'info' : 'default'} className="text-[10px] px-2 py-0.5">
+                      {unitType === 'rented' ? 'שכירות' : 'בעלים'}
+                    </Badge>
+                    {u.floor != null && (
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                        קומה {u.floor}
+                      </span>
                     )}
-                    {(u.storage_number || u.storageNumber) && (
-                      <span>מחסן: {u.storage_number || u.storageNumber}</span>
+                    {u.rooms != null && (
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                        {u.rooms} חד׳
+                      </span>
                     )}
-                    {owners.length > 0 && (
-                      <span className="text-[var(--text-muted)]">
-                        בעלים: {owners.map(fullName).join(', ')}
+                    {u.area > 0 && (
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                        {u.area} מ"ר
                       </span>
                     )}
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="text-sm font-medium text-[var(--primary)]">
+
+                  {/* Fee with emphasis */}
+                  <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+                    <span className="text-lg font-bold text-[var(--primary)]">
                       {formatCurrency(getDisplayFee(u))}
                     </span>
+                    {buildingMap[u.buildingId || u.building_id] && (
+                      <span className="text-[11px] text-[var(--text-muted)]">
+                        {buildingMap[u.buildingId || u.building_id].name}
+                      </span>
+                    )}
                   </div>
-                  {buildingMap[u.buildingId || u.building_id] && (
-                    <p className="text-xs text-[var(--text-muted)] mt-1">
-                      {buildingMap[u.buildingId || u.building_id].name}
+
+                  {/* Owners row for rental units */}
+                  {owners.length > 0 && (
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                      בעלים: {owners.map(fullName).join(', ')}
                     </p>
                   )}
                 </CardContent>

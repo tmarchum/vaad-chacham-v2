@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TabGroup } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank } from 'lucide-react'
 
@@ -93,18 +93,27 @@ function diffDays(start, end) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
+const STAT_GRADIENTS = {
+  '#22c55e': 'from-emerald-500 to-emerald-600',
+  '#ef4444': 'from-red-500 to-red-600',
+  '#f59e0b': 'from-amber-500 to-amber-600',
+  '#6366f1': 'from-indigo-500 to-indigo-600',
+  '#06b6d4': 'from-cyan-500 to-cyan-600',
+}
+
 function StatCard({ icon: Icon, label, value, sub, color = 'var(--primary)', className = '' }) {
+  const gradient = STAT_GRADIENTS[color] || 'from-blue-500 to-blue-600'
   return (
-    <Card className={className}>
+    <Card className={cn('overflow-hidden border border-[var(--border)] hover:shadow-md transition-all', className)}>
+      <div className={`h-1 bg-gradient-to-r ${gradient}`} />
       <CardContent className="flex items-start gap-3 p-4">
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-          style={{ backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)` }}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} shadow-sm`}
         >
-          <Icon size={20} style={{ color }} />
+          <Icon size={20} className="text-white" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
             {label}
           </p>
           <p className="mt-0.5 text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -121,16 +130,19 @@ function StatCard({ icon: Icon, label, value, sub, color = 'var(--primary)', cla
 
 function HorizontalBar({ label, amount, pct, color = 'var(--primary)' }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-slate-50/50 transition-colors">
       <div className="flex items-center justify-between text-sm">
-        <span style={{ color: 'var(--text-primary)' }}>{label}</span>
-        <span style={{ color: 'var(--text-secondary)' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+          <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
+        </div>
+        <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
           {formatCurrency(amount)}{' '}
-          <span className="text-xs">({Math.round(pct)}%)</span>
+          <span className="text-xs font-normal text-[var(--text-muted)]">({Math.round(pct)}%)</span>
         </span>
       </div>
       <div
-        className="h-2.5 w-full overflow-hidden rounded-full"
+        className="h-2 w-full overflow-hidden rounded-full"
         style={{ backgroundColor: 'var(--border-light, #e5e7eb)' }}
       >
         <div
@@ -250,9 +262,13 @@ function FinancialTab({ payments, expenses, period, buildingId }) {
       </div>
 
       {/* Monthly breakdown */}
-      <Card>
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
         <CardContent className="p-4">
-          <h3 className="mb-4 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-sm">
+              <BarChart2 size={16} className="text-white" />
+            </div>
             פירוט חודשי (6 חודשים אחרונים)
           </h3>
           <div className="overflow-x-auto">
@@ -274,19 +290,22 @@ function FinancialTab({ payments, expenses, period, buildingId }) {
             {monthlyRows.map((row) => (
               <div
                 key={row.key}
-                className="grid gap-2 border-b py-2 text-sm"
+                className="group grid gap-2 border-b py-2.5 text-sm hover:bg-slate-50/50 transition-colors rounded-lg px-1"
                 style={{
                   borderColor: 'var(--border)',
                   gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
                 }}
               >
-                <span style={{ color: 'var(--text-primary)' }}>{monthLabel(row.key)}</span>
-                <span style={{ color: '#22c55e' }}>{formatCurrency(row.income)}</span>
-                <span style={{ color: '#ef4444' }}>{formatCurrency(row.expenses)}</span>
-                <span style={{ color: row.net >= 0 ? '#22c55e' : '#ef4444' }}>
+                <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{monthLabel(row.key)}</span>
+                <span className="font-medium" style={{ color: '#22c55e' }}>{formatCurrency(row.income)}</span>
+                <span className="font-medium" style={{ color: '#ef4444' }}>{formatCurrency(row.expenses)}</span>
+                <span className="font-semibold" style={{ color: row.net >= 0 ? '#22c55e' : '#ef4444' }}>
                   {formatCurrency(row.net)}
                 </span>
-                <span style={{ color: 'var(--text-secondary)' }}>{row.rate}%</span>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${row.rate >= 80 ? 'bg-emerald-500' : row.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} />
+                  <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{row.rate}%</span>
+                </div>
               </div>
             ))}
           </div>
@@ -295,12 +314,16 @@ function FinancialTab({ payments, expenses, period, buildingId }) {
 
       {/* Expense by category */}
       {expenseByCategory.length > 0 && (
-        <Card>
+        <Card className="overflow-hidden border border-[var(--border)]">
+          <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
           <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-sm">
+                <PiggyBank size={16} className="text-white" />
+              </div>
               הוצאות לפי קטגוריה
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-1">
               {expenseByCategory.map(({ cat, amt, pct }, i) => (
                 <HorizontalBar
                   key={cat}
@@ -380,86 +403,93 @@ function ResidentsTab({ units, payments, buildingId }) {
         dir="rtl"
       />
 
-      <Card>
-        <CardContent className="p-0">
-          {/* Header */}
-          <div
-            className="grid gap-2 border-b px-4 py-2 text-xs font-medium"
-            style={{
-              borderColor: 'var(--border)',
-              color: 'var(--text-secondary)',
-              gridTemplateColumns: '60px 1fr 80px 80px 100px 100px',
-            }}
-          >
-            <span>דירה</span>
-            <span>שם</span>
-            <span>שולם</span>
-            <span>חוב</span>
-            <span>סה"כ שולם</span>
-            <span>סה"כ חוב</span>
-          </div>
+      {searched.length === 0 && (
+        <p className="px-4 py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
+          אין נתונים
+        </p>
+      )}
 
-          {searched.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-              אין נתונים
-            </p>
-          )}
-
-          {searched.map(({ unit, paidCount, pendingCount, overdueCount, totalPaid, totalDebt }) => (
+      {/* Resident cards */}
+      <div className="space-y-2">
+        {searched.map(({ unit, paidCount, pendingCount, overdueCount, totalPaid, totalDebt }) => {
+          const hasDebt = totalDebt > 0
+          const debtCount = pendingCount + overdueCount
+          return (
             <div
               key={unit.id}
-              className="grid items-center gap-2 border-b px-4 py-2.5 text-sm transition-colors"
-              style={{
-                borderColor: 'var(--border)',
-                gridTemplateColumns: '60px 1fr 80px 80px 100px 100px',
-                backgroundColor: totalDebt > 0 ? 'rgba(239,68,68,0.05)' : undefined,
-              }}
+              className={cn(
+                'group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all',
+                hasDebt ? 'border-red-200/60' : 'border-[var(--border)]'
+              )}
             >
-              <span className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                {unit.number}
-              </span>
-              <span style={{ color: 'var(--text-primary)' }}>
-                {unit.ownerName || unit.tenant_name || '—'}
-              </span>
-              <span>
-                {paidCount > 0 && (
-                  <Badge variant="success">{paidCount} חודשים</Badge>
-                )}
-              </span>
-              <span>
-                {(pendingCount + overdueCount) > 0 && (
-                  <Badge variant="danger">{pendingCount + overdueCount} חודשים</Badge>
-                )}
-              </span>
-              <span style={{ color: '#22c55e', fontWeight: 500 }}>
-                {formatCurrency(totalPaid)}
-              </span>
-              <span style={{ color: totalDebt > 0 ? '#ef4444' : 'var(--text-secondary)', fontWeight: totalDebt > 0 ? 600 : 400 }}>
-                {formatCurrency(totalDebt)}
-              </span>
-            </div>
-          ))}
+              {/* Unit number circle */}
+              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${hasDebt ? 'from-red-500 to-red-600' : 'from-emerald-500 to-emerald-600'} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                {unit.number || unit.unit_number}
+              </div>
 
-          {/* Summary row */}
-          <div
-            className="grid items-center gap-2 px-4 py-2.5 text-sm font-semibold"
-            style={{
-              gridTemplateColumns: '60px 1fr 80px 80px 100px 100px',
-              backgroundColor: 'var(--surface)',
-              borderTop: `2px solid var(--border)`,
-            }}
-          >
-            <span style={{ color: 'var(--text-secondary)' }}>סה"כ</span>
-            <span />
-            <span />
-            <span />
-            <span style={{ color: '#22c55e' }}>{formatCurrency(totalPaidAll)}</span>
-            <span style={{ color: totalDebtAll > 0 ? '#ef4444' : 'var(--text-secondary)' }}>
-              {formatCurrency(totalDebtAll)}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+              {/* Main info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                    דירה {unit.number || unit.unit_number}
+                  </span>
+                </div>
+                <span className="text-xs text-[var(--text-muted)]">
+                  {unit.ownerName || unit.tenant_name || '—'}
+                </span>
+              </div>
+
+              {/* Payment status badges */}
+              <div className="flex items-center gap-2">
+                {paidCount > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full shrink-0 bg-emerald-500" />
+                    <span className="text-xs font-medium text-emerald-700">{paidCount} שולם</span>
+                  </div>
+                )}
+                {debtCount > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full shrink-0 bg-red-500" />
+                    <span className="text-xs font-medium text-red-700">{debtCount} חוב</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Amounts */}
+              <div className="text-left min-w-[100px]">
+                <div className="text-[13px] font-bold text-emerald-600">{formatCurrency(totalPaid)}</div>
+                {hasDebt && (
+                  <div className="text-[11px] font-semibold text-red-500">חוב: {formatCurrency(totalDebt)}</div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Summary card */}
+      {searched.length > 0 && (
+        <Card className="overflow-hidden border-2 border-[var(--border)]">
+          <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-[var(--text-primary)]">סה"כ</span>
+              <div className="flex items-center gap-6">
+                <div className="text-left">
+                  <div className="text-xs text-[var(--text-muted)]">שולם</div>
+                  <div className="text-sm font-bold text-emerald-600">{formatCurrency(totalPaidAll)}</div>
+                </div>
+                <div className="text-left">
+                  <div className="text-xs text-[var(--text-muted)]">חוב</div>
+                  <div className={cn('text-sm font-bold', totalDebtAll > 0 ? 'text-red-500' : 'text-[var(--text-secondary)]')}>
+                    {formatCurrency(totalDebtAll)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
@@ -582,20 +612,27 @@ function MaintenanceTab({ issues, period, buildingId }) {
 
       {/* Top categories */}
       {byCategory.length > 0 && (
-        <Card>
+        <Card className="overflow-hidden border border-[var(--border)]">
+          <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
           <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-sm">
+                <Wrench size={16} className="text-white" />
+              </div>
               תקלות לפי קטגוריה
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-1">
               {byCategory.map(({ cat, count, pct }, i) => (
-                <div key={cat} className="flex flex-col gap-1">
+                <div key={cat} className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-slate-50/50 transition-colors">
                   <div className="flex items-center justify-between text-sm">
-                    <span style={{ color: 'var(--text-primary)' }}>{cat}</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{count} תקלות</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }} />
+                      <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{cat}</span>
+                    </div>
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{count} <span className="font-normal text-xs text-[var(--text-muted)]">תקלות</span></span>
                   </div>
                   <div
-                    className="h-2.5 w-full overflow-hidden rounded-full"
+                    className="h-2 w-full overflow-hidden rounded-full"
                     style={{ backgroundColor: 'var(--border-light, #e5e7eb)' }}
                   >
                     <div
@@ -615,28 +652,34 @@ function MaintenanceTab({ issues, period, buildingId }) {
 
       {/* Top 5 most expensive */}
       {top5.length > 0 && (
-        <Card>
+        <Card className="overflow-hidden border border-[var(--border)]">
+          <div className="h-1 bg-gradient-to-r from-red-500 to-orange-500" />
           <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-sm">
+                <TrendingDown size={16} className="text-white" />
+              </div>
               5 התקלות היקרות ביותר
             </h3>
             <div className="space-y-2">
-              {top5.map((issue) => (
+              {top5.map((issue, idx) => (
                 <div
                   key={issue.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border p-3"
-                  style={{ borderColor: 'var(--border)' }}
+                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
                 >
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+                    {idx + 1}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                    <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
                       {issue.title || issue.description || '—'}
                     </p>
-                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <p className="text-xs text-[var(--text-muted)]">
                       {issue.category || issue.priority || ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-sm font-semibold" style={{ color: '#f59e0b' }}>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-sm font-bold" style={{ color: '#f59e0b' }}>
                       {formatCurrency(issue.cost)}
                     </span>
                     {statusBadge(issue.status)}
@@ -650,37 +693,32 @@ function MaintenanceTab({ issues, period, buildingId }) {
 
       {/* Vendor utilization */}
       {byVendor.length > 0 && (
-        <Card>
+        <Card className="overflow-hidden border border-[var(--border)]">
+          <div className="h-1 bg-gradient-to-r from-cyan-500 to-teal-500" />
           <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center shadow-sm">
+                <Users size={16} className="text-white" />
+              </div>
               ספקים ונותני שירות
             </h3>
-            <div
-              className="mb-2 grid gap-2 border-b pb-2 text-xs font-medium"
-              style={{
-                borderColor: 'var(--border)',
-                color: 'var(--text-secondary)',
-                gridTemplateColumns: '1fr 80px 120px',
-              }}
-            >
-              <span>ספק</span>
-              <span>תקלות</span>
-              <span>עלות כוללת</span>
+            <div className="space-y-2">
+              {byVendor.map(({ name, count, cost }) => (
+                <div
+                  key={name}
+                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+                    {name.charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-[var(--text-primary)] truncate block">{name}</span>
+                    <span className="text-xs text-[var(--text-muted)]">{count} תקלות</span>
+                  </div>
+                  <span className="text-sm font-bold text-amber-600">{formatCurrency(cost)}</span>
+                </div>
+              ))}
             </div>
-            {byVendor.map(({ name, count, cost }) => (
-              <div
-                key={name}
-                className="grid gap-2 border-b py-2 text-sm"
-                style={{
-                  borderColor: 'var(--border)',
-                  gridTemplateColumns: '1fr 80px 120px',
-                }}
-              >
-                <span style={{ color: 'var(--text-primary)' }}>{name}</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{count}</span>
-                <span style={{ color: '#f59e0b' }}>{formatCurrency(cost)}</span>
-              </div>
-            ))}
           </CardContent>
         </Card>
       )}
@@ -778,9 +816,13 @@ function BudgetTab({ units, expenses, buildingId }) {
       </div>
 
       {/* Budget bar */}
-      <Card>
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
         <CardContent className="p-4">
-          <h3 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="mb-3 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-sm">
+              <BarChart2 size={16} className="text-white" />
+            </div>
             תקציב שנתי — {currentYear}
           </h3>
           <div className="mb-2 flex justify-between text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -796,9 +838,13 @@ function BudgetTab({ units, expenses, buildingId }) {
       </Card>
 
       {/* Reserve fund */}
-      <Card>
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
         <CardContent className="p-4">
-          <h3 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="mb-3 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-sm">
+              <PiggyBank size={16} className="text-white" />
+            </div>
             קרן רזרבה מומלצת (10% מהכנסות שנתיות)
           </h3>
           <div className="grid grid-cols-2 gap-4">
@@ -826,9 +872,13 @@ function BudgetTab({ units, expenses, buildingId }) {
       </Card>
 
       {/* Monthly projection table */}
-      <Card>
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
         <CardContent className="p-4">
-          <h3 className="mb-4 text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-sm">
+              <TrendingUp size={16} className="text-white" />
+            </div>
             תחזית חודשית שנתית
           </h3>
           {/* Header */}

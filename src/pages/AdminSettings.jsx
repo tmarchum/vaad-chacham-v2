@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
-import { Settings } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { Settings, Users, Database, Building, Shield, Key, Hash, ToggleRight } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,64 +109,70 @@ function UsersTab() {
     )
   }
 
+  const ROLE_GRADIENTS = {
+    admin: 'from-red-500 to-rose-600',
+    committee: 'from-blue-500 to-indigo-600',
+    resident: 'from-slate-400 to-slate-500',
+  }
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" dir="rtl">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[var(--text-secondary)]">
-                  <th className="text-right px-4 py-3 font-medium">דוא"ל</th>
-                  <th className="text-right px-4 py-3 font-medium">שם</th>
-                  <th className="text-right px-4 py-3 font-medium">תפקיד</th>
-                  <th className="text-right px-4 py-3 font-medium">בניינים</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"
-                  >
-                    <td className="px-4 py-3 text-[var(--text-primary)]">
-                      {user.email ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-primary)]">
-                      {[user.first_name, user.last_name].filter(Boolean).join(' ') || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={ROLE_BADGE_VARIANT[user.role] ?? 'default'}>
-                        {ROLE_LABELS[user.role] ?? user.role ?? '—'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-secondary)]">
-                      {buildingsForUser(user.id).join(', ') || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-left">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditRole(user)}
-                      >
-                        ערוך תפקיד
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-secondary)]">
-                      לא נמצאו משתמשים
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {users.length === 0 && (
+        <p className="px-4 py-8 text-center text-[var(--text-secondary)]">לא נמצאו משתמשים</p>
+      )}
+
+      <div className="space-y-2">
+        {users.map((user) => {
+          const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || '—'
+          const initials = [user.first_name?.[0], user.last_name?.[0]].filter(Boolean).join('') || '?'
+          const gradient = ROLE_GRADIENTS[user.role] || ROLE_GRADIENTS.resident
+          const userBuildings = buildingsForUser(user.id).join(', ')
+
+          return (
+            <div
+              key={user.id}
+              className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
+            >
+              {/* Avatar circle */}
+              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                {initials}
+              </div>
+
+              {/* Main info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                    {fullName}
+                  </span>
+                  <Badge variant={ROLE_BADGE_VARIANT[user.role] ?? 'default'}>
+                    {ROLE_LABELS[user.role] ?? user.role ?? '—'}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[var(--text-muted)] truncate">{user.email ?? '—'}</span>
+                  {userBuildings && (
+                    <span className="text-xs text-[var(--text-muted)]">
+                      <Building className="h-3 w-3 inline ml-0.5" />
+                      {userBuildings}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action (hover reveal) */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openEditRole(user)}
+                >
+                  ערוך תפקיד
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
 
       {/* Edit Role Dialog */}
       <Dialog open={!!editRoleUser} onOpenChange={(open) => !open && setEditRoleUser(null)}>
@@ -266,75 +273,89 @@ function CustomFieldsTab() {
   return (
     <div className="space-y-6">
       {/* Existing fields */}
-      <Card>
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
         <CardHeader>
-          <CardTitle>שדות קיימים</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-sm">
+              <Database size={16} className="text-white" />
+            </div>
+            שדות קיימים
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="pt-0">
           {isLoading ? (
             <p className="text-[var(--text-secondary)] px-5 py-8 text-center">טוען שדות...</p>
+          ) : fields.length === 0 ? (
+            <p className="px-4 py-8 text-center text-[var(--text-secondary)]">לא הוגדרו שדות מותאמים</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm" dir="rtl">
-                <thead>
-                  <tr className="border-b border-[var(--border)] text-[var(--text-secondary)]">
-                    <th className="text-right px-4 py-3 font-medium">שם תצוגה</th>
-                    <th className="text-right px-4 py-3 font-medium">מפתח</th>
-                    <th className="text-right px-4 py-3 font-medium">סוג</th>
-                    <th className="text-right px-4 py-3 font-medium">חובה</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {fields.map((field) => (
-                    <tr
-                      key={field.id}
-                      className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors"
-                    >
-                      <td className="px-4 py-3 text-[var(--text-primary)]">{field.name}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
-                        {field.field_key}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-secondary)]">
-                        {FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}
-                      </td>
-                      <td className="px-4 py-3">
-                        {field.required ? (
-                          <Badge variant="warning">חובה</Badge>
-                        ) : (
-                          <span className="text-[var(--text-secondary)]">אופציונלי</span>
+            <div className="space-y-2">
+              {fields.map((field) => {
+                const TYPE_GRADIENTS = {
+                  text: 'from-blue-500 to-blue-600',
+                  number: 'from-emerald-500 to-emerald-600',
+                  boolean: 'from-amber-500 to-amber-600',
+                  date: 'from-purple-500 to-purple-600',
+                }
+                const TYPE_ICONS = { text: 'T', number: '#', boolean: '?', date: 'D' }
+                const gradient = TYPE_GRADIENTS[field.field_type] || TYPE_GRADIENTS.text
+
+                return (
+                  <div
+                    key={field.id}
+                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
+                  >
+                    {/* Type icon circle */}
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                      {TYPE_ICONS[field.field_type] || 'T'}
+                    </div>
+
+                    {/* Field info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)]">{field.name}</span>
+                        {field.required && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-full shrink-0 bg-amber-500" />
+                            <span className="text-[11px] font-medium text-amber-700">חובה</span>
+                          </div>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-left">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          disabled={deletingId === field.id}
-                          onClick={() => handleDelete(field.id)}
-                        >
-                          {deletingId === field.id ? 'מוחק...' : 'מחק'}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {fields.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-[var(--text-secondary)]">
-                        לא הוגדרו שדות מותאמים
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs text-[var(--text-muted)]">{field.field_key}</span>
+                        <span className="text-xs text-[var(--text-muted)]">{FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}</span>
+                      </div>
+                    </div>
+
+                    {/* Delete action (hover reveal) */}
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={deletingId === field.id}
+                        onClick={() => handleDelete(field.id)}
+                      >
+                        {deletingId === field.id ? 'מוחק...' : 'מחק'}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Create new field */}
-      <Card>
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
         <CardHeader>
-          <CardTitle>הוסף שדה חדש</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-sm">
+              <Key size={16} className="text-white" />
+            </div>
+            הוסף שדה חדש
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} dir="rtl">
@@ -457,13 +478,28 @@ function BuildingsCommitteesTab() {
         <p className="text-[var(--text-secondary)] py-8 text-center">לא נמצאו בניינים</p>
       )}
 
-      {buildings.map((building) => {
+      {buildings.map((building, bIdx) => {
         const members = membersForBuilding(building.id)
+        const BUILDING_GRADIENTS = [
+          'from-blue-500 to-indigo-600',
+          'from-emerald-500 to-teal-600',
+          'from-purple-500 to-violet-600',
+          'from-amber-500 to-orange-600',
+          'from-cyan-500 to-blue-600',
+        ]
+        const buildingGradient = BUILDING_GRADIENTS[bIdx % BUILDING_GRADIENTS.length]
+
         return (
-          <Card key={building.id}>
+          <Card key={building.id} className="overflow-hidden border border-[var(--border)]">
+            <div className={`h-1 bg-gradient-to-r ${buildingGradient}`} />
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>{building.name}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${buildingGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
+                    <Building size={18} className="text-white" />
+                  </div>
+                  {building.name}
+                </CardTitle>
                 <Button size="sm" onClick={() => openAddMember(building)}>
                   + הוסף חבר ועד
                 </Button>
@@ -473,33 +509,50 @@ function BuildingsCommitteesTab() {
               {members.length === 0 ? (
                 <p className="text-sm text-[var(--text-secondary)]">לא הוגדרו חברי ועד לבניין זה</p>
               ) : (
-                <div className="divide-y divide-[var(--border)]">
-                  {members.map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex items-center justify-between py-2.5"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-[var(--text-primary)]">
-                          {m.profile
-                            ? [m.profile.first_name, m.profile.last_name].filter(Boolean).join(' ') ||
-                              m.profile.email
-                            : m.user_id}
-                        </span>
+                <div className="space-y-2">
+                  {members.map((m) => {
+                    const memberName = m.profile
+                      ? [m.profile.first_name, m.profile.last_name].filter(Boolean).join(' ') || m.profile.email
+                      : m.user_id
+                    const initials = m.profile
+                      ? [m.profile.first_name?.[0], m.profile.last_name?.[0]].filter(Boolean).join('') || '?'
+                      : '?'
+                    const MEMBER_ROLE_GRADIENTS = {
+                      committee_chair: 'from-amber-500 to-orange-600',
+                      committee: 'from-blue-500 to-indigo-600',
+                      manager: 'from-emerald-500 to-teal-600',
+                    }
+                    const memberGradient = MEMBER_ROLE_GRADIENTS[m.role] || 'from-slate-400 to-slate-500'
+
+                    return (
+                      <div
+                        key={m.id}
+                        className="group flex items-center gap-3 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
+                      >
+                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${memberGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                          {initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">
+                            {memberName}
+                          </span>
+                        </div>
                         <Badge variant="info">
                           {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
                         </Badge>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-[var(--danger)] hover:text-[var(--danger)]"
+                            onClick={() => handleRemoveMember(m.id)}
+                          >
+                            הסר
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-[var(--danger)] hover:text-[var(--danger)]"
-                        onClick={() => handleRemoveMember(m.id)}
-                      >
-                        הסר
-                      </Button>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
