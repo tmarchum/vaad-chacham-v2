@@ -409,97 +409,80 @@ function Announcements() {
               onAction={openCreateAnnouncement}
             />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-2">
               {filteredAnnouncements.map((ann) => {
                 const typeInfo = TYPE_CONFIG[ann.type] || TYPE_CONFIG.general
                 const priorityInfo = PRIORITY_CONFIG[ann.priority] || PRIORITY_CONFIG.normal
                 const TypeIcon = typeInfo.icon
                 const expired = isExpired(ann.expiresAt)
-                const isExpanded = expandedAnnouncements[ann.id]
+
+                // Gradient colors based on type
+                const gradientMap = {
+                  general: 'from-blue-500 to-blue-600',
+                  maintenance: 'from-amber-400 to-amber-500',
+                  urgent: 'from-red-500 to-red-600',
+                  meeting: 'from-emerald-500 to-emerald-600',
+                }
+                const circleGradient = gradientMap[ann.type] || gradientMap.general
+
+                // Status dot
+                const dotColor = expired ? 'bg-red-500' : (ann.priority === 'urgent' ? 'bg-red-500' : ann.priority === 'high' ? 'bg-amber-500' : 'bg-emerald-500')
+                const statusLabel = expired ? 'פג תוקף' : (ann.priority === 'urgent' ? 'דחוף' : ann.priority === 'high' ? 'גבוה' : 'פעיל')
+                const statusTextColor = expired ? 'text-red-700' : (ann.priority === 'urgent' ? 'text-red-700' : ann.priority === 'high' ? 'text-amber-700' : 'text-emerald-700')
 
                 return (
-                  <Card key={ann.id}>
-                    <CardContent className="pt-5 space-y-3">
-                      {/* Top row: badges */}
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        <Badge variant={typeInfo.variant}>
-                          <TypeIcon className="h-3 w-3 ml-1" />
-                          {typeInfo.label}
-                        </Badge>
-                        <Badge variant={priorityInfo.variant}>{priorityInfo.label}</Badge>
-                        {expired && <Badge variant="danger">פג תוקף</Badge>}
-                      </div>
+                  <div
+                    key={ann.id}
+                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
+                    onClick={() => toggleExpandedAnnouncement(ann.id)}
+                  >
+                    {/* Type icon circle */}
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                      <TypeIcon className="h-5 w-5" />
+                    </div>
 
-                      {/* Title */}
-                      <h3
-                        className="text-base font-bold leading-snug"
-                        style={{ color: 'var(--text-primary)' }}
+                    {/* Main info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                          {ann.title}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)] line-clamp-1">
+                        {ann.content || ''}
+                      </p>
+                    </div>
+
+                    {/* Building badge */}
+                    {ann.buildingId && buildingMap[ann.buildingId] && (
+                      <Badge variant="default" className="shrink-0">{buildingMap[ann.buildingId].name}</Badge>
+                    )}
+
+                    {/* Date */}
+                    <div className="text-xs text-[var(--text-muted)] shrink-0 min-w-[70px] text-left">
+                      {ann.publishedAt ? formatDate(ann.publishedAt) : ''}
+                    </div>
+
+                    {/* Status */}
+                    <div className="flex items-center gap-2 min-w-[70px]">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                      <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusLabel}</span>
+                    </div>
+
+                    {/* Actions (visible on hover) */}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" onClick={() => openEditAnnouncement(ann)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleteAnnouncementTarget(ann)}
                       >
-                        {ann.title}
-                      </h3>
-
-                      {/* Content */}
-                      {ann.content && (
-                        <div>
-                          <p
-                            className="text-sm"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
-                            {isExpanded ? ann.content : truncate(ann.content, 150)}
-                          </p>
-                          {ann.content.length > 150 && (
-                            <button
-                              className="text-xs mt-1 underline"
-                              style={{ color: 'var(--text-secondary)' }}
-                              onClick={() => toggleExpandedAnnouncement(ann.id)}
-                            >
-                              {isExpanded ? 'הצג פחות' : 'הצג עוד'}
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Bottom meta */}
-                      <div
-                        className="text-xs space-y-0.5"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        {ann.author && <p>{ann.author}</p>}
-                        {ann.publishedAt && <p>{formatDate(ann.publishedAt)}</p>}
-                        {ann.expiresAt && (
-                          <p>בתוקף עד {formatDate(ann.expiresAt)}</p>
-                        )}
-                        {ann.buildingId && buildingMap[ann.buildingId] && (
-                          <p style={{ color: 'var(--text-secondary)' }}>
-                            {buildingMap[ann.buildingId].name}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditAnnouncement(ann)}
-                          aria-label="ערוך"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          עריכה
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteAnnouncementTarget(ann)}
-                          aria-label="מחק"
-                          className="text-[var(--danger)] hover:text-[var(--danger)]"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          מחיקה
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                      </Button>
+                    </div>
+                  </div>
                 )
               })}
             </div>
@@ -521,141 +504,96 @@ function Announcements() {
               onAction={openCreateMinutes}
             />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-2">
               {filteredMinutes.map((min) => {
                 const meetingTypeLabel = MEETING_TYPE[min.type] || min.type
                 const attendees = Number(min.attendees) || 0
                 const totalUnits = Number(min.totalUnits) || 0
                 const hasQuorum = totalUnits > 0 && attendees / totalUnits >= 0.5
-                const isSummaryExpanded = expandedMinutes[`${min.id}_summary`]
-                const isDecisionsExpanded = expandedMinutes[`${min.id}_decisions`]
+                const quorumPct = totalUnits > 0 ? Math.min(100, Math.round((attendees / totalUnits) * 100)) : 0
+
+                // Gradient colors based on meeting type
+                const gradientMap = {
+                  annual: 'from-blue-500 to-blue-600',
+                  committee: 'from-purple-500 to-purple-600',
+                  emergency: 'from-red-500 to-red-600',
+                }
+                const circleGradient = gradientMap[min.type] || gradientMap.committee
+
+                // Quorum status dot
+                const dotColor = totalUnits > 0 ? (hasQuorum ? 'bg-emerald-500' : 'bg-red-500') : 'bg-slate-400'
+                const quorumLabel = totalUnits > 0 ? (hasQuorum ? 'יש מניין' : 'אין מניין') : ''
+                const quorumTextColor = totalUnits > 0 ? (hasQuorum ? 'text-emerald-700' : 'text-red-700') : 'text-slate-500'
+
+                // Progress bar color
+                const barColor = hasQuorum ? 'bg-emerald-500' : 'bg-red-400'
 
                 return (
-                  <Card key={min.id}>
-                    <CardContent className="pt-5 space-y-3">
-                      {/* Title + date */}
-                      <div>
-                        <h3
-                          className="text-base font-bold leading-snug"
-                          style={{ color: 'var(--text-primary)' }}
-                        >
+                  <div
+                    key={min.id}
+                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
+                    onClick={() => toggleExpandedMinutes(min.id)}
+                  >
+                    {/* Meeting type circle */}
+                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                      <FileText className="h-5 w-5" />
+                    </div>
+
+                    {/* Main info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
                           {min.title}
-                        </h3>
-                        {min.date && (
-                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                            {formatDate(min.date)}
-                          </p>
-                        )}
+                        </span>
+                        <Badge variant="default" className="shrink-0">{meetingTypeLabel}</Badge>
                       </div>
+                      <p className="text-xs text-[var(--text-muted)] line-clamp-1">
+                        {min.summary || ''}
+                      </p>
+                    </div>
 
-                      {/* Type badge */}
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        <Badge variant="default">{meetingTypeLabel}</Badge>
-                        {totalUnits > 0 && (
-                          <Badge variant={hasQuorum ? 'success' : 'danger'}>
-                            {hasQuorum ? 'יש מניין' : 'אין מניין'}
-                          </Badge>
-                        )}
+                    {/* Attendance + mini progress bar */}
+                    {totalUnits > 0 && (
+                      <div className="text-left min-w-[100px]">
+                        <div className="text-[13px] font-semibold text-[var(--text-primary)]">
+                          {attendees}/{totalUnits} דיירים
+                        </div>
+                        <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${barColor}`}
+                            style={{ width: quorumPct + '%' }}
+                          />
+                        </div>
                       </div>
+                    )}
 
-                      {/* Attendees */}
-                      {totalUnits > 0 && (
-                        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          <Users className="h-3.5 w-3.5 inline ml-1" />
-                          {attendees} מתוך {totalUnits} דיירים
-                        </p>
-                      )}
+                    {/* Date */}
+                    <div className="text-xs text-[var(--text-muted)] shrink-0 min-w-[70px] text-left">
+                      {min.date ? formatDate(min.date) : ''}
+                    </div>
 
-                      {/* Summary */}
-                      {min.summary && (
-                        <div>
-                          <p
-                            className="text-xs font-medium mb-0.5"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
-                            סיכום:
-                          </p>
-                          <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                            {isSummaryExpanded ? min.summary : truncate(min.summary, 150)}
-                          </p>
-                          {min.summary.length > 150 && (
-                            <button
-                              className="text-xs mt-1 underline"
-                              style={{ color: 'var(--text-secondary)' }}
-                              onClick={() =>
-                                toggleExpandedMinutes(`${min.id}_summary`)
-                              }
-                            >
-                              {isSummaryExpanded ? 'הצג פחות' : 'הצג עוד'}
-                            </button>
-                          )}
-                        </div>
-                      )}
+                    {/* Quorum status */}
+                    {totalUnits > 0 && (
+                      <div className="flex items-center gap-2 min-w-[70px]">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                        <span className={`text-[12px] font-medium ${quorumTextColor}`}>{quorumLabel}</span>
+                      </div>
+                    )}
 
-                      {/* Decisions */}
-                      {min.decisions && (
-                        <div>
-                          <p
-                            className="text-xs font-medium mb-0.5"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
-                            החלטות:
-                          </p>
-                          <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                            {isDecisionsExpanded ? min.decisions : truncate(min.decisions, 150)}
-                          </p>
-                          {min.decisions.length > 150 && (
-                            <button
-                              className="text-xs mt-1 underline"
-                              style={{ color: 'var(--text-secondary)' }}
-                              onClick={() =>
-                                toggleExpandedMinutes(`${min.id}_decisions`)
-                              }
-                            >
-                              {isDecisionsExpanded ? 'הצג פחות' : 'הצג עוד'}
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Meta */}
-                      <div
-                        className="text-xs space-y-0.5"
-                        style={{ color: 'var(--text-secondary)' }}
+                    {/* Actions (visible on hover) */}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" onClick={() => openEditMinutes(min)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleteMinutesTarget(min)}
                       >
-                        {min.nextMeeting && (
-                          <p>פגישה הבאה: {formatDate(min.nextMeeting)}</p>
-                        )}
-                        {min.author && <p>{min.author}</p>}
-                        {min.buildingId && buildingMap[min.buildingId] && (
-                          <p>{buildingMap[min.buildingId].name}</p>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditMinutes(min)}
-                          aria-label="ערוך"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                          עריכה
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteMinutesTarget(min)}
-                          aria-label="מחק"
-                          className="text-[var(--danger)] hover:text-[var(--danger)]"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          מחיקה
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                        <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                      </Button>
+                    </div>
+                  </div>
                 )
               })}
             </div>

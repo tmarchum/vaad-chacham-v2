@@ -214,34 +214,106 @@ function Compliance() {
           onAction={!search ? openCreate : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-2">
           {filtered.map((item) => {
             const status = getComplianceStatus(item.expiry_date)
+
+            // Gradient colors based on status
+            const gradientMap = {
+              valid: 'from-emerald-500 to-emerald-600',
+              expired: 'from-red-500 to-red-600',
+              pending: 'from-amber-400 to-amber-500',
+            }
+            const circleGradient = gradientMap[status.key] || gradientMap.pending
+
+            // Status dot colors
+            const dotColorMap = {
+              valid: 'bg-emerald-500',
+              expired: 'bg-red-500',
+              pending: 'bg-amber-500',
+            }
+            const dotColor = dotColorMap[status.key] || dotColorMap.pending
+
+            // Status text colors
+            const textColorMap = {
+              valid: 'text-emerald-700',
+              expired: 'text-red-700',
+              pending: 'text-amber-700',
+            }
+            const statusTextColor = textColorMap[status.key] || textColorMap.pending
+
+            // Days until expiry for countdown
+            const daysLeft = item.expiry_date
+              ? Math.ceil((new Date(item.expiry_date) - new Date()) / (1000 * 60 * 60 * 24))
+              : null
+
             return (
-              <Card
+              <div
                 key={item.id}
-                className="cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
                 onClick={() => setDetailItem(item)}
               >
-                <CardContent className="pt-5">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-base font-semibold text-[var(--text-primary)] leading-tight">
+                {/* Status circle */}
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
                       {item.title}
-                    </h3>
-                    <Badge variant={status.variant}>{status.label}</Badge>
+                    </span>
+                    {item.type && (
+                      <Badge variant="default" className="shrink-0">{item.type}</Badge>
+                    )}
                   </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {buildingMap[item.buildingId]?.name || ''}
+                    </span>
+                    {item.document_number && (
+                      <span className="text-xs text-[var(--text-muted)]">מסמך: {item.document_number}</span>
+                    )}
+                  </div>
+                </div>
 
-                  {item.type && (
-                    <Badge variant="default" className="mb-2">{item.type}</Badge>
+                {/* Expiry date + countdown */}
+                <div className="text-left min-w-[100px]">
+                  {item.expiry_date ? (
+                    <>
+                      <div className="text-[13px] font-semibold text-[var(--text-primary)]">
+                        {formatDate(item.expiry_date)}
+                      </div>
+                      <div className={`text-[11px] ${daysLeft !== null && daysLeft > 0 ? 'text-[var(--text-muted)]' : 'text-red-500 font-medium'}`}>
+                        {daysLeft !== null && daysLeft > 0 ? `בעוד ${daysLeft} ימים` : daysLeft !== null ? `לפני ${Math.abs(daysLeft)} ימים` : ''}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-[var(--text-muted)]">לא הוגדר תוקף</div>
                   )}
+                </div>
 
-                  <div className="text-xs text-[var(--text-secondary)] space-y-1 mt-2">
-                    <p>בניין: {buildingMap[item.buildingId]?.name || ''}</p>
-                    {item.expiry_date && <p>תוקף: {formatDate(item.expiry_date)}</p>}
-                    {item.document_number && <p>מספר מסמך: {item.document_number}</p>}
-                  </div>
-                </CardContent>
-              </Card>
+                {/* Status */}
+                <div className="flex items-center gap-2 min-w-[80px]">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{status.label}</span>
+                </div>
+
+                {/* Actions (visible on hover) */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteTarget(item)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                  </Button>
+                </div>
+              </div>
             )
           })}
         </div>

@@ -235,55 +235,109 @@ function RecurringTasks() {
           onAction={!search ? openCreate : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-2">
           {filtered.map((task) => {
             const freq = FREQUENCY_MAP[task.frequency] || FREQUENCY_MAP.monthly
             const overdue = isOverdue(task.next_due_date)
+
+            // Gradient colors based on frequency
+            const gradientMap = {
+              monthly: 'from-blue-500 to-blue-600',
+              quarterly: 'from-purple-500 to-purple-600',
+              annually: 'from-amber-400 to-amber-500',
+            }
+            const circleGradient = gradientMap[task.frequency] || gradientMap.monthly
+
+            // Status dot
+            const dotColor = overdue ? 'bg-red-500' : 'bg-emerald-500'
+            const statusLabel = overdue ? 'באיחור' : 'תקין'
+            const statusTextColor = overdue ? 'text-red-700' : 'text-emerald-700'
+
+            // Days until due
+            const daysLeft = task.next_due_date
+              ? Math.ceil((new Date(task.next_due_date) - new Date()) / (1000 * 60 * 60 * 24))
+              : null
+
             return (
-              <Card
+              <div
                 key={task.id}
-                className="cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
                 onClick={() => setDetailTask(task)}
               >
-                <CardContent className="pt-5">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-base font-semibold text-[var(--text-primary)] leading-tight">
-                      {task.title}
-                    </h3>
-                    <RefreshCw className="h-5 w-5 text-[var(--text-muted)] shrink-0" />
-                  </div>
+                {/* Frequency circle */}
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                  <RefreshCw className="h-5 w-5" />
+                </div>
 
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    <Badge variant={freq.variant}>{freq.label}</Badge>
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                      {task.title}
+                    </span>
                     {task.is_required_by_law && (
-                      <Badge variant="info">
+                      <Badge variant="info" className="shrink-0">
                         <Scale className="h-3 w-3 ml-1" />
                         נדרש בחוק
                       </Badge>
                     )}
-                    {overdue && <Badge variant="danger">באיחור</Badge>}
                   </div>
-
-                  <div className="text-xs text-[var(--text-secondary)] space-y-1">
-                    <p>בניין: {buildingMap[task.buildingId]?.name || ''}</p>
-                    {task.next_due_date && (
-                      <p>תאריך ביצוע הבא: {formatDate(task.next_due_date)}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {buildingMap[task.buildingId]?.name || ''}
+                    </span>
+                    {task.notes && (
+                      <span className="text-xs text-[var(--text-muted)] line-clamp-1">{task.notes}</span>
                     )}
                   </div>
+                </div>
 
-                  {/* Mark as done button */}
-                  <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleMarkDone(task)}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      סמן כבוצע
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                {/* Frequency badge */}
+                <Badge variant={freq.variant} className="shrink-0">{freq.label}</Badge>
+
+                {/* Next due date */}
+                <div className="text-left min-w-[100px]">
+                  {task.next_due_date ? (
+                    <>
+                      <div className="text-[13px] font-semibold text-[var(--text-primary)]">
+                        {formatDate(task.next_due_date)}
+                      </div>
+                      <div className={`text-[11px] ${overdue ? 'text-red-500 font-medium' : 'text-[var(--text-muted)]'}`}>
+                        {daysLeft !== null && daysLeft > 0
+                          ? `בעוד ${daysLeft} ימים`
+                          : daysLeft !== null && daysLeft < 0
+                            ? `לפני ${Math.abs(daysLeft)} ימים`
+                            : 'היום'}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-[var(--text-muted)]">לא הוגדר</div>
+                  )}
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center gap-2 min-w-[70px]">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusLabel}</span>
+                </div>
+
+                {/* Actions (visible on hover) */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" onClick={() => handleMarkDone(task)} title="סמן כבוצע">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(task)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteTarget(task)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                  </Button>
+                </div>
+              </div>
             )
           })}
         </div>

@@ -349,71 +349,132 @@ function BuildingAssets() {
           onAction={!search ? openCreate : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-2">
           {filtered.map((item) => {
             const serviceStatus = getServiceStatus(item.nextService)
             const today = new Date()
             today.setHours(0, 0, 0, 0)
             const warrantyExpired = item.warrantyEnd && new Date(item.warrantyEnd) < today
+
+            // Gradient colors based on category
+            const categoryGradientMap = {
+              'מעלית': 'from-blue-500 to-blue-600',
+              'אינסטלציה': 'from-cyan-500 to-cyan-600',
+              'חשמל': 'from-amber-400 to-amber-500',
+              'בטיחות': 'from-red-500 to-red-600',
+              'מיזוג': 'from-sky-400 to-sky-500',
+              'גנרטור': 'from-emerald-500 to-emerald-600',
+              'אחר': 'from-slate-400 to-slate-500',
+            }
+            const circleGradient = categoryGradientMap[item.category] || categoryGradientMap['אחר']
+
+            // Status dot based on service status
+            const dotColorMap = {
+              ok: 'bg-emerald-500',
+              soon: 'bg-amber-500',
+              overdue: 'bg-red-500',
+              unknown: 'bg-slate-400',
+            }
+            const dotColor = dotColorMap[serviceStatus.key] || dotColorMap.unknown
+
+            const textColorMap = {
+              ok: 'text-emerald-700',
+              soon: 'text-amber-700',
+              overdue: 'text-red-700',
+              unknown: 'text-slate-500',
+            }
+            const statusTextColor = textColorMap[serviceStatus.key] || textColorMap.unknown
+
             return (
-              <Card
+              <div
                 key={item.id}
-                className="cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
                 onClick={() => setDetailItem(item)}
               >
-                <CardContent className="pt-5">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-base font-semibold text-[var(--text-primary)] leading-tight">
+                {/* Category circle */}
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                  <Cog className="h-5 w-5" />
+                </div>
+
+                {/* Main info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
                       {item.name}
-                    </h3>
+                    </span>
                     {item.category && (
-                      <Badge variant="default">{item.category}</Badge>
+                      <Badge variant="default" className="shrink-0">{item.category}</Badge>
+                    )}
+                    {warrantyExpired && (
+                      <Badge variant="danger" className="shrink-0">אחריות פגה</Badge>
+                    )}
+                    {item.warrantyEnd && !warrantyExpired && (
+                      <Badge variant="success" className="shrink-0">אחריות בתוקף</Badge>
                     )}
                   </div>
-
-                  {(item.manufacturer || item.model) && (
-                    <p className="text-xs text-[var(--text-secondary)] mb-2">
-                      {[item.manufacturer, item.model].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-
-                  <div className="text-xs text-[var(--text-secondary)] space-y-1 mt-2">
-                    {item.installDate && (
-                      <p>הותקן: {formatDate(item.installDate)}</p>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {buildingMap[item.buildingId]?.name || ''}
+                    </span>
+                    {(item.manufacturer || item.model) && (
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {[item.manufacturer, item.model].filter(Boolean).join(' · ')}
+                      </span>
                     )}
-                    {item.warrantyEnd && (
-                      <div>
-                        {warrantyExpired ? (
-                          <Badge variant="danger">אחריות פגה</Badge>
-                        ) : (
-                          <Badge variant="success">אחריות בתוקף</Badge>
-                        )}
+                  </div>
+                </div>
+
+                {/* Last service date */}
+                <div className="text-left min-w-[90px]">
+                  {item.lastService ? (
+                    <>
+                      <div className="text-[11px] text-[var(--text-muted)]">טיפול אחרון</div>
+                      <div className="text-[13px] font-semibold text-[var(--text-primary)]">
+                        {formatDate(item.lastService)}
                       </div>
-                    )}
-                    {item.lastService && (
-                      <p>טיפול אחרון: {formatDate(item.lastService)}</p>
-                    )}
-                    {item.nextService && (
-                      <p>טיפול הבא: {formatDate(item.nextService)}</p>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-[var(--text-muted)]">ללא טיפול</div>
+                  )}
+                </div>
 
-                  <div className="flex items-center justify-between mt-3">
-                    <Badge variant={serviceStatus.variant}>{serviceStatus.label}</Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleServiceDone(item)
-                      }}
-                    >
-                      <Wrench className="h-3.5 w-3.5" />
-                      סמן כמתוחזק
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                {/* Next service date */}
+                <div className="text-left min-w-[90px]">
+                  {item.nextService ? (
+                    <>
+                      <div className="text-[11px] text-[var(--text-muted)]">טיפול הבא</div>
+                      <div className={`text-[13px] font-semibold ${serviceStatus.key === 'overdue' ? 'text-red-600' : serviceStatus.key === 'soon' ? 'text-amber-600' : 'text-[var(--text-primary)]'}`}>
+                        {formatDate(item.nextService)}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-[var(--text-muted)]">לא הוגדר</div>
+                  )}
+                </div>
+
+                {/* Service status */}
+                <div className="flex items-center gap-2 min-w-[80px]">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{serviceStatus.label}</span>
+                </div>
+
+                {/* Actions (visible on hover) */}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" onClick={() => handleServiceDone(item)} title="סמן כמתוחזק">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteTarget(item)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                  </Button>
+                </div>
+              </div>
             )
           })}
         </div>
