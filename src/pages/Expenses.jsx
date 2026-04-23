@@ -13,6 +13,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Receipt, Plus, Pencil, Trash2, Landmark, Wallet, BarChart2 } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
+import { EXPENSE_CATEGORIES, EXPENSE_GROUPS, findExpenseCategory, CATEGORY_BG_COLORS, LEGACY_EXPENSE_MAP } from '@/lib/categories'
 
 const HEBREW_MONTHS = [
   { value: '01', label: 'ינואר' },
@@ -29,24 +30,17 @@ const HEBREW_MONTHS = [
   { value: '12', label: 'דצמבר' },
 ]
 
-const CATEGORIES = [
-  { value: 'תחזוקה', label: 'תחזוקה' },
-  { value: 'חשמל', label: 'חשמל' },
-  { value: 'מים', label: 'מים' },
-  { value: 'ניקיון', label: 'ניקיון' },
-  { value: 'ביטוח', label: 'ביטוח' },
-  { value: 'משפטי', label: 'משפטי' },
-  { value: 'אחר', label: 'אחר' },
-]
+// Grouped categories for the select dropdown
+const CATEGORIES = EXPENSE_CATEGORIES.map(c => ({ value: c.value, label: c.label }))
 
-const CATEGORY_VARIANTS = {
-  'תחזוקה': 'default',
-  'חשמל': 'warning',
-  'מים': 'info',
-  'ניקיון': 'success',
-  'ביטוח': 'danger',
-  'משפטי': 'default',
-  'אחר': 'default',
+// Resolve category to display (handles legacy values)
+function resolveCategory(val) {
+  if (!val) return null
+  const direct = findExpenseCategory(val)
+  if (direct) return direct
+  const mapped = LEGACY_EXPENSE_MAP[val]
+  if (mapped) return findExpenseCategory(mapped)
+  return { value: val, label: val, color: 'slate', icon: '📋' }
 }
 
 const EMPTY_FORM = {
@@ -304,17 +298,13 @@ function Expenses() {
       ) : (
         <div className="space-y-2">
           {filtered.map((exp) => {
-            const categoryGradients = {
-              'תחזוקה': 'from-blue-500 to-blue-600',
-              'חשמל': 'from-amber-400 to-amber-500',
-              'מים': 'from-cyan-500 to-cyan-600',
-              'ניקיון': 'from-emerald-500 to-emerald-600',
-              'ביטוח': 'from-purple-500 to-purple-600',
-              'משפטי': 'from-red-500 to-red-600',
-              'אחר': 'from-slate-400 to-slate-500',
-            }
-            const gradient = categoryGradients[exp.category] || categoryGradients['אחר']
-            const categoryLetter = exp.category ? exp.category.charAt(0) : '?'
+            const cat = resolveCategory(exp.category)
+            const gradient = cat
+              ? `from-${cat.color}-500 to-${cat.color}-600`
+              : 'from-slate-400 to-slate-500'
+            const categoryIcon = cat?.icon || '📋'
+            const categoryLabel = cat?.label || exp.category || ''
+            const categoryBg = cat ? (CATEGORY_BG_COLORS[cat.color] || '') : ''
 
             return (
               <div
@@ -323,8 +313,8 @@ function Expenses() {
                 onClick={() => setDetailExpense(exp)}
               >
                 {/* Category gradient circle */}
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                  {categoryLetter}
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-lg shrink-0 shadow-sm`}>
+                  {categoryIcon}
                 </div>
 
                 {/* Main info */}
@@ -356,10 +346,10 @@ function Expenses() {
                 </div>
 
                 {/* Category chip */}
-                {exp.category && (
-                  <Badge variant={CATEGORY_VARIANTS[exp.category] || 'default'} className="shrink-0">
-                    {exp.category}
-                  </Badge>
+                {categoryLabel && (
+                  <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-md border ${categoryBg || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
+                    {categoryLabel}
+                  </span>
                 )}
 
                 {/* Date */}

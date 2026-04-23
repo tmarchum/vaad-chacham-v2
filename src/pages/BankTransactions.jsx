@@ -8,9 +8,10 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormSelect } from '@/components/common/FormField'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, EXPENSE_GROUPS, INCOME_GROUPS, findExpenseCategory, findIncomeCategory, CATEGORY_BG_COLORS, CATEGORY_GRADIENTS } from '@/lib/categories'
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Landmark, Link2, X as XIcon,
-  CheckCircle2, AlertCircle, Filter, ChevronDown, Check,
+  CheckCircle2, AlertCircle, Filter, ChevronDown, Check, Tag,
 } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -59,6 +60,7 @@ export default function BankTransactions() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [matchDialog, setMatchDialog] = useState(null) // transaction to match
   const [paymentSummaryOpen, setPaymentSummaryOpen] = useState(false)
+  const [categoryDialog, setCategoryDialog] = useState(null) // transaction to categorize
 
   const monthKey = `${selectedYear}-${selectedMonth}`
 
@@ -356,6 +358,13 @@ export default function BankTransactions() {
     refresh()
   }
 
+  // Assign a category to a transaction
+  const handleSetCategory = async (txId, category) => {
+    await updateTx(txId, { category })
+    setCategoryDialog(null)
+    refresh()
+  }
+
   const yearOptions = useMemo(() => {
     const currentYear = now.getFullYear()
     return Array.from({ length: 5 }, (_, i) => {
@@ -573,6 +582,30 @@ export default function BankTransactions() {
                   </div>
                 )}
 
+                {/* Category chip */}
+                <div className="hidden sm:block shrink-0" onClick={e => e.stopPropagation()}>
+                  {tx.category ? (() => {
+                    const cat = isCredit ? findIncomeCategory(tx.category) : findExpenseCategory(tx.category)
+                    const catBg = cat ? (CATEGORY_BG_COLORS[cat.color] || '') : ''
+                    return (
+                      <button
+                        onClick={() => setCategoryDialog(tx)}
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${catBg || 'bg-slate-50 text-slate-700 border-slate-200'}`}
+                      >
+                        {cat?.icon} {cat?.label || tx.category}
+                      </button>
+                    )
+                  })() : (
+                    <button
+                      onClick={() => setCategoryDialog(tx)}
+                      className="text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded-md border border-dashed border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Tag className="h-3 w-3" />
+                      קטגוריה
+                    </button>
+                  )}
+                </div>
+
                 {/* Amount */}
                 <div className="text-left min-w-[90px]">
                   <p className={`text-[15px] font-bold ${
@@ -686,6 +719,73 @@ export default function BankTransactions() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Category Dialog */}
+      <Dialog open={!!categoryDialog} onOpenChange={() => setCategoryDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>שייך קטגוריה</DialogTitle>
+          </DialogHeader>
+          {categoryDialog && (() => {
+            const isCredit = Number(categoryDialog.credit) > 0
+            const categories = isCredit ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+            const groups = isCredit ? INCOME_GROUPS : EXPENSE_GROUPS
+            return (
+              <div className="space-y-3 mt-2">
+                <div className="p-3 rounded-lg bg-[var(--surface-hover)] text-sm">
+                  <p className="font-medium truncate">{categoryDialog.description}</p>
+                  <p className={`font-bold mt-1 ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {isCredit ? '+' : '-'}{formatCurrency(categoryDialog.credit || categoryDialog.debit)}
+                  </p>
+                </div>
+                {categoryDialog.category && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => handleSetCategory(categoryDialog.id, null)}
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                    הסר קטגוריה
+                  </Button>
+                )}
+                <div className="max-h-72 overflow-y-auto space-y-3">
+                  {groups.map(group => {
+                    const groupCats = categories.filter(c => c.group === group.key)
+                    if (groupCats.length === 0) return null
+                    return (
+                      <div key={group.key}>
+                        <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1.5 px-1">{group.label}</p>
+                        <div className="space-y-0.5">
+                          {groupCats.map(cat => {
+                            const isActive = categoryDialog.category === cat.value
+                            const bgClass = CATEGORY_BG_COLORS[cat.color] || ''
+                            return (
+                              <button
+                                key={cat.value}
+                                onClick={() => handleSetCategory(categoryDialog.id, cat.value)}
+                                className={`w-full flex items-center gap-2.5 p-2 rounded-lg transition-colors text-sm text-right ${
+                                  isActive
+                                    ? `${bgClass} font-medium`
+                                    : 'hover:bg-[var(--surface-hover)]'
+                                }`}
+                              >
+                                <span className="text-base">{cat.icon}</span>
+                                <span className="flex-1">{cat.label}</span>
+                                {isActive && <Check className="h-4 w-4 shrink-0" />}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 

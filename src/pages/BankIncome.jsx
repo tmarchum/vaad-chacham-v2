@@ -9,8 +9,9 @@ import { FormSelect, FormTextarea } from '@/components/common/FormField'
 import { SearchBar } from '@/components/common/SearchBar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
+import { INCOME_CATEGORIES, INCOME_GROUPS, findIncomeCategory, CATEGORY_BG_COLORS } from '@/lib/categories'
 import {
-  ArrowDownLeft, Landmark, Pencil, CheckCircle2,
+  ArrowDownLeft, Landmark, Pencil, CheckCircle2, Tag, Check, X as XIcon,
 } from 'lucide-react'
 
 const HEBREW_MONTHS = [
@@ -33,6 +34,7 @@ export default function BankIncome() {
   const [search, setSearch] = useState('')
   const [editTx, setEditTx] = useState(null)
   const [editNotes, setEditNotes] = useState('')
+  const [categoryDialog, setCategoryDialog] = useState(null)
 
   const monthKey = `${selectedYear}-${selectedMonth}`
 
@@ -79,6 +81,12 @@ export default function BankIncome() {
     if (!editTx) return
     await update(editTx.id, { notes: editNotes })
     setEditTx(null)
+    refresh()
+  }
+
+  const handleSetCategory = async (txId, category) => {
+    await update(txId, { category })
+    setCategoryDialog(null)
     refresh()
   }
 
@@ -201,6 +209,30 @@ export default function BankIncome() {
                   </div>
                 </div>
 
+                {/* Category chip */}
+                <div className="hidden sm:block shrink-0" onClick={e => e.stopPropagation()}>
+                  {tx.category ? (() => {
+                    const cat = findIncomeCategory(tx.category)
+                    const catBg = cat ? (CATEGORY_BG_COLORS[cat.color] || '') : ''
+                    return (
+                      <button
+                        onClick={() => setCategoryDialog(tx)}
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${catBg || 'bg-slate-50 text-slate-700 border-slate-200'}`}
+                      >
+                        {cat?.icon} {cat?.label || tx.category}
+                      </button>
+                    )
+                  })() : (
+                    <button
+                      onClick={() => setCategoryDialog(tx)}
+                      className="text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded-md border border-dashed border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <Tag className="h-3 w-3" />
+                      קטגוריה
+                    </button>
+                  )}
+                </div>
+
                 {/* Amount */}
                 <div className="text-left min-w-[100px]">
                   <p className="text-[15px] font-bold text-emerald-600">
@@ -225,6 +257,66 @@ export default function BankIncome() {
           })}
         </div>
       )}
+
+      {/* Category Dialog */}
+      <Dialog open={!!categoryDialog} onOpenChange={() => setCategoryDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>שייך קטגוריית הכנסה</DialogTitle>
+          </DialogHeader>
+          {categoryDialog && (
+            <div className="space-y-3 mt-2">
+              <div className="p-3 rounded-lg bg-[var(--surface-hover)] text-sm">
+                <p className="font-medium truncate">{categoryDialog.description}</p>
+                <p className="text-emerald-600 font-bold mt-1">+{formatCurrency(categoryDialog.credit)}</p>
+              </div>
+              {categoryDialog.category && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={() => handleSetCategory(categoryDialog.id, null)}
+                >
+                  <XIcon className="h-3.5 w-3.5" />
+                  הסר קטגוריה
+                </Button>
+              )}
+              <div className="max-h-72 overflow-y-auto space-y-3">
+                {INCOME_GROUPS.map(group => {
+                  const groupCats = INCOME_CATEGORIES.filter(c => c.group === group.key)
+                  if (groupCats.length === 0) return null
+                  return (
+                    <div key={group.key}>
+                      <p className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1.5 px-1">{group.label}</p>
+                      <div className="space-y-0.5">
+                        {groupCats.map(cat => {
+                          const isActive = categoryDialog.category === cat.value
+                          const bgClass = CATEGORY_BG_COLORS[cat.color] || ''
+                          return (
+                            <button
+                              key={cat.value}
+                              onClick={() => handleSetCategory(categoryDialog.id, cat.value)}
+                              className={`w-full flex items-center gap-2.5 p-2 rounded-lg transition-colors text-sm text-right ${
+                                isActive
+                                  ? `${bgClass} font-medium`
+                                  : 'hover:bg-[var(--surface-hover)]'
+                              }`}
+                            >
+                              <span className="text-base">{cat.icon}</span>
+                              <span className="flex-1">{cat.label}</span>
+                              {isActive && <Check className="h-4 w-4 shrink-0" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Notes Dialog */}
       <Dialog open={!!editTx} onOpenChange={() => setEditTx(null)}>
