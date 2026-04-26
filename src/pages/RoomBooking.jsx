@@ -398,6 +398,11 @@ export default function RoomBooking() {
         sendEmail(bk.booker_email, `שריון נדחה: ${selectedResource?.name}`,
           buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד.'))
       }
+      // Notify vaad rep about rejection
+      if (selectedResource?.notify_email) {
+        sendEmail(selectedResource.notify_email, `שריון נדחה: ${selectedResource?.name}`,
+          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`))
+      }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נדחה — המשבצת שוחררה', type: 'success' } }))
     } catch (err) {
       console.error('Reject failed:', err)
@@ -413,6 +418,11 @@ export default function RoomBooking() {
       if (bk.booker_email) {
         sendEmail(bk.booker_email, `שריון בוטל: ${selectedResource?.name}`,
           buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.'))
+      }
+      // Notify vaad rep about cancellation
+      if (selectedResource?.notify_email) {
+        sendEmail(selectedResource.notify_email, `שריון בוטל: ${selectedResource?.name}`,
+          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`))
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון בוטל — המשבצת שוחררה', type: 'success' } }))
     } catch (err) {
