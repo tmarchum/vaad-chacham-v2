@@ -270,7 +270,7 @@ export default function RoomBooking() {
             ${(booking.price || 0) > 0 ? `<tr><td ${th}>מחיר</td><td ${td}>${formatCurrency(booking.price)}</td></tr>` : ''}
             ${booking.notes ? `<tr><td ${th}>הערות</td><td ${td}>${booking.notes}</td></tr>` : ''}
           </table>
-          ${approvalNotes ? `<div style="margin-top:16px;padding:12px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;"><strong style="color:#1e40af;">הערות מנציג הוועד:</strong><p style="margin:6px 0 0;color:#1e3a5f;">${approvalNotes}</p></div>` : ''}
+          ${approvalNotes ? `<div style="margin-top:16px;padding:12px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;"><strong style="color:#1e40af;">הנחיות:</strong><p style="margin:6px 0 0;color:#1e3a5f;white-space:pre-line;">${approvalNotes.replace(/\n/g, '<br>')}</p></div>` : ''}
           ${showPayment && resource.payment_url && (booking.price || 0) > 0 ? `<div style="text-align:center;margin-top:16px;"><a href="${resource.payment_url}" style="display:inline-block;padding:12px 32px;background:#10b981;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">לתשלום</a></div>` : ''}
           ${approvalLink ? `<div style="text-align:center;margin-top:16px;"><a href="${approvalLink}" style="display:inline-block;padding:12px 32px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">כניסה לאישור/דחייה</a></div>` : ''}
         </div>
@@ -400,7 +400,10 @@ export default function RoomBooking() {
       await refreshBookings()
       if (bk.booker_email) {
         const unitNum = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
-        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.', { showPayment: true, unitNumber: unitNum, approvalNotes: notes, buildingName: selectedBuilding?.name || '' })
+        // Combine fixed approval message from resource settings + one-time notes
+        const fixedMsg = selectedResource?.approval_message || ''
+        const allNotes = [fixedMsg, notes].filter(Boolean).join('\n')
+        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.', { showPayment: true, unitNumber: unitNum, approvalNotes: allNotes, buildingName: selectedBuilding?.name || '' })
         sendEmail(bk.booker_email, `שריון מאושר: ${selectedResource?.name}`, html)
       }
       setApproveDialog(null)
@@ -463,10 +466,10 @@ export default function RoomBooking() {
       setResourceForm({
         name: '', description: '', price_morning: 0, price_evening: 0, price_full_day: 0,
         payment_url: '', max_advance_days: 30, residents_only: true, notify_email: '',
-        custom_questions: [], rental_terms: '',
+        custom_questions: [], rental_terms: '', approval_message: '',
       })
     } else {
-      setResourceForm({ ...resource, custom_questions: resource.custom_questions || [], rental_terms: resource.rental_terms || '' })
+      setResourceForm({ ...resource, custom_questions: resource.custom_questions || [], rental_terms: resource.rental_terms || '', approval_message: resource.approval_message || '' })
     }
     setResourceDialog(resource)
   }
@@ -487,6 +490,7 @@ export default function RoomBooking() {
         notify_email: resourceForm.notify_email || '',
         custom_questions: resourceForm.custom_questions || [],
         rental_terms: resourceForm.rental_terms || '',
+        approval_message: resourceForm.approval_message || '',
       }
       if (resourceDialog === 'new') {
         data.blocked_dates = []; data.active = true
@@ -1039,6 +1043,14 @@ export default function RoomBooking() {
               value={resourceForm.rental_terms || ''}
               onChange={(e) => setResourceForm(f => ({ ...f, rental_terms: e.target.value }))}
               placeholder="פרטי הכללים, שעות, אחריות, ניקיון, ציוד..."
+            />
+
+            {/* Fixed approval message */}
+            <FormTextarea
+              label="הנחיות קבועות לאחר אישור (יישלחו בכל מייל אישור)"
+              value={resourceForm.approval_message || ''}
+              onChange={(e) => setResourceForm(f => ({ ...f, approval_message: e.target.value }))}
+              placeholder="למשל: יש להחזיר מפתח עד 23:00, לנקות בסיום, לא לחנות בכניסה..."
             />
 
             {/* Custom questions */}
