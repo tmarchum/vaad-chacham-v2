@@ -359,8 +359,8 @@ export default function RoomBooking() {
       setBookingDialog(null)
       refreshBookings()
 
-      // Show payment redirect
-      if (price > 0 && selectedResource.payment_url) {
+      // Redirect to payment immediately
+      if (selectedResource.payment_url) {
         setPaymentRedirect({ url: selectedResource.payment_url })
       } else {
         window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נשלח — ממתין לאישור הוועד', type: 'success' } }))
@@ -377,9 +377,8 @@ export default function RoomBooking() {
   const handleApprove = async (bk) => {
     await updateBooking(bk.id, { status: 'approved' })
     refreshBookings()
-    // Send approval email to booker
     if (bk.booker_email) {
-      const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.', true)
+      const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.')
       await sendEmail(bk.booker_email, `שריון מאושר: ${selectedResource?.name}`, html)
     }
     window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון אושר ונשלח מייל למזמין', type: 'success' } }))
@@ -1040,11 +1039,10 @@ export default function RoomBooking() {
                 <Clock className="h-8 w-8 text-white" />
               </div>
               <p className="text-lg font-bold">השריון נשלח לאישור!</p>
-              <p className="text-sm text-[var(--text-secondary)]">בינתיים, ניתן לבצע את התשלום</p>
+              <p className="text-sm text-[var(--text-secondary)]">יש לבצע תשלום כדי להשלים את התהליך</p>
               <Button onClick={() => { window.open(paymentRedirect.url, '_blank'); setPaymentRedirect(null) }} className="w-full gap-2">
-                <ExternalLink className="h-4 w-4" />עבור לתשלום
+                <ExternalLink className="h-4 w-4" />לתשלום
               </Button>
-              <Button variant="outline" onClick={() => setPaymentRedirect(null)} className="w-full">אשלם אחרי האישור</Button>
             </div>
           )}
         </DialogContent>
