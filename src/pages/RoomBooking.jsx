@@ -19,9 +19,9 @@ import {
 
 // ── Slot definitions ─────────────────────────────────────────────
 const SLOTS = {
-  morning:  { label: 'בוקר (08:00-14:00)',    short: 'בוקר',  icon: Sun,     color: 'amber' },
-  evening:  { label: 'ערב (16:00-23:00)',     short: 'ערב',   icon: Moon,    color: 'indigo' },
-  full_day: { label: 'יממה — שבת/חג (24 שעות)', short: 'יממה', icon: SunMoon, color: 'purple' },
+  morning:  { label: 'בוקר (08:00-14:00)',    short: 'בוקר 08-14',  icon: Sun,     color: 'amber' },
+  evening:  { label: 'ערב (16:00-23:00)',     short: 'ערב 16-23',   icon: Moon,    color: 'indigo' },
+  full_day: { label: 'יממה — שבת/חג (24 שעות)', short: 'יממה 24שע',  icon: SunMoon, color: 'purple' },
 }
 
 const HEBREW_MONTHS = [
@@ -633,9 +633,9 @@ export default function RoomBooking() {
                     {day.isSaturday && !holidayName && <p className="text-[9px] text-blue-500 mb-1">שבת</p>}
 
                     <div className="flex flex-wrap gap-0.5 mt-auto">
-                      {day.hasFullDay && <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">יממה</span>}
-                      {!day.hasFullDay && day.hasMorning && <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">בוקר</span>}
-                      {!day.hasFullDay && day.hasEvening && <span className="text-[8px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">ערב</span>}
+                      {day.hasFullDay && <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">יממה 24שע</span>}
+                      {!day.hasFullDay && day.hasMorning && <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">08-14</span>}
+                      {!day.hasFullDay && day.hasEvening && <span className="text-[8px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">16-23</span>}
                       {pendingBookings.length > 0 && <span className="text-[8px] px-1 py-0.5 rounded bg-amber-50 text-amber-600">
                         <Clock className="h-2.5 w-2.5 inline" />
                       </span>}
@@ -649,9 +649,9 @@ export default function RoomBooking() {
           {/* Legend */}
           <div className="flex flex-wrap gap-4 text-xs text-[var(--text-secondary)]">
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-[var(--border)]" /> פנוי</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100" /> בוקר תפוס</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-100" /> ערב תפוס</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-100" /> יממה</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100" /> בוקר 08:00-14:00</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-100" /> ערב 16:00-23:00</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-100" /> יממה 24 שעות</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-50 border border-blue-200" /> שבת / חג</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-50 border border-red-200" /> חסום</span>
             <span className="flex items-center gap-1.5"><Clock className="h-3 w-3 text-amber-500" /> ממתין לאישור</span>
