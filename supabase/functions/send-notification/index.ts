@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
+const GMAIL_USER = Deno.env.get("GMAIL_USER") || "";
+const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") || "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -29,8 +32,37 @@ serve(async (req) => {
 
     let sendResult = { success: false, error: "" };
 
-    if (RESEND_API_KEY) {
-      // Send via Resend
+    // Priority 1: Gmail SMTP
+    if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+      try {
+        const client = new SMTPClient({
+          connection: {
+            hostname: "smtp.gmail.com",
+            port: 465,
+            tls: true,
+            auth: {
+              username: GMAIL_USER,
+              password: GMAIL_APP_PASSWORD,
+            },
+          },
+        });
+
+        await client.send({
+          from: `וועד+ <${GMAIL_USER}>`,
+          to: to,
+          subject,
+          content: "auto",
+          html,
+        });
+
+        await client.close();
+        sendResult.success = true;
+      } catch (gmailErr) {
+        sendResult.error = `gmail_error: ${gmailErr.message}`;
+      }
+    }
+    // Priority 2: Resend API (fallback)
+    else if (RESEND_API_KEY) {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -38,7 +70,7 @@ serve(async (req) => {
           Authorization: `Bearer ${RESEND_API_KEY}`,
         },
         body: JSON.stringify({
-          from: "ועד חכם <vaad@resend.dev>",
+          from: "וועד+ <vaad@resend.dev>",
           to: [to],
           subject,
           html,
@@ -49,10 +81,11 @@ serve(async (req) => {
         sendResult.success = true;
       } else {
         const err = await res.text();
-        sendResult.error = err;
+        sendResult.error = `resend_error: ${err}`;
       }
-    } else {
-      // No email provider configured - just log
+    }
+    // No provider
+    else {
       sendResult.success = true;
       sendResult.error = "no_provider_logged_only";
     }
