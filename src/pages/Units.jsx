@@ -13,7 +13,7 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { formatCurrency, calcUnitFee, cn } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FilterPills } from '@/components/common/FilterPills'
-import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users } from 'lucide-react'
+import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays } from 'lucide-react'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
 function ListField({ label, items, onAdd, onRemove, placeholder }) {
@@ -187,6 +187,10 @@ function Units() {
   const [saving, setSaving] = useState(false)
   const [detailUnit, setDetailUnit] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [archiveDialog, setArchiveDialog] = useState(null)
+  const [archiveDate, setArchiveDate] = useState('')
+  const [archiveSelection, setArchiveSelection] = useState({})
+  const [archiving, setArchiving] = useState(false)
 
   // IDs of residents existing in DB before edit (to detect deletions)
   const originalPersonIds = useRef([])
@@ -203,10 +207,24 @@ function Units() {
     [buildings]
   )
 
-  // Map unitId → residents array (from DB)
+  // Map unitId → active residents (not archived)
   const residentsByUnit = useMemo(() => {
     const m = {}
     allResidents.forEach(r => {
+      if (r.archived) return
+      const uid = r.unit_id || r.unitId
+      if (!uid) return
+      if (!m[uid]) m[uid] = []
+      m[uid].push(r)
+    })
+    return m
+  }, [allResidents])
+
+  // Map unitId → archived residents (history)
+  const archivedByUnit = useMemo(() => {
+    const m = {}
+    allResidents.forEach(r => {
+      if (!r.archived) return
       const uid = r.unit_id || r.unitId
       if (!uid) return
       if (!m[uid]) m[uid] = []
@@ -463,6 +481,57 @@ function Units() {
       setFormOpen(false)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ── Archive residents ────────────────────────────────────────────────────
+  const openArchiveDialog = (unit) => {
+    const residents = residentsByUnit[unit.id] || []
+    if (residents.length === 0) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'אין דיירים פעילים לארכיון', type: 'error' } }))
+      return
+    }
+    const unitType = getUnitType(unit)
+    const selection = {}
+    residents.forEach(r => {
+      // For rented units, pre-select tenants only (owners stay)
+      if (unitType === 'rented' && (r.resident_type || r.residentType) === 'owner') {
+        selection[r.id] = false
+      } else {
+        selection[r.id] = true
+      }
+    })
+    setArchiveSelection(selection)
+    setArchiveDate(new Date().toISOString().split('T')[0])
+    setArchiveDialog(unit)
+  }
+
+  const handleArchiveResidents = async () => {
+    const selectedIds = Object.entries(archiveSelection)
+      .filter(([, selected]) => selected)
+      .map(([id]) => id)
+    if (selectedIds.length === 0) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'לא נבחרו דיירים', type: 'error' } }))
+      return
+    }
+    setArchiving(true)
+    try {
+      for (const id of selectedIds) {
+        await updateResident(id, {
+          archived: true,
+          move_out_date: archiveDate || new Date().toISOString().split('T')[0],
+          is_primary: false,
+        })
+      }
+      setArchiveDialog(null)
+      setArchiveDate('')
+      setArchiveSelection({})
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'הדיירים הועברו לארכיון בהצלחה', type: 'success' } }))
+    } catch (err) {
+      console.error('Archive failed:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה בארכיון: ${err.message}`, type: 'error' } }))
+    } finally {
+      setArchiving(false)
     }
   }
 
@@ -736,9 +805,51 @@ function Units() {
             <DetailRow label="טלפון לחניה" value={pgPhones.length ? pgPhones.join(', ') : undefined} />
             <DetailRow label="הערות" value={detailUnit.notes} />
 
+            {/* ── Archived residents history ─────────────────────────── */}
+            {(() => {
+              const archived = archivedByUnit[detailUnit.id] || []
+              if (archived.length === 0) return null
+              return (
+                <div className="pt-3 pb-1">
+                  <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <History className="h-3.5 w-3.5" />
+                    ארכיון דיירים ({archived.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {archived
+                      .sort((a, b) => (b.move_out_date || '').localeCompare(a.move_out_date || ''))
+                      .map(r => (
+                      <div key={r.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-700">{fullName(r)}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
+                            {(r.resident_type || r.residentType) === 'tenant' ? 'שוכר' : 'בעלים'}
+                          </span>
+                        </div>
+                        <div className="flex gap-3 mt-1 text-xs text-slate-500">
+                          {r.move_in_date && <span>כניסה: {new Date(r.move_in_date).toLocaleDateString('he-IL')}</span>}
+                          {r.move_out_date && <span>יציאה: {new Date(r.move_out_date).toLocaleDateString('he-IL')}</span>}
+                        </div>
+                        {r.phone && <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</div>}
+                        {r.email && <div className="text-xs text-slate-500">{r.email}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
             <div className="flex gap-2 pt-4">
               <Button variant="outline" size="sm" onClick={() => openEdit(detailUnit)}>
                 <Pencil className="h-3.5 w-3.5" /> עריכה
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                onClick={() => { setDetailUnit(null); openArchiveDialog(detailUnit) }}
+              >
+                <Archive className="h-3.5 w-3.5" /> העבר דיירים לארכיון
               </Button>
               <Button
                 variant="destructive"
@@ -759,6 +870,106 @@ function Units() {
         onConfirm={handleDelete}
         itemName={deleteTarget ? `דירה ${deleteTarget.number || deleteTarget.unit_number}` : ''}
       />
+
+      {/* ── Archive Dialog ───────────────────────────────────────────────────── */}
+      <Dialog open={!!archiveDialog} onOpenChange={() => setArchiveDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Archive className="h-5 w-5 text-amber-500" />
+              העברת דיירים לארכיון — דירה {archiveDialog?.number || archiveDialog?.unit_number}
+            </DialogTitle>
+          </DialogHeader>
+          {archiveDialog && (() => {
+            const residents = residentsByUnit[archiveDialog.id] || []
+            const unitType = getUnitType(archiveDialog)
+            const hasOwners = unitType === 'rented' && residents.some(r => (r.resident_type || r.residentType) === 'owner')
+            const selectedCount = Object.values(archiveSelection).filter(Boolean).length
+
+            return (
+              <div className="space-y-4 mt-1">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  הדיירים שייבחרו יועברו לארכיון הדירה. כל הנתונים המקושרים (חובות, תקלות, שריונים) יישמרו בהיסטוריה.
+                </p>
+
+                {/* Move-out date */}
+                <div>
+                  <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5">
+                    <CalendarDays className="h-4 w-4 text-slate-500" />
+                    תאריך יציאה
+                  </label>
+                  <input
+                    type="date"
+                    value={archiveDate}
+                    onChange={e => setArchiveDate(e.target.value)}
+                    className="w-full h-9 rounded-lg border border-[var(--border)] bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                  />
+                </div>
+
+                {/* Resident checkboxes */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">בחר דיירים להעברה:</label>
+                  {residents.map(r => {
+                    const isOwner = unitType === 'rented' && (r.resident_type || r.residentType) === 'owner'
+                    return (
+                      <label key={r.id} className={cn(
+                        'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
+                        archiveSelection[r.id]
+                          ? 'bg-amber-50 border-amber-200'
+                          : 'bg-white border-[var(--border)] hover:border-slate-300'
+                      )}>
+                        <input
+                          type="checkbox"
+                          checked={!!archiveSelection[r.id]}
+                          onChange={e => setArchiveSelection(prev => ({ ...prev, [r.id]: e.target.checked }))}
+                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{fullName(r)}</span>
+                            <span className={cn('text-[10px] px-1.5 py-0.5 rounded border',
+                              isOwner ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                            )}>
+                              {isOwner ? 'בעלים' : (unitType === 'rented' ? 'שוכר' : 'דייר')}
+                            </span>
+                            {(r.is_primary || r.isPrimary) && (
+                              <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
+                                <Star className="h-3 w-3 fill-amber-400" />ראשי
+                              </span>
+                            )}
+                          </div>
+                          {r.phone && <span className="text-xs text-slate-500">{r.phone}</span>}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+
+                {hasOwners && !Object.entries(archiveSelection).some(([id, sel]) => {
+                  const r = residents.find(res => res.id === id)
+                  return sel && (r?.resident_type || r?.residentType) === 'owner'
+                }) && (
+                  <p className="text-xs text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                    הבעלים לא נבחרו — הם יישארו משויכים לדירה. בתקופת הפער עד כניסת שוכר חדש, הדירה תהיה תחת אחריות הבעלים.
+                  </p>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    onClick={handleArchiveResidents}
+                    disabled={archiving || selectedCount === 0 || !archiveDate}
+                    className="flex-1 gap-1.5 bg-amber-600 hover:bg-amber-700"
+                  >
+                    <Archive className="h-4 w-4" />
+                    {archiving ? 'מעביר...' : `העבר ${selectedCount} דיירים לארכיון`}
+                  </Button>
+                  <Button variant="outline" onClick={() => setArchiveDialog(null)}>ביטול</Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Create / Edit Dialog ─────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

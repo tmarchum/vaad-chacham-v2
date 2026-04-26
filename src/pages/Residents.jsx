@@ -56,6 +56,7 @@ function Residents() {
   const residentsByUnit = useMemo(() => {
     const map = {}
     allResidents.forEach((r) => {
+      if (r.archived) return // skip archived residents
       if (!map[r.unitId]) map[r.unitId] = []
       map[r.unitId].push(r)
     })
