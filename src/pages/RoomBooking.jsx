@@ -375,35 +375,50 @@ export default function RoomBooking() {
 
   // Vaad approves a booking
   const handleApprove = async (bk) => {
-    await updateBooking(bk.id, { status: 'approved' })
-    refreshBookings()
-    if (bk.booker_email) {
-      const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.')
-      await sendEmail(bk.booker_email, `שריון מאושר: ${selectedResource?.name}`, html)
+    try {
+      await updateBooking(bk.id, { status: 'approved' })
+      await refreshBookings()
+      if (bk.booker_email) {
+        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.')
+        sendEmail(bk.booker_email, `שריון מאושר: ${selectedResource?.name}`, html)
+      }
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון אושר', type: 'success' } }))
+    } catch (err) {
+      console.error('Approve failed:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה באישור: ${err.message}`, type: 'error' } }))
     }
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון אושר ונשלח מייל למזמין', type: 'success' } }))
   }
 
   // Vaad rejects a booking — slot freed
   const handleReject = async (bk) => {
-    await updateBooking(bk.id, { status: 'rejected' })
-    refreshBookings()
-    if (bk.booker_email) {
-      const html = buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד. ניתן ליצור קשר לפרטים נוספים.')
-      await sendEmail(bk.booker_email, `שריון נדחה: ${selectedResource?.name}`, html)
+    try {
+      await updateBooking(bk.id, { status: 'rejected' })
+      await refreshBookings()
+      if (bk.booker_email) {
+        sendEmail(bk.booker_email, `שריון נדחה: ${selectedResource?.name}`,
+          buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד.'))
+      }
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נדחה — המשבצת שוחררה', type: 'success' } }))
+    } catch (err) {
+      console.error('Reject failed:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה בדחייה: ${err.message}`, type: 'error' } }))
     }
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נדחה — המשבצת שוחררה', type: 'success' } }))
   }
 
   // Cancel an approved/pending booking — slot freed
   const handleCancel = async (bk) => {
-    await updateBooking(bk.id, { status: 'cancelled' })
-    refreshBookings()
-    if (bk.booker_email) {
-      const html = buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.')
-      await sendEmail(bk.booker_email, `שריון בוטל: ${selectedResource?.name}`, html)
+    try {
+      await updateBooking(bk.id, { status: 'cancelled' })
+      await refreshBookings()
+      if (bk.booker_email) {
+        sendEmail(bk.booker_email, `שריון בוטל: ${selectedResource?.name}`,
+          buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.'))
+      }
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון בוטל — המשבצת שוחררה', type: 'success' } }))
+    } catch (err) {
+      console.error('Cancel failed:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה בביטול: ${err.message}`, type: 'error' } }))
     }
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון בוטל — המשבצת שוחררה', type: 'success' } }))
   }
 
   // ── Resource CRUD ────────────────────────────────────────────
