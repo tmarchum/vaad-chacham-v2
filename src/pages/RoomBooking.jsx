@@ -101,25 +101,26 @@ export default function RoomBooking() {
     [allUnits, selectedBuilding]
   )
 
-  // Primary resident per unit
+  // Primary resident per unit (residents link to building via unit_id, not building_id)
   const residentMap = useMemo(() => {
     const map = {}
-    // First pass: set any resident
+    const unitIds = new Set(buildingUnits.map(u => u.id))
+    // First pass: set any resident for units in this building
     allResidents.forEach(r => {
-      if (r.building_id !== selectedBuilding?.id) return
+      if (!unitIds.has(r.unit_id)) return
       if (!map[r.unit_id]) {
         map[r.unit_id] = { name: `${r.first_name || ''} ${r.last_name || ''}`.trim(), email: r.email, phone: r.phone }
       }
     })
-    // Second pass: override with primary
+    // Second pass: override with primary resident
     allResidents.forEach(r => {
-      if (r.building_id !== selectedBuilding?.id) return
+      if (!unitIds.has(r.unit_id)) return
       if (r.is_primary) {
         map[r.unit_id] = { name: `${r.first_name || ''} ${r.last_name || ''}`.trim(), email: r.email, phone: r.phone }
       }
     })
     return map
-  }, [allResidents, selectedBuilding])
+  }, [allResidents, buildingUnits])
 
   // Active bookings (not cancelled or rejected) — these block slots
   const activeBookings = useMemo(() => {
