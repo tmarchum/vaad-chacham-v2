@@ -8,7 +8,7 @@ import {
   Wrench, Store, CalendarClock, ShieldCheck, Bot,
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, Menu, X, ChevronDown, ChevronLeft, ClipboardList,
-  Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck,
+  Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
 } from 'lucide-react'
 
 const NAV_SECTIONS = [
@@ -20,6 +20,7 @@ const NAV_SECTIONS = [
       { to: '/buildings',     label: 'בניינים',        icon: Building2 },
       { to: '/units',         label: 'דירות',          icon: Home },
       { to: '/residents',     label: 'דיירים',         icon: Users },
+      { to: '/room-booking', label: 'שריון חדרים',    icon: DoorOpen },
     ],
   },
   {

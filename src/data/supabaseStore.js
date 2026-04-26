@@ -30,6 +30,8 @@ const TABLE_MAP = {
   profiles: 'profiles',
   buildingMemberships: 'building_memberships',
   unitFieldDefinitions: 'unit_field_definitions',
+  bookingResources: 'booking_resources',
+  bookings: 'bookings',
 }
 
 // Normalize a DB row to app format (snake_case → app fields)
