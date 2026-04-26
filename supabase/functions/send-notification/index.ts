@@ -4,7 +4,6 @@ import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const GMAIL_USER = Deno.env.get("GMAIL_USER") || "";
 const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD") || "";
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -62,40 +61,9 @@ serve(async (req) => {
         sendResult.provider = "gmail_failed";
       }
     }
-    // Priority 2: Resend API (fallback)
-    else if (RESEND_API_KEY) {
-      try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${RESEND_API_KEY}`,
-          },
-          body: JSON.stringify({
-            from: "וועד+ <vaad@resend.dev>",
-            to: [to],
-            subject,
-            html,
-          }),
-        });
-
-        if (res.ok) {
-          sendResult.success = true;
-          sendResult.provider = "resend";
-        } else {
-          const err = await res.text();
-          sendResult.error = `resend_error: ${err}`;
-          sendResult.provider = "resend_failed";
-        }
-      } catch (resendErr: any) {
-        sendResult.error = `resend_error: ${resendErr.message}`;
-        sendResult.provider = "resend_failed";
-      }
-    }
-    // No provider
+    // No Gmail credentials configured
     else {
-      sendResult.success = true;
-      sendResult.error = "no_provider_logged_only";
+      sendResult.error = "no_gmail_credentials";
       sendResult.provider = "none";
     }
 
