@@ -10,6 +10,7 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
+import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, calcUnitFee, cn } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FilterPills } from '@/components/common/FilterPills'
@@ -170,6 +171,7 @@ function fullName(p) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 function Units() {
   const { buildings, selectedBuilding } = useBuildingContext()
+  const { isCommittee } = useAuth()
   const { data: allUnits, create, update, remove } = useCollection('units')
   const {
     data: allResidents,
@@ -843,14 +845,16 @@ function Units() {
               <Button variant="outline" size="sm" onClick={() => openEdit(detailUnit)}>
                 <Pencil className="h-3.5 w-3.5" /> עריכה
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
-                onClick={() => { setDetailUnit(null); openArchiveDialog(detailUnit) }}
-              >
-                <Archive className="h-3.5 w-3.5" /> העבר דיירים לארכיון
-              </Button>
+              {isCommittee && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                  onClick={() => { setDetailUnit(null); openArchiveDialog(detailUnit) }}
+                >
+                  <Archive className="h-3.5 w-3.5" /> העבר דיירים לארכיון
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 size="sm"
