@@ -72,6 +72,8 @@ export default function RoomBooking() {
   const [blockDate, setBlockDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [paymentRedirect, setPaymentRedirect] = useState(null)
+  const [approveDialog, setApproveDialog] = useState(null) // { bk } — booking being approved
+  const [approveNotes, setApproveNotes] = useState('')
   // Custom questions editor
   const [questionText, setQuestionText] = useState('')
   const [questionType, setQuestionType] = useState('text')
@@ -242,7 +244,7 @@ export default function RoomBooking() {
 
   const HEBREW_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
 
-  const buildEmailHtml = (resource, booking, statusMessage, { showPayment = false, unitNumber = '', approvalLink = '' } = {}) => {
+  const buildEmailHtml = (resource, booking, statusMessage, { showPayment = false, unitNumber = '', approvalLink = '', approvalNotes = '', buildingName = '' } = {}) => {
     const bookingDate = new Date(booking.booking_date || booking.dk)
     const dateStr = bookingDate.toLocaleDateString('he-IL')
     const dayName = HEBREW_DAYS[bookingDate.getDay()]
@@ -253,10 +255,12 @@ export default function RoomBooking() {
       <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
         <div style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;padding:20px;border-radius:12px 12px 0 0;">
           <h2 style="margin:0;">שריון ${resource.name}</h2>
+          ${buildingName ? `<p style="margin:4px 0 0;opacity:0.75;font-size:14px;">${buildingName}</p>` : ''}
           <p style="margin:8px 0 0;opacity:0.9;">${statusMessage}</p>
         </div>
         <div style="background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
           <table style="width:100%;border-collapse:collapse;">
+            <tr><td ${th}>בניין</td><td ${td}>${buildingName || ''}</td></tr>
             <tr><td ${th}>תאריך</td><td ${td}>יום ${dayName}, ${dateStr}</td></tr>
             <tr><td ${th}>משבצת</td><td ${td}>${slotLabel}</td></tr>
             <tr><td ${th}>שם המזמין</td><td ${td}>${booking.booker_name || booking.bookerName || ''}</td></tr>
@@ -266,6 +270,7 @@ export default function RoomBooking() {
             ${(booking.price || 0) > 0 ? `<tr><td ${th}>מחיר</td><td ${td}>${formatCurrency(booking.price)}</td></tr>` : ''}
             ${booking.notes ? `<tr><td ${th}>הערות</td><td ${td}>${booking.notes}</td></tr>` : ''}
           </table>
+          ${approvalNotes ? `<div style="margin-top:16px;padding:12px 16px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;"><strong style="color:#1e40af;">הערות מנציג הוועד:</strong><p style="margin:6px 0 0;color:#1e3a5f;">${approvalNotes}</p></div>` : ''}
           ${showPayment && resource.payment_url && (booking.price || 0) > 0 ? `<div style="text-align:center;margin-top:16px;"><a href="${resource.payment_url}" style="display:inline-block;padding:12px 32px;background:#10b981;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">לתשלום</a></div>` : ''}
           ${approvalLink ? `<div style="text-align:center;margin-top:16px;"><a href="${approvalLink}" style="display:inline-block;padding:12px 32px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">כניסה לאישור/דחייה</a></div>` : ''}
         </div>
@@ -357,11 +362,12 @@ export default function RoomBooking() {
 
       // Email to booker — pending approval
       const unitNum = isGuest ? '' : (buildingUnits.find(u => u.id === unitId)?.number || '')
-      const pendingHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'השריון שלך התקבל וממתין לאישור נציג הוועד. תקבל עדכון במייל כאשר השריון יאושר או יידחה.', { unitNumber: unitNum })
+      const bldName = selectedBuilding?.name || ''
+      const pendingHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'השריון שלך התקבל וממתין לאישור נציג הוועד. תקבל עדכון במייל כאשר השריון יאושר או יידחה.', { unitNumber: unitNum, buildingName: bldName })
       if (email) await sendEmail(email, `שריון ${selectedResource.name} — ממתין לאישור`, pendingHtml)
       // Email to vaad rep
       if (selectedResource.notify_email) {
-        const vaadHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'שריון חדש ממתין לאישורך. היכנס למערכת לאישור או דחייה.', { unitNumber: unitNum, approvalLink: `${window.location.origin}/room-booking` })
+        const vaadHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'שריון חדש ממתין לאישורך. היכנס למערכת לאישור או דחייה.', { unitNumber: unitNum, approvalLink: `${window.location.origin}/room-booking`, buildingName: bldName })
         await sendEmail(selectedResource.notify_email, `שריון חדש ממתין לאישור: ${selectedResource.name}`, vaadHtml)
       }
 
@@ -382,16 +388,22 @@ export default function RoomBooking() {
     }
   }
 
-  // Vaad approves a booking
-  const handleApprove = async (bk) => {
+  // Vaad approves a booking — opens notes dialog first
+  const openApproveDialog = (bk) => {
+    setApproveNotes('')
+    setApproveDialog(bk)
+  }
+
+  const handleApprove = async (bk, notes = '') => {
     try {
       await updateBooking(bk.id, { status: 'approved' })
       await refreshBookings()
       if (bk.booker_email) {
         const unitNum = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
-        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.', { showPayment: true, unitNumber: unitNum })
+        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.', { showPayment: true, unitNumber: unitNum, approvalNotes: notes, buildingName: selectedBuilding?.name || '' })
         sendEmail(bk.booker_email, `שריון מאושר: ${selectedResource?.name}`, html)
       }
+      setApproveDialog(null)
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון אושר', type: 'success' } }))
     } catch (err) {
       console.error('Approve failed:', err)
@@ -405,14 +417,15 @@ export default function RoomBooking() {
       await updateBooking(bk.id, { status: 'rejected' })
       await refreshBookings()
       const unitNumR = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
+      const bldNameR = selectedBuilding?.name || ''
       if (bk.booker_email) {
         sendEmail(bk.booker_email, `שריון נדחה: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד.', { unitNumber: unitNumR }))
+          buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד.', { unitNumber: unitNumR, buildingName: bldNameR }))
       }
       // Notify vaad rep about rejection
       if (selectedResource?.notify_email) {
         sendEmail(selectedResource.notify_email, `שריון נדחה: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`, { unitNumber: unitNumR }))
+          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`, { unitNumber: unitNumR, buildingName: bldNameR }))
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נדחה — המשבצת שוחררה', type: 'success' } }))
     } catch (err) {
@@ -427,14 +440,15 @@ export default function RoomBooking() {
       await updateBooking(bk.id, { status: 'cancelled' })
       await refreshBookings()
       const unitNumC = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
+      const bldNameC = selectedBuilding?.name || ''
       if (bk.booker_email) {
         sendEmail(bk.booker_email, `שריון בוטל: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.', { unitNumber: unitNumC }))
+          buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.', { unitNumber: unitNumC, buildingName: bldNameC }))
       }
       // Notify vaad rep about cancellation
       if (selectedResource?.notify_email) {
         sendEmail(selectedResource.notify_email, `שריון בוטל: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC }))
+          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון בוטל — המשבצת שוחררה', type: 'success' } }))
     } catch (err) {
@@ -711,7 +725,7 @@ export default function RoomBooking() {
                 </h3>
                 {pendingList.map(bk => (
                   <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap}
-                    onApprove={() => handleApprove(bk)} onReject={() => handleReject(bk)} onCancel={() => handleCancel(bk)}
+                    onApprove={() => openApproveDialog(bk)} onReject={() => handleReject(bk)} onCancel={() => handleCancel(bk)}
                     showActions="approve" />
                 ))}
               </div>
@@ -1059,6 +1073,42 @@ export default function RoomBooking() {
               <Button variant="outline" onClick={() => setResourceDialog(null)}>ביטול</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════════════════════════════════════════════════════════ */}
+      {/* APPROVE WITH NOTES DIALOG                                 */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      <Dialog open={!!approveDialog} onOpenChange={() => setApproveDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Check className="h-5 w-5 text-emerald-500" />אישור שריון</DialogTitle>
+          </DialogHeader>
+          {approveDialog && (
+            <div className="space-y-4 mt-2">
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
+                <p><strong>{approveDialog.booker_name}</strong> — {new Date(approveDialog.booking_date).toLocaleDateString('he-IL')} — {SLOTS[approveDialog.slot]?.short || approveDialog.slot}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">הערות לדייר (יישלחו במייל האישור)</label>
+                <textarea
+                  value={approveNotes}
+                  onChange={e => setApproveNotes(e.target.value)}
+                  placeholder="למשל: יש להחזיר מפתח עד 23:00, לא לחנות בכניסה..."
+                  className="w-full h-24 rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  dir="rtl"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => handleApprove(approveDialog, approveNotes)} className="flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                  <Check className="h-4 w-4" />אשר ושלח
+                </Button>
+                <Button onClick={() => setApproveDialog(null)} variant="outline" className="gap-1.5">
+                  ביטול
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
