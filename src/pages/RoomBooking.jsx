@@ -363,12 +363,12 @@ export default function RoomBooking() {
       // Email to booker — pending approval
       const unitNum = isGuest ? '' : (buildingUnits.find(u => u.id === unitId)?.number || '')
       const bldName = selectedBuilding?.name || ''
-      const pendingHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'השריון שלך התקבל וממתין לאישור נציג הוועד. תקבל עדכון במייל כאשר השריון יאושר או יידחה.', { unitNumber: unitNum, buildingName: bldName })
-      if (email) await sendEmail(email, `שריון ${selectedResource.name} — ממתין לאישור`, pendingHtml)
+      const pendingHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, `${name}, השריון שלך התקבל וממתין לאישור נציג הוועד. תקבל עדכון במייל כאשר השריון יאושר או יידחה.`, { unitNumber: unitNum, buildingName: bldName })
+      if (email) await sendEmail(email, `${bldName} — שריון ${selectedResource.name} — ממתין לאישור`, pendingHtml)
       // Email to vaad rep
       if (selectedResource.notify_email) {
         const vaadHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'שריון חדש ממתין לאישורך. היכנס למערכת לאישור או דחייה.', { unitNumber: unitNum, approvalLink: `${window.location.origin}/room-booking`, buildingName: bldName })
-        await sendEmail(selectedResource.notify_email, `שריון חדש ממתין לאישור: ${selectedResource.name}`, vaadHtml)
+        await sendEmail(selectedResource.notify_email, `${bldName} — שריון חדש ממתין לאישור: ${selectedResource.name}`, vaadHtml)
       }
 
       setBookingDialog(null)
@@ -403,8 +403,9 @@ export default function RoomBooking() {
         // Combine fixed approval message from resource settings + one-time notes
         const fixedMsg = selectedResource?.approval_message || ''
         const allNotes = [fixedMsg, notes].filter(Boolean).join('\n')
-        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.', { showPayment: true, unitNumber: unitNum, approvalNotes: allNotes, buildingName: selectedBuilding?.name || '' })
-        sendEmail(bk.booker_email, `שריון מאושר: ${selectedResource?.name}`, html)
+        const bldNameA = selectedBuilding?.name || ''
+        const html = buildEmailHtml(selectedResource, bk, `${bk.booker_name}, השריון שלך אושר! להלן פרטי ההשכרה הסופיים.`, { unitNumber: unitNum, approvalNotes: allNotes, buildingName: bldNameA })
+        sendEmail(bk.booker_email, `${bldNameA} — שריון מאושר: ${selectedResource?.name}`, html)
       }
       setApproveDialog(null)
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון אושר', type: 'success' } }))
@@ -422,12 +423,12 @@ export default function RoomBooking() {
       const unitNumR = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
       const bldNameR = selectedBuilding?.name || ''
       if (bk.booker_email) {
-        sendEmail(bk.booker_email, `שריון נדחה: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד.', { unitNumber: unitNumR, buildingName: bldNameR }))
+        sendEmail(bk.booker_email, `${bldNameR} — שריון נדחה: ${selectedResource?.name}`,
+          buildEmailHtml(selectedResource, bk, `${bk.booker_name}, לצערנו השריון שלך נדחה על ידי נציג הוועד.`, { unitNumber: unitNumR, buildingName: bldNameR }))
       }
       // Notify vaad rep about rejection
       if (selectedResource?.notify_email) {
-        sendEmail(selectedResource.notify_email, `שריון נדחה: ${selectedResource?.name}`,
+        sendEmail(selectedResource.notify_email, `${bldNameR} — שריון נדחה: ${selectedResource?.name}`,
           buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`, { unitNumber: unitNumR, buildingName: bldNameR }))
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נדחה — המשבצת שוחררה', type: 'success' } }))
@@ -445,12 +446,12 @@ export default function RoomBooking() {
       const unitNumC = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
       const bldNameC = selectedBuilding?.name || ''
       if (bk.booker_email) {
-        sendEmail(bk.booker_email, `שריון בוטל: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.', { unitNumber: unitNumC, buildingName: bldNameC }))
+        sendEmail(bk.booker_email, `${bldNameC} — שריון בוטל: ${selectedResource?.name}`,
+          buildEmailHtml(selectedResource, bk, `${bk.booker_name}, השריון בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
       }
       // Notify vaad rep about cancellation
       if (selectedResource?.notify_email) {
-        sendEmail(selectedResource.notify_email, `שריון בוטל: ${selectedResource?.name}`,
+        sendEmail(selectedResource.notify_email, `${bldNameC} — שריון בוטל: ${selectedResource?.name}`,
           buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון בוטל — המשבצת שוחררה', type: 'success' } }))
