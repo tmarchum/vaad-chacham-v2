@@ -240,9 +240,15 @@ export default function RoomBooking() {
     } catch {}
   }
 
-  const buildEmailHtml = (resource, booking, statusMessage, showPayment = false) => {
-    const dateStr = new Date(booking.booking_date || booking.dk).toLocaleDateString('he-IL')
+  const HEBREW_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+
+  const buildEmailHtml = (resource, booking, statusMessage, { showPayment = false, unitNumber = '', approvalLink = '' } = {}) => {
+    const bookingDate = new Date(booking.booking_date || booking.dk)
+    const dateStr = bookingDate.toLocaleDateString('he-IL')
+    const dayName = HEBREW_DAYS[bookingDate.getDay()]
     const slotLabel = SLOTS[booking.slot]?.label || booking.slot
+    const td = `style="padding:10px;border-bottom:1px solid #e2e8f0;"`
+    const th = `style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;width:120px;"`
     return `
       <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
         <div style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;padding:20px;border-radius:12px 12px 0 0;">
@@ -251,15 +257,17 @@ export default function RoomBooking() {
         </div>
         <div style="background:#f8fafc;padding:20px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
           <table style="width:100%;border-collapse:collapse;">
-            <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;width:120px;">תאריך</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">${dateStr}</td></tr>
-            <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">משבצת</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">${slotLabel}</td></tr>
-            <tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">שם המזמין</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">${booking.booker_name || booking.bookerName || ''}</td></tr>
-            ${booking.booker_phone || booking.bookerPhone ? `<tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">טלפון</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">${booking.booker_phone || booking.bookerPhone}</td></tr>` : ''}
-            ${booking.is_guest || booking.isGuest ? '<tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">סוג</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">אורח חיצוני</td></tr>' : ''}
-            ${(booking.price || 0) > 0 ? `<tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">מחיר</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">${formatCurrency(booking.price)}</td></tr>` : ''}
-            ${booking.notes ? `<tr><td style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;">הערות</td><td style="padding:10px;border-bottom:1px solid #e2e8f0;">${booking.notes}</td></tr>` : ''}
+            <tr><td ${th}>תאריך</td><td ${td}>יום ${dayName}, ${dateStr}</td></tr>
+            <tr><td ${th}>משבצת</td><td ${td}>${slotLabel}</td></tr>
+            <tr><td ${th}>שם המזמין</td><td ${td}>${booking.booker_name || booking.bookerName || ''}</td></tr>
+            ${unitNumber ? `<tr><td ${th}>דירה</td><td ${td}>${unitNumber}</td></tr>` : ''}
+            ${booking.booker_phone || booking.bookerPhone ? `<tr><td ${th}>טלפון</td><td ${td}>${booking.booker_phone || booking.bookerPhone}</td></tr>` : ''}
+            ${booking.is_guest || booking.isGuest ? `<tr><td ${th}>סוג</td><td ${td}>אורח חיצוני</td></tr>` : ''}
+            ${(booking.price || 0) > 0 ? `<tr><td ${th}>מחיר</td><td ${td}>${formatCurrency(booking.price)}</td></tr>` : ''}
+            ${booking.notes ? `<tr><td ${th}>הערות</td><td ${td}>${booking.notes}</td></tr>` : ''}
           </table>
           ${showPayment && resource.payment_url && (booking.price || 0) > 0 ? `<div style="text-align:center;margin-top:16px;"><a href="${resource.payment_url}" style="display:inline-block;padding:12px 32px;background:#10b981;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">לתשלום</a></div>` : ''}
+          ${approvalLink ? `<div style="text-align:center;margin-top:16px;"><a href="${approvalLink}" style="display:inline-block;padding:12px 32px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">כניסה לאישור/דחייה</a></div>` : ''}
         </div>
       </div>
     `
@@ -348,11 +356,12 @@ export default function RoomBooking() {
       await createBooking(bookingData)
 
       // Email to booker — pending approval
-      const pendingHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'השריון שלך התקבל וממתין לאישור נציג הוועד')
+      const unitNum = isGuest ? '' : (buildingUnits.find(u => u.id === unitId)?.number || '')
+      const pendingHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'השריון שלך התקבל וממתין לאישור נציג הוועד. תקבל עדכון במייל כאשר השריון יאושר או יידחה.', { unitNumber: unitNum })
       if (email) await sendEmail(email, `שריון ${selectedResource.name} — ממתין לאישור`, pendingHtml)
       // Email to vaad rep
       if (selectedResource.notify_email) {
-        const vaadHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'שריון חדש ממתין לאישורך. היכנס למערכת לאישור או דחייה.')
+        const vaadHtml = buildEmailHtml(selectedResource, { ...bookingData, dk: bookingDialog.dk }, 'שריון חדש ממתין לאישורך. היכנס למערכת לאישור או דחייה.', { unitNumber: unitNum, approvalLink: `${window.location.origin}/room-booking` })
         await sendEmail(selectedResource.notify_email, `שריון חדש ממתין לאישור: ${selectedResource.name}`, vaadHtml)
       }
 
@@ -379,7 +388,8 @@ export default function RoomBooking() {
       await updateBooking(bk.id, { status: 'approved' })
       await refreshBookings()
       if (bk.booker_email) {
-        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.')
+        const unitNum = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
+        const html = buildEmailHtml(selectedResource, bk, 'השריון שלך אושר! להלן פרטי ההשכרה הסופיים.', { showPayment: true, unitNumber: unitNum })
         sendEmail(bk.booker_email, `שריון מאושר: ${selectedResource?.name}`, html)
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון אושר', type: 'success' } }))
@@ -394,14 +404,15 @@ export default function RoomBooking() {
     try {
       await updateBooking(bk.id, { status: 'rejected' })
       await refreshBookings()
+      const unitNumR = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
       if (bk.booker_email) {
         sendEmail(bk.booker_email, `שריון נדחה: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד.'))
+          buildEmailHtml(selectedResource, bk, 'לצערנו, השריון שלך נדחה על ידי נציג הוועד.', { unitNumber: unitNumR }))
       }
       // Notify vaad rep about rejection
       if (selectedResource?.notify_email) {
         sendEmail(selectedResource.notify_email, `שריון נדחה: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`))
+          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`, { unitNumber: unitNumR }))
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נדחה — המשבצת שוחררה', type: 'success' } }))
     } catch (err) {
@@ -415,14 +426,15 @@ export default function RoomBooking() {
     try {
       await updateBooking(bk.id, { status: 'cancelled' })
       await refreshBookings()
+      const unitNumC = buildingUnits.find(u => u.id === bk.unit_id)?.number || ''
       if (bk.booker_email) {
         sendEmail(bk.booker_email, `שריון בוטל: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.'))
+          buildEmailHtml(selectedResource, bk, 'השריון בוטל. המשבצת שוחררה.', { unitNumber: unitNumC }))
       }
       // Notify vaad rep about cancellation
       if (selectedResource?.notify_email) {
         sendEmail(selectedResource.notify_email, `שריון בוטל: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`))
+          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC }))
       }
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון בוטל — המשבצת שוחררה', type: 'success' } }))
     } catch (err) {
