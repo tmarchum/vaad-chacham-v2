@@ -13,15 +13,7 @@ import { INCOME_CATEGORIES, INCOME_GROUPS, findIncomeCategory, CATEGORY_BG_COLOR
 import {
   ArrowDownLeft, Landmark, Pencil, CheckCircle2, Tag, Check, X as XIcon,
 } from 'lucide-react'
-
-const HEBREW_MONTHS = [
-  { value: '01', label: 'ינואר' }, { value: '02', label: 'פברואר' },
-  { value: '03', label: 'מרץ' },  { value: '04', label: 'אפריל' },
-  { value: '05', label: 'מאי' },  { value: '06', label: 'יוני' },
-  { value: '07', label: 'יולי' }, { value: '08', label: 'אוגוסט' },
-  { value: '09', label: 'ספטמבר' }, { value: '10', label: 'אוקטובר' },
-  { value: '11', label: 'נובמבר' }, { value: '12', label: 'דצמבר' },
-]
+import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 export default function BankIncome() {
   const { selectedBuilding } = useBuildingContext()

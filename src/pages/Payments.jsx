@@ -13,21 +13,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { formatCurrency, formatDate, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3, Users, AlertTriangle, Wallet } from 'lucide-react'
-
-const HEBREW_MONTHS = [
-  { value: '01', label: 'ינואר' },
-  { value: '02', label: 'פברואר' },
-  { value: '03', label: 'מרץ' },
-  { value: '04', label: 'אפריל' },
-  { value: '05', label: 'מאי' },
-  { value: '06', label: 'יוני' },
-  { value: '07', label: 'יולי' },
-  { value: '08', label: 'אוגוסט' },
-  { value: '09', label: 'ספטמבר' },
-  { value: '10', label: 'אוקטובר' },
-  { value: '11', label: 'נובמבר' },
-  { value: '12', label: 'דצמבר' },
-]
+import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 const STATUS_MAP = {
   paid: { label: 'שולם', variant: 'success' },
@@ -64,9 +50,13 @@ const EMPTY_FORM = {
 }
 
 function Payments() {
-  const { buildings } = useBuildingContext()
-  const { data: allPayments, create, update, remove, refresh, isSaving } = useCollection('payments')
-  const { data: allUnits } = useCollection('units')
+  const { buildings, selectedBuilding } = useBuildingContext()
+  const { data: allPayments, create, update, remove, refresh, isSaving } = useCollection('payments',
+    selectedBuilding ? { building_id: selectedBuilding.id } : {}
+  )
+  const { data: allUnits } = useCollection('units',
+    selectedBuilding ? { building_id: selectedBuilding.id } : {}
+  )
   const { data: allResidents } = useCollection('residents')
 
   const now = new Date()

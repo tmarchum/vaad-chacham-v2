@@ -25,10 +25,7 @@ const STATUS_CONFIG = {
   closed:  { label: 'נסגר',  variant: 'success' },
 }
 
-const HEBREW_MONTHS = [
-  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
-]
+import { HEBREW_MONTHS } from '@/lib/constants'
 
 function monthLabel(mk) {
   const [y, m] = mk.split('-')

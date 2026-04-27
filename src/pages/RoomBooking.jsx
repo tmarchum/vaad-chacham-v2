@@ -30,10 +30,7 @@ const SLOTS = {
   full_day: { label: 'יממה — שבת/חג (24 שעות)', short: 'יממה 24שע',  icon: SunMoon, color: 'purple' },
 }
 
-const HEBREW_MONTHS = [
-  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
-]
+import { HEBREW_MONTHS } from '@/lib/constants'
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
 
 const STATUS_CONFIG = {

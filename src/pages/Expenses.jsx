@@ -14,21 +14,7 @@ import { Receipt, Plus, Pencil, Trash2, Landmark, Wallet, BarChart2 } from 'luci
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { EXPENSE_CATEGORIES, EXPENSE_GROUPS, findExpenseCategory, CATEGORY_BG_COLORS, CATEGORY_GRADIENTS, LEGACY_EXPENSE_MAP } from '@/lib/categories'
-
-const HEBREW_MONTHS = [
-  { value: '01', label: 'ינואר' },
-  { value: '02', label: 'פברואר' },
-  { value: '03', label: 'מרץ' },
-  { value: '04', label: 'אפריל' },
-  { value: '05', label: 'מאי' },
-  { value: '06', label: 'יוני' },
-  { value: '07', label: 'יולי' },
-  { value: '08', label: 'אוגוסט' },
-  { value: '09', label: 'ספטמבר' },
-  { value: '10', label: 'אוקטובר' },
-  { value: '11', label: 'נובמבר' },
-  { value: '12', label: 'דצמבר' },
-]
+import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 // Grouped categories for the select dropdown
 const CATEGORIES = EXPENSE_CATEGORIES.map(c => ({ value: c.value, label: c.label }))
@@ -54,8 +40,10 @@ const EMPTY_FORM = {
 }
 
 function Expenses() {
-  const { buildings } = useBuildingContext()
-  const { data: allExpenses, create, update, remove, isSaving } = useCollection('expenses')
+  const { buildings, selectedBuilding } = useBuildingContext()
+  const { data: allExpenses, create, update, remove, isSaving } = useCollection('expenses',
+    selectedBuilding ? { building_id: selectedBuilding.id } : {}
+  )
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
@@ -104,7 +92,7 @@ function Expenses() {
       return exp.date.startsWith(datePrefix)
     })
 
-    // Building filter
+    // Building filter (secondary — query already scoped by selectedBuilding)
     if (buildingFilter !== 'all') {
       result = result.filter((exp) => exp.buildingId === buildingFilter)
     }

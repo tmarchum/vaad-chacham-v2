@@ -26,11 +26,7 @@ import {
   ChevronLeft,
   Building2,
 } from 'lucide-react'
-
-const HEBREW_MONTHS = [
-  'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר',
-]
+import { HEBREW_MONTHS } from '@/lib/constants'
 
 /* ── Circular progress ring ─────────────────────────────────────────── */
 function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#3b82f6' }) {
