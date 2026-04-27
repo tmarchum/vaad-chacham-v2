@@ -18,6 +18,12 @@ import {
 } from 'lucide-react'
 
 // ── Slot definitions ─────────────────────────────────────────────
+const SLOT_GRADIENTS = {
+  amber:  'from-amber-500 to-amber-600',
+  indigo: 'from-indigo-500 to-indigo-600',
+  purple: 'from-purple-500 to-purple-600',
+}
+
 const SLOTS = {
   morning:  { label: 'בוקר (08:00-14:00)',    short: 'בוקר 08-14',  icon: Sun,     color: 'amber' },
   evening:  { label: 'ערב (16:00-23:00)',     short: 'ערב 16-23',   icon: Moon,    color: 'indigo' },
@@ -508,8 +514,14 @@ export default function RoomBooking() {
   }
 
   const handleDeleteResource = async (id) => {
-    await removeResource(id); refreshResources()
-    if (selectedResourceId === id) setSelectedResourceId(null)
+    if (!window.confirm('האם אתה בטוח שברצונך למחוק משאב זה?')) return
+    try {
+      await removeResource(id); refreshResources()
+      if (selectedResourceId === id) setSelectedResourceId(null)
+    } catch (err) {
+      console.error('Failed to delete resource:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת משאב', type: 'error' } }))
+    }
   }
 
   const handleBlockDate = async () => {
@@ -1168,7 +1180,7 @@ function BookingCard({ bk, resource, residentMap, onApprove, onReject, onCancel,
       bk.status === 'cancelled' || bk.status === 'rejected' ? 'opacity-60' : ''
     }`}>
       <div className="flex items-center gap-4">
-        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br from-${slotInfo.color}-500 to-${slotInfo.color}-600 flex items-center justify-center text-white shadow-sm shrink-0`}>
+        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${SLOT_GRADIENTS[slotInfo.color] || 'from-slate-500 to-slate-600'} flex items-center justify-center text-white shadow-sm shrink-0`}>
           <SlotIcon className="h-5 w-5" />
         </div>
 

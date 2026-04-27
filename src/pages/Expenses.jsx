@@ -13,7 +13,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Receipt, Plus, Pencil, Trash2, Landmark, Wallet, BarChart2 } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
-import { EXPENSE_CATEGORIES, EXPENSE_GROUPS, findExpenseCategory, CATEGORY_BG_COLORS, LEGACY_EXPENSE_MAP } from '@/lib/categories'
+import { EXPENSE_CATEGORIES, EXPENSE_GROUPS, findExpenseCategory, CATEGORY_BG_COLORS, CATEGORY_GRADIENTS, LEGACY_EXPENSE_MAP } from '@/lib/categories'
 
 const HEBREW_MONTHS = [
   { value: '01', label: 'ינואר' },
@@ -300,7 +300,7 @@ function Expenses() {
           {filtered.map((exp) => {
             const cat = resolveCategory(exp.category)
             const gradient = cat
-              ? `from-${cat.color}-500 to-${cat.color}-600`
+              ? (CATEGORY_GRADIENTS[cat.color] || 'from-slate-500 to-slate-600')
               : 'from-slate-400 to-slate-500'
             const categoryIcon = cat?.icon || '📋'
             const categoryLabel = cat?.label || exp.category || ''
