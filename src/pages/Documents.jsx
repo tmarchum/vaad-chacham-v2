@@ -417,9 +417,9 @@ export default function Documents() {
 
       const docData = { ...form, fileUrl, file_url: fileUrl, fileSize }
       if (editingDoc) {
-        update(editingDoc.id, docData)
+        await update(editingDoc.id, docData)
       } else {
-        create(docData)
+        await create(docData)
       }
       setFormOpen(false)
     } finally {
@@ -427,9 +427,14 @@ export default function Documents() {
     }
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (deleteDoc) {
-      remove(deleteDoc.id)
+      try {
+        await remove(deleteDoc.id)
+      } catch (err) {
+        console.error('Failed to delete document:', err)
+        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת מסמך', type: 'error' } }))
+      }
       setDeleteDoc(null)
     }
   }

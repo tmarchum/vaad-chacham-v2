@@ -103,14 +103,19 @@ function Residents() {
     setFormOpen(true)
   }
 
-  const doSubmit = (data) => {
-    if (editingId) {
-      update(editingId, data)
-    } else {
-      create(data)
+  const doSubmit = async (data) => {
+    try {
+      if (editingId) {
+        await update(editingId, data)
+      } else {
+        await create(data)
+      }
+      setFormOpen(false)
+      setPendingSubmitData(null)
+    } catch (err) {
+      console.error('Failed to save resident:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירת דייר', type: 'error' } }))
     }
-    setFormOpen(false)
-    setPendingSubmitData(null)
   }
 
   const handleSubmit = (e) => {
@@ -137,7 +142,7 @@ function Residents() {
     doSubmit(data)
   }
 
-  const confirmPrimaryOverride = () => {
+  const confirmPrimaryOverride = async () => {
     if (!pendingSubmitData) return
     const data = pendingSubmitData
     // Demote the existing primary resident
@@ -145,16 +150,26 @@ function Residents() {
     const existingPrimary = unitResidents.find(
       (r) => r.is_primary && r.id !== editingId
     )
-    if (existingPrimary) {
-      update(existingPrimary.id, { ...existingPrimary, is_primary: false })
+    try {
+      if (existingPrimary) {
+        await update(existingPrimary.id, { ...existingPrimary, is_primary: false })
+      }
+      await doSubmit(data)
+    } catch (err) {
+      console.error('Failed to override primary resident:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בעדכון דייר ראשי', type: 'error' } }))
     }
-    doSubmit(data)
     setPrimaryWarnOpen(false)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteTarget) {
-      remove(deleteTarget.id)
+      try {
+        await remove(deleteTarget.id)
+      } catch (err) {
+        console.error('Failed to delete resident:', err)
+        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת דייר', type: 'error' } }))
+      }
       setDeleteTarget(null)
     }
   }

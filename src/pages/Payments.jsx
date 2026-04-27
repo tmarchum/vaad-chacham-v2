@@ -327,15 +327,20 @@ function Payments() {
     })
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteTarget) {
-      remove(deleteTarget.id)
+      try {
+        await remove(deleteTarget.id)
+      } catch (err) {
+        console.error('Failed to delete payment:', err)
+        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת תשלום', type: 'error' } }))
+      }
       setDeleteTarget(null)
     }
   }
 
   // Auto-create monthly payments for all units without a payment this month
-  const handleCreateMonthly = () => {
+  const handleCreateMonthly = async () => {
     const targetUnits = buildingFilter === 'all'
       ? allUnits
       : allUnits.filter((u) => u.buildingId === buildingFilter)
@@ -345,24 +350,30 @@ function Payments() {
     )
 
     let created = 0
-    targetUnits.forEach((unit) => {
+    for (const unit of targetUnits) {
       if (!existingUnitIds.has(unit.id)) {
         const building = buildingMap[unit.buildingId || unit.building_id]
         const fee = calcUnitFee(unit, building)
-        create({
-          unitId: unit.id,
-          buildingId: unit.buildingId || unit.building_id,
-          amount: fee,
-          month: monthKey,
-          status: 'pending',
-          paidAt: null,
-          method: null,
-        })
-        created++
+        try {
+          await create({
+            unitId: unit.id,
+            buildingId: unit.buildingId || unit.building_id,
+            amount: fee,
+            month: monthKey,
+            status: 'pending',
+            paidAt: null,
+            method: null,
+          })
+          created++
+        } catch (err) {
+          console.error('Failed to create payment for unit:', unit.id, err)
+        }
       }
-    })
+    }
     if (created === 0) {
-      alert('כל הדירות כבר מופיעות בחודש זה')
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'כל הדירות כבר מופיעות בחודש זה', type: 'info' } }))
+    } else {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `נוצרו ${created} תשלומים חדשים`, type: 'success' } }))
     }
   }
 

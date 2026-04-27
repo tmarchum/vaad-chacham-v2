@@ -1186,45 +1186,61 @@ export default function SmartAgents() {
     })
   }
 
-  function handleMarkOverdue(debtor) {
-    debtor.payments.forEach(p => {
-      updatePayment(p.id, { status: 'overdue' })
-    })
+  async function handleMarkOverdue(debtor) {
+    try {
+      for (const p of debtor.payments) {
+        await updatePayment(p.id, { status: 'overdue' })
+      }
+    } catch (err) {
+      console.error('Failed to mark payments as overdue:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בעדכון סטטוס תשלומים', type: 'error' } }))
+    }
   }
 
-  function handleCreateAnnouncement() {
+  async function handleCreateAnnouncement() {
     if (!collectionAnalysis || collectionAnalysis.debtors.length === 0) return
     const debtorList = collectionAnalysis.debtors
       .map(d => `• דירה ${d.unit.number} — ${formatCurrency(d.totalDebt)}`)
       .join('\n')
-    createAnnouncement({
-      buildingId: selectedBuilding.id,
-      type: 'urgent',
-      title: 'תזכורת תשלום ועד בית',
-      content: `נמצאו דיירים שטרם שילמו את דמי ועד הבית:\n\n${debtorList}\n\nנבקשכם להסדיר את התשלום בהקדם האפשרי.`,
-      date: new Date().toISOString().slice(0, 10),
-    })
-    setMessageDialog({
-      open: true,
-      title: 'הודעה נוצרה בהצלחה',
-      content: `הודעה דחופה נשלחה לכלל הדיירים עם רשימת החייבים:\n\n${debtorList}`
-    })
+    try {
+      await createAnnouncement({
+        buildingId: selectedBuilding.id,
+        type: 'urgent',
+        title: 'תזכורת תשלום ועד בית',
+        content: `נמצאו דיירים שטרם שילמו את דמי ועד הבית:\n\n${debtorList}\n\nנבקשכם להסדיר את התשלום בהקדם האפשרי.`,
+        date: new Date().toISOString().slice(0, 10),
+      })
+      setMessageDialog({
+        open: true,
+        title: 'הודעה נוצרה בהצלחה',
+        content: `הודעה דחופה נשלחה לכלל הדיירים עם רשימת החייבים:\n\n${debtorList}`
+      })
+    } catch (err) {
+      console.error('Failed to create announcement:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה ביצירת הודעה', type: 'error' } }))
+    }
   }
 
   // -------------------------------------------------------------------------
   // Action handlers — Vendor
   // -------------------------------------------------------------------------
-  function handleAddVendor(vendor) {
-    createVendor({
-      buildingId: selectedBuilding.id,
-      name: vendor.name,
-      category: vendor.category,
-      phone: vendor.phone,
-      area: vendor.area,
-      rating: vendor.rating,
-      description: vendor.description,
-      available_24_7: vendor.available_24_7,
-    })
+  async function handleAddVendor(vendor) {
+    try {
+      await createVendor({
+        buildingId: selectedBuilding.id,
+        name: vendor.name,
+        category: vendor.category,
+        phone: vendor.phone,
+        area: vendor.area,
+        rating: vendor.rating,
+        description: vendor.description,
+        available_24_7: vendor.available_24_7,
+      })
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'ספק נוסף בהצלחה', type: 'success' } }))
+    } catch (err) {
+      console.error('Failed to add vendor:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בהוספת ספק', type: 'error' } }))
+    }
   }
 
   // -------------------------------------------------------------------------
