@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react'
 import store from '@/data/supabaseStore'
 
-export function useCollection(collectionName) {
+export function useCollection(collectionName, filters = {}) {
   const collection = store[collectionName]
   const [data, setData] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -11,7 +11,7 @@ export function useCollection(collectionName) {
     if (!collection) { setIsLoading(false); return }
     setIsLoading(true)
     try {
-      const items = await collection.list()
+      const items = await collection.list(filters)
       setData(items)
     } catch(e) {
       console.error('useCollection error:', e)
@@ -19,7 +19,7 @@ export function useCollection(collectionName) {
     } finally {
       setIsLoading(false)
     }
-  }, [collection])
+  }, [collection, JSON.stringify(filters)])
 
   useEffect(() => { refresh() }, [refresh])
 

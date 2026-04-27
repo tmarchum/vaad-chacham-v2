@@ -58,8 +58,10 @@ function getNextDate(currentDateStr, frequency) {
 }
 
 function RecurringTasks() {
-  const { buildings } = useBuildingContext()
-  const { data: allTasks, create, update, remove, isSaving } = useCollection('recurringTasks')
+  const { buildings, selectedBuilding } = useBuildingContext()
+  const { data: allTasks, create, update, remove, isSaving } = useCollection('recurringTasks',
+    selectedBuilding ? { building_id: selectedBuilding.id } : {}
+  )
 
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')

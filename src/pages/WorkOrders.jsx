@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useCollection, useBuildingContext } from '@/hooks/useStore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -407,11 +407,11 @@ function WorkOrderForm({ form, onChange, issuesOptions, vendorsOptions }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function WorkOrders() {
+  const { selectedBuilding } = useBuildingContext();
   const { data: workOrders = [], create, update, remove, isLoading, isSaving } =
-    useCollection('workOrders');
+    useCollection('workOrders', selectedBuilding ? { building_id: selectedBuilding.id } : {});
   const { data: issues  = [] } = useCollection('issues');
   const { data: vendors = [] } = useCollection('vendors');
-  const { selectedBuilding } = useBuildingContext();
 
   // UI state
   const [searchQuery,    setSearchQuery]    = useState('');

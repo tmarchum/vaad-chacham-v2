@@ -18,7 +18,7 @@ import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
-  FileText, Calendar, DollarSign, Users, LayoutList, Columns3,
+  FileText, Calendar, Users, LayoutList, Columns3,
   ArrowRight, Send, Check, X, Sparkles, Copy, CheckCheck, RefreshCw,
 } from 'lucide-react'
 
@@ -157,8 +157,10 @@ function getAvgResolutionDays(issues) {
 // ---------------------------------------------------------------------------
 
 function Issues() {
-  const { buildings } = useBuildingContext()
-  const { data: allIssues, create, update, remove, isSaving } = useCollection('issues')
+  const { buildings, selectedBuilding } = useBuildingContext()
+  const { data: allIssues, create, update, remove, isSaving } = useCollection('issues',
+    selectedBuilding ? { building_id: selectedBuilding.id } : {}
+  )
   const { data: allUnits } = useCollection('units')
   const { data: allVendors } = useCollection('vendors')
   const { data: allQuotes, create: createQuote, update: updateQuote } = useCollection('quotes')

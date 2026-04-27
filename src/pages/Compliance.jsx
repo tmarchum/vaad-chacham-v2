@@ -52,8 +52,10 @@ function getComplianceStatus(expiryDate) {
 }
 
 function Compliance() {
-  const { buildings } = useBuildingContext()
-  const { data: allCompliance, create, update, remove, isSaving } = useCollection('compliance')
+  const { buildings, selectedBuilding } = useBuildingContext()
+  const { data: allCompliance, create, update, remove, isSaving } = useCollection('compliance',
+    selectedBuilding ? { building_id: selectedBuilding.id } : {}
+  )
 
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')

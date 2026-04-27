@@ -61,7 +61,9 @@ function getServiceStatus(nextService) {
 
 function BuildingAssets() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allAssets, create, update, remove, isSaving } = useCollection('buildingAssets')
+  const { data: allAssets, create, update, remove, isSaving } = useCollection('buildingAssets',
+    selectedBuilding ? { building_id: selectedBuilding.id } : {}
+  )
 
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')
