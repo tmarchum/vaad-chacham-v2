@@ -992,12 +992,12 @@ function StepRating({ issue, selectedQuote, completionData, vendorsCollection, a
 
 export default function VendorFinder() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: issues } = useCollection('issues')
   const quotesCollection = useCollection('quotes')
   const workOrdersCollection = useCollection('workOrders')
   const vendorsCollection = useCollection('vendors')
   const announcementsCollection = useCollection('announcements')
   const issuesCollection = useCollection('issues')
+  const isLoading = issuesCollection.isLoading
 
   // Workflow state
   const [selectedIssue, setSelectedIssue] = useState(null)
@@ -1013,13 +1013,13 @@ export default function VendorFinder() {
 
   const openIssues = useMemo(
     () =>
-      issues.filter(
+      issuesCollection.data.filter(
         (i) =>
           (!selectedBuilding || i.buildingId === selectedBuilding.id) &&
           i.status !== 'completed' &&
           i.status !== 'closed'
       ),
-    [issues, selectedBuilding]
+    [issuesCollection.data, selectedBuilding]
   )
 
   function selectIssue(issue) {
@@ -1041,6 +1041,18 @@ export default function VendorFinder() {
     setCompletionData(null)
     setSuccess(false)
   }
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Search} iconColor="cyan" title="מציאת ספקים" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   if (!selectedBuilding) {
     return (

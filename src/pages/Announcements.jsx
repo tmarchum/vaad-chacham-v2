@@ -114,6 +114,7 @@ function Announcements() {
     update: updateAnnouncement,
     remove: removeAnnouncement,
     isSaving: isSavingAnnouncement,
+    isLoading,
   } = useCollection('announcements')
   const {
     data: allMinutes,
@@ -311,6 +312,18 @@ function Announcements() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Megaphone} iconColor="amber" title="הודעות ופרוטוקולים" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6" dir="rtl">

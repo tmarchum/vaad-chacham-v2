@@ -45,13 +45,6 @@ const CATEGORY_OPTIONS = [
   { value: 'אחר', label: 'אחר' },
 ]
 
-const RATING_OPTIONS = [
-  { value: '1', label: '1' },
-  { value: '2', label: '2' },
-  { value: '3', label: '3' },
-  { value: '4', label: '4' },
-  { value: '5', label: '5' },
-]
 
 const EMPTY_FORM = {
   name: '',
@@ -527,7 +520,7 @@ function MarketplaceCard({ vendor, onAdd, alreadyAdded }) {
 // ---------------------------------------------------------------------------
 
 function Vendors() {
-  const { data: allVendors, create, update, remove, isSaving } = useCollection('vendors')
+  const { data: allVendors, create, update, remove, isSaving, isLoading } = useCollection('vendors')
   const { data: workOrders } = useCollection('workOrders')
 
   const [activeTab, setActiveTab] = useState('my-vendors')
@@ -666,6 +659,18 @@ function Vendors() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Store} iconColor="amber" title="ספקים" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6">

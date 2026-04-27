@@ -59,7 +59,7 @@ function getNextDate(currentDateStr, frequency) {
 
 function RecurringTasks() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allTasks, create, update, remove, isSaving } = useCollection('recurringTasks',
+  const { data: allTasks, create, update, remove, isSaving, isLoading } = useCollection('recurringTasks',
     selectedBuilding ? { building_id: selectedBuilding.id } : {}
   )
 
@@ -168,6 +168,18 @@ function RecurringTasks() {
     const nextDate = getNextDate(task.next_due_date || new Date().toISOString().slice(0, 10), task.frequency)
     update(task.id, { next_due_date: nextDate })
   }
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={CalendarClock} iconColor="purple" title="משימות חוזרות" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6">

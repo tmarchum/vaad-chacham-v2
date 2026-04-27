@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/common/EmptyState'
 import { StatCard } from '@/components/common/StatCard'
 import { FormSelect } from '@/components/common/FormField'
@@ -11,7 +10,7 @@ import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 export default function Balance() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx } = useCollection('bankTransactions')
+  const { data: allTx, isLoading } = useCollection('bankTransactions')
   const { data: allExpenses } = useCollection('expenses')
 
   const now = new Date()
@@ -73,6 +72,18 @@ export default function Balance() {
       balance: totalIncome - totalExpenses,
     }
   }, [monthlyData])
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Scale} iconColor="blue" title="מאזן" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   if (!selectedBuilding) {
     return <EmptyState icon={Scale} title="בחר בניין" description="יש לבחור בניין כדי לצפות במאזן" />

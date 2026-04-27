@@ -53,7 +53,7 @@ const SUPABASE_URL = 'https://stncskqjrmecjckxldvi.supabase.co'
 export default function RoomBooking() {
   const { selectedBuilding } = useBuildingContext()
   const { profile } = useAuth()
-  const { data: resources, create: createResource, update: updateResource, remove: removeResource, refresh: refreshResources } = useCollection('bookingResources')
+  const { data: resources, create: createResource, update: updateResource, remove: removeResource, refresh: refreshResources, isLoading } = useCollection('bookingResources')
   const { data: allBookings, create: createBooking, update: updateBooking, refresh: refreshBookings } = useCollection('bookings')
   const { data: allUnits } = useCollection('units')
   const { data: allResidents } = useCollection('residents')
@@ -554,6 +554,18 @@ export default function RoomBooking() {
   // ═════════════════════════════════════════════════════════════
   // RENDER
   // ═════════════════════════════════════════════════════════════
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={DoorOpen} iconColor="violet" title="שריון חדרים" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
+
   if (!selectedBuilding) {
     return <EmptyState icon={DoorOpen} title="בחר בניין" description="יש לבחור בניין כדי לנהל שריונים" />
   }

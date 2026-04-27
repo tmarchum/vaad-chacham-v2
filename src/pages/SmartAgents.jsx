@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import {
   CreditCard, Store, PiggyBank, ShieldCheck,
   Play, CheckCircle, AlertTriangle, XCircle,
-  ChevronDown, ChevronUp, Zap, RefreshCw,
+  ChevronDown, ChevronUp, Zap,
   MessageSquare, UserX, TrendingUp, TrendingDown,
   Plus, Bell, Sparkles, Loader2
 } from 'lucide-react'
@@ -979,14 +979,13 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
 export default function SmartAgents() {
   const { selectedBuilding } = useBuildingContext()
 
-  const { data: allPayments } = useCollection('payments')
+  const { data: allPayments, isLoading } = useCollection('payments')
   const { data: allUnits } = useCollection('units')
   const { data: allExpenses } = useCollection('expenses')
   const { data: allCompliance } = useCollection('compliance')
   const { data: allTasks } = useCollection('recurringTasks')
   const { data: allVendors, create: createVendor } = useCollection('vendors')
   const { data: allIssues } = useCollection('issues')
-  const { data: allAssets } = useCollection('buildingAssets')
   const { create: createAnnouncement } = useCollection('announcements')
   const { create: createRecurringTask } = useCollection('recurringTasks')
   const { create: createCompliance } = useCollection('compliance')
@@ -1360,6 +1359,18 @@ export default function SmartAgents() {
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Zap} iconColor="amber" title="סוכנים חכמים" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="space-y-6" dir="rtl">
       <PageHeader icon={Zap} iconColor="amber" title="סוכנים חכמים" subtitle={`סוכני AI שמנתחים את נתוני ${selectedBuilding?.name || 'הבניין'} ומייצרים פעולות מומלצות`} />

@@ -34,7 +34,7 @@ function monthLabel(mk) {
 
 function CollectionCases() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allCases } = useCollection('collectionCases')
+  const { data: allCases, isLoading } = useCollection('collectionCases')
   const { data: allNotifications } = useCollection('notificationLog')
   const { data: allUnits } = useCollection('units')
   const { data: allResidents } = useCollection('residents')
@@ -83,6 +83,18 @@ function CollectionCases() {
     const dt = new Date(d)
     return `${dt.getDate()}/${dt.getMonth() + 1}/${dt.getFullYear()}`
   }
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={UserCheck} iconColor="red" title="מעקב גבייה חכם" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6">

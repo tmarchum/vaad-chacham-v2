@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, EXPENSE_GROUPS, INCOME_GROUPS, findExpenseCategory, findIncomeCategory, CATEGORY_BG_COLORS, CATEGORY_GRADIENTS } from '@/lib/categories'
 import {
   ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Landmark, Link2, X as XIcon,
-  CheckCircle2, AlertCircle, Filter, ChevronDown, Check, Tag,
+  CheckCircle2, AlertCircle, Check, Tag,
 } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
@@ -40,7 +40,7 @@ const TYPE_FILTERS = [
 
 export default function BankTransactions() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx, update: updateTx, refresh } = useCollection('bankTransactions')
+  const { data: allTx, update: updateTx, refresh, isLoading } = useCollection('bankTransactions')
   const { data: allUnits } = useCollection('units')
   const { data: allResidents } = useCollection('residents')
   const { data: allPayments, create: createPayment, update: updatePayment, refresh: refreshPayments } = useCollection('payments')
@@ -385,6 +385,18 @@ export default function BankTransactions() {
       return { value: y, label: y }
     })
   }, [])
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={ArrowLeftRight} iconColor="indigo" title="תנועות בנק" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   if (!selectedBuilding) {
     return <EmptyState icon={Landmark} title="בחר בניין" description="יש לבחור בניין כדי לצפות בתנועות" />

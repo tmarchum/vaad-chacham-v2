@@ -2,14 +2,13 @@ import { useState, useMemo, useEffect } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
 import {
-  Landmark, Plus, Pencil, Trash2, RefreshCw, Eye, EyeOff,
+  Landmark, Plus, Pencil, Trash2, Eye, EyeOff,
   Play, Settings2, Clock, Calendar, Moon, CheckCircle2, AlertCircle,
 } from 'lucide-react'
 
@@ -42,7 +41,7 @@ const EMPTY_FORM = { bank_type: '', label: '', credentials: {} }
 
 export default function BankSettings() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: accounts, create, update, remove, refresh, isSaving } = useCollection('bankAccounts')
+  const { data: accounts, create, update, remove, refresh, isSaving, isLoading } = useCollection('bankAccounts')
   const { data: allScrapeSettings, create: createSettings, update: updateSettings, refresh: refreshSettings } = useCollection('scrapeSettings')
   const { data: allTx } = useCollection('bankTransactions')
 
@@ -150,6 +149,18 @@ export default function BankSettings() {
   const togglePassword = (fieldKey) => setShowPasswords(prev => ({ ...prev, [fieldKey]: !prev[fieldKey] }))
 
   const bankFields = BANKS[form.bank_type]?.fields || []
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Landmark} iconColor="slate" title="חשבונות בנק" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   if (!selectedBuilding) {
     return <EmptyState icon={Landmark} title="בחר בניין" description="יש לבחור בניין כדי לנהל חשבונות בנק" />

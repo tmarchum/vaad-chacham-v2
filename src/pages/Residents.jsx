@@ -25,7 +25,7 @@ const RESIDENT_TYPE_OPTIONS = [
 
 function Residents() {
   const { selectedBuilding, buildings, setSelectedBuilding } = useBuildingContext()
-  const { data: allUnits } = useCollection('units')
+  const { data: allUnits, isLoading } = useCollection('units')
   const { data: allResidents, create, update, remove } = useCollection('unitResidents')
 
   const [expandedUnits, setExpandedUnits] = useState({})
@@ -176,6 +176,18 @@ function Residents() {
 
   const getUnitNumber = (u) => u.unit_number || u.number || ''
   const getResidentFullName = (r) => [r.first_name, r.last_name].filter(Boolean).join(' ')
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Users} iconColor="cyan" title="דיירים" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6">

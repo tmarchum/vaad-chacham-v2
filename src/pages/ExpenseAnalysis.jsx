@@ -27,7 +27,7 @@ const HEALTH_STYLES = {
 
 export default function ExpenseAnalysis() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx } = useCollection('bankTransactions')
+  const { data: allTx, isLoading } = useCollection('bankTransactions')
   const { data: allExpenses } = useCollection('expenses')
 
   const now = new Date()
@@ -101,6 +101,18 @@ export default function ExpenseAnalysis() {
       setLoading(false)
     }
   }, [analysisData, selectedBuilding])
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={Brain} iconColor="purple" title="ניתוח הוצאות AI" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   if (!selectedBuilding) {
     return <EmptyState icon={Brain} title="בחר בניין" description="יש לבחור בניין כדי להפעיל ניתוח" />

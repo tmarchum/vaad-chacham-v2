@@ -51,7 +51,7 @@ const EMPTY_FORM = {
 
 function Payments() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allPayments, create, update, remove, refresh, isSaving } = useCollection('payments',
+  const { data: allPayments, create, update, remove, refresh, isSaving, isLoading } = useCollection('payments',
     selectedBuilding ? { building_id: selectedBuilding.id } : {}
   )
   const { data: allUnits } = useCollection('units',
@@ -372,6 +372,18 @@ function Payments() {
     { value: 'paid', label: 'שולם' },
     { value: 'overdue', label: 'באיחור' },
   ]
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={CreditCard} iconColor="blue" title="תשלומים" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6">

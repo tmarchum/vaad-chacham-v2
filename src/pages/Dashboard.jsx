@@ -11,16 +11,11 @@ import {
   AlertTriangle,
   Wrench,
   Wallet,
-  ArrowLeft,
   Zap,
   Info,
   AlertCircle,
-  Calendar,
   TrendingUp,
   TrendingDown,
-  Users,
-  FileText,
-  ClipboardList,
   Megaphone,
   BarChart2,
   ChevronLeft,
@@ -49,7 +44,7 @@ function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#3b82f6' }
 function Dashboard() {
   const { selectedBuilding } = useBuildingContext()
   const { profile } = useAuth()
-  const { data: allUnits } = useCollection('units')
+  const { data: allUnits, isLoading } = useCollection('units')
   const { data: allPayments } = useCollection('payments')
   const { data: allIssues } = useCollection('issues')
   const { data: allExpenses } = useCollection('expenses')
@@ -181,6 +176,17 @@ function Dashboard() {
   const hour = now.getHours()
   const greeting = hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : 'ערב טוב'
   const firstName = profile?.first_name || ''
+
+  if (isLoading) return (
+    <div className="p-6">
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

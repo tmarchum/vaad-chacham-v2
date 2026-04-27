@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormSelect, FormTextarea } from '@/components/common/FormField'
@@ -11,13 +10,13 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { INCOME_CATEGORIES, INCOME_GROUPS, findIncomeCategory, CATEGORY_BG_COLORS } from '@/lib/categories'
 import {
-  ArrowDownLeft, Landmark, Pencil, CheckCircle2, Tag, Check, X as XIcon,
+  ArrowDownLeft, Landmark, Pencil, Tag, Check, X as XIcon,
 } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 export default function BankIncome() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx, update, refresh } = useCollection('bankTransactions')
+  const { data: allTx, update, refresh, isLoading } = useCollection('bankTransactions')
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
@@ -102,6 +101,18 @@ export default function BankIncome() {
     setCategoryDialog(null)
     refresh()
   }
+
+  if (isLoading) return (
+    <div className="p-6">
+      <PageHeader icon={ArrowDownLeft} iconColor="emerald" title="הכנסות" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
+        </div>
+      </div>
+    </div>
+  )
 
   if (!selectedBuilding) {
     return <EmptyState icon={Landmark} title="בחר בניין" description="יש לבחור בניין כדי לצפות בהכנסות" />

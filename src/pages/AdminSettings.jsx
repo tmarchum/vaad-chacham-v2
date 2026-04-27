@@ -9,8 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
-import { cn } from '@/lib/utils'
-import { Settings, Users, Database, Building, Shield, Key, Hash, ToggleRight } from 'lucide-react'
+import { Settings, Users, Database, Building, Shield, Key } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -236,7 +235,7 @@ function CustomFieldsTab() {
   }
 
   const handleChange = (field) => (e) => {
-    const value = field === 'required' ? e.target.value : e.target.value
+    const value = field === 'required' ? e.target.checked : e.target.value
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
