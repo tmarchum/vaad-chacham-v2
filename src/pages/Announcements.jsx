@@ -12,7 +12,7 @@ import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus, Megaphone, FileText, AlertTriangle, Calendar,
-  Users, Pencil, Trash2, Wrench,
+  Pencil, Trash2, Wrench,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -100,11 +100,6 @@ const TABS = [
 function isExpired(expiresAt) {
   if (!expiresAt) return false
   return new Date(expiresAt) < new Date()
-}
-
-function truncate(str, len = 150) {
-  if (!str) return ''
-  return str.length > len ? str.slice(0, len) + '...' : str
 }
 
 // ---------------------------------------------------------------------------
@@ -433,55 +428,64 @@ function Announcements() {
                 return (
                   <div
                     key={ann.id}
-                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
+                    className="group rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)] p-4"
                     onClick={() => toggleExpandedAnnouncement(ann.id)}
                   >
-                    {/* Type icon circle */}
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                      <TypeIcon className="h-5 w-5" />
-                    </div>
-
-                    {/* Main info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                          {ann.title}
-                        </span>
+                    <div className="flex items-center gap-4">
+                      {/* Type icon circle */}
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                        <TypeIcon className="h-5 w-5" />
                       </div>
-                      <p className="text-xs text-[var(--text-muted)] line-clamp-1">
-                        {ann.content || ''}
-                      </p>
+
+                      {/* Main info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                            {ann.title}
+                          </span>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] line-clamp-1">
+                          {ann.content || ''}
+                        </p>
+                      </div>
+
+                      {/* Building badge */}
+                      {ann.buildingId && buildingMap[ann.buildingId] && (
+                        <Badge variant="default" className="shrink-0">{buildingMap[ann.buildingId].name}</Badge>
+                      )}
+
+                      {/* Date */}
+                      <div className="text-xs text-[var(--text-muted)] shrink-0 min-w-[70px] text-left">
+                        {ann.publishedAt ? formatDate(ann.publishedAt) : ''}
+                      </div>
+
+                      {/* Status */}
+                      <div className="flex items-center gap-2 min-w-[70px]">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                        <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusLabel}</span>
+                      </div>
+
+                      {/* Actions (visible on hover) */}
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" onClick={() => openEditAnnouncement(ann)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteAnnouncementTarget(ann)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                        </Button>
+                      </div>
                     </div>
 
-                    {/* Building badge */}
-                    {ann.buildingId && buildingMap[ann.buildingId] && (
-                      <Badge variant="default" className="shrink-0">{buildingMap[ann.buildingId].name}</Badge>
+                    {/* Expanded content */}
+                    {expandedAnnouncements[ann.id] && ann.content && (
+                      <div className="mt-3 pt-3 border-t border-[var(--border)]">
+                        <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap">{ann.content}</p>
+                      </div>
                     )}
-
-                    {/* Date */}
-                    <div className="text-xs text-[var(--text-muted)] shrink-0 min-w-[70px] text-left">
-                      {ann.publishedAt ? formatDate(ann.publishedAt) : ''}
-                    </div>
-
-                    {/* Status */}
-                    <div className="flex items-center gap-2 min-w-[70px]">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                      <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusLabel}</span>
-                    </div>
-
-                    {/* Actions (visible on hover) */}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={() => openEditAnnouncement(ann)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteAnnouncementTarget(ann)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                      </Button>
-                    </div>
                   </div>
                 )
               })}
@@ -531,68 +535,94 @@ function Announcements() {
                 return (
                   <div
                     key={min.id}
-                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
+                    className="group rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)] p-4"
                     onClick={() => toggleExpandedMinutes(min.id)}
                   >
-                    {/* Meeting type circle */}
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                      <FileText className="h-5 w-5" />
-                    </div>
-
-                    {/* Main info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                          {min.title}
-                        </span>
-                        <Badge variant="default" className="shrink-0">{meetingTypeLabel}</Badge>
+                    <div className="flex items-center gap-4">
+                      {/* Meeting type circle */}
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                        <FileText className="h-5 w-5" />
                       </div>
-                      <p className="text-xs text-[var(--text-muted)] line-clamp-1">
-                        {min.summary || ''}
-                      </p>
+
+                      {/* Main info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
+                            {min.title}
+                          </span>
+                          <Badge variant="default" className="shrink-0">{meetingTypeLabel}</Badge>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] line-clamp-1">
+                          {min.summary || ''}
+                        </p>
+                      </div>
+
+                      {/* Attendance + mini progress bar */}
+                      {totalUnits > 0 && (
+                        <div className="text-left min-w-[100px]">
+                          <div className="text-[13px] font-semibold text-[var(--text-primary)]">
+                            {attendees}/{totalUnits} דיירים
+                          </div>
+                          <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${barColor}`}
+                              style={{ width: quorumPct + '%' }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Date */}
+                      <div className="text-xs text-[var(--text-muted)] shrink-0 min-w-[70px] text-left">
+                        {min.date ? formatDate(min.date) : ''}
+                      </div>
+
+                      {/* Quorum status */}
+                      {totalUnits > 0 && (
+                        <div className="flex items-center gap-2 min-w-[70px]">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                          <span className={`text-[12px] font-medium ${quorumTextColor}`}>{quorumLabel}</span>
+                        </div>
+                      )}
+
+                      {/* Actions (visible on hover) */}
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" onClick={() => openEditMinutes(min)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeleteMinutesTarget(min)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
+                        </Button>
+                      </div>
                     </div>
 
-                    {/* Attendance + mini progress bar */}
-                    {totalUnits > 0 && (
-                      <div className="text-left min-w-[100px]">
-                        <div className="text-[13px] font-semibold text-[var(--text-primary)]">
-                          {attendees}/{totalUnits} דיירים
-                        </div>
-                        <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${barColor}`}
-                            style={{ width: quorumPct + '%' }}
-                          />
-                        </div>
+                    {/* Expanded content */}
+                    {expandedMinutes[min.id] && (
+                      <div className="mt-3 pt-3 border-t border-[var(--border)] space-y-2">
+                        {min.summary && (
+                          <div>
+                            <span className="text-xs font-semibold text-[var(--text-muted)]">סיכום:</span>
+                            <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap">{min.summary}</p>
+                          </div>
+                        )}
+                        {min.decisions && (
+                          <div>
+                            <span className="text-xs font-semibold text-[var(--text-muted)]">החלטות:</span>
+                            <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap">{min.decisions}</p>
+                          </div>
+                        )}
+                        {min.nextMeeting && (
+                          <div>
+                            <span className="text-xs font-semibold text-[var(--text-muted)]">פגישה הבאה:</span>
+                            <span className="text-sm text-[var(--text-secondary)] mr-1">{formatDate(min.nextMeeting)}</span>
+                          </div>
+                        )}
                       </div>
                     )}
-
-                    {/* Date */}
-                    <div className="text-xs text-[var(--text-muted)] shrink-0 min-w-[70px] text-left">
-                      {min.date ? formatDate(min.date) : ''}
-                    </div>
-
-                    {/* Quorum status */}
-                    {totalUnits > 0 && (
-                      <div className="flex items-center gap-2 min-w-[70px]">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                        <span className={`text-[12px] font-medium ${quorumTextColor}`}>{quorumLabel}</span>
-                      </div>
-                    )}
-
-                    {/* Actions (visible on hover) */}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={() => openEditMinutes(min)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeleteMinutesTarget(min)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                      </Button>
-                    </div>
                   </div>
                 )
               })}

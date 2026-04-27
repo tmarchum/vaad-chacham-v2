@@ -26,12 +26,13 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const STATUSES = ['reported', 'pending_committee', 'acknowledged', 'quoted', 'approved', 'scheduled', 'in_progress', 'completed', 'closed']
+const STATUSES = ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes', 'quoted', 'approved', 'scheduled', 'in_progress', 'completed', 'closed']
 
 const STATUS_MAP = {
   reported:          { label: 'דווח',           variant: 'danger' },
   pending_committee: { label: 'ממתין לועד',     variant: 'warning' },
   acknowledged:      { label: 'אושר קבלה',      variant: 'warning' },
+  approved_for_quotes: { label: 'אושר להצעות מחיר', variant: 'info' },
   quoted:       { label: 'הצעת מחיר', variant: 'info' },
   approved:     { label: 'מאושר',     variant: 'info' },
   scheduled:    { label: 'מתוזמן',    variant: 'default' },
@@ -418,9 +419,14 @@ function Issues() {
     })
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteTarget) {
-      remove(deleteTarget.id)
+      try {
+        await remove(deleteTarget.id)
+      } catch (err) {
+        console.error('Failed to delete issue:', err)
+        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת תקלה', type: 'error' } }))
+      }
       setDeleteTarget(null)
     }
   }
@@ -604,23 +610,28 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setQuoteDescription(iss.description || '')
   }
 
-  const handleSendQuoteRequests = () => {
+  const handleSendQuoteRequests = async () => {
     if (!quoteDialogIssue || quoteSelectedVendors.length === 0) return
-    quoteSelectedVendors.forEach((vendorName) => {
-      createQuote({
-        issueId: quoteDialogIssue.id,
-        vendorName,
-        amount: null,
-        status: 'pending',
-        description: quoteDescription,
-        requestedAt: new Date().toISOString(),
-        validUntil: null,
-      })
-    })
-    // Move issue to quoted status if still earlier in the flow
-    const idx = STATUSES.indexOf(quoteDialogIssue.status)
-    if (idx < STATUSES.indexOf('quoted')) {
-      update(quoteDialogIssue.id, { status: 'quoted' })
+    try {
+      for (const vendorName of quoteSelectedVendors) {
+        await createQuote({
+          issueId: quoteDialogIssue.id,
+          vendorName,
+          amount: null,
+          status: 'pending',
+          description: quoteDescription,
+          requestedAt: new Date().toISOString(),
+          validUntil: null,
+        })
+      }
+      // Move issue to quoted status if still earlier in the flow
+      const idx = STATUSES.indexOf(quoteDialogIssue.status)
+      if (idx < STATUSES.indexOf('quoted')) {
+        await update(quoteDialogIssue.id, { status: 'quoted' })
+      }
+    } catch (err) {
+      console.error('Failed to send quote requests:', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשליחת בקשות הצעות מחיר', type: 'error' } }))
     }
     setQuoteDialogIssue(null)
   }

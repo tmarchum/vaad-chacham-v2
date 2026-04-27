@@ -432,10 +432,9 @@ export default function BankSettings() {
 
       <DeleteConfirm
         open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
+        onOpenChange={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        title="מחיקת חשבון בנק"
-        description={`למחוק את החשבון "${BANKS[deleteTarget?.bank_type]?.name || ''}"? התנועות יישארו אך לא יקושרו לחשבון זה.`}
+        itemName={`חשבון "${BANKS[deleteTarget?.bank_type]?.name || ''}"`}
       />
     </div>
   )

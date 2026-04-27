@@ -121,8 +121,8 @@ function getVendorStats(vendor, workOrders) {
   )
   const completed = vendorOrders.filter((wo) => wo.status === 'completed' || wo.status === 'הושלם')
   const totalSpent = completed.reduce((sum, wo) => sum + (Number(wo.cost) || Number(wo.actual_cost) || 0), 0)
-  const avgResponseDays = vendor.avg_response_time || (completed.length > 0 ? Math.floor(Math.random() * 5) + 1 : null)
-  const onTimeRate = completed.length > 0 ? Math.floor(70 + Math.random() * 30) : null
+  const avgResponseDays = vendor.avg_response_time || null
+  const onTimeRate = null
 
   return {
     totalJobs: vendorOrders.length,
