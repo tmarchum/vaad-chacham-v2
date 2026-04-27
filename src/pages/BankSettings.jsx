@@ -351,7 +351,7 @@ export default function BankSettings() {
 
       {/* Add/Edit Account Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle>{editingId ? 'עריכת חשבון בנק' : 'הוספת חשבון בנק'}</DialogTitle>
           </DialogHeader>
@@ -388,7 +388,7 @@ export default function BankSettings() {
 
       {/* Settings Dialog */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle>הגדרות תהליך לילי</DialogTitle>
           </DialogHeader>

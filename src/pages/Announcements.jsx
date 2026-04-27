@@ -409,7 +409,7 @@ function Announcements() {
               onAction={openCreateAnnouncement}
             />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-x-auto">
               {filteredAnnouncements.map((ann) => {
                 const typeInfo = TYPE_CONFIG[ann.type] || TYPE_CONFIG.general
                 const priorityInfo = PRIORITY_CONFIG[ann.priority] || PRIORITY_CONFIG.normal
@@ -504,7 +504,7 @@ function Announcements() {
               onAction={openCreateMinutes}
             />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-x-auto">
               {filteredMinutes.map((min) => {
                 const meetingTypeLabel = MEETING_TYPE[min.type] || min.type
                 const attendees = Number(min.attendees) || 0
@@ -622,7 +622,7 @@ function Announcements() {
       {/* Create / Edit Announcement Dialog                                 */}
       {/* ================================================================= */}
       <Dialog open={announcementFormOpen} onOpenChange={setAnnouncementFormOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingAnnouncementId ? 'עריכת הודעה' : 'הודעה חדשה'}
@@ -697,7 +697,7 @@ function Announcements() {
       {/* Create / Edit Meeting Minutes Dialog                              */}
       {/* ================================================================= */}
       <Dialog open={minutesFormOpen} onOpenChange={setMinutesFormOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingMinutesId ? 'עריכת פרוטוקול' : 'פרוטוקול חדש'}

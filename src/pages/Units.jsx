@@ -877,7 +877,7 @@ function Units() {
 
       {/* ── Archive Dialog ───────────────────────────────────────────────────── */}
       <Dialog open={!!archiveDialog} onOpenChange={() => setArchiveDialog(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Archive className="h-5 w-5 text-amber-500" />
@@ -977,7 +977,7 @@ function Units() {
 
       {/* ── Create / Edit Dialog ─────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'עריכת דירה' : 'דירה חדשה'}</DialogTitle>
           </DialogHeader>

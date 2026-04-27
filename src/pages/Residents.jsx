@@ -349,7 +349,7 @@ function Residents() {
 
       {/* Primary resident warning dialog */}
       <Dialog open={primaryWarnOpen} onOpenChange={setPrimaryWarnOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>החלפת דייר ראשי</DialogTitle>
           </DialogHeader>
@@ -365,7 +365,7 @@ function Residents() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'עריכת דייר' : 'דייר חדש'}</DialogTitle>
           </DialogHeader>

@@ -585,7 +585,7 @@ export default function BuildingAgent() {
               </div>
 
               {/* Quick stats */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 flex-1 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 flex-1 w-full">
                 {[
                   { label: 'תחזוקות באיחור', value: healthScore.overdueTasks, icon: <Wrench className="h-4 w-4" />, danger: healthScore.overdueTasks > 0, gradient: 'from-amber-500 to-amber-600' },
                   { label: 'תקלות פתוחות', value: healthScore.openIssues, icon: <AlertTriangle className="h-4 w-4" />, danger: healthScore.openIssues > 3, gradient: 'from-orange-500 to-orange-600' },
@@ -863,7 +863,7 @@ export default function BuildingAgent() {
           {activeTab === 'issues' && issueAnalysis && (
             <div className="space-y-4">
               {/* Stats row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" />, gradient: 'from-blue-500 to-blue-600' },
                   { label: 'פתוחות', value: issueAnalysis.open, icon: <AlertTriangle className="h-4 w-4" />, gradient: 'from-red-500 to-red-600', color: 'var(--danger)' },

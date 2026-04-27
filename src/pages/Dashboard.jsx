@@ -199,7 +199,7 @@ function Dashboard() {
 
         <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl lg:text-3xl font-extrabold mb-1">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold mb-1">
               {greeting}{firstName ? `, ${firstName}` : ''} 👋
             </h1>
             <p className="text-blue-100 text-sm lg:text-base">

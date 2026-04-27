@@ -833,7 +833,7 @@ export default function RoomBooking() {
       {/* BOOKING DIALOG                                            */}
       {/* ══════════════════════════════════════════════════════════ */}
       <Dialog open={!!bookingDialog} onOpenChange={() => setBookingDialog(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarDays className="h-5 w-5 text-violet-500" />
@@ -1015,7 +1015,7 @@ export default function RoomBooking() {
       {/* RESOURCE FORM DIALOG                                      */}
       {/* ══════════════════════════════════════════════════════════ */}
       <Dialog open={!!resourceDialog} onOpenChange={() => setResourceDialog(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{resourceDialog === 'new' ? 'הוסף חדר / מתקן' : 'ערוך חדר / מתקן'}</DialogTitle>
           </DialogHeader>
@@ -1093,7 +1093,7 @@ export default function RoomBooking() {
       {/* APPROVE WITH NOTES DIALOG                                 */}
       {/* ══════════════════════════════════════════════════════════ */}
       <Dialog open={!!approveDialog} onOpenChange={() => setApproveDialog(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Check className="h-5 w-5 text-emerald-500" />אישור שריון</DialogTitle>
           </DialogHeader>
@@ -1129,7 +1129,7 @@ export default function RoomBooking() {
       {/* PAYMENT REDIRECT DIALOG                                   */}
       {/* ══════════════════════════════════════════════════════════ */}
       <Dialog open={!!paymentRedirect} onOpenChange={() => setPaymentRedirect(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><CreditCard className="h-5 w-5 text-emerald-500" />תשלום</DialogTitle>
           </DialogHeader>

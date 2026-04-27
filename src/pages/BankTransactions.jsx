@@ -689,7 +689,7 @@ export default function BankTransactions() {
 
       {/* Match Dialog */}
       <Dialog open={!!matchDialog} onOpenChange={() => setMatchDialog(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>שייך תנועה לדירה</DialogTitle>
           </DialogHeader>
@@ -745,7 +745,7 @@ export default function BankTransactions() {
 
       {/* Category Dialog */}
       <Dialog open={!!categoryDialog} onOpenChange={() => setCategoryDialog(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>שייך קטגוריה</DialogTitle>
           </DialogHeader>
@@ -812,7 +812,7 @@ export default function BankTransactions() {
 
       {/* Payment Summary Dialog */}
       <Dialog open={paymentSummaryOpen} onOpenChange={setPaymentSummaryOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full max-w-lg">
           <DialogHeader>
             <DialogTitle>
               סיכום תשלומים — {HEBREW_MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
@@ -820,7 +820,7 @@ export default function BankTransactions() {
           </DialogHeader>
           <div className="mt-2">
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
               <div className="text-center p-2 rounded-lg bg-green-50 dark:bg-green-900/20">
                 <p className="text-xs text-[var(--text-secondary)]">שילמו</p>
                 <p className="text-lg font-bold text-green-600">

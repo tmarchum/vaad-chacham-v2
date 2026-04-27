@@ -124,7 +124,7 @@ export default function Balance() {
       </div>
 
       {/* Monthly breakdown cards */}
-      <div className="space-y-2">
+      <div className="space-y-2 overflow-x-auto">
         {monthlyData.map(m => {
           const hasData = m.income > 0 || m.expenses > 0
           const maxAmount = Math.max(m.income, m.expenses) || 1

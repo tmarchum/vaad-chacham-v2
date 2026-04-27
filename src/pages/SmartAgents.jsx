@@ -1514,7 +1514,7 @@ export default function SmartAgents() {
         open={messageDialog.open}
         onOpenChange={(o) => !o && setMessageDialog(p => ({ ...p, open: false }))}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-full max-w-lg">
           <DialogHeader>
             <DialogTitle>{messageDialog.title}</DialogTitle>
           </DialogHeader>

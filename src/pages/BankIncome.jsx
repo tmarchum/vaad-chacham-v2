@@ -198,7 +198,7 @@ export default function BankIncome() {
           description={`לא נמצאו הכנסות ל${HEBREW_MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear}`}
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 overflow-x-auto">
           {incomeList.map(tx => {
             const isMatched = tx.match_status === 'matched'
             const dotColor = isMatched ? 'bg-emerald-500' : 'bg-amber-500'
@@ -281,7 +281,7 @@ export default function BankIncome() {
 
       {/* Category Dialog */}
       <Dialog open={!!categoryDialog} onOpenChange={() => setCategoryDialog(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>שייך קטגוריית הכנסה</DialogTitle>
           </DialogHeader>
@@ -341,7 +341,7 @@ export default function BankIncome() {
 
       {/* Edit Notes Dialog */}
       <Dialog open={!!editTx} onOpenChange={() => setEditTx(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>עריכת הערות</DialogTitle>
           </DialogHeader>

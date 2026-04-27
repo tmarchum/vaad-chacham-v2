@@ -1117,7 +1117,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* Full Issue Workflow Dialog */}
       <Dialog open={!!workflowIssue} onOpenChange={(open) => { if (!open) setWorkflowIssue(null) }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <ArrowRight className="h-5 w-5 text-[var(--primary)]" />
@@ -1424,7 +1424,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* AI Issue Analysis Dialog */}
       <Dialog open={!!aiAnalysisIssue} onOpenChange={(open) => { if (!open) setAiAnalysisIssue(null) }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="w-full max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-[var(--primary)]" />
@@ -1557,7 +1557,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* Template Picker Dialog */}
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle>יצירה מתבנית</DialogTitle>
           </DialogHeader>
@@ -1581,7 +1581,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* Request Quote Dialog */}
       <Dialog open={!!quoteDialogIssue} onOpenChange={() => setQuoteDialogIssue(null)}>
-        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>בקשת הצעת מחיר</DialogTitle>
           </DialogHeader>
@@ -1639,7 +1639,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* Assign Vendor Dialog */}
       <Dialog open={!!vendorAssignIssue} onOpenChange={() => setVendorAssignIssue(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>קבע ספק</DialogTitle>
           </DialogHeader>
@@ -1665,7 +1665,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* Schedule Dialog */}
       <Dialog open={!!scheduleDialogIssue} onOpenChange={() => setScheduleDialogIssue(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>תזמון עבודה</DialogTitle>
           </DialogHeader>
@@ -1692,7 +1692,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* Complete Dialog */}
       <Dialog open={!!completeDialogIssue} onOpenChange={() => setCompleteDialogIssue(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="w-full max-w-sm">
           <DialogHeader>
             <DialogTitle>סימון כבוצע</DialogTitle>
           </DialogHeader>
@@ -1718,7 +1718,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       {/* Create/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'עריכת תקלה' : 'תקלה חדשה'}</DialogTitle>
           </DialogHeader>
