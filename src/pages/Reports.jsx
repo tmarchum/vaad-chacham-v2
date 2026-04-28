@@ -25,6 +25,7 @@ const PERIODS = [
   { key: 'last_3', label: '3 חודשים' },
   { key: 'this_year', label: 'השנה' },
   { key: 'all', label: 'הכל' },
+  { key: 'custom', label: 'טווח מותאם' },
 ]
 
 import { HEBREW_MONTHS } from '@/lib/constants'
@@ -33,10 +34,18 @@ import { HEBREW_MONTHS } from '@/lib/constants'
 // Helpers
 // ---------------------------------------------------------------------------
 
-function inPeriod(dateStr, period) {
+function inPeriod(dateStr, period, customFrom = '', customTo = '') {
   if (!dateStr || period === 'all') return true
   const d = new Date(dateStr)
   const now = new Date()
+  if (period === 'custom') {
+    if (!customFrom && !customTo) return true
+    const from = customFrom ? new Date(customFrom) : null
+    const to = customTo ? new Date(customTo + 'T23:59:59') : null
+    if (from && d < from) return false
+    if (to && d > to) return false
+    return true
+  }
   if (period === 'this_month')
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
   if (period === 'last_3') {
@@ -175,15 +184,15 @@ function HorizontalBar({ label, amount, pct, color = 'var(--primary)' }) {
 // Tab: Financial
 // ---------------------------------------------------------------------------
 
-function FinancialTab({ payments, expenses, period, buildingId }) {
+function FinancialTab({ payments, expenses, period, buildingId, customFrom, customTo }) {
   // Filter payments
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
       const matchBuilding = !buildingId || buildingId === 'all' || p.buildingId === buildingId
       const dateField = p.status === 'paid' ? p.paidAt : p.month
-      return matchBuilding && inPeriod(dateField, period)
+      return matchBuilding && inPeriod(dateField, period, customFrom, customTo)
     })
-  }, [payments, buildingId, period])
+  }, [payments, buildingId, period, customFrom, customTo])
 
   const paidPayments = filteredPayments.filter((p) => p.status === 'paid')
   const totalIncome = sumBy(paidPayments, 'amount')
@@ -194,9 +203,9 @@ function FinancialTab({ payments, expenses, period, buildingId }) {
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
       const matchBuilding = !buildingId || buildingId === 'all' || e.buildingId === buildingId
-      return matchBuilding && inPeriod(e.date, period)
+      return matchBuilding && inPeriod(e.date, period, customFrom, customTo)
     })
-  }, [expenses, buildingId, period])
+  }, [expenses, buildingId, period, customFrom, customTo])
 
   const totalExpenses = sumBy(filteredExpenses, 'amount')
   const netBalance = totalIncome - totalExpenses
@@ -635,13 +644,13 @@ function ResidentsTab({ units, payments, buildingId }) {
 // Tab: Maintenance
 // ---------------------------------------------------------------------------
 
-function MaintenanceTab({ issues, period, buildingId }) {
+function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
   const filtered = useMemo(() => {
     return issues.filter((i) => {
       const matchBuilding = !buildingId || buildingId === 'all' || i.buildingId === buildingId
-      return matchBuilding && inPeriod(i.reportedAt, period)
+      return matchBuilding && inPeriod(i.reportedAt, period, customFrom, customTo)
     })
-  }, [issues, buildingId, period])
+  }, [issues, buildingId, period, customFrom, customTo])
 
   const openIssues = filtered.filter(
     (i) => !['completed', 'closed'].includes(i.status)
@@ -1062,6 +1071,8 @@ function BudgetTab({ units, expenses, buildingId }) {
 export default function Reports() {
   const [activeTab, setActiveTab] = useState('financial')
   const [period, setPeriod] = useState('this_month')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
 
   const { selectedBuilding, buildings } = useBuildingContext()
   const [buildingFilter, setBuildingFilter] = useState('all')
@@ -1076,6 +1087,9 @@ export default function Reports() {
 
   // Derive data needed for CSV export from filtered collections
   function handleExport() {
+    const periodLabel = period === 'custom'
+      ? `${customFrom || ''}_${customTo || ''}`
+      : period
     if (activeTab === 'financial') {
       const monthKeys = getLast6MonthKeys()
       const rows = monthKeys.map((key) => {
@@ -1120,7 +1134,7 @@ export default function Reports() {
     } else if (activeTab === 'maintenance') {
       const filtered = (issues || []).filter((i) => {
         const matchBuilding = !activeBuildingId || activeBuildingId === 'all' || i.buildingId === activeBuildingId
-        return matchBuilding && inPeriod(i.reportedAt, period)
+        return matchBuilding && inPeriod(i.reportedAt, period, customFrom, customTo)
       })
       const rows = filtered.map((i) => [
         i.title || i.description || '',
@@ -1130,7 +1144,7 @@ export default function Reports() {
         formatDate(i.reportedAt),
         i.resolvedAt ? formatDate(i.resolvedAt) : '',
       ])
-      exportToCSV('דוח_תחזוקה.csv', ['כותרת', 'קטגוריה', 'סטטוס', 'עלות', 'תאריך דיווח', 'תאריך סגירה'], rows)
+      exportToCSV(`דוח_תחזוקה_${periodLabel}.csv`, ['כותרת', 'קטגוריה', 'סטטוס', 'עלות', 'תאריך דיווח', 'תאריך סגירה'], rows)
     } else if (activeTab === 'budget') {
       const now = new Date()
       const currentMonthIdx = now.getMonth()
@@ -1202,17 +1216,39 @@ export default function Reports() {
 
       {/* Period selector (visible on financial & maintenance tabs) */}
       {(activeTab === 'financial' || activeTab === 'maintenance') && (
-        <div className="flex flex-wrap gap-2">
-          {PERIODS.map((p) => (
-            <Button
-              key={p.key}
-              variant={period === p.key ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setPeriod(p.key)}
-            >
-              {p.label}
-            </Button>
-          ))}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            {PERIODS.map((p) => (
+              <Button
+                key={p.key}
+                variant={period === p.key ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPeriod(p.key)}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
+          {period === 'custom' && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>מתאריך:</label>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded-lg border px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--primary-light)]"
+                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
+              />
+              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>עד:</label>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded-lg border px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--primary-light)]"
+                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1227,6 +1263,8 @@ export default function Reports() {
             expenses={expenses}
             period={period}
             buildingId={activeBuildingId}
+            customFrom={customFrom}
+            customTo={customTo}
           />
         )}
         {activeTab === 'residents' && (
@@ -1241,6 +1279,8 @@ export default function Reports() {
             issues={issues}
             period={period}
             buildingId={activeBuildingId}
+            customFrom={customFrom}
+            customTo={customTo}
           />
         )}
         {activeTab === 'budget' && (
