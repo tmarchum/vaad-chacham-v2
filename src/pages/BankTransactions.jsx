@@ -66,8 +66,8 @@ export default function BankTransactions() {
   const residentMap = useMemo(() => {
     const map = {}
     allResidents.forEach(r => {
-      if (r.is_primary || !map[r.unit_id]) {
-        map[r.unit_id] = `${r.first_name || ''} ${r.last_name || ''}`.trim()
+      if (r.is_primary || r.isPrimary || !map[r.unit_id]) {
+        map[r.unit_id] = `${r.firstName || r.first_name || ''} ${r.lastName || r.last_name || ''}`.trim()
       }
     })
     return map
