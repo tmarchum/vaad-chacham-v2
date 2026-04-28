@@ -2,7 +2,6 @@ import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { useAuth } from '@/hooks/useAuth'
-import { HDate } from '@hebcal/core'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
@@ -157,16 +156,21 @@ function Dashboard() {
   // Hebrew date
   const [hebrewDate, setHebrewDate] = useState('')
   useEffect(() => {
-    try {
-      const hd = new HDate()
-      setHebrewDate(hd.render('he'))
-    } catch (e) {
-      console.warn('Hebrew date error:', e)
-    }
-    const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
-    const timer = setTimeout(() => {
-      try { setHebrewDate(new HDate().render('he')) } catch {}
-    }, msUntilMidnight)
+    let timer
+    import('@hebcal/core').then(({ HDate }) => {
+      try {
+        const hd = new HDate()
+        setHebrewDate(hd.render('he'))
+      } catch (e) {
+        console.warn('Hebrew date error:', e)
+      }
+      const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
+      timer = setTimeout(() => {
+        import('@hebcal/core').then(({ HDate: HDate2 }) => {
+          try { setHebrewDate(new HDate2().render('he')) } catch {}
+        })
+      }, msUntilMidnight)
+    })
     return () => clearTimeout(timer)
   }, [])
 
