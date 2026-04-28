@@ -250,13 +250,13 @@ export default function BankTransactions() {
   // Ignore a transaction
   const handleIgnore = async (tx) => {
     await updateTx(tx.id, { match_status: 'ignored' })
-    refresh()
+    await refresh()
   }
 
   // Exclude a transaction (not relevant — returned check, fee, etc.)
   const handleExclude = async (tx) => {
     await updateTx(tx.id, { match_status: 'excluded', unit_id: null })
-    refresh()
+    await refresh()
   }
 
   // Approve a suggestion — convert to matched and sync payment
@@ -287,7 +287,7 @@ export default function BankTransactions() {
   // Reject a suggestion — revert to unmatched
   const handleRejectSuggestion = async (tx) => {
     await updateTx(tx.id, { match_status: 'unmatched', unit_id: null })
-    refresh()
+    await refresh()
   }
 
   // Unmatch a transaction
@@ -347,7 +347,7 @@ export default function BankTransactions() {
         detail: { message: 'לא נמצאו התאמות אוטומטיות', type: 'warning' }
       }))
     }
-    refresh()
+    await refresh()
   }
 
   // Assign a category to a transaction + auto-apply to all matching descriptions
@@ -375,7 +375,7 @@ export default function BankTransactions() {
     }
 
     setCategoryDialog(null)
-    refresh()
+    await refresh()
   }
 
   const yearOptions = useMemo(() => {

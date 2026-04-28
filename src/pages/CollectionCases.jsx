@@ -289,7 +289,7 @@ export default function CollectionCases() {
   }
 
   // ── Handler: WhatsApp Reminder ────────────────────────────────────────────
-  const sendWhatsApp = (e, c) => {
+  const sendWhatsApp = async (e, c) => {
     e.stopPropagation()
     if (!notificationsEnabled) {
       window.dispatchEvent(new CustomEvent('app-toast', {
@@ -313,7 +313,7 @@ export default function CollectionCases() {
       : `https://wa.me/?text=${msg}`
     window.open(url, '_blank')
 
-    // Log to history
+    // Log to history (fire-and-forget is acceptable here; user already has the WA window open)
     const history = Array.isArray(c.history) ? [...c.history] : []
     history.push({ date: new Date().toISOString(), note: 'תזכורת WhatsApp נשלחה' })
     update(c.id, { history, escalation_level: c.escalation_level === 'none' ? 'reminder' : c.escalation_level })
