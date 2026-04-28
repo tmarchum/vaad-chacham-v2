@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { supabase } from '@/lib/supabase'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,7 @@ import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus, Megaphone, FileText, AlertTriangle, Calendar,
-  Pencil, Trash2, Wrench,
+  Pencil, Trash2, Wrench, Mail,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -134,6 +135,7 @@ function Announcements() {
   const [announcementFormOpen, setAnnouncementFormOpen] = useState(false)
   const [editingAnnouncementId, setEditingAnnouncementId] = useState(null)
   const [announcementForm, setAnnouncementForm] = useState(EMPTY_ANNOUNCEMENT_FORM)
+  const [sendNotifyEmail, setSendNotifyEmail] = useState(true)
   const [deleteAnnouncementTarget, setDeleteAnnouncementTarget] = useState(null)
   const [expandedAnnouncements, setExpandedAnnouncements] = useState({})
 
@@ -196,6 +198,7 @@ function Announcements() {
 
   const openCreateAnnouncement = () => {
     setEditingAnnouncementId(null)
+    setSendNotifyEmail(true)
     setAnnouncementForm({
       ...EMPTY_ANNOUNCEMENT_FORM,
       buildingId: buildingFilter !== 'all' ? buildingFilter : (buildings[0]?.id || ''),
@@ -219,6 +222,7 @@ function Announcements() {
 
   const handleSubmitAnnouncement = async (e) => {
     e.preventDefault()
+    const isNew = !editingAnnouncementId
     const data = {
       ...announcementForm,
       publishedAt: announcementForm.publishedAt || new Date().toISOString(),
@@ -229,6 +233,52 @@ function Announcements() {
       await createAnnouncement(data)
     }
     setAnnouncementFormOpen(false)
+
+    // ── Send email notifications to residents on new publish ─────────────
+    if (isNew && sendNotifyEmail && announcementForm.buildingId) {
+      try {
+        const { data: residents } = await supabase
+          .from('unit_residents')
+          .select('email, first_name, last_name')
+          .eq('building_id', announcementForm.buildingId)
+          .not('email', 'is', null)
+          .neq('email', '')
+
+        if (residents && residents.length > 0) {
+          const building = buildings.find((b) => b.id === announcementForm.buildingId)
+          const buildingName = building?.name || 'הבניין'
+          const typeLabel = TYPE_CONFIG[announcementForm.type]?.label || 'הודעה'
+          const subject = `[${buildingName}] ${typeLabel}: ${announcementForm.title}`
+          const html = `
+<div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb; border-radius: 8px;">
+  <div style="background: linear-gradient(135deg, #3b82f6, #6366f1); padding: 24px; border-radius: 8px 8px 0 0; text-align: center; margin: -20px -20px 20px -20px;">
+    <h1 style="color: white; margin: 0; font-size: 22px;">${buildingName}</h1>
+    <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px;">${typeLabel}</p>
+  </div>
+  <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 12px;">${announcementForm.title}</h2>
+  <p style="color: #475569; font-size: 15px; line-height: 1.7; white-space: pre-wrap;">${announcementForm.content}</p>
+  ${announcementForm.expiresAt ? `<p style="color: #94a3b8; font-size: 13px; margin-top: 16px;">בתוקף עד: ${new Date(announcementForm.expiresAt).toLocaleDateString('he-IL')}</p>` : ''}
+  <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+  <p style="color: #94a3b8; font-size: 12px; text-align: center;">VaadPlus — מערכת ניהול ועד בית</p>
+</div>`
+
+          let sent = 0
+          await Promise.allSettled(
+            residents.map(async (r) => {
+              try {
+                await supabase.functions.invoke('send-notification', {
+                  body: { to: r.email, subject, html, buildingId: announcementForm.buildingId, channel: 'email' },
+                })
+                sent++
+              } catch { /* */ }
+            })
+          )
+          window.dispatchEvent(new CustomEvent('app-toast', {
+            detail: { message: `הודעה נשלחה ל-${sent} דיירים במייל ✓`, type: 'success' },
+          }))
+        }
+      } catch { /* silent — notification failure doesn't block publish */ }
+    }
   }
 
   const setAnnouncementField = (field) => (e) => {
@@ -720,6 +770,22 @@ function Announcements() {
                 onChange={setAnnouncementField('author')}
               />
             </div>
+            {/* Email notification opt-in (only for new announcements) */}
+            {!editingAnnouncementId && (
+              <label className="flex items-center gap-2.5 cursor-pointer select-none py-1">
+                <input
+                  type="checkbox"
+                  checked={sendNotifyEmail}
+                  onChange={(e) => setSendNotifyEmail(e.target.checked)}
+                  className="h-4 w-4 rounded border-[var(--border)] accent-[var(--primary)]"
+                />
+                <span className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  <Mail className="h-4 w-4" style={{ color: 'var(--text-muted)' }} />
+                  שלח הודעה גם במייל לדיירי הבניין
+                </span>
+              </label>
+            )}
+
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={isSavingAnnouncement}>
                 {isSavingAnnouncement ? 'שומר...' : editingAnnouncementId ? 'שמור שינויים' : 'פרסם הודעה'}
