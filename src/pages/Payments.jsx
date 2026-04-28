@@ -47,11 +47,12 @@ const EMPTY_FORM = {
   status: 'pending',
   paidAt: '',
   method: '',
+  amount_paid: '',
 }
 
 function Payments() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allPayments, create, update, remove, refresh, isSaving, isLoading } = useCollection('payments',
+  const { data: allPayments, create, update, remove, bulkCreate, refresh, isSaving, isLoading } = useCollection('payments',
     selectedBuilding ? { building_id: selectedBuilding.id } : {}
   )
   const { data: allUnits } = useCollection('units',
@@ -339,37 +340,30 @@ function Payments() {
       allPayments.filter((p) => p.month === monthKey).map((p) => p.unitId)
     )
 
-    let created = 0
-    for (const unit of targetUnits) {
-      if (!existingUnitIds.has(unit.id)) {
-        const building = buildingMap[unit.buildingId || unit.building_id]
-        const fee = calcUnitFee(unit, building)
-        try {
-          await create({
-            unitId: unit.id,
-            buildingId: unit.buildingId || unit.building_id,
-            amount: fee,
-            month: monthKey,
-            status: 'pending',
-            paidAt: null,
-            method: null,
-          })
-          created++
-        } catch (err) {
-          console.error('Failed to create payment for unit:', unit.id, err)
-        }
-      }
-    }
-    if (created === 0) {
+    const paymentArray = targetUnits
+      .filter((unit) => !existingUnitIds.has(unit.id))
+      .map((unit) => ({
+        unit_id: unit.id,
+        building_id: unit.buildingId || unit.building_id,
+        month: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`,
+        amount: calcUnitFee(unit, buildingMap[unit.buildingId || unit.building_id]),
+        status: 'unpaid',
+        owner_name: getOwnerName(unit.id),
+      }))
+
+    if (paymentArray.length === 0) {
       window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'כל הדירות כבר מופיעות בחודש זה', type: 'info' } }))
-    } else {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `נוצרו ${created} תשלומים חדשים`, type: 'success' } }))
+      return
     }
+
+    await bulkCreate(paymentArray)
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `נוצרו ${paymentArray.length} תשלומים חדשים`, type: 'success' } }))
   }
 
   const statusOptions = [
     { value: 'pending', label: 'ממתין' },
     { value: 'paid', label: 'שולם' },
+    { value: 'partial', label: 'שולם חלקית' },
     { value: 'overdue', label: 'באיחור' },
   ]
 
@@ -770,6 +764,15 @@ function Payments() {
               onChange={setField('status')}
               options={statusOptions}
             />
+            {form.status === 'partial' && (
+              <FormField
+                label="סכום ששולם (₪)"
+                type="number"
+                value={form.amount_paid || ''}
+                onChange={e => setForm(f => ({ ...f, amount_paid: e.target.value }))}
+                placeholder="סכום שהתקבל בפועל"
+              />
+            )}
             <FormField
               label="תאריך תשלום"
               type="date"

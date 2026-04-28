@@ -14,22 +14,37 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { Plus, Pencil, Trash2, RefreshCw, CheckCircle2, Scale, CalendarClock } from 'lucide-react'
 
 const FREQUENCY_MAP = {
+  weekly: { label: 'שבועי', variant: 'default', months: 0, weeks: 1 },
   monthly: { label: 'חודשי', variant: 'default', months: 1 },
   quarterly: { label: 'רבעוני', variant: 'info', months: 3 },
+  biannually: { label: 'חצי שנתי', variant: 'info', months: 6 },
   annually: { label: 'שנתי', variant: 'warning', months: 12 },
 }
 
 const FREQUENCY_OPTIONS = [
+  { value: 'weekly', label: 'שבועי' },
   { value: 'monthly', label: 'חודשי' },
   { value: 'quarterly', label: 'רבעוני' },
+  { value: 'biannually', label: 'חצי שנתי' },
   { value: 'annually', label: 'שנתי' },
 ]
 
 const FREQUENCY_FILTERS = [
   { key: 'all', label: 'הכל' },
+  { key: 'weekly', label: 'שבועי' },
   { key: 'monthly', label: 'חודשי' },
   { key: 'quarterly', label: 'רבעוני' },
+  { key: 'biannually', label: 'חצי שנתי' },
   { key: 'annually', label: 'שנתי' },
+]
+
+const TASK_CATEGORIES = [
+  { value: 'maintenance', label: 'תחזוקה' },
+  { value: 'safety', label: 'בטיחות' },
+  { value: 'regulatory', label: 'רגולציה' },
+  { value: 'cleaning', label: 'ניקיון' },
+  { value: 'financial', label: 'כספים' },
+  { value: 'other', label: 'אחר' },
 ]
 
 const EMPTY_FORM = {
@@ -39,6 +54,8 @@ const EMPTY_FORM = {
   next_due_date: '',
   is_required_by_law: false,
   notes: '',
+  category: '',
+  law_reference: '',
 }
 
 function isOverdue(dateStr) {
@@ -51,9 +68,13 @@ function isOverdue(dateStr) {
 }
 
 function getNextDate(currentDateStr, frequency) {
-  const months = FREQUENCY_MAP[frequency]?.months || 1
+  const freq = FREQUENCY_MAP[frequency]
   const date = new Date(currentDateStr)
-  date.setMonth(date.getMonth() + months)
+  if (frequency === 'weekly') {
+    date.setDate(date.getDate() + 7)
+  } else {
+    date.setMonth(date.getMonth() + (freq?.months || 1))
+  }
   return date.toISOString().slice(0, 10)
 }
 
@@ -71,6 +92,7 @@ function RecurringTasks() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [detailTask, setDetailTask] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [confirmMarkDone, setConfirmMarkDone] = useState(null)
 
   const buildingMap = useMemo(() => {
     const map = {}
@@ -136,6 +158,8 @@ function RecurringTasks() {
       next_due_date: task.next_due_date ? task.next_due_date.slice(0, 10) : '',
       is_required_by_law: task.is_required_by_law || false,
       notes: task.notes || '',
+      category: task.category || '',
+      law_reference: task.law_reference || '',
     })
     setFormOpen(true)
     setDetailTask(null)
@@ -164,9 +188,13 @@ function RecurringTasks() {
     }
   }
 
-  const handleMarkDone = (task) => {
+  const handleMarkDone = async (task) => {
     const nextDate = getNextDate(task.next_due_date || new Date().toISOString().slice(0, 10), task.frequency)
-    update(task.id, { next_due_date: nextDate })
+    const history = Array.isArray(task.completion_history) ? [...task.completion_history] : []
+    history.push({ completed_at: new Date().toISOString(), previous_due: task.next_due_date })
+    await update(task.id, { next_due_date: nextDate, completion_history: history })
+    setConfirmMarkDone(null)
+    if (detailTask?.id === task.id) setDetailTask(null)
   }
 
   if (isLoading) return (
@@ -337,7 +365,7 @@ function RecurringTasks() {
 
                 {/* Actions (visible on hover) */}
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" onClick={() => handleMarkDone(task)} title="סמן כבוצע">
+                  <Button variant="ghost" size="icon" onClick={() => setConfirmMarkDone(task)} title="סמן כבוצע">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => openEdit(task)}>
@@ -400,6 +428,26 @@ function RecurringTasks() {
               }
             />
             <DetailRow label="הערות" value={detailTask.notes} />
+            {detailTask.category && (
+              <DetailRow label="קטגוריה" value={TASK_CATEGORIES.find(c => c.value === detailTask.category)?.label || detailTask.category} />
+            )}
+            {detailTask.law_reference && (
+              <DetailRow label="הפניה לחוק" value={detailTask.law_reference} />
+            )}
+            {Array.isArray(detailTask.completion_history) && detailTask.completion_history.length > 0 && (
+              <div className="pt-3">
+                <p className="text-xs font-medium text-[var(--text-secondary)] mb-2">היסטוריית ביצועים אחרונה</p>
+                <div className="space-y-1">
+                  {[...detailTask.completion_history].reverse().slice(0, 3).map((entry, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span>בוצע: {formatDate(entry.completed_at)}</span>
+                      {entry.previous_due && <span className="text-[var(--text-muted)]">(מועד מקורי: {formatDate(entry.previous_due)})</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2 pt-4">
               <Button variant="outline" size="sm" onClick={() => openEdit(detailTask)}>
                 <Pencil className="h-3.5 w-3.5" />
@@ -408,10 +456,7 @@ function RecurringTasks() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  handleMarkDone(detailTask)
-                  setDetailTask(null)
-                }}
+                onClick={() => setConfirmMarkDone(detailTask)}
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 סמן כבוצע
@@ -439,6 +484,27 @@ function RecurringTasks() {
         onConfirm={handleDelete}
         itemName={deleteTarget ? deleteTarget.title || 'משימה' : ''}
       />
+
+      {/* Mark Done Confirm Dialog */}
+      <Dialog open={!!confirmMarkDone} onOpenChange={() => setConfirmMarkDone(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>סמן כבוצע</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-sm text-[var(--text-secondary)]">
+            {confirmMarkDone && (
+              <p>האם לסמן את המשימה <strong>{confirmMarkDone.title}</strong> כבוצעת? תאריך הביצוע הבא יעודכן אוטומטית.</p>
+            )}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button onClick={() => handleMarkDone(confirmMarkDone)} disabled={isSaving}>
+              <CheckCircle2 className="h-4 w-4" />
+              {isSaving ? 'שומר...' : 'כן, בוצע'}
+            </Button>
+            <Button variant="outline" onClick={() => setConfirmMarkDone(null)}>ביטול</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -480,6 +546,19 @@ function RecurringTasks() {
               label="נדרש בחוק"
               value={form.is_required_by_law}
               onChange={setField('is_required_by_law')}
+            />
+            <FormSelect
+              label="קטגוריה"
+              value={form.category}
+              onChange={setField('category')}
+              options={TASK_CATEGORIES}
+              placeholder="בחר קטגוריה"
+            />
+            <FormField
+              label="הפניה לחוק (אופציונלי)"
+              value={form.law_reference}
+              onChange={setField('law_reference')}
+              placeholder="לדוגמה: תקנות הבטיחות..."
             />
             <FormTextarea
               label="הערות"
