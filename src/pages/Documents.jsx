@@ -430,6 +430,16 @@ export default function Documents() {
   async function handleDelete() {
     if (deleteDoc) {
       try {
+        if (deleteDoc.file_url) {
+          try {
+            // Extract path after /documents/
+            const match = deleteDoc.file_url.match(/\/documents\/(.+)$/)
+            if (match) {
+              const filePath = decodeURIComponent(match[1])
+              await supabase.storage.from('documents').remove([filePath])
+            }
+          } catch { /* storage errors are non-fatal */ }
+        }
         await remove(deleteDoc.id)
       } catch (err) {
         console.error('Failed to delete document:', err)
@@ -655,6 +665,8 @@ export default function Documents() {
               value={form.fileSize}
               onChange={(e) => handleFormChange('fileSize', e.target.value)}
               placeholder="מחושב אוטומטית בעת העלאת קובץ"
+              readOnly
+              className="bg-gray-100"
             />
 
             {/* File upload */}
@@ -667,7 +679,17 @@ export default function Documents() {
                   ref={fileInputRef}
                   type="file"
                   className="hidden"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null
+                    setSelectedFile(file)
+                    if (file) {
+                      const fileSizeKB = Math.round(file.size / 1024)
+                      const sizeLabel = fileSizeKB > 1024
+                        ? `${(fileSizeKB / 1024).toFixed(1)} MB`
+                        : `${fileSizeKB} KB`
+                      setForm(f => ({ ...f, fileSize: sizeLabel }))
+                    }
+                  }}
                 />
                 <Button
                   type="button"

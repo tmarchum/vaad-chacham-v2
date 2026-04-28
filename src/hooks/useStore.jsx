@@ -56,7 +56,22 @@ export function useCollection(collectionName, filters = {}) {
     }
   }, [collection, refresh])
 
-  return { data, isLoading, isSaving, create, update, remove, refresh }
+  const bulkCreate = useCallback(async (items) => {
+    if (!items?.length) return []
+    setIsSaving(true)
+    try {
+      const result = await collection.bulkCreate(items)
+      await refresh()
+      return result
+    } catch (e) {
+      console.error('bulkCreate error:', e)
+      return []
+    } finally {
+      setIsSaving(false)
+    }
+  }, [collection, refresh])
+
+  return { data, isLoading, isSaving, create, update, remove, refresh, bulkCreate }
 }
 
 // BuildingContext — selected building persists
