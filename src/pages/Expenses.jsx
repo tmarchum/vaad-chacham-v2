@@ -179,9 +179,9 @@ function Expenses() {
     setForm((prev) => ({ ...prev, [field]: val }))
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteTarget) {
-      remove(deleteTarget.id)
+      await remove(deleteTarget.id)
       setDeleteTarget(null)
     }
   }
