@@ -31,6 +31,7 @@ import { BuildingProvider } from '@/hooks/useStore'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { Layout } from '@/components/layout/Layout'
 import Login from '@/pages/Login'
+import NotFound from '@/pages/NotFound'
 
 // Lazy-load all page components for code splitting
 const Dashboard        = lazy(() => import('@/pages/Dashboard'))
@@ -114,6 +115,9 @@ createRoot(document.getElementById('root')).render(
               <Route path="admin" element={<Suspense fallback={<PageLoader />}><AdminSettings /></Suspense>} />
             </Route>
           </Route>
+
+          {/* 404 catch-all */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

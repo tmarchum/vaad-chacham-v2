@@ -118,7 +118,7 @@ function Residents() {
     }
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const data = { ...form }
 
@@ -139,7 +139,7 @@ function Residents() {
       }
     }
 
-    doSubmit(data)
+    await doSubmit(data)
   }
 
   const confirmPrimaryOverride = async () => {
