@@ -20,6 +20,11 @@ const sizes = {
 
 const Button = forwardRef(
   ({ className, variant = 'default', size = 'default', disabled, children, ...props }, ref) => {
+    // For icon-only buttons: auto-apply aria-label as title for native tooltip
+    const isIconOnly = size === 'icon'
+    const titleProp = isIconOnly && props['aria-label'] && !props.title
+      ? { title: props['aria-label'] }
+      : {}
     return (
       <button
         ref={ref}
@@ -33,6 +38,7 @@ const Button = forwardRef(
           sizes[size],
           className
         )}
+        {...titleProp}
         {...props}
       >
         {children}

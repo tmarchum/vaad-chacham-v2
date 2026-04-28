@@ -43,7 +43,7 @@ function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#3b82f6' }
 }
 
 function Dashboard() {
-  const { selectedBuilding } = useBuildingContext()
+  const { selectedBuilding, buildings, isLoading: buildingsLoading } = useBuildingContext()
   const { profile } = useAuth()
   const { data: allUnits, isLoading } = useCollection('units')
   const { data: allPayments } = useCollection('payments')
@@ -256,6 +256,43 @@ function Dashboard() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
           <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
         </div>
+      </div>
+    </div>
+  )
+
+  // First-time onboarding: no buildings yet
+  if (!buildingsLoading && buildings.length === 0) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-fade-in-up">
+      <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-blue-500/25">
+        <Building2 className="h-12 w-12 text-white" />
+      </div>
+      <h1 className="text-2xl font-extrabold text-[var(--text-primary)] mb-2">ברוכים הבאים לוועד+</h1>
+      <p className="text-[var(--text-muted)] mb-2 max-w-sm">
+        טרם הוגדר בניין במערכת. הוסיפו את הבניין הראשון כדי להתחיל לנהל תשלומים, תקלות ודיירים.
+      </p>
+      <Link
+        to="/buildings"
+        className="mt-6 inline-flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl px-6 py-3 transition-all shadow-lg shadow-blue-500/20 hover:shadow-xl hover:-translate-y-0.5"
+      >
+        <Building2 className="h-5 w-5" />
+        הוסף בניין ראשון
+      </Link>
+      <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-xl text-right">
+        {[
+          { icon: CreditCard, label: 'גבייה חודשית', desc: 'ניהול תשלומים ומעקב חייבים', color: 'text-blue-600 bg-blue-50' },
+          { icon: Wrench,     label: 'תקלות ועבודות', desc: 'פתיחת קריאות וניהול ספקים', color: 'text-purple-600 bg-purple-50' },
+          { icon: Megaphone,  label: 'הודעות לדיירים', desc: 'שליחת הודעות במייל ו-WhatsApp', color: 'text-amber-600 bg-amber-50' },
+        ].map(({ icon: Icon, label, desc, color }) => (
+          <div key={label} className="flex items-start gap-3 p-4 rounded-xl border border-[var(--border)] bg-white">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+              <Icon className="h-4.5 w-4.5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[var(--text-primary)]">{label}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">{desc}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

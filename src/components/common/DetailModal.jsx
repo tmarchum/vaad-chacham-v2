@@ -24,7 +24,7 @@ function DetailModal({ open, onOpenChange, title, onEdit, children }) {
           <div className="flex items-center justify-between">
             <DialogTitle>{title}</DialogTitle>
             {onEdit && (
-              <Button variant="ghost" size="icon" onClick={onEdit}>
+              <Button variant="ghost" size="icon" onClick={onEdit} aria-label="עריכה">
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
