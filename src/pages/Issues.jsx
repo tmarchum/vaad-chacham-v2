@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { callVaadAgent } from '@/lib/vaadAgent'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
@@ -153,6 +153,140 @@ function getAvgResolutionDays(issues) {
 }
 
 // ---------------------------------------------------------------------------
+// IssueCard component (memoized)
+// ---------------------------------------------------------------------------
+
+const PRIORITY_ACCENT = {
+  urgent: 'bg-red-500',
+  high: 'bg-orange-500',
+  medium: 'bg-amber-400',
+  low: 'bg-slate-300',
+}
+
+const IssueCard = React.memo(function IssueCard({
+  iss,
+  issueQuotes,
+  buildingName,
+  onOpen,
+  onAcknowledge,
+  onOpenQuoteDialog,
+  onOpenVendorAssign,
+  onOpenSchedule,
+  onOpenComplete,
+  onClose,
+}) {
+  const priority = PRIORITY_MAP[iss.priority] || PRIORITY_MAP.medium
+  const status = STATUS_MAP[iss.status] || STATUS_MAP.reported
+  const pendingCount = issueQuotes.filter((q) => q.status === 'pending').length
+  const receivedCount = issueQuotes.filter((q) => q.status === 'received').length
+  const displayCost = iss.cost != null && iss.cost !== '' ? iss.cost
+    : iss.estimatedCost != null && iss.estimatedCost !== '' ? iss.estimatedCost : null
+
+  // SLA badge (inlined)
+  const isOverdue = iss.reportedAt && !['completed','closed'].includes(iss.status) && (() => {
+    const slaHours = SLA_HOURS[iss.priority] || SLA_HOURS.medium
+    return (Date.now() - new Date(iss.reportedAt)) / 3600000 > slaHours
+  })()
+
+  const slaBadge = iss.reportedAt && !['completed','closed'].includes(iss.status) ? (
+    <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-green-600'}`}>
+      <Clock className="h-3 w-3" />
+      {isOverdue ? 'חריגת SLA' : 'בזמן'}
+    </span>
+  ) : null
+
+  // Quick actions
+  const actions = []
+  const s = iss.status
+  if (s === 'reported') {
+    actions.push(
+      <Button key="ack" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onAcknowledge(iss) }}>
+        <Check className="h-3.5 w-3.5" /> אשר
+      </Button>
+    )
+  }
+  if (s === 'reported' || s === 'acknowledged') {
+    actions.push(
+      <Button key="quote" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenQuoteDialog(iss) }}>
+        <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
+      </Button>
+    )
+  }
+  if (!iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(s)) {
+    actions.push(
+      <Button key="vendor" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenVendorAssign(iss) }}>
+        <Users className="h-3.5 w-3.5" /> קבע ספק
+      </Button>
+    )
+  }
+  if (s === 'approved') {
+    actions.push(
+      <Button key="sched" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenSchedule(iss) }}>
+        <Calendar className="h-3.5 w-3.5" /> תזמן
+      </Button>
+    )
+  }
+  if (['scheduled','in_progress'].includes(s)) {
+    actions.push(
+      <Button key="complete" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenComplete(iss) }}>
+        <CheckCircle2 className="h-3.5 w-3.5" /> סמן כבוצע
+      </Button>
+    )
+  }
+  if (s === 'completed') {
+    actions.push(
+      <Button key="close" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onClose(iss) }}>
+        <X className="h-3.5 w-3.5" /> סגור
+      </Button>
+    )
+  }
+
+  return (
+    <div
+      className="rounded-xl border border-[var(--border)] bg-white p-4 hover:shadow-md hover:border-slate-300 transition-all group relative overflow-hidden cursor-pointer"
+      onClick={() => onOpen(iss)}
+    >
+      <div className={`absolute top-0 left-0 right-0 h-1 ${PRIORITY_ACCENT[iss.priority] || 'bg-slate-300'}`} />
+      <div className="pt-1">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Badge variant={priority.variant}>{priority.label}</Badge>
+            {iss.category && <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">{iss.category}</span>}
+          </div>
+          <Badge variant={status.variant}>{status.label}</Badge>
+        </div>
+        <h3 className="text-[14px] font-semibold text-[var(--text-primary)] mb-2 line-clamp-2">{iss.title}</h3>
+        {iss.description && <p className="text-[12px] text-[var(--text-muted)] line-clamp-2 mb-3">{iss.description}</p>}
+        <div className="flex items-center gap-3 mb-3">
+          {slaBadge}
+          {issueQuotes.length > 0 && (
+            <span className="text-[11px] text-[var(--primary)] font-medium">
+              {pendingCount > 0 && `${pendingCount} ממתינות`}
+              {pendingCount > 0 && receivedCount > 0 && ', '}
+              {receivedCount > 0 && `${receivedCount} התקבלו`}
+              {pendingCount === 0 && receivedCount === 0 && `${issueQuotes.length} הצעות`}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-between pt-2 border-t border-[var(--border-light,var(--border))]">
+          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+            {iss.reportedAt && <span>{timeAgo(iss.reportedAt)}</span>}
+            {iss.vendor_name && <span>{iss.reportedAt ? '·' : ''} {iss.vendor_name}</span>}
+            {buildingName && <span>· {buildingName}</span>}
+          </div>
+          {displayCost != null && <span className="text-[12px] font-semibold text-[var(--text-primary)]">{formatCurrency(displayCost)}</span>}
+        </div>
+        {actions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-3" onClick={(e) => e.stopPropagation()}>
+            {actions}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+})
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -205,6 +339,12 @@ function Issues() {
   const [vendorSearchLoading, setVendorSearchLoading] = useState(false)
   const [externalVendors, setExternalVendors] = useState([])
   const [quoteRequestCopied, setQuoteRequestCopied] = useState(null)
+
+  // Memoized handlers for IssueCard
+  const handleOpenDetail = useCallback((iss) => setDetailIssue(iss), [])
+  const handleOpenVendorAssign = useCallback((iss) => { setVendorAssignIssue(iss); setSelectedVendorName('') }, [])
+  const handleOpenSchedule = useCallback((iss) => { setScheduleDialogIssue(iss); setScheduleDate('') }, [])
+  const handleOpenComplete = useCallback((iss) => { setCompleteDialogIssue(iss); setCompleteCost(iss.estimatedCost ?? '') }, [])
 
   // Maps
   const buildingMap = useMemo(() => {
@@ -439,6 +579,15 @@ function Issues() {
     setAiAnalysisResult(null)
     setAiAnalysisError(null)
     setAiAnalysisLoading(true)
+    const cacheKey = `issue-ai-${iss.id}`
+    try {
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null')
+      if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) {
+        setAiAnalysisResult(cached.result)
+        setAiAnalysisLoading(false)
+        return
+      }
+    } catch { /* ignore */ }
     const building = buildingMap[iss.buildingId]
     // Send all non-blacklisted vendors to AI so it can match by specialties too
     const relevantVendors = allVendors.filter(
@@ -463,6 +612,9 @@ function Issues() {
         })),
       })
       setAiAnalysisResult(result)
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ result, ts: Date.now() }))
+      } catch { /* ignore */ }
       // Save AI-recommended category and search terms to the issue
       if (result.recommended_vendor_category || result.recommended_search_terms) {
         update(iss.id, {
@@ -602,15 +754,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   }
 
   // Quick actions
-  const handleAcknowledge = (iss) => {
-    update(iss.id, { status: 'acknowledged' })
-  }
+  const handleAcknowledge = useCallback((iss) => { update(iss.id, { status: 'acknowledged' }) }, [update])
 
-  const handleOpenQuoteDialog = (iss) => {
+  const handleOpenQuoteDialog = useCallback((iss) => {
     setQuoteDialogIssue(iss)
     setQuoteSelectedVendors([])
     setQuoteDescription(iss.description || '')
-  }
+  }, [])
 
   const handleSendQuoteRequests = async () => {
     if (!quoteDialogIssue || quoteSelectedVendors.length === 0) return
@@ -684,152 +834,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setCompleteCost('')
   }
 
-  const handleClose = (iss) => {
-    update(iss.id, { status: 'closed' })
-  }
+  const handleClose = useCallback((iss) => { update(iss.id, { status: 'closed' }) }, [update])
 
   // Refresh detail issue from latest data
   const currentDetailIssue = useMemo(() => {
     if (!detailIssue) return null
     return allIssues.find((i) => i.id === detailIssue.id) || detailIssue
   }, [detailIssue, allIssues])
-
-  // ---------------------------------------------------------------------------
-  // Render helpers
-  // ---------------------------------------------------------------------------
-
-  const renderSLABadge = (iss) => {
-    if (iss.status === 'completed' || iss.status === 'closed') return null
-    const overdue = isOverdueSLA(iss)
-    return (
-      <span className={`inline-flex items-center gap-1 text-xs font-medium ${overdue ? 'text-red-600' : 'text-green-600'}`}>
-        <Clock className="h-3 w-3" />
-        {overdue ? 'חריגת SLA' : 'בזמן'}
-      </span>
-    )
-  }
-
-  const renderQuickActions = (iss) => {
-    const actions = []
-    const status = iss.status
-
-    if (status === 'reported') {
-      actions.push(
-        <Button key="ack" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleAcknowledge(iss) }}>
-          <Check className="h-3.5 w-3.5" />
-          אשר
-        </Button>
-      )
-    }
-    if (status === 'reported' || status === 'acknowledged') {
-      actions.push(
-        <Button key="quote" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleOpenQuoteDialog(iss) }}>
-          <FileText className="h-3.5 w-3.5" />
-          בקש הצעת מחיר
-        </Button>
-      )
-    }
-    if (!iss.vendor_name && ['reported', 'acknowledged', 'quoted', 'approved'].includes(status)) {
-      actions.push(
-        <Button key="vendor" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setVendorAssignIssue(iss); setSelectedVendorName('') }}>
-          <Users className="h-3.5 w-3.5" />
-          קבע ספק
-        </Button>
-      )
-    }
-    if (status === 'approved') {
-      actions.push(
-        <Button key="sched" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setScheduleDialogIssue(iss); setScheduleDate('') }}>
-          <Calendar className="h-3.5 w-3.5" />
-          תזמן
-        </Button>
-      )
-    }
-    if (['scheduled', 'in_progress'].includes(status)) {
-      actions.push(
-        <Button key="complete" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setCompleteDialogIssue(iss); setCompleteCost(iss.estimatedCost ?? '') }}>
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          סמן כבוצע
-        </Button>
-      )
-    }
-    if (status === 'completed') {
-      actions.push(
-        <Button key="close" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleClose(iss) }}>
-          <X className="h-3.5 w-3.5" />
-          סגור
-        </Button>
-      )
-    }
-
-    return actions.length > 0 ? (
-      <div className="flex flex-wrap gap-1.5 mt-3" onClick={(e) => e.stopPropagation()}>
-        {actions}
-      </div>
-    ) : null
-  }
-
-  const renderIssueCard = (iss) => {
-    const priority = PRIORITY_MAP[iss.priority] || PRIORITY_MAP.medium
-    const status = STATUS_MAP[iss.status] || STATUS_MAP.reported
-    const issueQuotes = quotesByIssue[iss.id] || []
-    const pendingCount = issueQuotes.filter((q) => q.status === 'pending').length
-    const receivedCount = issueQuotes.filter((q) => q.status === 'received').length
-    const displayCost = iss.cost != null && iss.cost !== '' ? iss.cost : (iss.estimatedCost != null && iss.estimatedCost !== '' ? iss.estimatedCost : null)
-
-    return (
-      <div
-        key={iss.id}
-        className="rounded-xl border border-[var(--border)] bg-white p-4 hover:shadow-md hover:border-slate-300 transition-all group relative overflow-hidden cursor-pointer"
-        onClick={() => setDetailIssue(iss)}
-      >
-        {/* Priority accent bar at top */}
-        <div className={`absolute top-0 left-0 right-0 h-1 ${
-          iss.priority === 'urgent' ? 'bg-red-500' : iss.priority === 'high' ? 'bg-orange-500' : iss.priority === 'medium' ? 'bg-amber-400' : 'bg-slate-300'
-        }`} />
-
-        <div className="pt-1">
-          {/* Header with priority + status */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Badge variant={priority.variant}>{priority.label}</Badge>
-              {iss.category && <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">{iss.category}</span>}
-            </div>
-            <Badge variant={status.variant}>{status.label}</Badge>
-          </div>
-
-          {/* Title */}
-          <h3 className="text-[14px] font-semibold text-[var(--text-primary)] mb-2 line-clamp-2">{iss.title}</h3>
-
-          {/* Description preview */}
-          {iss.description && <p className="text-[12px] text-[var(--text-muted)] line-clamp-2 mb-3">{iss.description}</p>}
-
-          {/* SLA + Quotes row */}
-          <div className="flex items-center gap-3 mb-3">
-            {iss.reportedAt && renderSLABadge(iss)}
-            {issueQuotes.length > 0 && (
-              <span className="text-[11px] text-[var(--primary)] font-medium">
-                {pendingCount > 0 && `${pendingCount} ממתינות`}{pendingCount > 0 && receivedCount > 0 && ', '}{receivedCount > 0 && `${receivedCount} התקבלו`}
-                {pendingCount === 0 && receivedCount === 0 && `${issueQuotes.length} הצעות`}
-              </span>
-            )}
-          </div>
-
-          {/* Footer with meta */}
-          <div className="flex items-center justify-between pt-2 border-t border-[var(--border-light,var(--border))]">
-            <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
-              {iss.reportedAt && <span>{timeAgo(iss.reportedAt)}</span>}
-              {iss.vendor_name && <span>{iss.reportedAt ? '·' : ''} {iss.vendor_name}</span>}
-              {buildingMap[iss.buildingId]?.name && <span>· {buildingMap[iss.buildingId].name}</span>}
-            </div>
-            {displayCost != null && <span className="text-[12px] font-semibold text-[var(--text-primary)]">{formatCurrency(displayCost)}</span>}
-          </div>
-
-          {renderQuickActions(iss)}
-        </div>
-      </div>
-    )
-  }
 
   // ---------------------------------------------------------------------------
   // Render
@@ -993,7 +1004,21 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         />
       ) : viewMode === 'list' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(renderIssueCard)}
+          {filtered.map((iss) => (
+            <IssueCard
+              key={iss.id}
+              iss={iss}
+              issueQuotes={quotesByIssue[iss.id] || []}
+              buildingName={buildingMap[iss.buildingId]?.name}
+              onOpen={handleOpenDetail}
+              onAcknowledge={handleAcknowledge}
+              onOpenQuoteDialog={handleOpenQuoteDialog}
+              onOpenVendorAssign={handleOpenVendorAssign}
+              onOpenSchedule={handleOpenSchedule}
+              onOpenComplete={handleOpenComplete}
+              onClose={handleClose}
+            />
+          ))}
         </div>
       ) : (
         /* Kanban view */
@@ -1013,7 +1038,21 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                       אין תקלות
                     </div>
                   ) : (
-                    columnIssues.map(renderIssueCard)
+                    columnIssues.map((iss) => (
+                      <IssueCard
+                        key={iss.id}
+                        iss={iss}
+                        issueQuotes={quotesByIssue[iss.id] || []}
+                        buildingName={buildingMap[iss.buildingId]?.name}
+                        onOpen={handleOpenDetail}
+                        onAcknowledge={handleAcknowledge}
+                        onOpenQuoteDialog={handleOpenQuoteDialog}
+                        onOpenVendorAssign={handleOpenVendorAssign}
+                        onOpenSchedule={handleOpenSchedule}
+                        onOpenComplete={handleOpenComplete}
+                        onClose={handleClose}
+                      />
+                    ))
                   )}
                 </div>
               </div>
@@ -1061,7 +1100,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               <DetailRow label="תאריך מתוזמן" value={iss.scheduledDate ? formatDate(iss.scheduledDate) : null} />
               <DetailRow label="תאריך פתרון" value={iss.resolvedAt ? formatDate(iss.resolvedAt) : null} />
               <DetailRow label="זמן שחלף" value={iss.reportedAt ? timeAgo(iss.reportedAt) : null} />
-              <DetailRow label="SLA" value={renderSLABadge(iss)} />
+              <DetailRow label="SLA" value={
+                iss.status !== 'completed' && iss.status !== 'closed' ? (
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdueSLA(iss) ? 'text-red-600' : 'text-green-600'}`}>
+                    <Clock className="h-3 w-3" />
+                    {isOverdueSLA(iss) ? 'חריגת SLA' : 'בזמן'}
+                  </span>
+                ) : null
+              } />
 
               {/* Quote Management Panel */}
               {issueQuotes.length > 0 && (
@@ -1111,7 +1157,36 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   <Sparkles className="h-3.5 w-3.5" />
                   ניתוח AI
                 </Button>
-                {renderQuickActions(iss)}
+                {iss.status === 'reported' && (
+                  <Button variant="outline" size="sm" onClick={() => handleAcknowledge(iss)}>
+                    <Check className="h-3.5 w-3.5" /> אשר
+                  </Button>
+                )}
+                {(iss.status === 'reported' || iss.status === 'acknowledged') && (
+                  <Button variant="outline" size="sm" onClick={() => handleOpenQuoteDialog(iss)}>
+                    <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
+                  </Button>
+                )}
+                {!iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(iss.status) && (
+                  <Button variant="outline" size="sm" onClick={() => handleOpenVendorAssign(iss)}>
+                    <Users className="h-3.5 w-3.5" /> קבע ספק
+                  </Button>
+                )}
+                {iss.status === 'approved' && (
+                  <Button variant="outline" size="sm" onClick={() => handleOpenSchedule(iss)}>
+                    <Calendar className="h-3.5 w-3.5" /> תזמן
+                  </Button>
+                )}
+                {['scheduled','in_progress'].includes(iss.status) && (
+                  <Button variant="outline" size="sm" onClick={() => handleOpenComplete(iss)}>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> סמן כבוצע
+                  </Button>
+                )}
+                {iss.status === 'completed' && (
+                  <Button variant="outline" size="sm" onClick={() => handleClose(iss)}>
+                    <X className="h-3.5 w-3.5" /> סגור
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={() => openEdit(iss)}>
                   <Pencil className="h-3.5 w-3.5" />
                   עריכה
