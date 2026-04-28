@@ -143,20 +143,21 @@ function BuildingAssets() {
   }, [allAssets, buildingFilter, categoryFilter, search])
 
   // Upcoming services within 90 days, sorted ascending
+  // Uses scopedAssets so the building filter pill is respected
   const upcomingServices = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const in90 = new Date(today)
     in90.setDate(in90.getDate() + 90)
 
-    return allAssets
+    return scopedAssets
       .filter((a) => {
         if (!a.nextService) return false
         const next = new Date(a.nextService)
         return next >= today && next <= in90
       })
       .sort((a, b) => new Date(a.nextService) - new Date(b.nextService))
-  }, [allAssets])
+  }, [scopedAssets])
 
   const openCreate = () => {
     setEditingId(null)
@@ -209,7 +210,7 @@ function BuildingAssets() {
     }
   }
 
-  const handleServiceDone = (item) => {
+  const handleServiceDone = async (item) => {
     const today = new Date().toISOString().slice(0, 10)
     // Calculate interval from last service to next service
     let nextServiceDate = today
@@ -221,7 +222,17 @@ function BuildingAssets() {
       newNext.setDate(newNext.getDate() + intervalDays)
       nextServiceDate = newNext.toISOString().slice(0, 10)
     }
-    update(item.id, { lastService: today, nextService: nextServiceDate })
+    const history = Array.isArray(item.service_history) ? [...item.service_history] : []
+    history.push({
+      serviced_at: new Date().toISOString(),
+      previous_service: item.lastService || item.last_service,
+      notes: '',
+    })
+    await update(item.id, {
+      lastService: today,
+      nextService: nextServiceDate,
+      service_history: history,
+    })
   }
 
   if (isLoading) return (
@@ -242,7 +253,7 @@ function BuildingAssets() {
         icon={Cog}
         iconColor="slate"
         title="ציוד ומערכות בניין"
-        subtitle={`${filtered.length} פריטים`}
+        subtitle={selectedBuilding ? `${selectedBuilding.name} · ${filtered.length} פריטים` : `${filtered.length} פריטים`}
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
@@ -520,6 +531,19 @@ function BuildingAssets() {
               }
             />
             <DetailRow label="הערות" value={detailItem.notes} />
+            {detailItem.service_history?.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-[var(--text-muted)] mb-1">היסטוריית טיפולים:</p>
+                <div className="space-y-1">
+                  {[...detailItem.service_history].reverse().slice(0, 5).map((h, i) => (
+                    <div key={i} className="text-xs text-[var(--text-secondary)] flex gap-2">
+                      <span className="text-[var(--text-muted)]">{new Date(h.serviced_at).toLocaleDateString('he-IL')}</span>
+                      <span>טיפול בוצע</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2 pt-4">
               <Button variant="outline" size="sm" onClick={() => openEdit(detailItem)}>
                 <Pencil className="h-3.5 w-3.5" />

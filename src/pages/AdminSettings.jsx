@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { PageHeader } from '@/components/common/PageHeader'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
 import { Settings, Users, Database, Building, Shield, Key } from 'lucide-react'
+import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,6 +101,7 @@ function UsersTab() {
     setSavingRole(false)
     setEditRoleUser(null)
     fetchData()
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'התפקיד עודכן בהצלחה', type: 'success' } }))
   }
 
   if (loading) {
@@ -415,6 +417,7 @@ function BuildingsCommitteesTab() {
   const [dialogBuilding, setDialogBuilding] = useState(null) // building object
   const [memberForm, setMemberForm] = useState(EMPTY_MEMBERSHIP_FORM)
   const [saving, setSaving] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(null) // null or member object
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -444,13 +447,27 @@ function BuildingsCommitteesTab() {
 
   const handleAddMember = async () => {
     if (!memberForm.user_id || !dialogBuilding) return
+
+    // Duplicate check
+    const alreadyMember = memberships.some(
+      (m) => m.building_id === dialogBuilding.id && m.user_id === memberForm.user_id
+    )
+    if (alreadyMember) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'המשתמש כבר חבר בועד', type: 'error' } }))
+      return
+    }
+
     setSaving(true)
-    await supabase.from('building_memberships').insert({
+    const { error } = await supabase.from('building_memberships').insert({
       building_id: dialogBuilding.id,
       user_id: memberForm.user_id,
       role: memberForm.role,
     })
     setSaving(false)
+    if (error) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בהוספת חבר ועד', type: 'error' } }))
+      return
+    }
     setDialogBuilding(null)
     fetchData()
   }
@@ -544,7 +561,7 @@ function BuildingsCommitteesTab() {
                             variant="ghost"
                             size="sm"
                             className="text-[var(--danger)] hover:text-[var(--danger)]"
-                            onClick={() => handleRemoveMember(m.id)}
+                            onClick={() => setConfirmRemove(m)}
                           >
                             הסר
                           </Button>
@@ -558,6 +575,17 @@ function BuildingsCommitteesTab() {
           </Card>
         )
       })}
+
+      {/* Remove member confirmation */}
+      <DeleteConfirm
+        open={!!confirmRemove}
+        onOpenChange={() => setConfirmRemove(null)}
+        onConfirm={async () => {
+          await handleRemoveMember(confirmRemove.id)
+          setConfirmRemove(null)
+        }}
+        itemName={`${confirmRemove?.profile ? [confirmRemove.profile.first_name, confirmRemove.profile.last_name].filter(Boolean).join(' ') || 'חבר ועד' : 'חבר ועד'} מהועד`}
+      />
 
       {/* Add member dialog */}
       <Dialog open={!!dialogBuilding} onOpenChange={(open) => !open && setDialogBuilding(null)}>
