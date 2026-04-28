@@ -12,7 +12,7 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { formatCurrency, formatDate, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
-import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3, Users, AlertTriangle, Wallet } from 'lucide-react'
+import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3, Users, AlertTriangle, Wallet, Download } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 const STATUS_MAP = {
@@ -48,6 +48,17 @@ const EMPTY_FORM = {
   paidAt: '',
   method: '',
   amount_paid: '',
+}
+
+function exportToCSV(filename, headers, rows) {
+  const BOM = '﻿'
+  const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const lines = [headers.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))]
+  const blob = new Blob([BOM + lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename + '.csv'; a.click()
+  URL.revokeObjectURL(url)
 }
 
 function Payments() {
@@ -367,6 +378,35 @@ function Payments() {
     { value: 'overdue', label: 'באיחור' },
   ]
 
+  const handleExport = () => {
+    if (viewMode === 'yearly') {
+      const headers = ['דירה', 'בעלים', 'חיוב חודשי', 'צפי שנתי', 'נגבה', 'פער', 'חודשים ששולמו']
+      const rows = yearlySummary.map((r) => [
+        `דירה ${r.unit.unit_number || r.unit.number}`,
+        r.unit.ownerName || '',
+        r.fee,
+        r.expected,
+        r.collected,
+        r.gap,
+        `${r.paidMonths}/${r.totalMonths}`,
+      ])
+      exportToCSV(`תשלומים-שנתי-${selectedYear}`, headers, rows)
+    } else {
+      const headers = ['דירה', 'בעלים', 'בניין', 'סכום', 'חיוב חודשי', 'סטטוס', 'תאריך תשלום', 'אמצעי תשלום']
+      const rows = filtered.filter((p) => !p._virtual).map((p) => [
+        `דירה ${unitMap[p.unitId]?.unit_number || unitMap[p.unitId]?.number || ''}`,
+        getOwnerName(p.unitId),
+        getBuildingName(p.unitId),
+        p.amount ?? 0,
+        calcUnitFee(unitMap[p.unitId], buildingMap[unitMap[p.unitId]?.buildingId || unitMap[p.unitId]?.building_id]),
+        STATUS_MAP[p.status]?.label || p.status,
+        p.paidAt ? p.paidAt.slice(0, 10) : '',
+        p.method || '',
+      ])
+      exportToCSV(`תשלומים-${monthKey}`, headers, rows)
+    }
+  }
+
   if (isLoading) return (
     <div className="p-6">
       <PageHeader icon={CreditCard} iconColor="blue" title="תשלומים" />
@@ -389,6 +429,10 @@ function Payments() {
         subtitle={`${filtered.length} תשלומים`}
         actions={
           <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="h-4 w-4" />
+              ייצוא CSV
+            </Button>
             <Button
               variant={viewMode === 'yearly' ? 'default' : 'outline'}
               onClick={() => setViewMode(viewMode === 'yearly' ? 'monthly' : 'yearly')}
