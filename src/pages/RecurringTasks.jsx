@@ -83,6 +83,7 @@ function RecurringTasks() {
   const { data: allTasks, create, update, remove, isSaving, isLoading } = useCollection('recurringTasks',
     selectedBuilding ? { building_id: selectedBuilding.id } : {}
   )
+  const issuesCollection = useCollection('issues')
 
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')
@@ -186,6 +187,21 @@ function RecurringTasks() {
       await remove(deleteTarget.id)
       setDeleteTarget(null)
     }
+  }
+
+  const handleCreateIssue = async (task) => {
+    if (!selectedBuilding) return
+    await issuesCollection.create({
+      title: task.title,
+      description: `נוצר אוטומטית ממשימה תקופתית פגת תוקף: ${task.title}`,
+      building_id: selectedBuilding.id || task.building_id,
+      priority: task.is_required_by_law ? 'high' : 'medium',
+      status: 'open',
+      reported_at: new Date().toISOString(),
+    })
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: 'תקלה נוצרה בהצלחה', type: 'success' }
+    }))
   }
 
   const handleMarkDone = async (task) => {
@@ -362,6 +378,19 @@ function RecurringTasks() {
                   <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
                   <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusLabel}</span>
                 </div>
+
+                {/* Create issue button for overdue tasks */}
+                {overdue && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 px-2 shrink-0"
+                    onClick={(e) => { e.stopPropagation(); handleCreateIssue(task) }}
+                  >
+                    <Plus className="h-3 w-3 ml-1" />
+                    צור תקלה
+                  </Button>
+                )}
 
                 {/* Actions (visible on hover) */}
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>

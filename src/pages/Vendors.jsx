@@ -188,7 +188,7 @@ function VendorCard({ vendor, stats, onClick, compareMode, isSelected, onToggleC
               {vendor.is_blacklisted && (
                 <Badge variant="danger" className="text-[10px] px-1.5 shrink-0">
                   <Ban className="h-3 w-3 ml-0.5" />
-                  חסום
+                  ברשימה שחורה
                 </Badge>
               )}
             </div>
@@ -443,6 +443,7 @@ function Vendors() {
   const [activeTab, setActiveTab] = useState('my-vendors')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -476,8 +477,11 @@ function Vendors() {
     if (categoryFilter) {
       result = result.filter((v) => v.category === categoryFilter)
     }
+    if (statusFilter === 'blacklisted') {
+      result = result.filter((v) => v.is_blacklisted === true)
+    }
     return result
-  }, [allVendors, search, categoryFilter])
+  }, [allVendors, search, categoryFilter, statusFilter])
 
   // Compare vendors
   const compareVendors = useMemo(() => {
@@ -540,6 +544,13 @@ function Vendors() {
       await remove(deleteTarget.id)
       setDeleteTarget(null)
     }
+  }
+
+  const handleBlacklist = async (vendor) => {
+    await update(vendor.id, { is_blacklisted: !vendor.is_blacklisted })
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: vendor.is_blacklisted ? 'הספק הוסר מהרשימה השחורה' : 'הספק נוסף לרשימה השחורה', type: 'success' }
+    }))
   }
 
   const toggleCompare = (id) => {
@@ -609,6 +620,21 @@ function Vendors() {
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
+          </div>
+
+          {/* Status filter pills */}
+          <div className="flex flex-wrap gap-2">
+            {[{ key: 'all', label: 'הכל' }, { key: 'blacklisted', label: 'רשימה שחורה' }].map((pill) => (
+              <Button
+                key={pill.key}
+                variant={statusFilter === pill.key ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter(pill.key)}
+              >
+                {pill.key === 'blacklisted' && <Ban className="h-3.5 w-3.5 ml-1" />}
+                {pill.label}
+              </Button>
+            ))}
           </div>
 
           {/* Compare mode indicator */}
@@ -840,6 +866,15 @@ function Vendors() {
               >
                 <GitCompare className="h-3.5 w-3.5" />
                 {compareIds.includes(detailVendor.id) ? 'הסר מהשוואה' : 'הוסף להשוואה'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={detailVendor.is_blacklisted ? 'text-emerald-600 border-emerald-200 hover:bg-emerald-50' : 'text-red-600 border-red-200 hover:bg-red-50'}
+                onClick={() => handleBlacklist(detailVendor)}
+              >
+                <Ban className="h-3.5 w-3.5" />
+                {detailVendor.is_blacklisted ? 'הסר מרשימה שחורה' : 'הוסף לרשימה שחורה'}
               </Button>
               <Button
                 variant="destructive"
