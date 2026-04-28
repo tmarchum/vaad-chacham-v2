@@ -19,6 +19,8 @@ import {
   BarChart2,
   ChevronLeft,
   Building2,
+  Clock,
+  ShieldAlert,
 } from 'lucide-react'
 import { HEBREW_MONTHS } from '@/lib/constants'
 
@@ -48,6 +50,10 @@ function Dashboard() {
   const { data: allIssues } = useCollection('issues')
   const { data: allExpenses } = useCollection('expenses')
   const { data: allAlerts } = useCollection('agentAlerts')
+  const { data: allCompliance } = useCollection('compliance')
+  const { data: allDocuments } = useCollection('documents')
+  const { data: allVendors } = useCollection('vendors')
+  const { data: allRecurringTasks } = useCollection('recurringTasks')
 
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -93,6 +99,68 @@ function Dashboard() {
 
   const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'in_progress')
   const urgentIssues = openIssues.filter((i) => i.priority === 'high' || i.priority === 'urgent')
+
+  // Expiry alerts — items needing attention
+  const today = new Date(); today.setHours(0,0,0,0)
+  const in60 = new Date(today); in60.setDate(in60.getDate() + 60)
+  const in30 = new Date(today); in30.setDate(in30.getDate() + 30)
+
+  const expiryAlerts = useMemo(() => {
+    const alerts = []
+    // Compliance items expiring within 60 days
+    allCompliance.forEach(c => {
+      if (!c.expiry_date) return
+      const exp = new Date(c.expiry_date)
+      if (exp <= in60 && (!selectedBuilding || c.building_id === selectedBuilding.id)) {
+        const daysLeft = Math.ceil((exp - today) / (1000 * 60 * 60 * 24))
+        alerts.push({
+          id: `comp-${c.id}`, type: 'compliance', urgent: daysLeft <= 14,
+          label: c.type || 'ציות', detail: c.document_number || '',
+          daysLeft, link: '/compliance',
+        })
+      }
+    })
+    // Documents expiring within 30 days
+    allDocuments.forEach(d => {
+      if (!d.expiresAt && !d.expires_at) return
+      const exp = new Date(d.expiresAt || d.expires_at)
+      if (exp <= in30 && (!selectedBuilding || d.building_id === selectedBuilding.id)) {
+        const daysLeft = Math.ceil((exp - today) / (1000 * 60 * 60 * 24))
+        alerts.push({
+          id: `doc-${d.id}`, type: 'document', urgent: daysLeft <= 7,
+          label: d.name || 'מסמך', detail: d.category || '',
+          daysLeft, link: '/documents',
+        })
+      }
+    })
+    // Vendors with insurance expiring within 30 days
+    allVendors.forEach(v => {
+      if (!v.insuranceExpiry && !v.insurance_expiry) return
+      const exp = new Date(v.insuranceExpiry || v.insurance_expiry)
+      if (exp <= in30) {
+        const daysLeft = Math.ceil((exp - today) / (1000 * 60 * 60 * 24))
+        alerts.push({
+          id: `vnd-${v.id}`, type: 'vendor', urgent: daysLeft <= 7,
+          label: v.name || 'ספק', detail: 'ביטוח',
+          daysLeft, link: '/vendors',
+        })
+      }
+    })
+    // Overdue recurring tasks
+    allRecurringTasks.forEach(t => {
+      if (!t.next_due_date || t.status === 'completed') return
+      const due = new Date(t.next_due_date)
+      if (due < today && (!selectedBuilding || t.building_id === selectedBuilding.id)) {
+        const daysOverdue = Math.ceil((today - due) / (1000 * 60 * 60 * 24))
+        alerts.push({
+          id: `task-${t.id}`, type: 'task', urgent: daysOverdue >= 7,
+          label: t.title || 'משימה', detail: 'משימה תקופתית',
+          daysLeft: -daysOverdue, link: '/recurring-tasks',
+        })
+      }
+    })
+    return alerts.sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 8)
+  }, [allCompliance, allDocuments, allVendors, allRecurringTasks, selectedBuilding, today, in60, in30])
 
   const monthExpenses = expenses.filter((e) => e.date?.startsWith(currentMonth))
   const totalExpenses = monthExpenses.reduce((sum, e) => sum + (e.amount || 0), 0)
@@ -545,6 +613,49 @@ function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          ── Expiry / Overdue Alerts ──
+          ═══════════════════════════════════════════════════════════ */}
+      {expiryAlerts.length > 0 && (
+        <Card className="animate-fade-in-up border-amber-200">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                  <ShieldAlert className="h-4 w-4 text-white" />
+                </div>
+                התראות תפוגה ומשימות
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white px-1.5">
+                  {expiryAlerts.length}
+                </span>
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {expiryAlerts.map(alert => (
+                <Link key={alert.id} to={alert.link}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-colors hover:bg-slate-50 ${alert.urgent ? 'bg-red-50 border border-red-100' : 'bg-amber-50 border border-amber-100'}`}
+                >
+                  <Clock className={`h-4 w-4 shrink-0 ${alert.urgent ? 'text-red-500' : 'text-amber-500'}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{alert.label}</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">{alert.detail}</p>
+                  </div>
+                  <span className={`text-xs font-bold shrink-0 ${alert.urgent ? 'text-red-600' : 'text-amber-600'}`}>
+                    {alert.daysLeft < 0
+                      ? `באיחור ${Math.abs(alert.daysLeft)} ימים`
+                      : alert.daysLeft === 0
+                      ? 'היום!'
+                      : `${alert.daysLeft} ימים`}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════
           ── Agent alerts ──
