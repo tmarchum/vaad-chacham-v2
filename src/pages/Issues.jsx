@@ -462,6 +462,21 @@ function Issues() {
     return { open: openIssues.length, overdue: overdue.length, pendingQuotes: pendingQuotes.length, avgDays }
   }, [allIssues, quotesByIssue])
 
+  const avgResolutionDays = useMemo(() => {
+    const resolved = allIssues.filter(i =>
+      (i.status === 'closed' || i.status === 'resolved') &&
+      (i.reportedAt || i.reported_at) &&
+      (i.resolvedAt || i.resolved_at)
+    )
+    if (resolved.length === 0) return null
+    const totalDays = resolved.reduce((sum, i) => {
+      const start = new Date(i.reportedAt || i.reported_at)
+      const end = new Date(i.resolvedAt || i.resolved_at)
+      return sum + Math.max(0, Math.ceil((end - start) / (1000 * 60 * 60 * 24)))
+    }, 0)
+    return Math.round(totalDays / resolved.length)
+  }, [allIssues])
+
   // Helpers
   const getUnitDisplay = (unitId) => {
     const unit = unitMap[unitId]
@@ -885,7 +900,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         <StatCard label="תקלות פתוחות" value={String(stats.open)} icon={AlertTriangle} color="red" />
         <StatCard label="חריגת SLA" value={String(stats.overdue)} color={stats.overdue > 0 ? 'red' : 'emerald'} icon={Clock} />
         <StatCard label="הצעות ממתינות" value={String(stats.pendingQuotes)} icon={FileText} color="amber" />
-        <StatCard label="זמן פתרון ממוצע" value={`${stats.avgDays} ימים`} icon={Calendar} color="blue" />
+        {avgResolutionDays !== null && (
+          <StatCard
+            label="זמן טיפול ממוצע"
+            value={`${avgResolutionDays} ימים`}
+            icon={Clock}
+            color="blue"
+          />
+        )}
       </div>
 
       {/* Search */}

@@ -53,6 +53,17 @@ function getExpiryStatus(expiresAt) {
   return { label: 'בתוקף', variant: 'success' }
 }
 
+function getExpiryBadge(expiresAt) {
+  if (!expiresAt) return null
+  const now = new Date(); now.setHours(0,0,0,0)
+  const exp = new Date(expiresAt)
+  const daysLeft = Math.ceil((exp - now) / (1000 * 60 * 60 * 24))
+  if (daysLeft < 0) return { label: 'פג תוקף', variant: 'danger', urgent: true }
+  if (daysLeft <= 7) return { label: `${daysLeft} ימים`, variant: 'danger', urgent: true }
+  if (daysLeft <= 30) return { label: `${daysLeft} ימים`, variant: 'warning', urgent: false }
+  return null
+}
+
 function getTypeIcon(type) {
   return TYPE_CONFIG[type]?.icon ?? File
 }
@@ -149,6 +160,16 @@ function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
             <span className={`text-[11px] font-medium ${expiryTextColor}`}>{expiry.label}</span>
           </div>
         )}
+
+        {/* Expiry urgency badge */}
+        {(() => {
+          const badge = getExpiryBadge(doc.expiresAt || doc.expires_at)
+          return badge ? (
+            <Badge variant={badge.variant} className={`text-[10px] ${badge.urgent ? 'animate-pulse' : ''}`}>
+              {badge.label}
+            </Badge>
+          ) : null
+        })()}
       </div>
 
       {/* Hover actions */}
@@ -237,6 +258,16 @@ function DocumentListRow({ doc, onEdit, onDelete, onView }) {
           <span className="text-xs text-[var(--text-muted)]">—</span>
         )}
       </div>
+
+      {/* Expiry urgency badge */}
+      {(() => {
+        const badge = getExpiryBadge(doc.expiresAt || doc.expires_at)
+        return badge ? (
+          <Badge variant={badge.variant} className={`text-[10px] shrink-0 ${badge.urgent ? 'animate-pulse' : ''}`}>
+            {badge.label}
+          </Badge>
+        ) : null
+      })()}
 
       {/* Actions (visible on hover) */}
       <div
