@@ -638,18 +638,19 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setQuoteDialogIssue(null)
   }
 
-  const handleAcceptQuote = (quote) => {
+  const handleAcceptQuote = async (quote) => {
     // Accept this quote, reject others for same issue
     const issueQuotes = quotesByIssue[quote.issueId] || []
-    issueQuotes.forEach((q) => {
+    await Promise.all(issueQuotes.map((q) => {
       if (q.id === quote.id) {
-        updateQuote(q.id, { status: 'accepted' })
+        return updateQuote(q.id, { status: 'accepted' })
       } else if (q.status === 'pending' || q.status === 'received') {
-        updateQuote(q.id, { status: 'rejected' })
+        return updateQuote(q.id, { status: 'rejected' })
       }
-    })
+      return Promise.resolve()
+    }))
     // Update issue with estimated cost and vendor, move to approved
-    update(quote.issueId, {
+    await update(quote.issueId, {
       estimatedCost: quote.amount,
       vendor_name: quote.vendorName,
       status: 'approved',
@@ -658,23 +659,23 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setDetailIssue((prev) => prev ? { ...prev, estimatedCost: quote.amount, vendor_name: quote.vendorName, status: 'approved' } : null)
   }
 
-  const handleAssignVendor = () => {
+  const handleAssignVendor = async () => {
     if (!vendorAssignIssue || !selectedVendorName) return
-    update(vendorAssignIssue.id, { vendor_name: selectedVendorName })
+    await update(vendorAssignIssue.id, { vendor_name: selectedVendorName })
     setVendorAssignIssue(null)
     setSelectedVendorName('')
   }
 
-  const handleSchedule = () => {
+  const handleSchedule = async () => {
     if (!scheduleDialogIssue || !scheduleDate) return
-    update(scheduleDialogIssue.id, { scheduledDate: scheduleDate, status: 'scheduled' })
+    await update(scheduleDialogIssue.id, { scheduledDate: scheduleDate, status: 'scheduled' })
     setScheduleDialogIssue(null)
     setScheduleDate('')
   }
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!completeDialogIssue) return
-    update(completeDialogIssue.id, {
+    await update(completeDialogIssue.id, {
       status: 'completed',
       resolvedAt: new Date().toISOString(),
       cost: completeCost !== '' ? Number(completeCost) : null,
