@@ -14,8 +14,8 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { cn } from '@/lib/utils'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
-  Shield, Clock, CheckCircle, Search, BarChart3, GitCompare,
-  Award, Wrench, MapPin, UserPlus, Store,
+  Shield, Clock, Search, BarChart3, GitCompare,
+  Award, Wrench, Store,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -67,21 +67,6 @@ const TABS = [
   { key: 'my-vendors', label: 'הספקים שלי' },
   { key: 'find-vendor', label: 'מצא ספק' },
   { key: 'compare', label: 'השוואת ספקים' },
-]
-
-const MOCK_MARKETPLACE_VENDORS = [
-  { id: 'mp-1', name: 'שלומי אינסטלציה בע"מ', category: 'אינסטלציה', area: 'מרכז', rating: 5, phone: '050-1234567', description: 'מומחה אינסטלציה עם 15 שנות ניסיון' },
-  { id: 'mp-2', name: 'חשמל פלוס', category: 'חשמל', area: 'מרכז וצפון', rating: 4, phone: '052-9876543', description: 'חשמלאי מוסמך, זמין 24/7' },
-  { id: 'mp-3', name: 'ניקיון הזהב', category: 'ניקיון', area: 'ארצי', rating: 4, phone: '054-5551234', description: 'חברת ניקיון מקצועית לבניינים' },
-  { id: 'mp-4', name: 'בוב הבנאי', category: 'בנייה ושיפוצים', area: 'מרכז', rating: 5, phone: '053-1112222', description: 'שיפוצים כלליים ובנייה' },
-  { id: 'mp-5', name: 'צבעי המרכז', category: 'צבע', area: 'מרכז ושרון', rating: 3, phone: '050-3334444', description: 'צביעת דירות ובניינים' },
-  { id: 'mp-6', name: 'מיזוג ישראל', category: 'מיזוג אוויר', area: 'ארצי', rating: 4, phone: '052-7778888', description: 'התקנה ותיקון מזגנים' },
-  { id: 'mp-7', name: 'גרין גארדן', category: 'גינון', area: 'מרכז ודרום', rating: 5, phone: '054-2223333', description: 'עיצוב ותחזוקת גינות' },
-  { id: 'mp-8', name: 'מעליות השרון', category: 'מעליות', area: 'שרון ומרכז', rating: 4, phone: '053-4445555', description: 'תחזוקה ותיקון מעליות' },
-  { id: 'mp-9', name: 'מנעולן 24', category: 'מנעולנות', area: 'ארצי', rating: 4, phone: '050-6667777', description: 'פריצת דלתות והחלפת מנעולים 24/7' },
-  { id: 'mp-10', name: 'איטום פרו', category: 'איטום', area: 'מרכז', rating: 5, phone: '052-8889999', description: 'איטום גגות ומרפסות' },
-  { id: 'mp-11', name: 'הדברה ירוקה', category: 'הדברה', area: 'ארצי', rating: 4, phone: '054-1110000', description: 'הדברה אקולוגית ובטוחה' },
-  { id: 'mp-12', name: 'אלו-זכוכית', category: 'אלומיניום וזכוכית', area: 'צפון ומרכז', rating: 3, phone: '053-2221111', description: 'חלונות, דלתות ומעקות' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -447,74 +432,6 @@ function ComparisonTable({ vendors, statsMap }) {
   )
 }
 
-function MarketplaceCard({ vendor, onAdd, alreadyAdded }) {
-  const firstLetter = vendor.name?.charAt(0) || '?'
-  const MP_CATEGORY_GRADIENTS = {
-    'אינסטלציה': 'from-blue-500 to-blue-600',
-    'חשמל': 'from-amber-500 to-amber-600',
-    'ניקיון': 'from-emerald-500 to-emerald-600',
-    'בנייה ושיפוצים': 'from-orange-500 to-orange-600',
-    'מעליות': 'from-indigo-500 to-indigo-600',
-    'גינון': 'from-green-500 to-green-600',
-    'מיזוג אוויר': 'from-cyan-500 to-cyan-600',
-    'הדברה': 'from-red-500 to-red-600',
-    'מנעולנות': 'from-slate-500 to-slate-600',
-    'איטום': 'from-teal-500 to-teal-600',
-    'אלומיניום וזכוכית': 'from-sky-500 to-sky-600',
-  }
-  const mpGradient = MP_CATEGORY_GRADIENTS[vendor.category] || 'from-purple-500 to-purple-600'
-
-  return (
-    <Card className="group overflow-hidden border border-[var(--border)] hover:shadow-lg hover:border-blue-200 transition-all bg-white">
-      {/* Gradient accent bar */}
-      <div className={`h-1 bg-gradient-to-r ${mpGradient}`} />
-      <CardContent className="pt-4 pb-4">
-        {/* Header with circle */}
-        <div className="flex items-start gap-3 mb-3">
-          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${mpGradient} flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-md`}>
-            {firstLetter}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-base font-bold text-[var(--text-primary)] leading-tight truncate mb-0.5">
-              {vendor.name}
-            </h3>
-            <StarRating rating={vendor.rating} />
-          </div>
-        </div>
-
-        <span className="inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 mb-2">
-          {vendor.category}
-        </span>
-
-        <p className="text-xs text-[var(--text-secondary)] mt-1 mb-2 line-clamp-2">{vendor.description}</p>
-
-        <div className="text-xs text-[var(--text-secondary)] space-y-1">
-          <p className="flex items-center gap-1.5">
-            <MapPin className="h-3 w-3 text-[var(--text-muted)]" /> {vendor.area}
-          </p>
-          <p className="flex items-center gap-1.5">
-            <Phone className="h-3 w-3 text-[var(--text-muted)]" /> {vendor.phone}
-          </p>
-        </div>
-
-        <div className="mt-3 pt-3 border-t border-[var(--border)]">
-          {alreadyAdded ? (
-            <Button variant="outline" size="sm" disabled className="w-full">
-              <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-              נוסף לרשימה
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => onAdd?.(vendor)} className="w-full">
-              <UserPlus className="h-3.5 w-3.5" />
-              הוסף לרשימה שלי
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
@@ -533,8 +450,6 @@ function Vendors() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [performanceVendor, setPerformanceVendor] = useState(null)
   const [compareIds, setCompareIds] = useState([])
-  const [marketplaceCategory, setMarketplaceCategory] = useState('')
-  const [addedMarketplace, setAddedMarketplace] = useState([])
 
   // Pre-compute stats for all vendors
   const statsMap = useMemo(() => {
@@ -563,12 +478,6 @@ function Vendors() {
     }
     return result
   }, [allVendors, search, categoryFilter])
-
-  // Marketplace filtered
-  const filteredMarketplace = useMemo(() => {
-    if (!marketplaceCategory) return MOCK_MARKETPLACE_VENDORS
-    return MOCK_MARKETPLACE_VENDORS.filter((v) => v.category === marketplaceCategory)
-  }, [marketplaceCategory])
 
   // Compare vendors
   const compareVendors = useMemo(() => {
@@ -639,21 +548,6 @@ function Vendors() {
       if (prev.length >= 3) return prev
       return [...prev, id]
     })
-  }
-
-  const addFromMarketplace = (mpVendor) => {
-    create({
-      name: mpVendor.name,
-      category: mpVendor.category,
-      phone: mpVendor.phone,
-      rating: mpVendor.rating,
-      service_area: mpVendor.area,
-      notes: mpVendor.description,
-      is_blacklisted: false,
-      preferred: false,
-      available_24_7: false,
-    })
-    setAddedMarketplace((prev) => [...prev, mpVendor.id])
   }
 
   // ---------------------------------------------------------------------------
@@ -769,45 +663,23 @@ function Vendors() {
       )}
 
       {/* ================================================================== */}
-      {/* TAB 2 - Find Vendor (Marketplace) */}
+      {/* TAB 2 - Find Vendor (Coming Soon) */}
       {/* ================================================================== */}
       {activeTab === 'find-vendor' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">מצא ספק חדש</h2>
-              <p className="text-sm text-[var(--text-secondary)]">חפש ספקים מומלצים לפי תחום</p>
-            </div>
-            <select
-              value={marketplaceCategory}
-              onChange={(e) => setMarketplaceCategory(e.target.value)}
-              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)]/25"
-            >
-              <option value="">כל הקטגוריות</option>
-              {CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-6 shadow-lg">
+            <Store className="h-10 w-10 text-white" />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredMarketplace.map((vendor) => (
-              <MarketplaceCard
-                key={vendor.id}
-                vendor={vendor}
-                onAdd={addFromMarketplace}
-                alreadyAdded={addedMarketplace.includes(vendor.id)}
-              />
-            ))}
+          <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">מאגר ספקים בבנייה</h3>
+          <p className="text-sm text-[var(--text-secondary)] max-w-sm leading-relaxed">
+            מאגר ספקים מורשים לניהול בניינים יהיה זמין בקרוב. בינתיים, הוסף ספקים ידנית ללשונית "הספקים שלי".
+          </p>
+          <div className="mt-6">
+            <span className="inline-flex items-center gap-2 text-xs text-[var(--text-muted)] bg-slate-50 border border-[var(--border)] rounded-full px-4 py-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              בקרוב
+            </span>
           </div>
-
-          {filteredMarketplace.length === 0 && (
-            <EmptyState
-              icon={Search}
-              title="לא נמצאו ספקים"
-              description="נסה לשנות את הקטגוריה"
-            />
-          )}
         </div>
       )}
 
