@@ -366,7 +366,7 @@ export default function CollectionCases() {
         <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <BellOff className="h-4 w-4 shrink-0" />
           <span>
-            <strong>שליחת התראות גבייה כבויה.</strong> הפעל את המתג כדי לאפשר שליחת תזכורות WhatsApp לדיירים.
+            <strong>שליחת התראות גבייה כבויה.</strong> הפעל את המתג כדי לאפשר שליחת תזכורות WhatsApp ומייל לדיירים.
           </span>
           <button onClick={toggleNotifications} className="mr-auto text-amber-700 underline font-medium hover:text-amber-900">
             הפעל
