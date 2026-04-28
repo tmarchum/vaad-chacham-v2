@@ -644,7 +644,29 @@ export default function CollectionCases() {
               <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">רמת הסלמה</label>
               <select
                 value={form.escalation_level}
-                onChange={e => setForm(f => ({ ...f, escalation_level: e.target.value }))}
+                onChange={e => {
+                  const newLevel = e.target.value
+                  const levelOrder = ['none','reminder','warning','legal_warning','legal_action']
+                  const currentIdx = levelOrder.indexOf(form.escalation_level || 'none')
+                  const newIdx = levelOrder.indexOf(newLevel)
+                  // Warn if escalating (not de-escalating) and last action was < 14 days ago
+                  if (newIdx > currentIdx && caseDialog && typeof caseDialog === 'object') {
+                    const history = Array.isArray(caseDialog.history) ? caseDialog.history : []
+                    const lastAction = history.length > 0 ? new Date(history[history.length - 1].date) : null
+                    if (lastAction) {
+                      const daysSince = Math.ceil((Date.now() - lastAction.getTime()) / (1000 * 60 * 60 * 24))
+                      if (daysSince < 14) {
+                        window.dispatchEvent(new CustomEvent('app-toast', {
+                          detail: {
+                            message: `⚠️ הסלמה מהירה: פעולה אחרונה לפני ${daysSince} ימים בלבד. מומלץ להמתין לפחות 14 ימים.`,
+                            type: 'warning'
+                          }
+                        }))
+                      }
+                    }
+                  }
+                  setForm(f => ({ ...f, escalation_level: newLevel }))
+                }}
                 className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/20"
               >
                 {ESCALATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}

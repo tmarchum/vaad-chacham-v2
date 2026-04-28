@@ -167,7 +167,9 @@ function Announcements() {
     if (typeFilter !== 'all') {
       result = result.filter((a) => a.type === typeFilter)
     }
-    if (statusFilter === 'active') {
+    if (statusFilter === 'expired') {
+      result = result.filter((a) => isExpired(a.expiresAt))
+    } else if (statusFilter === 'active') {
       result = result.filter((a) => !isExpired(a.expiresAt))
     }
 
@@ -177,6 +179,11 @@ function Announcements() {
       return db - da
     })
   }, [allAnnouncements, buildingFilter, typeFilter, statusFilter])
+
+  const expiredCount = useMemo(
+    () => allAnnouncements.filter((a) => isExpired(a.expiresAt)).length,
+    [allAnnouncements]
+  )
 
   const filteredMinutes = useMemo(() => {
     let result = allMinutes
@@ -438,8 +445,8 @@ function Announcements() {
             ))}
           </div>
 
-          {/* Active / All toggle */}
-          <div className="flex gap-2 items-center">
+          {/* Active / All / Archive toggle */}
+          <div className="flex gap-2 items-center flex-wrap">
             <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>סטטוס:</span>
             <Button
               variant={statusFilter === 'active' ? 'default' : 'outline'}
@@ -454,6 +461,21 @@ function Announcements() {
               onClick={() => setStatusFilter('all')}
             >
               הכל
+            </Button>
+            <Button
+              variant={statusFilter === 'expired' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setStatusFilter('expired')}
+              className="flex items-center gap-1.5"
+            >
+              ארכיון
+              {expiredCount > 0 && (
+                <span className={`inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[10px] font-bold ${
+                  statusFilter === 'expired' ? 'bg-white text-gray-800' : 'bg-red-500 text-white'
+                }`}>
+                  {expiredCount}
+                </span>
+              )}
             </Button>
           </div>
 
