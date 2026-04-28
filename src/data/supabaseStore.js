@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 // Most fields map directly (supabase returns snake_case, we keep as-is for now)
 // Only remap fields that differ between old localStorage keys and new DB columns
 
-const TABLE_MAP = {
+export const TABLE_MAP = {
   buildings: 'buildings',
   units: 'units',
   unitResidents: 'unit_residents',

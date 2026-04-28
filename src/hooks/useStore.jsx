@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react'
 import store from '@/data/supabaseStore'
+import { supabase } from '@/lib/supabase'
+import { TABLE_MAP } from '@/data/supabaseStore'
 
 export function useCollection(collectionName, filters = {}) {
   const collection = store[collectionName]
@@ -72,6 +74,26 @@ export function useCollection(collectionName, filters = {}) {
   }, [collection, refresh])
 
   return { data, isLoading, isSaving, create, update, remove, refresh, bulkCreate }
+}
+
+export function useRealtimeCollection(collectionName, filters = {}) {
+  const result = useCollection(collectionName, filters)
+  const { refresh } = result
+  const filtersKey = JSON.stringify(filters)
+
+  useEffect(() => {
+    const tableName = TABLE_MAP[collectionName] || collectionName
+    const channelName = `rt-${tableName}-${filtersKey}`
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => {
+        refresh()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [collectionName, filtersKey, refresh])
+
+  return result
 }
 
 // BuildingContext — selected building persists
