@@ -512,20 +512,24 @@ function StepQuotes({ issue, buildingName, pendingVendors, quotesCollection, loc
     setForms((prev) => ({ ...prev, [vendorId]: { ...prev[vendorId], [field]: value } }))
   }
 
-  function saveQuote(vendor) {
+  async function saveQuote(vendor) {
     const form = forms[vendor.id]
-    if (!form.amount) return
+    const parsedAmount = parseFloat(form.amount)
+    if (!form.amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'נא להזין סכום תקין', type: 'error' } }))
+      return
+    }
     const quote = {
       vendorId: vendor.id,
       vendorName: vendor.name,
       vendorPhone: vendor.phone,
       issueId: issue.id,
-      amount: parseFloat(form.amount),
+      amount: parsedAmount,
       description: form.description,
       validUntil: form.validUntil,
       createdAt: new Date().toISOString(),
     }
-    const saved = quotesCollection.create(quote)
+    const saved = await quotesCollection.create(quote)
     setLocalQuotes((prev) => [...prev.filter((q) => q.vendorId !== vendor.id), { ...quote, id: saved?.id || Date.now().toString() }])
   }
 
@@ -671,8 +675,8 @@ function StepApproval({ issue, selectedQuote, buildingName, announcementsCollect
   const [announcementText, setAnnouncementText] = useState(defaultText)
   const [sent, setSent] = useState(false)
 
-  function sendToVote() {
-    announcementsCollection.create({
+  async function sendToVote() {
+    await announcementsCollection.create({
       title: `אישור הצעת מחיר: ${issue.title}`,
       content: announcementText,
       type: 'meeting',
@@ -761,9 +765,9 @@ function StepWork({ issue, selectedQuote, buildingName, issuesCollection, workOr
   const waMessage = generateWhatsAppMessage(issue, buildingName, selectedQuote.vendorName)
   const waUrl = buildWhatsAppUrl(selectedQuote.vendorPhone || '', waMessage)
 
-  function markCompleted() {
-    issuesCollection.update(issue.id, { status: 'completed', completedAt: completion.completionDate })
-    workOrdersCollection.create({
+  async function markCompleted() {
+    await issuesCollection.update(issue.id, { status: 'completed', completedAt: completion.completionDate })
+    await workOrdersCollection.create({
       issueId: issue.id,
       vendorId: selectedQuote.vendorId,
       vendorName: selectedQuote.vendorName,
