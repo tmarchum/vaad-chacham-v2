@@ -75,32 +75,35 @@ const EMPTY_PAYMENT = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CollectionCases() {
-  const { selectedBuilding } = useBuildingContext()
+  const { selectedBuilding, refreshBuildings } = useBuildingContext()
   const {
     data: allCases, isLoading, create, update, remove,
   } = useCollection('collectionCases', selectedBuilding ? { building_id: selectedBuilding.id } : {})
   const { data: allNotifications } = useCollection('notificationLog')
   const { data: allUnits } = useCollection('units', selectedBuilding ? { building_id: selectedBuilding.id } : {})
   const { data: allResidents } = useCollection('residents')
+  const { update: updateBuilding } = useCollection('buildings')
 
-  // ── Notifications toggle (persisted per building) ─────────────────────────
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
-    if (!selectedBuilding) return false
-    return localStorage.getItem(NOTIF_KEY(selectedBuilding.id)) === 'true'
-  })
+  // ── Notifications toggle ──────────────────────────────────────────────────
+  // Source of truth: selectedBuilding.collection_notifications_enabled (Supabase)
+  // localStorage used only as optimistic fallback while DB responds
+  const notificationsEnabled = selectedBuilding?.collection_notifications_enabled === true
 
-  useEffect(() => {
+  const toggleNotifications = useCallback(async () => {
     if (!selectedBuilding) return
-    setNotificationsEnabled(localStorage.getItem(NOTIF_KEY(selectedBuilding.id)) === 'true')
-  }, [selectedBuilding?.id])
-
-  const toggleNotifications = useCallback(() => {
-    setNotificationsEnabled(prev => {
-      const next = !prev
-      if (selectedBuilding) localStorage.setItem(NOTIF_KEY(selectedBuilding.id), String(next))
-      return next
-    })
-  }, [selectedBuilding])
+    const next = !notificationsEnabled
+    // Optimistic: write to localStorage immediately for fast UI update
+    localStorage.setItem(NOTIF_KEY(selectedBuilding.id), String(next))
+    // Persist to DB so Edge Functions and other pages see the same value
+    try {
+      await updateBuilding(selectedBuilding.id, { collection_notifications_enabled: next })
+      await refreshBuildings()
+    } catch {
+      // Revert localStorage on failure
+      localStorage.setItem(NOTIF_KEY(selectedBuilding.id), String(!next))
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירת הגדרה', type: 'error' } }))
+    }
+  }, [selectedBuilding, notificationsEnabled, updateBuilding, refreshBuildings])
 
   // ── UI State ──────────────────────────────────────────────────────────────
   const [statusFilter, setStatusFilter]   = useState('open')

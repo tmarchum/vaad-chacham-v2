@@ -93,6 +93,7 @@ function normalizeRow(row) {
   if ('move_in_date' in row)   out.moveInDate   = row.move_in_date
   if ('move_out_date' in row)  out.moveOutDate  = row.move_out_date
   if ('year_built' in row)     out.yearBuilt    = row.year_built
+  if ('collection_notifications_enabled' in row) out.collection_notifications_enabled = row.collection_notifications_enabled
   if ('management_company' in row) out.managementCompany = row.management_company
   if ('bank_name' in row)      out.bankName     = row.bank_name
   if ('account_number' in row) out.accountNumber = row.account_number

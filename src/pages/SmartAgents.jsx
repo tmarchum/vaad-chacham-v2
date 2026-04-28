@@ -13,7 +13,7 @@ import {
   Play, CheckCircle, AlertTriangle, XCircle,
   ChevronDown, ChevronUp, Zap,
   MessageSquare, UserX, TrendingUp, TrendingDown,
-  Plus, Bell, Sparkles, Loader2
+  Plus, Bell, BellOff, Sparkles, Loader2
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -267,7 +267,7 @@ function AiInsightsPanel({ agentType, ai, onAsk }) {
 // CollectionAgentPanel
 // ---------------------------------------------------------------------------
 
-function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreateAnnouncement }) {
+function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreateAnnouncement, notificationsEnabled }) {
   if (!analysis) {
     return (
       <Card>
@@ -284,6 +284,17 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
 
   return (
     <div className="space-y-4">
+      {/* Notifications-disabled banner */}
+      {!notificationsEnabled && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <BellOff className="h-4 w-4 shrink-0" />
+          <span>
+            <strong>שליחת התראות גבייה כבויה.</strong>{' '}
+            עבור למסך <em>מעקב גבייה</em> כדי להפעיל את המתג ולאפשר שליחת הודעות.
+          </span>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="relative rounded-xl border bg-white overflow-hidden">
@@ -326,9 +337,11 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
             size="sm"
             variant="outline"
             onClick={onCreateAnnouncement}
+            disabled={!notificationsEnabled}
+            title={!notificationsEnabled ? 'הפעל התראות גבייה כדי לשלוח הודעות' : undefined}
             className="gap-1.5"
           >
-            <Bell className="h-3.5 w-3.5" />
+            {notificationsEnabled ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
             צור הודעה לכולם
           </Button>
         </div>
@@ -394,10 +407,15 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
                   size="sm"
                   variant="outline"
                   onClick={() => onShowMessage(debtor)}
+                  disabled={!notificationsEnabled}
+                  title={!notificationsEnabled ? 'הפעל התראות גבייה כדי לשלוח הודעות' : undefined}
                   className="gap-1.5"
                 >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  צפה בהודעה
+                  {notificationsEnabled
+                    ? <MessageSquare className="h-3.5 w-3.5" />
+                    : <BellOff className="h-3.5 w-3.5" />
+                  }
+                  {notificationsEnabled ? 'צפה בהודעה' : 'התראות כבויות'}
                 </Button>
                 <Button
                   size="sm"
@@ -979,6 +997,9 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
 export default function SmartAgents() {
   const { selectedBuilding } = useBuildingContext()
 
+  // Read the notifications toggle from the building record (set by CollectionCases page)
+  const notificationsEnabled = selectedBuilding?.collection_notifications_enabled === true
+
   const { data: allPayments, isLoading } = useCollection('payments')
   const { data: allUnits } = useCollection('units')
   const { data: allExpenses } = useCollection('expenses')
@@ -1000,12 +1021,16 @@ export default function SmartAgents() {
   const askClaude = useCallback(async (agentType, contextData) => {
     setAiState(prev => ({ ...prev, [agentType]: { loading: true, result: null, error: null } }))
     try {
-      const result = await callVaadAgent(agentType, selectedBuilding?.name ?? 'הבניין', contextData)
+      // Always pass notificationsEnabled so Edge Function can gate email sending
+      const result = await callVaadAgent(agentType, selectedBuilding?.name ?? 'הבניין', {
+        ...contextData,
+        notificationsEnabled,
+      })
       setAiState(prev => ({ ...prev, [agentType]: { loading: false, result, error: null } }))
     } catch (err) {
       setAiState(prev => ({ ...prev, [agentType]: { loading: false, result: null, error: err.message } }))
     }
-  }, [selectedBuilding])
+  }, [selectedBuilding, notificationsEnabled])
 
   // -------------------------------------------------------------------------
   // Agent 1: Collection analysis
@@ -1477,6 +1502,7 @@ export default function SmartAgents() {
             onShowMessage={handleShowMessage}
             onMarkOverdue={handleMarkOverdue}
             onCreateAnnouncement={handleCreateAnnouncement}
+            notificationsEnabled={notificationsEnabled}
           />
         </>
       )}
