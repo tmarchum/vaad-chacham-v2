@@ -7,7 +7,7 @@ import { TabGroup } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
-import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank } from 'lucide-react'
+import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank, Download } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -84,6 +84,26 @@ function diffDays(start, end) {
   const b = new Date(end)
   if (isNaN(a) || isNaN(b)) return null
   return Math.max(0, Math.round((b - a) / 86400000))
+}
+
+function exportToCSV(filename, headers, rows) {
+  const escape = (val) => {
+    const str = String(val ?? '')
+    return str.includes(',') || str.includes('"') || str.includes('\n')
+      ? `"${str.replace(/"/g, '""')}"`
+      : str
+  }
+  const lines = [headers.map(escape).join(',')]
+  rows.forEach((row) => lines.push(row.map(escape).join(',')))
+  const bom = '﻿'
+  const csv = bom + lines.join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 // ---------------------------------------------------------------------------
@@ -227,6 +247,25 @@ function FinancialTab({ payments, expenses, period, buildingId }) {
     '#a855f7', '#ec4899', '#14b8a6',
   ]
 
+  // SVG chart data
+  const chartData = monthlyRows.map((row) => ({
+    label: monthLabel(row.key).slice(0, 3),
+    income: row.income,
+    expenses: row.expenses,
+  }))
+  const chartMax = Math.max(...chartData.flatMap((d) => [d.income, d.expenses]), 1)
+  const svgW = 480
+  const svgH = 200
+  const padL = 48
+  const padR = 16
+  const padT = 16
+  const padB = 32
+  const innerW = svgW - padL - padR
+  const innerH = svgH - padT - padB
+  const barGroupW = innerW / chartData.length
+  const barW = Math.min(28, barGroupW * 0.35)
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({ pct: t, value: Math.round(chartMax * t) }))
+
   return (
     <div className="space-y-6">
       {/* Summary cards */}
@@ -257,6 +296,107 @@ function FinancialTab({ payments, expenses, period, buildingId }) {
           sub={<Progress value={collectionRate} />}
         />
       </div>
+
+      {/* SVG Bar Chart */}
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-green-500 to-emerald-500" />
+        <CardContent className="p-4">
+          <h3 className="mb-3 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-sm">
+              <BarChart2 size={16} className="text-white" />
+            </div>
+            הכנסות מול הוצאות — 6 חודשים אחרונים
+          </h3>
+          {/* Legend */}
+          <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#22c55e' }} />
+              <span>הכנסות</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#ef4444' }} />
+              <span>הוצאות</span>
+            </div>
+          </div>
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <svg
+              viewBox={`0 0 ${svgW} ${svgH}`}
+              width={svgW}
+              height={svgH}
+              style={{ display: 'block', minWidth: '300px' }}
+            >
+              {/* Y-axis ticks and grid lines */}
+              {ticks.map(({ pct, value }) => {
+                const y = padT + innerH * (1 - pct)
+                return (
+                  <g key={pct}>
+                    <line
+                      x1={padL}
+                      y1={y}
+                      x2={svgW - padR}
+                      y2={y}
+                      stroke="#e5e7eb"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={padL - 4}
+                      y={y + 4}
+                      textAnchor="end"
+                      fontSize="9"
+                      fill="#9ca3af"
+                    >
+                      {value >= 1000 ? `${Math.round(value / 1000)}k` : value}
+                    </text>
+                  </g>
+                )
+              })}
+              {/* Y axis line */}
+              <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} stroke="#d1d5db" strokeWidth="1" />
+              {/* Bars */}
+              {chartData.map((d, i) => {
+                const groupX = padL + i * barGroupW + barGroupW / 2
+                const incomeH = chartMax > 0 ? (d.income / chartMax) * innerH : 0
+                const expensesH = chartMax > 0 ? (d.expenses / chartMax) * innerH : 0
+                const incomeX = groupX - barW - 1
+                const expensesX = groupX + 1
+                const labelY = padT + innerH + 14
+                return (
+                  <g key={d.label}>
+                    {/* Income bar */}
+                    <rect
+                      x={incomeX}
+                      y={padT + innerH - incomeH}
+                      width={barW}
+                      height={incomeH}
+                      fill="#22c55e"
+                      rx="2"
+                    />
+                    {/* Expenses bar */}
+                    <rect
+                      x={expensesX}
+                      y={padT + innerH - expensesH}
+                      width={barW}
+                      height={expensesH}
+                      fill="#ef4444"
+                      rx="2"
+                    />
+                    {/* X-axis label */}
+                    <text
+                      x={groupX}
+                      y={labelY}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fill="#6b7280"
+                    >
+                      {d.label}
+                    </text>
+                  </g>
+                )
+              })}
+            </svg>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Monthly breakdown */}
       <Card className="overflow-hidden border border-[var(--border)]">
@@ -934,6 +1074,86 @@ export default function Reports() {
   const activeBuildingId =
     buildingFilter === 'all' ? 'all' : buildingFilter
 
+  // Derive data needed for CSV export from filtered collections
+  function handleExport() {
+    if (activeTab === 'financial') {
+      const monthKeys = getLast6MonthKeys()
+      const rows = monthKeys.map((key) => {
+        const monthPayments = (payments || []).filter((p) => {
+          const matchBuilding = !activeBuildingId || activeBuildingId === 'all' || p.buildingId === activeBuildingId
+          return matchBuilding && getMonthKey(p.status === 'paid' ? p.paidAt : p.month) === key
+        })
+        const monthPaid = monthPayments.filter((p) => p.status === 'paid')
+        const income = sumBy(monthPaid, 'amount')
+        const expected = sumBy(monthPayments, 'amount')
+        const rate = expected > 0 ? Math.round((income / expected) * 100) : 0
+        const monthExpenses = (expenses || []).filter((e) => {
+          const matchBuilding = !activeBuildingId || activeBuildingId === 'all' || e.buildingId === activeBuildingId
+          return matchBuilding && getMonthKey(e.date) === key
+        })
+        const expenseSum = sumBy(monthExpenses, 'amount')
+        const net = income - expenseSum
+        return [monthLabel(key), income, expenseSum, net, `${rate}%`]
+      })
+      exportToCSV('דוח_כספי.csv', ['חודש', 'הכנסות', 'הוצאות', 'נטו', '% גבייה'], rows)
+    } else if (activeTab === 'residents') {
+      const filteredUnits = (units || []).filter(
+        (u) => !activeBuildingId || activeBuildingId === 'all' || u.buildingId === activeBuildingId
+      )
+      const rows = filteredUnits.map((unit) => {
+        const unitPayments = (payments || []).filter((p) => p.unitId === unit.id)
+        const paid = unitPayments.filter((p) => p.status === 'paid')
+        const pending = unitPayments.filter((p) => p.status === 'pending')
+        const overdue = unitPayments.filter((p) => p.status === 'overdue')
+        const totalPaid = sumBy(paid, 'amount')
+        const totalDebt = sumBy([...pending, ...overdue], 'amount')
+        return [
+          unit.number || unit.unit_number || '',
+          unit.ownerName || unit.tenant_name || '',
+          paid.length,
+          pending.length + overdue.length,
+          totalPaid,
+          totalDebt,
+        ]
+      })
+      exportToCSV('דוח_דיירים.csv', ['מספר דירה', 'שם בעלים', 'תשלומים ששולמו', 'חובות', 'סה"כ שולם', 'סה"כ חוב'], rows)
+    } else if (activeTab === 'maintenance') {
+      const filtered = (issues || []).filter((i) => {
+        const matchBuilding = !activeBuildingId || activeBuildingId === 'all' || i.buildingId === activeBuildingId
+        return matchBuilding && inPeriod(i.reportedAt, period)
+      })
+      const rows = filtered.map((i) => [
+        i.title || i.description || '',
+        i.category || i.priority || '',
+        i.status || '',
+        i.cost ?? '',
+        formatDate(i.reportedAt),
+        i.resolvedAt ? formatDate(i.resolvedAt) : '',
+      ])
+      exportToCSV('דוח_תחזוקה.csv', ['כותרת', 'קטגוריה', 'סטטוס', 'עלות', 'תאריך דיווח', 'תאריך סגירה'], rows)
+    } else if (activeTab === 'budget') {
+      const now = new Date()
+      const currentMonthIdx = now.getMonth()
+      const currentYear = now.getFullYear()
+      const filteredUnits = (units || []).filter(
+        (u) => !activeBuildingId || activeBuildingId === 'all' || u.buildingId === activeBuildingId
+      )
+      const monthlyRevenue = sumBy(filteredUnits, 'monthlyFee')
+      const yearExpenses = (expenses || []).filter((e) => {
+        const matchBuilding = !activeBuildingId || activeBuildingId === 'all' || e.buildingId === activeBuildingId
+        return matchBuilding && inPeriod(e.date, 'this_year')
+      })
+      const annualExpenses = sumBy(yearExpenses, 'amount')
+      const avgMonthlyExpenses = currentMonthIdx > 0 ? annualExpenses / currentMonthIdx : annualExpenses
+      const rows = []
+      for (let m = currentMonthIdx; m < 12; m++) {
+        const net = monthlyRevenue - avgMonthlyExpenses
+        rows.push([`${HEBREW_MONTHS[m]} ${currentYear}`, monthlyRevenue, Math.round(avgMonthlyExpenses), Math.round(net)])
+      }
+      exportToCSV('דוח_תקציב.csv', ['חודש', 'הכנסה צפויה', 'הוצאות צפויות', 'נטו'], rows)
+    }
+  }
+
   if (isLoading) return (
     <div className="p-6">
       <PageHeader icon={BarChart2} iconColor="blue" title="דוחות וניתוחים" />
@@ -954,23 +1174,29 @@ export default function Reports() {
         title="דוחות וניתוחים"
         subtitle="סקירה כללית של פעילות הבניין"
         actions={
-          <select
-            value={buildingFilter}
-            onChange={(e) => setBuildingFilter(e.target.value)}
-            className="rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
-            style={{
-              borderColor: 'var(--border)',
-              backgroundColor: 'var(--surface)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <option value="all">כל הבניינים</option>
-            {buildings.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name || b.address}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={buildingFilter}
+              onChange={(e) => setBuildingFilter(e.target.value)}
+              className="rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
+              style={{
+                borderColor: 'var(--border)',
+                backgroundColor: 'var(--surface)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <option value="all">כל הבניינים</option>
+              {buildings.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name || b.address}
+                </option>
+              ))}
+            </select>
+            <Button variant="outline" size="sm" onClick={handleExport} className="flex items-center gap-1.5">
+              <Download size={15} />
+              ייצוא CSV
+            </Button>
+          </div>
         }
       />
 
