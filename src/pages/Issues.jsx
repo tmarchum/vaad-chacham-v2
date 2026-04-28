@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { callVaadAgent } from '@/lib/vaadAgent'
-import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -292,7 +292,7 @@ const IssueCard = React.memo(function IssueCard({
 
 function Issues() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allIssues, create, update, remove, isSaving, isLoading } = useCollection('issues',
+  const { data: allIssues, create, update, remove, isSaving, isLoading } = useRealtimeCollection('issues',
     selectedBuilding ? { building_id: selectedBuilding.id } : {}
   )
   const { data: allUnits } = useCollection('units')

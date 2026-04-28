@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -63,7 +63,7 @@ function exportToCSV(filename, headers, rows) {
 
 function Payments() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allPayments, create, update, remove, bulkCreate, refresh, isSaving, isLoading } = useCollection('payments',
+  const { data: allPayments, create, update, remove, bulkCreate, refresh, isSaving, isLoading } = useRealtimeCollection('payments',
     selectedBuilding ? { building_id: selectedBuilding.id } : {}
   )
   const { data: allUnits } = useCollection('units',

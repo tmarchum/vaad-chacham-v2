@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
-import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -78,7 +78,7 @@ export default function CollectionCases() {
   const { selectedBuilding, refreshBuildings } = useBuildingContext()
   const {
     data: allCases, isLoading, create, update, remove,
-  } = useCollection('collectionCases', selectedBuilding ? { building_id: selectedBuilding.id } : {})
+  } = useRealtimeCollection('collectionCases', selectedBuilding ? { building_id: selectedBuilding.id } : {})
   const { data: allNotifications } = useCollection('notificationLog')
   const { data: allUnits } = useCollection('units', selectedBuilding ? { building_id: selectedBuilding.id } : {})
   const { data: allResidents } = useCollection('residents')
