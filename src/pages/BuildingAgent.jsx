@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -60,12 +60,48 @@ function StarRating({ value = 0 }) {
 // BuildingAgent
 // ---------------------------------------------------------------------------
 
+// Cache AI results in localStorage so they persist across navigation
+const AI_CACHE_TTL_MS = 12 * 60 * 60 * 1000 // 12 hours
+
+function loadCachedAiResult(buildingId) {
+  try {
+    const raw = localStorage.getItem(`building-agent-ai-${buildingId}`)
+    if (!raw) return null
+    const { result, timestamp } = JSON.parse(raw)
+    if (Date.now() - timestamp > AI_CACHE_TTL_MS) return null
+    return { result, timestamp }
+  } catch { return null }
+}
+
+function saveCachedAiResult(buildingId, result) {
+  try {
+    localStorage.setItem(
+      `building-agent-ai-${buildingId}`,
+      JSON.stringify({ result, timestamp: Date.now() })
+    )
+  } catch { /* ignore storage errors */ }
+}
+
 export default function BuildingAgent() {
   const { selectedBuilding } = useBuildingContext()
   const [activeTab, setActiveTab] = useState('health')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState(null)
+  const [aiResultTimestamp, setAiResultTimestamp] = useState(null)
   const [aiError, setAiError] = useState(null)
+
+  // Load cached AI result when building changes
+  useEffect(() => {
+    if (!selectedBuilding?.id) { setAiResult(null); setAiResultTimestamp(null); return }
+    const cached = loadCachedAiResult(selectedBuilding.id)
+    if (cached) {
+      setAiResult(cached.result)
+      setAiResultTimestamp(cached.timestamp)
+    } else {
+      setAiResult(null)
+      setAiResultTimestamp(null)
+    }
+  }, [selectedBuilding?.id])
 
   const { data: allIssues, create: createIssue, isLoading } = useCollection('issues')
   const { data: allTasks } = useCollection('recurringTasks')
@@ -465,6 +501,7 @@ export default function BuildingAgent() {
     if (!selectedBuilding || !healthScore) return
     setAiLoading(true)
     setAiResult(null)
+    setAiResultTimestamp(null)
     setAiError(null)
     try {
       const result = await callVaadAgent('building_health', selectedBuilding.name, {
@@ -481,6 +518,9 @@ export default function BuildingAgent() {
         recommendations: recommendations.slice(0, 5),
       })
       setAiResult(result)
+      const now = Date.now()
+      setAiResultTimestamp(now)
+      saveCachedAiResult(selectedBuilding.id, result)
     } catch (e) {
       setAiError(e.message)
     } finally {
@@ -548,14 +588,21 @@ export default function BuildingAgent() {
         title="סוכן AI חכם"
         subtitle={`ניתוח חכם ל${selectedBuilding.name || 'בניין'}`}
         actions={
-          <Button
-            onClick={runAiHealthAnalysis}
-            disabled={aiLoading || !healthScore}
-            className="gap-2"
-          >
-            <Sparkles className="h-4 w-4" />
-            {aiLoading ? 'מנתח...' : 'ניתוח AI'}
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              onClick={runAiHealthAnalysis}
+              disabled={aiLoading || !healthScore}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {aiLoading ? 'מנתח...' : aiResult ? 'עדכן ניתוח AI' : 'ניתוח AI'}
+            </Button>
+            {aiResultTimestamp && !aiLoading && (
+              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                נותח לאחרונה: {new Date(aiResultTimestamp).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
         }
       />
 
@@ -640,9 +687,16 @@ export default function BuildingAgent() {
           {(aiLoading || aiResult || aiError) && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-[var(--primary)]" />
-                  ניתוח AI — בריאות הבניין
+                <CardTitle className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-[var(--primary)]" />
+                    ניתוח AI — בריאות הבניין
+                  </span>
+                  {aiResultTimestamp && !aiLoading && (
+                    <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
+                      עודכן: {new Date(aiResultTimestamp).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
