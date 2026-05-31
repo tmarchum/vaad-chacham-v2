@@ -1,8 +1,9 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { ResidentOnboarding } from './ResidentOnboarding'
 
 export function AuthGuard() {
-  const { user, loading } = useAuth()
+  const { user, loading, needsOnboarding } = useAuth()
 
   if (loading) {
     return (
@@ -16,5 +17,9 @@ export function AuthGuard() {
   }
 
   if (!user) return <Navigate to="/login" replace />
+
+  // New user whose email didn't auto-match a resident → show onboarding wizard
+  if (needsOnboarding) return <ResidentOnboarding />
+
   return <Outlet />
 }
