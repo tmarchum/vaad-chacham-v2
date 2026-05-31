@@ -6,6 +6,7 @@ import {
   Home, CreditCard, Megaphone, LogOut, Building2,
   CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp,
   Wrench, CalendarDays, Users, Plus, X, Send, Loader2,
+  UserCog, Mail, Phone, Pencil,
 } from 'lucide-react'
 
 const STATUS_MAP = {
@@ -45,7 +46,7 @@ const SLOTS = [
 ]
 
 export function ResidentPortal() {
-  const { profile, user, signOut } = useAuth()
+  const { profile, user, signOut, updateProfile } = useAuth()
   const [unit, setUnit]               = useState(null)
   const [building, setBuilding]       = useState(null)
   const [payments, setPayments]       = useState([])
@@ -61,7 +62,9 @@ export function ResidentPortal() {
   const [openForm, setOpenForm] = useState(null)
 
   const unitNumber = unit?.unit_number || unit?.number || '—'
-  const ownerName = `${user?.user_metadata?.given_name || ''} ${user?.user_metadata?.family_name || ''}`.trim()
+  // Prefer the saved profile name; fall back to the Google account name
+  const ownerName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
+    || `${user?.user_metadata?.given_name || ''} ${user?.user_metadata?.family_name || ''}`.trim()
 
   // ── Data loading ──────────────────────────────────────────────
   const loadUnitScoped = useCallback(async () => {
@@ -172,6 +175,14 @@ export function ResidentPortal() {
               </div>
             )}
           </div>
+
+          {/* ── My profile (הפרטים שלי) ── */}
+          <ProfileSection
+            profile={profile}
+            user={user}
+            ownerName={ownerName}
+            updateProfile={updateProfile}
+          />
 
           {/* ── Current month payment ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
@@ -295,6 +306,125 @@ export function ResidentPortal() {
           <p className="text-center text-xs text-slate-400 py-2">
             לפנייה לועד הבית — צור קשר ישירות עם מנהל הבניין
           </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════
+   My profile
+   ════════════════════════════════════════════════════════════════ */
+function ProfileSection({ profile, user, ownerName, updateProfile }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({
+    first_name: profile?.first_name || user?.user_metadata?.given_name || '',
+    last_name:  profile?.last_name  || user?.user_metadata?.family_name || '',
+    phone:      profile?.phone || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const startEdit = () => {
+    setForm({
+      first_name: profile?.first_name || user?.user_metadata?.given_name || '',
+      last_name:  profile?.last_name  || user?.user_metadata?.family_name || '',
+      phone:      profile?.phone || '',
+    })
+    setError(null)
+    setEditing(true)
+  }
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setSaving(true); setError(null)
+    try {
+      await updateProfile({
+        first_name: form.first_name.trim(),
+        last_name:  form.last_name.trim(),
+        phone:      form.phone.trim(),
+      })
+      setEditing(false)
+    } catch (err) {
+      console.error('profile update error', err)
+      setError('שגיאה בשמירת הפרטים. נסה שוב.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <UserCog className="h-4 w-4 text-indigo-500" />
+          <p className="font-bold text-slate-800 text-sm">הפרטים שלי</p>
+        </div>
+        {!editing && (
+          <button
+            onClick={startEdit}
+            className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+          >
+            <Pencil className="h-3.5 w-3.5" /> עריכה
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <form onSubmit={submit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text" placeholder="שם פרטי"
+              value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <input
+              type="text" placeholder="שם משפחה"
+              value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })}
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <input
+            type="tel" placeholder="טלפון"
+            value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          {/* Email is the login identity — read-only */}
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 text-slate-400 text-sm">
+            <Mail className="h-4 w-4 shrink-0" />
+            <span className="truncate">{user?.email}</span>
+            <span className="text-[10px] mr-auto shrink-0">לא ניתן לשינוי</span>
+          </div>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit" disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              שמירה
+            </button>
+            <button
+              type="button" onClick={() => setEditing(false)}
+              className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors"
+            >
+              ביטול
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="space-y-2.5">
+          <div className="flex items-center gap-2.5 text-sm">
+            <UserCog className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-700 font-medium">{ownerName || 'דייר'}</span>
+          </div>
+          <div className="flex items-center gap-2.5 text-sm">
+            <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600 truncate">{user?.email || '—'}</span>
+          </div>
+          <div className="flex items-center gap-2.5 text-sm">
+            <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600">{profile?.phone || 'לא הוזן טלפון'}</span>
+          </div>
         </div>
       )}
     </div>
