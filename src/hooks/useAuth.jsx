@@ -30,22 +30,26 @@ export function AuthProvider({ children }) {
 
     if (!isPrivileged && !alreadyLinked && !doneBefore && userEmail) {
       // Try to auto-match by email in unit_residents
+      // unit_residents has no building_id column — join to units to get it
       const { data: resident } = await supabase
         .from('unit_residents')
-        .select('unit_id, building_id')
+        .select('unit_id, units(building_id)')
         .eq('email', userEmail)
         .limit(1)
         .maybeSingle()
 
-      if (resident?.unit_id) {
+      const unitId = resident?.unit_id
+      const buildingId = resident?.units?.building_id
+
+      if (unitId) {
         // Auto-link: update profiles row
         const { data: updated } = await supabase
           .from('profiles')
-          .update({ unit_id: resident.unit_id, building_id: resident.building_id })
+          .update({ unit_id: unitId, building_id: buildingId ?? null })
           .eq('id', userId)
           .select()
           .single()
-        resolved = updated ?? { ...data, unit_id: resident.unit_id, building_id: resident.building_id }
+        resolved = updated ?? { ...data, unit_id: unitId, building_id: buildingId }
         localStorage.setItem(ONBOARDING_KEY(userId), 'auto')
       }
     }

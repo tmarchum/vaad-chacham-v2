@@ -11,3 +11,13 @@ CREATE POLICY "buildings_select_authenticated"
 DROP POLICY IF EXISTS "units_select_authenticated" ON public.units;
 CREATE POLICY "units_select_authenticated"
   ON public.units FOR SELECT TO authenticated USING (true);
+
+-- Allow a resident to read their own unit_residents record by email.
+-- This enables auto-match on login: useAuth checks unit_residents WHERE email = user.email
+-- Existing policy (ur_select) only allows access via user_id or building_membership,
+-- but admin-created resident records have user_id = NULL.
+
+DROP POLICY IF EXISTS "ur_select_by_email" ON public.unit_residents;
+CREATE POLICY "ur_select_by_email"
+  ON public.unit_residents FOR SELECT TO authenticated
+  USING (email = (auth.jwt() ->> 'email'));

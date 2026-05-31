@@ -75,13 +75,13 @@ export function ResidentOnboarding() {
     setSaving(true)
     setError(null)
     try {
-      // Also try to link unit_residents row with this user's email
+      // Link unit_residents row with this user's email
+      // Note: unit_residents has no building_id column — only unit_id
       await supabase
         .from('unit_residents')
         .upsert(
           {
             unit_id: selectedUnit.id,
-            building_id: selectedBuilding.id,
             email: user.email,
             first_name: user.user_metadata?.given_name || '',
             last_name: user.user_metadata?.family_name || '',
