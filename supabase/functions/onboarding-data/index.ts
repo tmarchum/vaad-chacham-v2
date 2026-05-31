@@ -3,7 +3,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -16,27 +15,24 @@ serve(async (req) => {
   }
 
   try {
-    // ── 1. Verify caller is authenticated ──────────────────────────────
+    // ── 1. Verify caller is authenticated using service-role client ────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: "Unauthorized - no token" }), {
         status: 401, headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
-    // Use anon client to verify the JWT
-    const anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { data: { user }, error: authError } = await anonClient.auth.getUser(
+    // Service-role client can verify any user JWT
+    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: { user }, error: authError } = await admin.auth.getUser(
       authHeader.replace("Bearer ", "")
     );
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
+      return new Response(JSON.stringify({ error: `Invalid token: ${authError?.message}` }), {
         status: 401, headers: { ...cors, "Content-Type": "application/json" },
       });
     }
-
-    // ── 2. Service-role client bypasses RLS ────────────────────────────
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const url = new URL(req.url);
     let buildingId = url.searchParams.get("building_id");

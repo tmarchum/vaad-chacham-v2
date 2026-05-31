@@ -28,8 +28,18 @@ export function ResidentOnboarding() {
   useEffect(() => {
     supabase.functions.invoke('onboarding-data')
       .then(({ data, error }) => {
-        if (error) console.error('onboarding-data buildings error:', error)
+        console.log('[onboarding-data buildings]', { data, error })
+        if (error) {
+          setError(`שגיאה בטעינת בניינים: ${error.message || JSON.stringify(error)}`)
+          setLoadingBuildings(false)
+          return
+        }
         setBuildings(data?.buildings || [])
+        setLoadingBuildings(false)
+      })
+      .catch(err => {
+        console.error('[onboarding-data catch]', err)
+        setError(`שגיאת רשת: ${err.message}`)
         setLoadingBuildings(false)
       })
   }, [])
