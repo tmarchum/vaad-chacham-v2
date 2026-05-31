@@ -26,7 +26,10 @@ export function AuthProvider({ children }) {
     // Skip auto-match for admins/committee or already-linked users
     const isPrivileged = data?.role === 'admin' || data?.role === 'committee'
     const alreadyLinked = !!data?.unit_id
-    const doneBefore = !!localStorage.getItem(ONBOARDING_KEY(userId))
+    // Only trust the "done" flag when unit_id is actually persisted in the DB.
+    // If the flag exists but unit_id is null (e.g. a previous attempt that failed
+    // before profiles had the unit_id column), retry the auto-match.
+    const doneBefore = !!localStorage.getItem(ONBOARDING_KEY(userId)) && !!data?.unit_id
 
     if (!isPrivileged && !alreadyLinked && !doneBefore && userEmail) {
       // Try to auto-match by email in unit_residents
