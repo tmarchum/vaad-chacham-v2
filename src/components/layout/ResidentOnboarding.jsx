@@ -24,22 +24,19 @@ export function ResidentOnboarding() {
   const [saving, setSaving]               = useState(false)
   const [error, setError]                 = useState(null)
 
-  // Load all buildings on mount — via Edge Function (bypasses RLS for unlinked users)
+  // Load all buildings on mount — direct query now works via new RLS policy
   useEffect(() => {
-    supabase.functions.invoke('onboarding-data')
+    supabase
+      .from('buildings')
+      .select('id, name, address, city, total_units')
+      .order('name')
       .then(({ data, error }) => {
-        console.log('[onboarding-data buildings]', { data, error })
         if (error) {
-          setError(`שגיאה בטעינת בניינים: ${error.message || JSON.stringify(error)}`)
-          setLoadingBuildings(false)
-          return
+          console.error('buildings query error:', error)
+          setError(`שגיאה בטעינת בניינים: ${error.message}`)
+        } else {
+          setBuildings(data || [])
         }
-        setBuildings(data?.buildings || [])
-        setLoadingBuildings(false)
-      })
-      .catch(err => {
-        console.error('[onboarding-data catch]', err)
-        setError(`שגיאת רשת: ${err.message}`)
         setLoadingBuildings(false)
       })
   }, [])
@@ -50,13 +47,16 @@ export function ResidentOnboarding() {
     setLoadingUnits(true)
     setUnits([])
     setSelectedUnit(null)
-    supabase.functions.invoke('onboarding-data', {
-      body: { building_id: selectedBuilding.id },
-    }).then(({ data, error }) => {
-      if (error) console.error('onboarding-data units error:', error)
-      setUnits(data?.units || [])
-      setLoadingUnits(false)
-    })
+    supabase
+      .from('units')
+      .select('id, unit_number, number, floor, owner_name')
+      .eq('building_id', selectedBuilding.id)
+      .order('unit_number')
+      .then(({ data, error }) => {
+        if (error) console.error('units query error:', error)
+        setUnits(data || [])
+        setLoadingUnits(false)
+      })
   }, [selectedBuilding])
 
   const handlePickBuilding = (b) => {
