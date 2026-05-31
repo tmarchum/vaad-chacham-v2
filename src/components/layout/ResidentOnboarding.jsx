@@ -24,14 +24,12 @@ export function ResidentOnboarding() {
   const [saving, setSaving]               = useState(false)
   const [error, setError]                 = useState(null)
 
-  // Load all buildings on mount
+  // Load all buildings on mount — via Edge Function (bypasses RLS for unlinked users)
   useEffect(() => {
-    supabase
-      .from('buildings')
-      .select('id, name, address, city, total_units')
-      .order('name')
-      .then(({ data }) => {
-        setBuildings(data || [])
+    supabase.functions.invoke('onboarding-data')
+      .then(({ data, error }) => {
+        if (error) console.error('onboarding-data buildings error:', error)
+        setBuildings(data?.buildings || [])
         setLoadingBuildings(false)
       })
   }, [])
@@ -42,15 +40,13 @@ export function ResidentOnboarding() {
     setLoadingUnits(true)
     setUnits([])
     setSelectedUnit(null)
-    supabase
-      .from('units')
-      .select('id, unit_number, number, floor, owner_name')
-      .eq('building_id', selectedBuilding.id)
-      .order('unit_number')
-      .then(({ data }) => {
-        setUnits(data || [])
-        setLoadingUnits(false)
-      })
+    supabase.functions.invoke('onboarding-data', {
+      body: { building_id: selectedBuilding.id },
+    }).then(({ data, error }) => {
+      if (error) console.error('onboarding-data units error:', error)
+      setUnits(data?.units || [])
+      setLoadingUnits(false)
+    })
   }, [selectedBuilding])
 
   const handlePickBuilding = (b) => {
