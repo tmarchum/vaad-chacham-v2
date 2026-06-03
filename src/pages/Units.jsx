@@ -307,17 +307,16 @@ function Units() {
           email: r.email || '',
           is_primary: r.is_primary || r.isPrimary || false,
         }))
-      owners = unitResidents
-        .filter(r => (r.resident_type || r.residentType) === 'owner')
-        .map(r => ({
-          _key: r.id,
-          id: r.id,
-          first_name: r.first_name || r.firstName || '',
-          last_name: r.last_name || r.lastName || '',
-          phone: r.phone || '',
-          email: r.email || '',
-          is_primary: false,
-        }))
+      // Owner of a rented unit is stored on the unit itself (custom_fields.owner),
+      // not as a resident row — single source of truth shared with the resident portal.
+      const cfo = (unit.custom_fields || unit.customFields || {}).owner
+      owners = cfo && (cfo.first_name || cfo.last_name || cfo.phone || cfo.email)
+        ? [{
+            _key: 'cf-owner', id: null,
+            first_name: cfo.first_name || '', last_name: cfo.last_name || '',
+            phone: cfo.phone || '', email: cfo.email || '', is_primary: false,
+          }]
+        : []
     } else {
       residents = unitResidents.map(r => ({
         _key: r.id,
@@ -416,6 +415,17 @@ function Units() {
     e.preventDefault()
     setSaving(true)
     try {
+      // Landlord owner (rented units only) is persisted on the unit, not as a resident row
+      const ownerObj = form.unit_type === 'rented' && form.owners[0] &&
+        (form.owners[0].first_name || form.owners[0].last_name || form.owners[0].phone || form.owners[0].email)
+        ? {
+            first_name: form.owners[0].first_name || '',
+            last_name: form.owners[0].last_name || '',
+            phone: form.owners[0].phone || '',
+            email: form.owners[0].email || '',
+          }
+        : null
+
       const unitData = {
         buildingId: form.buildingId,
         number: form.number,
@@ -434,6 +444,7 @@ function Units() {
           storage_numbers: form.storage_numbers,
           parking_gate_phones: form.parking_gate_phones,
           tier_label: form.tier_label || '',
+          ...(ownerObj ? { owner: ownerObj } : {}),
         },
         notes: form.notes,
       }
@@ -447,12 +458,9 @@ function Units() {
       }
       if (!unitId) return
 
-      // Collect all persons to save
+      // Collect resident rows to save (owners of rented units are NOT resident rows)
       const residentType = form.unit_type === 'rented' ? 'tenant' : 'owner'
-      const toSave = [
-        ...form.residents.map(r => ({ ...r, resident_type: residentType })),
-        ...form.owners.map(r => ({ ...r, resident_type: 'owner', is_primary: false })),
-      ]
+      const toSave = form.residents.map(r => ({ ...r, resident_type: residentType }))
 
       // Delete persons removed from form
       const savedIds = toSave.filter(p => p.id).map(p => p.id)
@@ -732,8 +740,10 @@ function Units() {
         const tenants = unitType === 'rented'
           ? unitResidents.filter(r => (r.resident_type || r.residentType) === 'tenant')
           : unitResidents
-        const owners = unitType === 'rented'
-          ? unitResidents.filter(r => (r.resident_type || r.residentType) === 'owner')
+        const cfOwner = (detailUnit.custom_fields || detailUnit.customFields || {}).owner
+        const owners = unitType === 'rented' && cfOwner &&
+          (cfOwner.first_name || cfOwner.last_name || cfOwner.phone || cfOwner.email)
+          ? [cfOwner]
           : []
         const cf = detailUnit.custom_fields || detailUnit.customFields || {}
         const storageNums = cf.storage_numbers?.length
@@ -786,8 +796,8 @@ function Units() {
             {owners.length > 0 && (
               <div className="pt-1 pb-1">
                 <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-2">בעלים</p>
-                {owners.map(r => (
-                  <div key={r.id} className="mb-2 p-2 rounded bg-[var(--bg-secondary)] text-sm">
+                {owners.map((r, i) => (
+                  <div key={i} className="mb-2 p-2 rounded bg-[var(--bg-secondary)] text-sm">
                     <div className="font-medium">{fullName(r)}</div>
                     {r.phone && <div className="text-[var(--text-secondary)] flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</div>}
                     {r.email && <div className="text-[var(--text-secondary)]">{r.email}</div>}
@@ -1148,7 +1158,7 @@ function Units() {
               <div>
                 <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-1">בעלים</h4>
                 <p className="text-xs text-[var(--text-muted)] mb-3">
-                  הבעלים אינם נחשבים דיירים ראשיים ולא יקבלו הודעות שוטפות
+                  פרטי הבעלים נשמרים על הדירה (גלויים גם לדייר בפורטל). הבעלים אינם נחשבים דיירים ולא יקבלו הודעות שוטפות.
                 </p>
                 <div className="space-y-3">
                   {form.owners.map((person, idx) => (
@@ -1163,16 +1173,18 @@ function Units() {
                     />
                   ))}
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={addPerson('owners')}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  הוסף בעלים
-                </Button>
+                {form.owners.length === 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={addPerson('owners')}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    הוסף בעלים
+                  </Button>
+                )}
               </div>
             )}
 
