@@ -102,6 +102,29 @@ export function ResidentPortal() {
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const currentPayment = payments.find(p => p.month === currentMonth)
+
+  // ── Greeting + date (same as the admin dashboard) ──
+  const WEEKDAYS_HE = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+  const dayOfWeek = WEEKDAYS_HE[now.getDay()]
+  const gregDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
+  const hour = now.getHours()
+  const greeting = hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : 'ערב טוב'
+  const firstName = profile?.first_name || user?.user_metadata?.given_name || ''
+  const [hebrewDate, setHebrewDate] = useState('')
+  useEffect(() => {
+    let timer
+    import('@hebcal/core').then(({ HDate }) => {
+      try { setHebrewDate(new HDate().render('he')) } catch (e) { console.warn('Hebrew date error:', e) }
+      const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
+      timer = setTimeout(() => {
+        import('@hebcal/core').then(({ HDate: HDate2 }) => {
+          try { setHebrewDate(new HDate2().render('he')) } catch {}
+        })
+      }, msUntilMidnight)
+    })
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // How much this unit is supposed to pay: individual amount → defined tier → board-member discount
   const expectedFee = calcUnitFee(unit, building)
 
@@ -135,6 +158,22 @@ export function ResidentPortal() {
         </div>
       ) : (
         <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
+
+          {/* ── Greeting banner (same as admin dashboard) ── */}
+          <div className="bg-gradient-to-l from-blue-600 to-indigo-700 text-white rounded-2xl shadow-sm px-5 py-4">
+            <h1 className="text-lg font-extrabold mb-1">
+              {greeting}{firstName ? `, ${firstName}` : ''} 👋
+            </h1>
+            <p className="text-blue-100 text-sm">
+              יום {dayOfWeek}, {gregDate}
+              {hebrewDate && (
+                <>
+                  <span className="mx-2 opacity-40">|</span>
+                  <span className="font-medium">{hebrewDate}</span>
+                </>
+              )}
+            </p>
+          </div>
 
           {/* ── Unit card ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
