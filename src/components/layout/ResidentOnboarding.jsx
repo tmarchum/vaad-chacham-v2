@@ -28,7 +28,7 @@ export function ResidentOnboarding() {
   useEffect(() => {
     supabase
       .from('buildings')
-      .select('id, name, address, city, total_units')
+      .select('id, name, street, house_number, city, total_units')
       .order('name')
       .then(({ data, error }) => {
         if (error) {
@@ -49,9 +49,9 @@ export function ResidentOnboarding() {
     setSelectedUnit(null)
     supabase
       .from('units')
-      .select('id, unit_number, number, floor, owner_name')
+      .select('id, number, floor')
       .eq('building_id', selectedBuilding.id)
-      .order('unit_number')
+      .order('number')
       .then(({ data, error }) => {
         if (error) console.error('units query error:', error)
         setUnits(data || [])
@@ -167,9 +167,10 @@ export function ResidentOnboarding() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-gray-900">{b.name}</p>
-                        {(b.address || b.city) && (
-                          <p className="text-xs text-gray-400 truncate">{[b.address, b.city].filter(Boolean).join(', ')}</p>
-                        )}
+                        {(() => {
+                          const addr = [[b.street, b.house_number].filter(Boolean).join(' '), b.city].filter(Boolean).join(', ')
+                          return addr ? <p className="text-xs text-gray-400 truncate">{addr}</p> : null
+                        })()}
                       </div>
                       {b.total_units && (
                         <span className="text-xs text-gray-300 shrink-0">{b.total_units} דירות</span>
@@ -204,8 +205,7 @@ export function ResidentOnboarding() {
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {units.map((u) => {
-                    const num = u.unit_number || u.number
-                    const owner = u.owner_name || ''
+                    const num = u.number
                     const isSelected = selectedUnit?.id === u.id
                     return (
                       <button
@@ -225,7 +225,6 @@ export function ResidentOnboarding() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-gray-900">דירה {num}</p>
                           {u.floor && <p className="text-xs text-gray-400">קומה {u.floor}</p>}
-                          {owner && <p className="text-xs text-gray-400">{owner}</p>}
                         </div>
                         {isSelected && (
                           <CheckCircle2 className="h-5 w-5 text-blue-500 shrink-0" />
