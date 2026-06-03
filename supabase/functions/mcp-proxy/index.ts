@@ -233,26 +233,13 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
     }
 
     case 'upsert_collection_case': {
-      const { id, ...rest } = args as Record<string, unknown>
-      if (id) {
-        // Update
-        const { data, error } = await supabase
-          .from('collection_cases')
-          .update({ ...rest, updated_at: new Date().toISOString() })
-          .eq('id', id)
-          .select()
-          .single()
-        if (error) throw new Error(error.message)
-        return data
-      } else {
-        // Insert
-        const { data, error } = await supabase
-          .from('collection_cases')
-          .insert(rest)
-          .select()
-          .single()
-        if (error) throw new Error(error.message)
-        return data
+      // DISABLED — collection cases are now computed deterministically inside the
+      // app (debt = real fee per calcUnitFee − actual payments), not by the LLM
+      // agent, which fabricated debt for paid-up residents. The agent may read
+      // cases (get_collection_cases) but must not create or modify them.
+      return {
+        disabled: true,
+        message: 'ניהול תיקי גבייה מתבצע אוטומטית במערכת לפי תשלומים בפועל. הסוכן אינו רשאי ליצור או לעדכן תיקי גבייה.',
       }
     }
 

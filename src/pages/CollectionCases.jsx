@@ -3,7 +3,7 @@ import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hook
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, calcUnitFee } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
@@ -67,6 +67,15 @@ const EMPTY_CASE = {
   escalation_level: 'none', notes: '', status: 'open',
 }
 
+// Escalation level by number of unpaid months (deterministic)
+function escalationForMonths(months) {
+  if (months >= 6) return 'legal_action'
+  if (months >= 3) return 'legal_warning'
+  if (months >= 2) return 'warning'
+  if (months >= 1) return 'reminder'
+  return 'none'
+}
+
 const EMPTY_PAYMENT = {
   payment_amount: '', payment_date: new Date().toISOString().slice(0, 10),
   payment_method: 'transfer',
@@ -82,7 +91,55 @@ export default function CollectionCases() {
   const { data: allNotifications } = useCollection('notificationLog')
   const { data: allUnits } = useCollection('units', selectedBuilding ? { building_id: selectedBuilding.id } : {})
   const { data: allResidents } = useCollection('residents')
+  const { data: allPayments } = useCollection('payments', selectedBuilding ? { building_id: selectedBuilding.id } : {})
   const { update: updateBuilding } = useCollection('buildings')
+  const [recomputing, setRecomputing] = useState(false)
+
+  // ── Deterministic collection: debt comes ONLY from real unpaid/partial/overdue
+  // payment records (never from a guessed flat amount). Closes stale cases. ──
+  const recomputeCases = useCallback(async () => {
+    if (!selectedBuilding) return
+    if (!window.confirm('לחשב מחדש את תיקי הגבייה לפי התשלומים בפועל? תיקים ללא חוב אמיתי ייסגרו.')) return
+    setRecomputing(true)
+    try {
+      const payByUnit = {}
+      allPayments.forEach(p => {
+        const uid = p.unit_id || p.unitId
+        if (!uid) return
+        ;(payByUnit[uid] ||= []).push(p)
+      })
+      let opened = 0, closed = 0
+      for (const u of allUnits) {
+        const ups = payByUnit[u.id] || []
+        const debtRecords = ups.filter(p => ['unpaid', 'overdue', 'partial'].includes(p.status))
+        const expectedFee = calcUnitFee(u, selectedBuilding)
+        // Debt = sum of the actual charge for each unpaid month (record amount, or the
+        // computed fee if the record has none). Paid months contribute nothing.
+        const debt = debtRecords.reduce((s, p) => s + (Number(p.amount) > 0 ? Number(p.amount) : expectedFee), 0)
+        const months = debtRecords.length
+        const existing = allCases.find(c => (c.unit_id || c.unitId) === u.id && c.status !== 'closed')
+
+        if (months > 0 && debt > 0) {
+          const payload = {
+            building_id: selectedBuilding.id, unit_id: u.id,
+            total_debt: debt, months_overdue: months,
+            escalation_level: escalationForMonths(months), status: 'open',
+          }
+          if (existing) await update(existing.id, payload)
+          else { await create(payload); opened++ }
+        } else if (existing) {
+          await update(existing.id, { total_debt: 0, months_overdue: 0, status: 'closed', auto_closed: true })
+          closed++
+        }
+      }
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `חושב לפי תשלומים בפועל — ${opened} נפתחו, ${closed} נסגרו`, type: 'success' } }))
+    } catch (e) {
+      console.error('recompute error', e)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בחישוב תיקי הגבייה', type: 'error' } }))
+    } finally {
+      setRecomputing(false)
+    }
+  }, [selectedBuilding, allUnits, allPayments, allCases, create, update])
 
   // ── Notifications toggle ──────────────────────────────────────────────────
   // Source of truth: selectedBuilding.collection_notifications_enabled (Supabase)
@@ -352,6 +409,11 @@ export default function CollectionCases() {
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${notificationsEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </span>
             </button>
+
+            <Button variant="outline" onClick={recomputeCases} disabled={recomputing}>
+              <Check className="h-4 w-4" />
+              {recomputing ? 'מחשב...' : 'חשב לפי תשלומים'}
+            </Button>
 
             <Button onClick={openCreate}>
               <Plus className="h-4 w-4" />
