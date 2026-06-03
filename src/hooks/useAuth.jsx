@@ -89,9 +89,16 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch (e) {
+      console.error('signOut error', e)
+    }
     setUser(null)
     setProfile(null)
+    // Hard-redirect to the login screen so the Google sign-in button is always
+    // reachable after logout, regardless of re-render timing.
+    window.location.assign('/login')
   }, [])
 
   const isAdmin = profile?.role === 'admin'
