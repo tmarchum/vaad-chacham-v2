@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, calcUnitFee } from '@/lib/utils'
 import { ResidentBooking } from './ResidentBooking'
 import {
   Home, CreditCard, Megaphone, LogOut, Building2,
@@ -102,6 +102,8 @@ export function ResidentPortal() {
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const currentPayment = payments.find(p => p.month === currentMonth)
+  // How much this unit is supposed to pay: individual amount → defined tier → board-member discount
+  const expectedFee = calcUnitFee(unit, building)
 
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50" style={{ fontFamily: 'inherit' }}>
@@ -177,12 +179,27 @@ export function ResidentPortal() {
             />
           )}
 
-          {/* ── Current month payment ── */}
+          {/* ── Monthly dues ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center gap-2 mb-3">
               <CreditCard className="h-4 w-4 text-blue-600" />
               <p className="font-bold text-slate-800 text-sm">תשלום חודשי</p>
             </div>
+
+            {/* Expected monthly amount — always shown */}
+            {expectedFee > 0 && (
+              <>
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                  <span className="text-sm text-slate-500">סכום חודשי קבוע</span>
+                  <span className="font-extrabold text-slate-900 text-lg">{formatCurrency(expectedFee)}</span>
+                </div>
+                {unit?.board_member && building?.board_member_discount > 0 && (
+                  <p className="text-[11px] text-emerald-600 -mt-1 mb-3">כולל הנחת חבר ועד {building.board_member_discount}%</p>
+                )}
+              </>
+            )}
+
+            {/* Current month payment status */}
             {currentPayment ? (() => {
               const st = STATUS_MAP[currentPayment.status] || STATUS_MAP.pending
               const Icon = st.icon
@@ -201,7 +218,7 @@ export function ResidentPortal() {
             })() : (
               <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 text-slate-500 text-sm">
                 <Clock className="h-4 w-4" />
-                אין רשומה לחודש הנוכחי
+                טרם הופק חיוב לחודש {currentMonth}
               </div>
             )}
           </div>
