@@ -572,7 +572,7 @@ const buildUnitForm = (unit) => {
     number: unit.number || unit.unit_number || '',
     floor: unit.floor ?? '',
     rooms: unit.rooms ?? '',
-    area: unit.area ?? '',
+    area: unit.area > 0 ? unit.area : '',
     unit_type: cf.unit_type || 'owned',
     board_member: !!unit.board_member,
     parking_spots: Array.isArray(unit.parking_spots) ? unit.parking_spots : [],
@@ -708,7 +708,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
     e.preventDefault()
     setSaving(true); setError(null)
     const cf = unit.custom_fields || {}
-    const { error } = await supabase.from('units').update({
+    const { data, error } = await supabase.from('units').update({
       number: form.number,
       floor: form.floor === '' ? null : Number(form.floor),
       rooms: form.rooms === '' ? null : Number(form.rooms),
@@ -726,9 +726,11 @@ function UnitDetailsSection({ unit, building, onSaved }) {
       },
       notes: form.notes,
       updated_at: new Date().toISOString(),
-    }).eq('id', unit.id)
+    }).eq('id', unit.id).select()
     setSaving(false)
     if (error) { console.error('unit update error', error); setError('שגיאה בשמירת פרטי הדירה.'); return }
+    // RLS that blocks the row returns success with 0 rows — surface that clearly.
+    if (!data || data.length === 0) { setError('העדכון לא נשמר — ייתכן שאין הרשאה לעדכן דירה זו.'); return }
     setEditing(false)
     onSaved?.()
   }
@@ -874,15 +876,24 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  const hasPrimary = residents.some(r => r.is_primary)
+  const editingRes = residents.find(r => r.id === editingId) || null
+  const editingIsPrimary = !!editingRes?.is_primary
+  // First resident in a unit becomes primary automatically.
+  const newIsPrimary = residents.length === 0
+  // A primary resident must have name + mobile + email.
+  const addValid = form.first_name.trim() && (!newIsPrimary || (form.phone.trim() && form.email.trim()))
+  const editValid = editForm.first_name.trim() && (!editingIsPrimary || (editForm.phone.trim() && editForm.email.trim()))
+
   const add = async (e) => {
     e.preventDefault()
-    if (!form.first_name.trim()) return
+    if (!addValid) { setError(newIsPrimary ? 'לדייר הראשי חובה שם, נייד ומייל.' : 'יש למלא שם פרטי.'); return }
     setSaving(true); setError(null)
     const { error } = await supabase.from('unit_residents').insert({
       unit_id: profile.unit_id,
       first_name: form.first_name.trim(), last_name: form.last_name.trim(),
       phone: form.phone.trim(), email: form.email.trim(),
-      resident_type: defaultType, is_primary: false,
+      resident_type: defaultType, is_primary: newIsPrimary,
     })
     setSaving(false)
     if (error) { console.error('resident insert error', error); setError('שגיאה בהוספה. נסה שוב.'); return }
@@ -896,6 +907,7 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
   }
   const saveEdit = async (e) => {
     e.preventDefault()
+    if (!editValid) { setError(editingIsPrimary ? 'לדייר הראשי חובה שם, נייד ומייל.' : 'יש למלא שם פרטי.'); return }
     setSaving(true); setError(null)
     const { error } = await supabase.from('unit_residents').update({
       first_name: editForm.first_name.trim(), last_name: editForm.last_name.trim(),
@@ -907,9 +919,20 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
     setEditingId(null); onChanged()
   }
   const remove = async (r) => {
+    if (r.is_primary) { setError('לא ניתן להסיר דייר ראשי — הגדר דייר אחר כראשי תחילה.'); return }
     if (!window.confirm(`להסיר את ${r.first_name || 'הדייר'} מהדירה?`)) return
     const { error } = await supabase.from('unit_residents').update({ archived: true }).eq('id', r.id)
     if (error) { console.error('resident archive error', error); return }
+    onChanged()
+  }
+  // Mark a resident as primary (requires mobile + email). Clears the previous primary.
+  const makePrimary = async (r) => {
+    if (r.is_primary) return
+    if (!r.phone || !r.email) { setError('לדייר ראשי חובה נייד ומייל — עדכן את הפרטים תחילה.'); startEdit(r); return }
+    setError(null)
+    await supabase.from('unit_residents').update({ is_primary: false }).eq('unit_id', profile.unit_id).eq('archived', false)
+    const { error } = await supabase.from('unit_residents').update({ is_primary: true }).eq('id', r.id)
+    if (error) { console.error('set primary error', error); setError('שגיאה בהגדרת דייר ראשי.'); return }
     onChanged()
   }
 
@@ -930,9 +953,15 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
 
       {adding && (
         <form onSubmit={add} className="space-y-3 mb-4 p-3 rounded-xl bg-slate-50 border border-slate-100">
+          {newIsPrimary && (
+            <p className="text-xs text-amber-600 flex items-center gap-1">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+              דייר ראשי — נייד ומייל חובה
+            </p>
+          )}
           <PersonFields value={form} onChange={setForm} />
           {error && <p className="text-xs text-red-500">{error}</p>}
-          <button type="submit" disabled={saving || !form.first_name.trim()}
+          <button type="submit" disabled={saving || !addValid}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             הוספה
@@ -940,8 +969,15 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
         </form>
       )}
 
+      {!adding && !editingId && error && <p className="text-xs text-red-500 mb-2">{error}</p>}
+      {residents.length > 0 && !hasPrimary && (
+        <p className="text-xs text-amber-600 mb-2 flex items-center gap-1">
+          <Star className="h-3 w-3" /> יש להגדיר דייר ראשי (לחיצה על הכוכב)
+        </p>
+      )}
+
       {residents.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-2">אין רשומות</p>
+        <p className="text-sm text-slate-400 text-center py-2">יש להוסיף לפחות דייר אחד (ייקבע כראשי)</p>
       ) : (
         <div className="space-y-2">
           {residents.map(r => {
@@ -983,6 +1019,10 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => makePrimary(r)} title={r.is_primary ? 'דייר ראשי' : 'הגדר כדייר ראשי'}
+                    className={`p-1.5 ${r.is_primary ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'}`}>
+                    <Star className={`h-3.5 w-3.5 ${r.is_primary ? 'fill-amber-400' : ''}`} />
+                  </button>
                   <button onClick={() => startEdit(r)} className="p-1.5 text-slate-400 hover:text-blue-600" title="עריכה">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
