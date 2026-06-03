@@ -599,8 +599,12 @@ function OwnerDetails({ owner, unitId, onSaved }) {
     setError(null); setEditing(true)
   }
 
+  // first name, last name and mobile are required; email is optional
+  const ownerValid = form.first_name.trim() && form.last_name.trim() && form.phone.trim()
+
   const submit = async (e) => {
     e.preventDefault()
+    if (!ownerValid) { setError('יש למלא שם פרטי, שם משפחה ונייד.'); return }
     setSaving(true); setError(null)
     const payload = {
       first_name: form.first_name.trim(), last_name: form.last_name.trim(),
@@ -639,22 +643,22 @@ function OwnerDetails({ owner, unitId, onSaved }) {
       {editing ? (
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-slate-500">שם פרטי
-              <input type="text" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} className={inputCls} />
+            <label className="text-xs text-slate-500">שם פרטי *
+              <input type="text" required value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} className={inputCls} />
             </label>
-            <label className="text-xs text-slate-500">שם משפחה
-              <input type="text" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} className={inputCls} />
+            <label className="text-xs text-slate-500">שם משפחה *
+              <input type="text" required value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} className={inputCls} />
             </label>
           </div>
-          <label className="text-xs text-slate-500 block">נייד
-            <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className={inputCls} />
+          <label className="text-xs text-slate-500 block">נייד *
+            <input type="tel" required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className={inputCls} />
           </label>
           <label className="text-xs text-slate-500 block">מייל
             <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className={inputCls} />
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={saving}
+            <button type="submit" disabled={saving || !ownerValid}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               שמירה
