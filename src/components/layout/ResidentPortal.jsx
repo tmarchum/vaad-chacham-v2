@@ -1000,21 +1000,17 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
 function ResidentsSection({ unit, residents, profile, onChanged }) {
   const unitType = unit?.custom_fields?.unit_type || 'owned'
 
-  if (unitType === 'rented') {
-    // Tenants only — owner details live in the unit card (פרטי בעלים)
-    const tenants = residents.filter(r => r.resident_type !== 'owner')
-    return (
-      <ResidentGroup
-        title="שוכרים" icon={Users} residents={tenants} defaultType="tenant"
-        profile={profile} onChanged={onChanged} addLabel="הוסף שוכר"
-      />
-    )
-  }
+  // "דיירי הדירה" always lists the people who actually live in the unit.
+  // For a rented unit the owner doesn't live there and is shown separately in
+  // the unit card (פרטי בעלים), so exclude the owner row from this list.
+  const living = unitType === 'rented'
+    ? residents.filter(r => r.resident_type !== 'owner')
+    : residents
+  const defaultType = unitType === 'rented' ? 'tenant' : 'owner'
 
-  // Owned unit — single group
   return (
     <ResidentGroup
-      title="דיירי הדירה" icon={Users} residents={residents} defaultType="owner"
+      title="דיירי הדירה" icon={Users} residents={living} defaultType={defaultType}
       profile={profile} onChanged={onChanged} addLabel="הוסף דייר"
     />
   )
