@@ -168,11 +168,12 @@ export function ResidentPortal() {
             updateProfile={updateProfile}
           />
 
-          {/* ── Unit details (פרטי הדירה) ── */}
+          {/* ── Unit details (פרטי הדירה) — includes owner block for rented units ── */}
           {unit && (
             <UnitDetailsSection
               unit={unit}
               building={building}
+              residents={residents}
               onSaved={loadUnitScoped}
             />
           )}
@@ -583,7 +584,110 @@ const buildUnitForm = (unit) => {
   }
 }
 
-function UnitDetailsSection({ unit, building, onSaved }) {
+/* ── Owner details block (shown inside the unit card for rented units) ── */
+const EMPTY_OWNER = { first_name: '', last_name: '', phone: '', email: '' }
+function OwnerDetails({ owner, unitId, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [form, setForm] = useState(EMPTY_OWNER)
+
+  const startEdit = () => {
+    setForm(owner
+      ? { first_name: owner.first_name || '', last_name: owner.last_name || '', phone: owner.phone || '', email: owner.email || '' }
+      : EMPTY_OWNER)
+    setError(null); setEditing(true)
+  }
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setSaving(true); setError(null)
+    const payload = {
+      first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+      phone: form.phone.trim(), email: form.email.trim(),
+    }
+    let error
+    if (owner) {
+      ({ error } = await supabase.from('unit_residents')
+        .update({ ...payload, updated_at: new Date().toISOString() }).eq('id', owner.id))
+    } else {
+      ({ error } = await supabase.from('unit_residents')
+        .insert({ unit_id: unitId, resident_type: 'owner', is_primary: false, ...payload }))
+    }
+    setSaving(false)
+    if (error) { console.error('owner save error', error); setError('שגיאה בשמירת פרטי בעלים.'); return }
+    setEditing(false); onSaved?.()
+  }
+
+  const ownerName = owner ? `${owner.first_name || ''} ${owner.last_name || ''}`.trim() : ''
+  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <UserCog className="h-4 w-4 text-amber-500" />
+          <p className="font-bold text-slate-800 text-sm">פרטי בעלים</p>
+        </div>
+        {!editing && (
+          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+            <Pencil className="h-3.5 w-3.5" /> {owner ? 'עריכה' : 'הוספה'}
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <form onSubmit={submit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-slate-500">שם פרטי
+              <input type="text" value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} className={inputCls} />
+            </label>
+            <label className="text-xs text-slate-500">שם משפחה
+              <input type="text" value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} className={inputCls} />
+            </label>
+          </div>
+          <label className="text-xs text-slate-500 block">נייד
+            <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className={inputCls} />
+          </label>
+          <label className="text-xs text-slate-500 block">מייל
+            <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className={inputCls} />
+          </label>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              שמירה
+            </button>
+            <button type="button" onClick={() => setEditing(false)}
+              className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors">
+              ביטול
+            </button>
+          </div>
+        </form>
+      ) : owner ? (
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5 text-sm">
+            <UserCog className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-700 font-medium">{ownerName || '—'}</span>
+          </div>
+          <div className="flex items-center gap-2.5 text-sm">
+            <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600">{owner.phone || '—'}</span>
+          </div>
+          <div className="flex items-center gap-2.5 text-sm">
+            <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600 truncate">{owner.email || '—'}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-slate-400 py-1">לא הוזנו פרטי בעלים</p>
+      )}
+    </div>
+  )
+}
+
+function UnitDetailsSection({ unit, building, residents = [], onSaved }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -718,6 +822,15 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           )}
           {unit.notes && <Row icon={StickyNote} label="הערות" value={unit.notes} />}
         </div>
+      )}
+
+      {/* ── Owner details — only for rented units ── */}
+      {unitType === 'rented' && (
+        <OwnerDetails
+          owner={residents.find(r => r.resident_type === 'owner') || null}
+          unitId={unit.id}
+          onSaved={onSaved}
+        />
       )}
     </div>
   )
@@ -888,21 +1001,13 @@ function ResidentsSection({ unit, residents, profile, onChanged }) {
   const unitType = unit?.custom_fields?.unit_type || 'owned'
 
   if (unitType === 'rented') {
-    // Tenants = anyone who isn't explicitly an owner; owners shown separately
+    // Tenants only — owner details live in the unit card (פרטי בעלים)
     const tenants = residents.filter(r => r.resident_type !== 'owner')
-    const owners  = residents.filter(r => r.resident_type === 'owner')
     return (
-      <>
-        <ResidentGroup
-          title="שוכרים" icon={Users} residents={tenants} defaultType="tenant"
-          profile={profile} onChanged={onChanged} addLabel="הוסף שוכר"
-        />
-        <ResidentGroup
-          title="בעלים" subtitle="הבעלים אינם מקבלים הודעות שוטפות"
-          icon={Users} residents={owners} defaultType="owner"
-          profile={profile} onChanged={onChanged} addLabel="הוסף בעלים"
-        />
-      </>
+      <ResidentGroup
+        title="שוכרים" icon={Users} residents={tenants} defaultType="tenant"
+        profile={profile} onChanged={onChanged} addLabel="הוסף שוכר"
+      />
     )
   }
 
