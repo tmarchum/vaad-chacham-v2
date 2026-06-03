@@ -173,7 +173,6 @@ export function ResidentPortal() {
             <UnitDetailsSection
               unit={unit}
               building={building}
-              residents={residents}
               onSaved={loadUnitScoped}
             />
           )}
@@ -584,9 +583,15 @@ const buildUnitForm = (unit) => {
   }
 }
 
-/* ── Owner details block (shown inside the unit card for rented units) ── */
+/* ── Owner details block (shown inside the unit card for rented units) ──
+   Stored on the unit itself (custom_fields.owner) — completely separate from
+   the "דיירי הדירה" list, so changing the unit type never reclassifies a
+   resident into the owner (or vice-versa). */
 const EMPTY_OWNER = { first_name: '', last_name: '', phone: '', email: '' }
-function OwnerDetails({ owner, unitId, onSaved }) {
+function OwnerDetails({ unit, onSaved }) {
+  const owner = unit.custom_fields?.owner || null
+  const hasOwner = !!(owner && (owner.first_name || owner.last_name || owner.phone || owner.email))
+
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -606,18 +611,17 @@ function OwnerDetails({ owner, unitId, onSaved }) {
     e.preventDefault()
     if (!ownerValid) { setError('יש למלא שם פרטי, שם משפחה ונייד.'); return }
     setSaving(true); setError(null)
-    const payload = {
-      first_name: form.first_name.trim(), last_name: form.last_name.trim(),
-      phone: form.phone.trim(), email: form.email.trim(),
-    }
-    let error
-    if (owner) {
-      ({ error } = await supabase.from('unit_residents')
-        .update({ ...payload, updated_at: new Date().toISOString() }).eq('id', owner.id))
-    } else {
-      ({ error } = await supabase.from('unit_residents')
-        .insert({ unit_id: unitId, resident_type: 'owner', is_primary: false, ...payload }))
-    }
+    const cf = unit.custom_fields || {}
+    const { error } = await supabase.from('units').update({
+      custom_fields: {
+        ...cf,
+        owner: {
+          first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+          phone: form.phone.trim(), email: form.email.trim(),
+        },
+      },
+      updated_at: new Date().toISOString(),
+    }).eq('id', unit.id)
     setSaving(false)
     if (error) { console.error('owner save error', error); setError('שגיאה בשמירת פרטי בעלים.'); return }
     setEditing(false); onSaved?.()
@@ -635,7 +639,7 @@ function OwnerDetails({ owner, unitId, onSaved }) {
         </div>
         {!editing && (
           <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
-            <Pencil className="h-3.5 w-3.5" /> {owner ? 'עריכה' : 'הוספה'}
+            <Pencil className="h-3.5 w-3.5" /> {hasOwner ? 'עריכה' : 'הוספה'}
           </button>
         )}
       </div>
@@ -669,7 +673,7 @@ function OwnerDetails({ owner, unitId, onSaved }) {
             </button>
           </div>
         </form>
-      ) : owner ? (
+      ) : hasOwner ? (
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 text-sm">
             <UserCog className="h-4 w-4 text-slate-400 shrink-0" />
@@ -691,7 +695,7 @@ function OwnerDetails({ owner, unitId, onSaved }) {
   )
 }
 
-function UnitDetailsSection({ unit, building, residents = [], onSaved }) {
+function UnitDetailsSection({ unit, building, onSaved }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -828,13 +832,9 @@ function UnitDetailsSection({ unit, building, residents = [], onSaved }) {
         </div>
       )}
 
-      {/* ── Owner details — only for rented units ── */}
+      {/* ── Owner details — only for rented units (stored on the unit) ── */}
       {unitType === 'rented' && (
-        <OwnerDetails
-          owner={residents.find(r => r.resident_type === 'owner') || null}
-          unitId={unit.id}
-          onSaved={onSaved}
-        />
+        <OwnerDetails unit={unit} onSaved={onSaved} />
       )}
     </div>
   )
@@ -1003,18 +1003,14 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
 
 function ResidentsSection({ unit, residents, profile, onChanged }) {
   const unitType = unit?.custom_fields?.unit_type || 'owned'
-
-  // "דיירי הדירה" always lists the people who actually live in the unit.
-  // For a rented unit the owner doesn't live there and is shown separately in
-  // the unit card (פרטי בעלים), so exclude the owner row from this list.
-  const living = unitType === 'rented'
-    ? residents.filter(r => r.resident_type !== 'owner')
-    : residents
+  // "דיירי הדירה" always lists everyone who lives in the unit, unchanged when
+  // the unit type is toggled. Owner contact info lives separately in the unit
+  // card (custom_fields.owner), so nothing here is reclassified.
   const defaultType = unitType === 'rented' ? 'tenant' : 'owner'
 
   return (
     <ResidentGroup
-      title="דיירי הדירה" icon={Users} residents={living} defaultType={defaultType}
+      title="דיירי הדירה" icon={Users} residents={residents} defaultType={defaultType}
       profile={profile} onChanged={onChanged} addLabel="הוסף דייר"
     />
   )
