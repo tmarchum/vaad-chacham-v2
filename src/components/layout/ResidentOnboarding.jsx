@@ -51,10 +51,13 @@ export function ResidentOnboarding() {
       .from('units')
       .select('id, number, floor')
       .eq('building_id', selectedBuilding.id)
-      .order('number')
       .then(({ data, error }) => {
         if (error) console.error('units query error:', error)
-        setUnits(data || [])
+        // number is text — sort numerically (1,2,3,…,10) not lexically (1,10,2,…)
+        const sorted = (data || []).slice().sort(
+          (a, b) => (parseInt(a.number, 10) || 0) - (parseInt(b.number, 10) || 0)
+        )
+        setUnits(sorted)
         setLoadingUnits(false)
       })
   }, [selectedBuilding])
