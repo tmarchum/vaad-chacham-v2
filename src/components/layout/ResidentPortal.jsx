@@ -8,7 +8,7 @@ import {
   CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp,
   Wrench, CalendarDays, Users, Plus, X, Send, Loader2,
   UserCog, Mail, Phone, Pencil, Trash2, Ruler, Car, KeyRound,
-  Layers, Hash, StickyNote, Check,
+  Layers, Hash, StickyNote, Check, Star,
 } from 'lucide-react'
 
 const STATUS_MAP = {
@@ -172,6 +172,7 @@ export function ResidentPortal() {
           {unit && (
             <UnitDetailsSection
               unit={unit}
+              building={building}
               onSaved={loadUnitScoped}
             />
           )}
@@ -527,43 +528,91 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
   )
 }
 
+/* ── Small array editor (chips + add) ── */
+function ListEditor({ label, items, onChange, placeholder }) {
+  const [val, setVal] = useState('')
+  const add = () => {
+    const v = val.trim()
+    if (!v) return
+    onChange([...items, v]); setVal('')
+  }
+  return (
+    <div>
+      <p className="text-xs text-slate-500 mb-1">{label}</p>
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {items.map((it, i) => (
+            <span key={i} className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5 text-sm text-slate-700">
+              {it}
+              <button type="button" onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          value={val} onChange={e => setVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          placeholder={placeholder}
+          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+        <button type="button" onClick={add} className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">הוסף</button>
+      </div>
+    </div>
+  )
+}
+
 /* ════════════════════════════════════════════════════════════════
-   Unit details — view + edit
+   Unit details — full view + edit (mirrors the admin Units model)
    ════════════════════════════════════════════════════════════════ */
-function UnitDetailsSection({ unit, onSaved }) {
-  const [editing, setEditing] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-  const [form, setForm] = useState({
+const buildUnitForm = (unit) => {
+  const cf = unit.custom_fields || {}
+  return {
+    number: unit.number || unit.unit_number || '',
     floor: unit.floor ?? '',
     rooms: unit.rooms ?? '',
     area: unit.area ?? '',
-    storage_number: unit.storage_number ?? '',
-    parking_gate_phone: unit.parking_gate_phone ?? '',
-    notes: unit.notes ?? '',
-  })
-
-  const startEdit = () => {
-    setForm({
-      floor: unit.floor ?? '',
-      rooms: unit.rooms ?? '',
-      area: unit.area ?? '',
-      storage_number: unit.storage_number ?? '',
-      parking_gate_phone: unit.parking_gate_phone ?? '',
-      notes: unit.notes ?? '',
-    })
-    setError(null); setEditing(true)
+    unit_type: cf.unit_type || 'owned',
+    board_member: !!unit.board_member,
+    parking_spots: Array.isArray(unit.parking_spots) ? unit.parking_spots : [],
+    storage_numbers: Array.isArray(cf.storage_numbers) ? cf.storage_numbers : (unit.storage_number ? [unit.storage_number] : []),
+    key_numbers: Array.isArray(unit.key_numbers) ? unit.key_numbers : [],
+    parking_gate_phones: Array.isArray(cf.parking_gate_phones) ? cf.parking_gate_phones : (unit.parking_gate_phone ? [unit.parking_gate_phone] : []),
+    notes: unit.notes || '',
   }
+}
+
+function UnitDetailsSection({ unit, building, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [form, setForm] = useState(() => buildUnitForm(unit))
+
+  const startEdit = () => { setForm(buildUnitForm(unit)); setError(null); setEditing(true) }
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const submit = async (e) => {
     e.preventDefault()
     setSaving(true); setError(null)
+    const cf = unit.custom_fields || {}
     const { error } = await supabase.from('units').update({
+      number: form.number,
       floor: form.floor === '' ? null : Number(form.floor),
       rooms: form.rooms === '' ? null : Number(form.rooms),
       area: form.area === '' ? null : Number(form.area),
-      storage_number: form.storage_number,
-      parking_gate_phone: form.parking_gate_phone,
+      board_member: form.board_member,
+      parking_spots: form.parking_spots,
+      storage_number: form.storage_numbers[0] || '',
+      key_numbers: form.key_numbers,
+      parking_gate_phone: form.parking_gate_phones[0] || '',
+      custom_fields: {
+        ...cf,
+        unit_type: form.unit_type,
+        storage_numbers: form.storage_numbers,
+        parking_gate_phones: form.parking_gate_phones,
+      },
       notes: form.notes,
       updated_at: new Date().toISOString(),
     }).eq('id', unit.id)
@@ -573,15 +622,22 @@ function UnitDetailsSection({ unit, onSaved }) {
     onSaved?.()
   }
 
-  const parkingCount = Array.isArray(unit.parking_spots) ? unit.parking_spots.length : (unit.parking_spots ? 1 : 0)
+  const cf = unit.custom_fields || {}
+  const unitType = cf.unit_type || 'owned'
+  const storageList = Array.isArray(cf.storage_numbers) && cf.storage_numbers.length ? cf.storage_numbers : (unit.storage_number ? [unit.storage_number] : [])
+  const gatePhones = Array.isArray(cf.parking_gate_phones) && cf.parking_gate_phones.length ? cf.parking_gate_phones : (unit.parking_gate_phone ? [unit.parking_gate_phone] : [])
+  const parkingList = Array.isArray(unit.parking_spots) ? unit.parking_spots : []
+  const keyList = Array.isArray(unit.key_numbers) ? unit.key_numbers : []
+  const effectiveFee = (unit.monthly_fee && unit.monthly_fee > 0) ? unit.monthly_fee : (building?.monthly_fee ?? null)
 
   const Row = ({ icon: Icon, label, value }) => (
-    <div className="flex items-center gap-2.5 text-sm py-1">
-      <Icon className="h-4 w-4 text-slate-400 shrink-0" />
+    <div className="flex items-start gap-2.5 text-sm py-1">
+      <Icon className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
       <span className="text-slate-400 w-24 shrink-0">{label}</span>
       <span className="text-slate-700 font-medium">{value || '—'}</span>
     </div>
   )
+  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
@@ -599,31 +655,39 @@ function UnitDetailsSection({ unit, onSaved }) {
 
       {editing ? (
         <form onSubmit={submit} className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <label className="text-xs text-slate-500">קומה
-              <input type="number" value={form.floor} onChange={e => setForm({ ...form, floor: e.target.value })}
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-slate-500">מספר דירה
+              <input type="text" value={form.number} onChange={e => set('number', e.target.value)} className={inputCls} />
             </label>
-            <label className="text-xs text-slate-500">חדרים
-              <input type="number" step="0.5" value={form.rooms} onChange={e => setForm({ ...form, rooms: e.target.value })}
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-            </label>
-            <label className="text-xs text-slate-500">שטח (מ״ר)
-              <input type="number" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })}
-                className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+            <label className="text-xs text-slate-500">סוג
+              <select value={form.unit_type} onChange={e => set('unit_type', e.target.value)} className={`${inputCls} bg-white`}>
+                <option value="owned">בבעלות</option>
+                <option value="rented">שכירות</option>
+              </select>
             </label>
           </div>
-          <label className="text-xs text-slate-500 block">מספר מחסן
-            <input type="text" value={form.storage_number} onChange={e => setForm({ ...form, storage_number: e.target.value })}
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-          </label>
-          <label className="text-xs text-slate-500 block">טלפון שער חניה
-            <input type="tel" value={form.parking_gate_phone} onChange={e => setForm({ ...form, parking_gate_phone: e.target.value })}
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          <div className="grid grid-cols-3 gap-2">
+            <label className="text-xs text-slate-500">קומה
+              <input type="number" value={form.floor} onChange={e => set('floor', e.target.value)} className={inputCls} />
+            </label>
+            <label className="text-xs text-slate-500">חדרים
+              <input type="number" step="0.5" value={form.rooms} onChange={e => set('rooms', e.target.value)} className={inputCls} />
+            </label>
+            <label className="text-xs text-slate-500">שטח (מ״ר)
+              <input type="number" value={form.area} onChange={e => set('area', e.target.value)} className={inputCls} />
+            </label>
+          </div>
+          <ListEditor label="מספרי חניה" items={form.parking_spots} onChange={v => set('parking_spots', v)} placeholder="למשל: 12" />
+          <ListEditor label="מספרי מחסן" items={form.storage_numbers} onChange={v => set('storage_numbers', v)} placeholder="למשל: B4" />
+          <ListEditor label="מפתחות / תגים" items={form.key_numbers} onChange={v => set('key_numbers', v)} placeholder="למשל: A1" />
+          <ListEditor label="טלפון לפתיחת שער חניה" items={form.parking_gate_phones} onChange={v => set('parking_gate_phones', v)} placeholder="למשל: *3456" />
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={form.board_member} onChange={e => set('board_member', e.target.checked)}
+              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+            חבר ועד
           </label>
           <label className="text-xs text-slate-500 block">הערות
-            <textarea rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} className={`${inputCls} resize-none`} />
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
@@ -640,15 +704,18 @@ function UnitDetailsSection({ unit, onSaved }) {
         </form>
       ) : (
         <div className="space-y-0.5">
-          <Row icon={Hash}   label="מספר דירה" value={unit.unit_number || unit.number} />
-          <Row icon={Layers} label="קומה"      value={unit.floor} />
-          <Row icon={Home}   label="חדרים"     value={unit.rooms} />
-          <Row icon={Ruler}  label="שטח"       value={unit.area ? `${unit.area} מ״ר` : ''} />
-          <Row icon={KeyRound} label="מחסן"    value={unit.storage_number} />
-          <Row icon={Car}    label="חניות"     value={parkingCount > 0 ? parkingCount : ''} />
-          <Row icon={Phone}  label="שער חניה"  value={unit.parking_gate_phone} />
-          {unit.monthly_fee != null && (
-            <Row icon={CreditCard} label="דמי ועד" value={formatCurrency(unit.monthly_fee)} />
+          <Row icon={Hash}    label="מספר דירה" value={unit.unit_number || unit.number} />
+          <Row icon={Home}    label="סוג"       value={unitType === 'rented' ? 'שכירות' : 'בבעלות'} />
+          <Row icon={Layers}  label="קומה"      value={unit.floor} />
+          <Row icon={Home}    label="חדרים"     value={unit.rooms} />
+          <Row icon={Ruler}   label="שטח"       value={unit.area ? `${unit.area} מ״ר` : ''} />
+          <Row icon={Car}     label="חניות"     value={parkingList.join(', ')} />
+          <Row icon={KeyRound} label="מחסנים"   value={storageList.join(', ')} />
+          <Row icon={KeyRound} label="מפתחות"   value={keyList.join(', ')} />
+          <Row icon={Phone}   label="שער חניה"  value={gatePhones.join(', ')} />
+          <Row icon={Star}    label="חבר ועד"   value={unit.board_member ? 'כן' : 'לא'} />
+          {effectiveFee != null && (
+            <Row icon={CreditCard} label="דמי ועד" value={formatCurrency(effectiveFee)} />
           )}
           {unit.notes && <Row icon={StickyNote} label="הערות" value={unit.notes} />}
         </div>
