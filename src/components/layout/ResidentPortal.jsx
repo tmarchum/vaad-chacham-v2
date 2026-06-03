@@ -246,13 +246,12 @@ export function ResidentPortal() {
             onCreated={() => loadBuildingScoped(building?.id || profile?.building_id)}
           />
 
-          {/* ── Additional residents (דיירים נוספים) ── */}
+          {/* ── Residents — grouped by unit type (owned/rented) ── */}
           <ResidentsSection
+            unit={unit}
             residents={residents}
-            open={openForm === 'resident'}
-            onToggle={() => setOpenForm(openForm === 'resident' ? null : 'resident')}
-            onCreated={async () => { setOpenForm(null); await loadUnitScoped() }}
             profile={profile}
+            onChanged={loadUnitScoped}
           />
 
           {/* ── Announcements ── */}
@@ -725,123 +724,99 @@ function UnitDetailsSection({ unit, building, onSaved }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   Additional residents
+   Residents — grouped by unit type (owned vs rented)
    ════════════════════════════════════════════════════════════════ */
-const RESIDENT_TYPES = [
-  { value: 'family', label: 'בן משפחה' },
-  { value: 'owner',  label: 'בעלים' },
-  { value: 'tenant', label: 'שוכר' },
-]
-const residentTypeLabel = (t) => RESIDENT_TYPES.find(x => x.value === t)?.label || ''
+const EMPTY_PERSON = { first_name: '', last_name: '', phone: '', email: '' }
+const personFieldCls = 'px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
-const EMPTY_RESIDENT = { first_name: '', last_name: '', phone: '', email: '', resident_type: 'family' }
+// Module-level so it doesn't remount on each keystroke (would steal focus)
+function PersonFields({ value, onChange }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        <input type="text" required placeholder="שם פרטי *" value={value.first_name}
+          onChange={e => onChange({ ...value, first_name: e.target.value })} className={personFieldCls} />
+        <input type="text" placeholder="שם משפחה" value={value.last_name}
+          onChange={e => onChange({ ...value, last_name: e.target.value })} className={personFieldCls} />
+      </div>
+      <input type="tel" placeholder="טלפון" value={value.phone}
+        onChange={e => onChange({ ...value, phone: e.target.value })} className={`w-full ${personFieldCls}`} />
+      <input type="email" placeholder="אימייל" value={value.email}
+        onChange={e => onChange({ ...value, email: e.target.value })} className={`w-full ${personFieldCls}`} />
+    </>
+  )
+}
 
-function ResidentsSection({ residents, open, onToggle, onCreated, profile }) {
-  const [form, setForm] = useState(EMPTY_RESIDENT)
+// One titled card with add / edit / remove for a single resident group.
+// resident_type is fixed per group (owner / tenant) — derived from unit type.
+function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, profile, onChanged, addLabel }) {
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState(EMPTY_PERSON)
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState(EMPTY_PERSON)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [editingId, setEditingId] = useState(null)
-  const [editForm, setEditForm] = useState(EMPTY_RESIDENT)
 
-  const submit = async (e) => {
+  const add = async (e) => {
     e.preventDefault()
     if (!form.first_name.trim()) return
     setSaving(true); setError(null)
     const { error } = await supabase.from('unit_residents').insert({
       unit_id: profile.unit_id,
-      first_name: form.first_name.trim(),
-      last_name: form.last_name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      resident_type: form.resident_type,
-      is_primary: false,
+      first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+      phone: form.phone.trim(), email: form.email.trim(),
+      resident_type: defaultType, is_primary: false,
     })
     setSaving(false)
-    if (error) { console.error('resident insert error', error); setError('שגיאה בהוספת דייר. נסה שוב.'); return }
-    setForm(EMPTY_RESIDENT)
-    onCreated()
+    if (error) { console.error('resident insert error', error); setError('שגיאה בהוספה. נסה שוב.'); return }
+    setForm(EMPTY_PERSON); setAdding(false); onChanged()
   }
 
   const startEdit = (r) => {
     setEditingId(r.id)
-    setEditForm({
-      first_name: r.first_name || '', last_name: r.last_name || '',
-      phone: r.phone || '', email: r.email || '',
-      resident_type: r.resident_type || 'family',
-    })
+    setEditForm({ first_name: r.first_name || '', last_name: r.last_name || '', phone: r.phone || '', email: r.email || '' })
     setError(null)
   }
-
   const saveEdit = async (e) => {
     e.preventDefault()
     setSaving(true); setError(null)
     const { error } = await supabase.from('unit_residents').update({
-      first_name: editForm.first_name.trim(),
-      last_name: editForm.last_name.trim(),
-      phone: editForm.phone.trim(),
-      email: editForm.email.trim(),
-      resident_type: editForm.resident_type,
+      first_name: editForm.first_name.trim(), last_name: editForm.last_name.trim(),
+      phone: editForm.phone.trim(), email: editForm.email.trim(),
       updated_at: new Date().toISOString(),
     }).eq('id', editingId)
     setSaving(false)
-    if (error) { console.error('resident update error', error); setError('שגיאה בעדכון. נסה שוב.'); return }
-    setEditingId(null)
-    onCreated()
+    if (error) { console.error('resident update error', error); setError('שגיאה בעדכון.'); return }
+    setEditingId(null); onChanged()
   }
-
-  const removeResident = async (r) => {
+  const remove = async (r) => {
     if (!window.confirm(`להסיר את ${r.first_name || 'הדייר'} מהדירה?`)) return
     const { error } = await supabase.from('unit_residents').update({ archived: true }).eq('id', r.id)
     if (error) { console.error('resident archive error', error); return }
-    onCreated()
+    onChanged()
   }
-
-  const fieldCls = 'px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
-
-  const ResidentForm = ({ value, onChange }) => (
-    <>
-      <div className="grid grid-cols-2 gap-2">
-        <input type="text" required placeholder="שם פרטי *" value={value.first_name}
-          onChange={e => onChange({ ...value, first_name: e.target.value })} className={fieldCls} />
-        <input type="text" placeholder="שם משפחה" value={value.last_name}
-          onChange={e => onChange({ ...value, last_name: e.target.value })} className={fieldCls} />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <input type="tel" placeholder="טלפון" value={value.phone}
-          onChange={e => onChange({ ...value, phone: e.target.value })} className={fieldCls} />
-        <select value={value.resident_type} onChange={e => onChange({ ...value, resident_type: e.target.value })}
-          className={`${fieldCls} bg-white`}>
-          {RESIDENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-      </div>
-      <input type="email" placeholder="אימייל" value={value.email}
-        onChange={e => onChange({ ...value, email: e.target.value })} className={`w-full ${fieldCls}`} />
-    </>
-  )
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
-          <Users className="h-4 w-4 text-teal-500" />
-          <p className="font-bold text-slate-800 text-sm">דיירי הדירה</p>
+          <Icon className="h-4 w-4 text-teal-500" />
+          <p className="font-bold text-slate-800 text-sm">{title}</p>
         </div>
-        <button
-          onClick={onToggle}
-          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
-        >
-          {open ? <><X className="h-3.5 w-3.5" /> ביטול</> : <><Plus className="h-3.5 w-3.5" /> הוספת דייר</>}
+        <button onClick={() => { setAdding(a => !a); setError(null) }}
+          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+          {adding ? <><X className="h-3.5 w-3.5" /> ביטול</> : <><Plus className="h-3.5 w-3.5" /> {addLabel}</>}
         </button>
       </div>
+      {subtitle && <p className="text-xs text-slate-400 mb-3">{subtitle}</p>}
+      {!subtitle && <div className="mb-3" />}
 
-      {open && (
-        <form onSubmit={submit} className="space-y-3 mb-4 p-3 rounded-xl bg-slate-50 border border-slate-100">
-          <ResidentForm value={form} onChange={setForm} />
-          {error && !editingId && <p className="text-xs text-red-500">{error}</p>}
-          <button
-            type="submit" disabled={saving || !form.first_name.trim()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
-          >
+      {adding && (
+        <form onSubmit={add} className="space-y-3 mb-4 p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <PersonFields value={form} onChange={setForm} />
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <button type="submit" disabled={saving || !form.first_name.trim()}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             הוספה
           </button>
@@ -849,18 +824,17 @@ function ResidentsSection({ residents, open, onToggle, onCreated, profile }) {
       )}
 
       {residents.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-2">אין דיירים רשומים</p>
+        <p className="text-sm text-slate-400 text-center py-2">אין רשומות</p>
       ) : (
         <div className="space-y-2">
           {residents.map(r => {
             const name = `${r.first_name || ''} ${r.last_name || ''}`.trim() || '—'
             const initial = (r.first_name || '?').charAt(0)
-            const typeLabel = residentTypeLabel(r.resident_type)
 
             if (editingId === r.id) {
               return (
                 <form key={r.id} onSubmit={saveEdit} className="space-y-3 p-3 rounded-xl bg-slate-50 border border-teal-200">
-                  <ResidentForm value={editForm} onChange={setEditForm} />
+                  <PersonFields value={editForm} onChange={setEditForm} />
                   {error && <p className="text-xs text-red-500">{error}</p>}
                   <div className="flex gap-2">
                     <button type="submit" disabled={saving}
@@ -885,7 +859,6 @@ function ResidentsSection({ residents, open, onToggle, onCreated, profile }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-slate-800 truncate">
                     {name}
-                    {typeLabel && <span className="text-[10px] text-slate-400 font-medium mr-1.5">· {typeLabel}</span>}
                     {r.is_primary && <span className="text-[10px] text-teal-600 font-medium mr-1.5">• ראשי</span>}
                   </p>
                   {(r.phone || r.email) && (
@@ -897,7 +870,7 @@ function ResidentsSection({ residents, open, onToggle, onCreated, profile }) {
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   {!r.is_primary && (
-                    <button onClick={() => removeResident(r)} className="p-1.5 text-slate-400 hover:text-red-500" title="הסרה">
+                    <button onClick={() => remove(r)} className="p-1.5 text-slate-400 hover:text-red-500" title="הסרה">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
@@ -908,5 +881,36 @@ function ResidentsSection({ residents, open, onToggle, onCreated, profile }) {
         </div>
       )}
     </div>
+  )
+}
+
+function ResidentsSection({ unit, residents, profile, onChanged }) {
+  const unitType = unit?.custom_fields?.unit_type || 'owned'
+
+  if (unitType === 'rented') {
+    // Tenants = anyone who isn't explicitly an owner; owners shown separately
+    const tenants = residents.filter(r => r.resident_type !== 'owner')
+    const owners  = residents.filter(r => r.resident_type === 'owner')
+    return (
+      <>
+        <ResidentGroup
+          title="שוכרים" icon={Users} residents={tenants} defaultType="tenant"
+          profile={profile} onChanged={onChanged} addLabel="הוסף שוכר"
+        />
+        <ResidentGroup
+          title="בעלים" subtitle="הבעלים אינם מקבלים הודעות שוטפות"
+          icon={Users} residents={owners} defaultType="owner"
+          profile={profile} onChanged={onChanged} addLabel="הוסף בעלים"
+        />
+      </>
+    )
+  }
+
+  // Owned unit — single group
+  return (
+    <ResidentGroup
+      title="דיירי הדירה" icon={Users} residents={residents} defaultType="owner"
+      profile={profile} onChanged={onChanged} addLabel="הוסף דייר"
+    />
   )
 }
