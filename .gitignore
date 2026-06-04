@@ -22,3 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.vercel
+
+# One-off maintenance scripts often contain access tokens — never commit them
+scripts/*.cjs
+.env
+.env.*
+
+# Local tooling / generated
+.claude/
+supabase/.temp/
