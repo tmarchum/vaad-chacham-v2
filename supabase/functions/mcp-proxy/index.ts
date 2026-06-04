@@ -339,9 +339,22 @@ function jsonRpcError(id: unknown, code: number, message: string) {
   return { jsonrpc: '2.0', id, error: { code, message } }
 }
 
+const MCP_SECRET = Deno.env.get('MCP_SECRET') || ''
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  // This function uses the service role (bypasses RLS), so it must NEVER be
+  // callable by the public. Require a shared secret on every request.
+  // Fail closed: if MCP_SECRET is unset, deny everything.
+  const provided = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+    || (req.headers.get('x-mcp-secret') || '').trim()
+  if (!MCP_SECRET || provided !== MCP_SECRET) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
   }
 
   // GET = SSE endpoint for server-initiated messages (not needed for stateless)
