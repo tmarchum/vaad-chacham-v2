@@ -133,9 +133,14 @@ export function ResidentPortal() {
   const primaryResident = residents.find(r => r.is_primary) || residents[0] || null
   const contactOk = !!(primaryResident && isValidPhone(primaryResident.phone) && primaryResident.email)
   const gatePhonesCount = Array.isArray(unit?.custom_fields?.parking_gate_phones) ? unit.custom_fields.parking_gate_phones.length : 0
+  // For rented units, owner details are mandatory
+  const isRented = (unit?.custom_fields?.unit_type || 'owned') === 'rented'
+  const ownerObj = unit?.custom_fields?.owner
+  const ownerOk = !isRented || !!(ownerObj && ownerObj.first_name && ownerObj.last_name && isValidPhone(ownerObj.phone))
+  const canConfirm = contactOk && ownerOk
   const confirmedAt = unit?.details_confirmed_at
   const confirmDetails = async () => {
-    if (!contactOk || !unit) return
+    if (!canConfirm || !unit) return
     setConfirming(true)
     const { data, error } = await supabase.from('units')
       .update({ details_confirmed_at: new Date().toISOString() }).eq('id', unit.id).select()
@@ -402,11 +407,19 @@ export function ResidentPortal() {
                   {gatePhonesCount > 0 ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
                   מספר/י טלפון לשער חניה {gatePhonesCount > 0 ? `(${gatePhonesCount})` : '(הוסף בפרטי הדירה אם יש לך חניה)'}
                 </div>
+                {isRented && (
+                  <div className={`flex items-center gap-1.5 ${ownerOk ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {ownerOk ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                    פרטי בעלים (שם + נייד) — חובה בדירה בשכירות
+                  </div>
+                )}
               </div>
-              <button onClick={confirmDetails} disabled={confirming || !contactOk}
+              <button onClick={confirmDetails} disabled={confirming || !canConfirm}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
                 {confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {contactOk ? 'בדקתי — הפרטים מעודכנים, אשר' : 'יש להשלים דייר ראשי עם טלפון ומייל'}
+                {!contactOk ? 'יש להשלים דייר ראשי עם טלפון ומייל'
+                  : !ownerOk ? 'יש להשלים פרטי בעלים (דירה בשכירות)'
+                  : 'בדקתי — הפרטים מעודכנים, אשר'}
               </button>
             </div>
           )}
@@ -921,7 +934,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
       floor: form.floor === '' ? null : Number(form.floor),
       rooms: form.rooms === '' ? null : Number(form.rooms),
       area: form.area === '' ? null : Number(form.area),
-      board_member: form.board_member,
+      // board_member is intentionally NOT updated by residents — vaad-only field
       parking_spots: form.parking_spots,
       storage_number: form.storage_numbers[0] || '',
       key_numbers: form.key_numbers,
@@ -1013,11 +1026,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
               </select>
             </label>
           )}
-          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-            <input type="checkbox" checked={form.board_member} onChange={e => set('board_member', e.target.checked)}
-              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
-            חבר ועד
-          </label>
+          {/* "חבר ועד" is set by the vaad only — residents see it read-only below */}
           <label className="text-xs text-slate-500 block">הערות
             <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} className={`${inputCls} resize-none`} />
           </label>
