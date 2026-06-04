@@ -32,27 +32,15 @@ export function AuthProvider({ children }) {
     const doneBefore = !!localStorage.getItem(ONBOARDING_KEY(userId)) && !!data?.unit_id
 
     if (!isPrivileged && !alreadyLinked && !doneBefore && userEmail) {
-      // Try to auto-match by email in unit_residents
-      // unit_residents has no building_id column — join to units to get it
-      const { data: resident } = await supabase
-        .from('unit_residents')
-        .select('unit_id, units(building_id)')
-        .eq('email', userEmail)
-        .limit(1)
-        .maybeSingle()
-
-      const unitId = resident?.unit_id
-      const buildingId = resident?.units?.building_id
-
-      if (unitId) {
-        // Auto-link: update profiles row
-        const { data: updated } = await supabase
-          .from('profiles')
-          .update({ unit_id: unitId, building_id: buildingId ?? null })
-          .eq('id', userId)
-          .select()
-          .single()
-        resolved = updated ?? { ...data, unit_id: unitId, building_id: buildingId }
+      // Auto-link + auto-VERIFY only when the email matches a vaad-created
+      // resident record (admin already vouched for them). Runs server-side
+      // (SECURITY DEFINER) so it can set is_verified. Self-onboarded residents
+      // with no matching record stay unverified → pending admin approval.
+      const { data: matched } = await supabase.rpc('claim_verified_unit')
+      if (matched) {
+        const { data: refetched } = await supabase
+          .from('profiles').select('*').eq('id', userId).single()
+        resolved = refetched ?? resolved
         localStorage.setItem(ONBOARDING_KEY(userId), 'auto')
       }
     }
@@ -110,6 +98,10 @@ export function AuthProvider({ children }) {
     !isCommittee && !profile?.unit_id &&
     !localStorage.getItem(ONBOARDING_KEY(user?.id))
 
+  // Self-onboarded but not yet verified by the vaad → no data access, waiting for approval
+  const needsApproval = !loading && !!user && onboardingChecked &&
+    !isCommittee && !!profile?.unit_id && profile?.is_verified === false
+
   const updateProfile = useCallback(async (updates) => {
     if (!user) return
     const { data } = await supabase
@@ -136,7 +128,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, profile, loading,
-      isAdmin, isCommittee, isResident, needsOnboarding,
+      isAdmin, isCommittee, isResident, needsOnboarding, needsApproval,
       signInWithGoogle, signOut, updateProfile, completeOnboarding,
       refetchProfile: () => fetchProfile(user?.id, user?.email)
     }}>
