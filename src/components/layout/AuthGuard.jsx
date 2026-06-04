@@ -2,10 +2,9 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { ResidentOnboarding } from './ResidentOnboarding'
 import { ResidentPortal } from './ResidentPortal'
-import { PendingApproval } from './PendingApproval'
 
 export function AuthGuard() {
-  const { user, loading, needsOnboarding, needsApproval, isCommittee, profile } = useAuth()
+  const { user, loading, needsOnboarding, isCommittee, profile } = useAuth()
 
   if (loading) {
     return (
@@ -22,9 +21,6 @@ export function AuthGuard() {
 
   // New user whose email didn't auto-match a resident → show onboarding wizard
   if (needsOnboarding) return <ResidentOnboarding />
-
-  // Self-onboarded resident waiting for vaad approval → no data access yet
-  if (needsApproval) return <PendingApproval />
 
   // Resident user (not admin/committee) who has been linked to a unit → dedicated portal
   if (!isCommittee && profile?.unit_id) return <ResidentPortal />

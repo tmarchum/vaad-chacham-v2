@@ -14,7 +14,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, calcUnitFee, cn, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FilterPills } from '@/components/common/FilterPills'
-import { PendingApprovals } from '@/components/common/PendingApprovals'
 import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays } from 'lucide-react'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
@@ -610,9 +609,6 @@ function Units() {
           </Button>
         }
       />
-
-      {/* Pending self-registration approvals */}
-      <PendingApprovals allUnits={allUnits} />
 
       {/* Building filter */}
       <div className="flex flex-wrap gap-2">

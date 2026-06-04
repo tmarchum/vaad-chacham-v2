@@ -98,10 +98,6 @@ export function AuthProvider({ children }) {
     !isCommittee && !profile?.unit_id &&
     !localStorage.getItem(ONBOARDING_KEY(user?.id))
 
-  // Self-onboarded but not yet verified by the vaad → no data access, waiting for approval
-  const needsApproval = !loading && !!user && onboardingChecked &&
-    !isCommittee && !!profile?.unit_id && profile?.is_verified === false
-
   const updateProfile = useCallback(async (updates) => {
     if (!user) return
     const { data } = await supabase
@@ -128,7 +124,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, profile, loading,
-      isAdmin, isCommittee, isResident, needsOnboarding, needsApproval,
+      isAdmin, isCommittee, isResident, needsOnboarding,
       signInWithGoogle, signOut, updateProfile, completeOnboarding,
       refetchProfile: () => fetchProfile(user?.id, user?.email)
     }}>
