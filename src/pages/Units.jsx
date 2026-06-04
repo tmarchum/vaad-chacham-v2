@@ -11,26 +11,26 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
 import { useAuth } from '@/hooks/useAuth'
-import { formatCurrency, calcUnitFee, cn } from '@/lib/utils'
+import { formatCurrency, calcUnitFee, cn, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FilterPills } from '@/components/common/FilterPills'
 import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays } from 'lucide-react'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
-function ListField({ label, items, onAdd, onRemove, placeholder, max }) {
+function ListField({ label, items, onAdd, onRemove, placeholder, max, phone }) {
   const [val, setVal] = useState('')
   const atMax = !!max && items.length >= max
+  const valid = phone ? isValidPhone(val) : !!val.trim()
   const add = () => {
-    const v = val.trim()
-    if (!v || atMax) return
-    onAdd(v)
+    if (atMax || !valid) return
+    onAdd(phone ? val : val.trim())
     setVal('')
   }
   return (
     <div className="space-y-1.5">
       {label && (
         <label className="block text-sm font-medium text-[var(--text-secondary)]">
-          {label}{max ? ` (עד ${max})` : ''}
+          {label}{phone ? ' (10 ספרות)' : (max ? ` (עד ${max})` : '')}
         </label>
       )}
       {items.length > 0 && (
@@ -58,12 +58,13 @@ function ListField({ label, items, onAdd, onRemove, placeholder, max }) {
         <div className="flex gap-2">
           <Input
             value={val}
-            onChange={e => setVal(e.target.value)}
+            onChange={e => setVal(phone ? sanitizePhone(e.target.value) : e.target.value)}
+            inputMode={phone ? 'numeric' : undefined}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-            placeholder={placeholder || 'הקלד ולחץ הוסף...'}
+            placeholder={phone ? '0501234567' : (placeholder || 'הקלד ולחץ הוסף...')}
             className="flex-1"
           />
-          <Button type="button" variant="outline" size="sm" onClick={add}>הוסף</Button>
+          <Button type="button" variant="outline" size="sm" onClick={add} disabled={!valid}>הוסף</Button>
         </div>
       )}
     </div>
@@ -118,9 +119,10 @@ function PersonRow({ person, isPrimary, showPrimary, onSetPrimary, onChange, onR
           onChange={e => onChange('last_name', e.target.value)}
         />
         <Input
-          placeholder="טלפון"
+          placeholder="טלפון (10 ספרות)"
+          inputMode="numeric"
           value={person.phone}
-          onChange={e => onChange('phone', e.target.value)}
+          onChange={e => onChange('phone', sanitizePhone(e.target.value))}
         />
         <Input
           placeholder="אימייל"
@@ -1229,8 +1231,8 @@ function Units() {
                   items={form.parking_gate_phones}
                   onAdd={addToList('parking_gate_phones')}
                   onRemove={removeFromList('parking_gate_phones')}
-                  placeholder="למשל: *3456"
                   max={buildingMap[form.buildingId]?.max_gate_phones || 2}
+                  phone
                 />
                 {/* Garage selection — only when the building defines parking lots */}
                 {(() => {

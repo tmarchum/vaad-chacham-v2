@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
-import { formatCurrency, formatDate, calcUnitFee } from '@/lib/utils'
+import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { ResidentBooking } from './ResidentBooking'
 import {
   Home, CreditCard, Megaphone, LogOut, Building2,
@@ -382,6 +382,7 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
 
   const submit = async (e) => {
     e.preventDefault()
+    if (form.phone && !isValidPhone(form.phone)) { setError('מספר טלפון חייב להיות בדיוק 10 ספרות'); return }
     setSaving(true); setError(null)
     try {
       await updateProfile({
@@ -429,8 +430,8 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
             />
           </div>
           <input
-            type="tel" placeholder="טלפון"
-            value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
+            type="tel" inputMode="numeric" placeholder="טלפון (10 ספרות)"
+            value={form.phone} onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })}
             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           {/* Email is the login identity — read-only */}
@@ -584,17 +585,18 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
 }
 
 /* ── Small array editor (chips + add) ── */
-function ListEditor({ label, items, onChange, placeholder, max }) {
+function ListEditor({ label, items, onChange, placeholder, max, phone }) {
   const [val, setVal] = useState('')
   const atMax = !!max && items.length >= max
+  const onInput = (e) => setVal(phone ? sanitizePhone(e.target.value) : e.target.value)
+  const valid = phone ? isValidPhone(val) : !!val.trim()
   const add = () => {
-    const v = val.trim()
-    if (!v || atMax) return
-    onChange([...items, v]); setVal('')
+    if (atMax || !valid) return
+    onChange([...items, phone ? val : val.trim()]); setVal('')
   }
   return (
     <div>
-      <p className="text-xs text-slate-500 mb-1">{label}{max ? ` (עד ${max})` : ''}</p>
+      <p className="text-xs text-slate-500 mb-1">{label}{phone ? ' (10 ספרות)' : (max ? ` (עד ${max})` : '')}</p>
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-1.5">
           {items.map((it, i) => (
@@ -612,12 +614,14 @@ function ListEditor({ label, items, onChange, placeholder, max }) {
       ) : (
       <div className="flex gap-2">
         <input
-          value={val} onChange={e => setVal(e.target.value)}
+          value={val} onChange={onInput}
+          inputMode={phone ? 'numeric' : undefined}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-          placeholder={placeholder}
+          placeholder={phone ? '0501234567' : placeholder}
           className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
-        <button type="button" onClick={add} className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">הוסף</button>
+        <button type="button" onClick={add} disabled={!valid}
+          className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 disabled:opacity-40">הוסף</button>
       </div>
       )}
     </div>
@@ -667,11 +671,11 @@ function OwnerDetails({ unit, onSaved }) {
   }
 
   // first name, last name and mobile are required; email is optional
-  const ownerValid = form.first_name.trim() && form.last_name.trim() && form.phone.trim()
+  const ownerValid = form.first_name.trim() && form.last_name.trim() && isValidPhone(form.phone)
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!ownerValid) { setError('יש למלא שם פרטי, שם משפחה ונייד.'); return }
+    if (!ownerValid) { setError('יש למלא שם פרטי, שם משפחה ונייד תקין (10 ספרות).'); return }
     setSaving(true); setError(null)
     const cf = unit.custom_fields || {}
     const { error } = await supabase.from('units').update({
@@ -716,8 +720,8 @@ function OwnerDetails({ unit, onSaved }) {
               <input type="text" required value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} className={inputCls} />
             </label>
           </div>
-          <label className="text-xs text-slate-500 block">נייד *
-            <input type="tel" required value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className={inputCls} />
+          <label className="text-xs text-slate-500 block">נייד * (10 ספרות)
+            <input type="tel" inputMode="numeric" required value={form.phone} onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })} className={inputCls} />
           </label>
           <label className="text-xs text-slate-500 block">מייל
             <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className={inputCls} />
@@ -858,7 +862,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           <ListEditor label="מספרי חניה" items={form.parking_spots} onChange={v => set('parking_spots', v)} placeholder="למשל: 12" />
           <ListEditor label="מספרי מחסן" items={form.storage_numbers} onChange={v => set('storage_numbers', v)} placeholder="למשל: B4" />
           <ListEditor label="מפתחות / תגים" items={form.key_numbers} onChange={v => set('key_numbers', v)} placeholder="למשל: A1" />
-          <ListEditor label="טלפון לפתיחת שער חניה" items={form.parking_gate_phones} onChange={v => set('parking_gate_phones', v)} placeholder="למשל: *3456" max={maxGatePhones} />
+          <ListEditor label="טלפון לפתיחת שער חניה" items={form.parking_gate_phones} onChange={v => set('parking_gate_phones', v)} max={maxGatePhones} phone />
           {parkingLots.length > 0 && (
             <label className="text-xs text-slate-500 block">חניון
               <select value={form.parking_lot} onChange={e => set('parking_lot', e.target.value)} className={`${inputCls} bg-white`}>
@@ -932,8 +936,8 @@ function PersonFields({ value, onChange }) {
         <input type="text" placeholder="שם משפחה" value={value.last_name}
           onChange={e => onChange({ ...value, last_name: e.target.value })} className={personFieldCls} />
       </div>
-      <input type="tel" placeholder="טלפון" value={value.phone}
-        onChange={e => onChange({ ...value, phone: e.target.value })} className={`w-full ${personFieldCls}`} />
+      <input type="tel" inputMode="numeric" placeholder="טלפון (10 ספרות)" value={value.phone}
+        onChange={e => onChange({ ...value, phone: sanitizePhone(e.target.value) })} className={`w-full ${personFieldCls}`} />
       <input type="email" placeholder="אימייל" value={value.email}
         onChange={e => onChange({ ...value, email: e.target.value })} className={`w-full ${personFieldCls}`} />
     </>
@@ -955,13 +959,15 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
   const editingIsPrimary = !!editingRes?.is_primary
   // First resident in a unit becomes primary automatically.
   const newIsPrimary = residents.length === 0
-  // A primary resident must have name + mobile + email.
-  const addValid = form.first_name.trim() && (!newIsPrimary || (form.phone.trim() && form.email.trim()))
-  const editValid = editForm.first_name.trim() && (!editingIsPrimary || (editForm.phone.trim() && editForm.email.trim()))
+  // Any phone provided must be exactly 10 digits; a primary needs name + 10-digit mobile + email.
+  const phoneOk = (p) => !p || isValidPhone(p)
+  const addValid = form.first_name.trim() && phoneOk(form.phone) && (!newIsPrimary || (isValidPhone(form.phone) && form.email.trim()))
+  const editValid = editForm.first_name.trim() && phoneOk(editForm.phone) && (!editingIsPrimary || (isValidPhone(editForm.phone) && editForm.email.trim()))
 
   const add = async (e) => {
     e.preventDefault()
-    if (!addValid) { setError(newIsPrimary ? 'לדייר הראשי חובה שם, נייד ומייל.' : 'יש למלא שם פרטי.'); return }
+    if (form.phone && !isValidPhone(form.phone)) { setError('מספר טלפון חייב להיות בדיוק 10 ספרות'); return }
+    if (!addValid) { setError(newIsPrimary ? 'לדייר הראשי חובה שם, נייד (10 ספרות) ומייל.' : 'יש למלא שם פרטי.'); return }
     setSaving(true); setError(null)
     const { error } = await supabase.from('unit_residents').insert({
       unit_id: profile.unit_id,
@@ -981,7 +987,8 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
   }
   const saveEdit = async (e) => {
     e.preventDefault()
-    if (!editValid) { setError(editingIsPrimary ? 'לדייר הראשי חובה שם, נייד ומייל.' : 'יש למלא שם פרטי.'); return }
+    if (editForm.phone && !isValidPhone(editForm.phone)) { setError('מספר טלפון חייב להיות בדיוק 10 ספרות'); return }
+    if (!editValid) { setError(editingIsPrimary ? 'לדייר הראשי חובה שם, נייד (10 ספרות) ומייל.' : 'יש למלא שם פרטי.'); return }
     setSaving(true); setError(null)
     const { error } = await supabase.from('unit_residents').update({
       first_name: editForm.first_name.trim(), last_name: editForm.last_name.trim(),

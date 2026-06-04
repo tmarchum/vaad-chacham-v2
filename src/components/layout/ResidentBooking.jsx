@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, sanitizePhone, isValidPhone } from '@/lib/utils'
 
 const SUPABASE_URL = 'https://stncskqjrmecjckxldvi.supabase.co'
 import {
@@ -176,6 +176,10 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
 
   const submit = async () => {
     if (!resource || !selectedDay || !slot) return
+    if (phone && !isValidPhone(phone)) {
+      setError('מספר טלפון חייב להיות בדיוק 10 ספרות')
+      return
+    }
     // Rental terms must be accepted when the resource defines them
     if (resource.rental_terms && !termsAccepted) {
       setError('יש לאשר את תנאי ההשכרה כדי להמשיך')
@@ -370,8 +374,8 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
           </div>
 
           <input
-            type="tel" placeholder="טלפון ליצירת קשר"
-            value={phone} onChange={e => setPhone(e.target.value)}
+            type="tel" inputMode="numeric" placeholder="טלפון ליצירת קשר (10 ספרות)"
+            value={phone} onChange={e => setPhone(sanitizePhone(e.target.value))}
             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
           />
 

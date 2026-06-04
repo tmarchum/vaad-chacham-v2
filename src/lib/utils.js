@@ -107,6 +107,12 @@ export function calcUnitFee(unit, building) {
 }
 
 /**
+ * Phone numbers must be exactly 10 digits, numeric only.
+ */
+export const sanitizePhone = (v) => (v == null ? '' : String(v)).replace(/\D/g, '').slice(0, 10)
+export const isValidPhone = (v) => /^\d{10}$/.test(v == null ? '' : String(v))
+
+/**
  * Safely parse JSON, returning fallback on failure
  */
 export function sortByUnitNumber(a, b) {
