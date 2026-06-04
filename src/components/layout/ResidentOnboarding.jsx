@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
-import { Building2, Home, ChevronLeft, CheckCircle2, Loader2 } from 'lucide-react'
+import { Building2, Home, ChevronLeft, CheckCircle2, Loader2, LogOut } from 'lucide-react'
 
 /**
  * Full-screen wizard shown after Google login when the user's email
@@ -12,7 +12,7 @@ import { Building2, Home, ChevronLeft, CheckCircle2, Loader2 } from 'lucide-reac
  * Confirm → links profile.unit_id / building_id
  */
 export function ResidentOnboarding() {
-  const { user, completeOnboarding } = useAuth()
+  const { user, completeOnboarding, signOut } = useAuth()
 
   const [step, setStep]                   = useState(1)
   const [buildings, setBuildings]         = useState([])
@@ -112,14 +112,25 @@ export function ResidentOnboarding() {
 
         {/* Header */}
         <div className="px-8 pt-8 pb-4">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
-              <span className="text-white text-sm font-black">+ו</span>
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
+                <span className="text-white text-sm font-black">+ו</span>
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-lg font-extrabold text-gray-900">ברוכים הבאים לוועד+</h1>
+                <p className="text-xs text-gray-400">כניסה ראשונה — שייכו את עצמכם לדירתכם</p>
+                {user?.email && <p className="text-[11px] text-gray-400 truncate mt-0.5">מחובר כ-{user.email}</p>}
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-extrabold text-gray-900">ברוכים הבאים לוועד+</h1>
-              <p className="text-xs text-gray-400">כניסה ראשונה — שייכו את עצמכם לדירתכם</p>
-            </div>
+            <button
+              onClick={signOut}
+              title="התנתק / החלף חשבון"
+              className="flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-red-500 transition-colors shrink-0"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              התנתק
+            </button>
           </div>
 
           {/* Step indicator */}
