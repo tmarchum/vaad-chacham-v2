@@ -26,10 +26,9 @@ export function ResidentOnboarding() {
 
   // Load all buildings on mount — direct query now works via new RLS policy
   useEffect(() => {
+    // Safe, non-sensitive list via SECURITY DEFINER RPC (no bank details exposed)
     supabase
-      .from('buildings')
-      .select('id, name, street, house_number, city, total_units')
-      .order('name')
+      .rpc('onboarding_buildings')
       .then(({ data, error }) => {
         if (error) {
           console.error('buildings query error:', error)
@@ -48,9 +47,7 @@ export function ResidentOnboarding() {
     setUnits([])
     setSelectedUnit(null)
     supabase
-      .from('units')
-      .select('id, number, floor')
-      .eq('building_id', selectedBuilding.id)
+      .rpc('onboarding_units', { p_building: selectedBuilding.id })
       .then(({ data, error }) => {
         if (error) console.error('units query error:', error)
         // number is text — sort numerically (1,2,3,…,10) not lexically (1,10,2,…)
