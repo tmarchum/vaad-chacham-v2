@@ -17,12 +17,13 @@ import { FilterPills } from '@/components/common/FilterPills'
 import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays } from 'lucide-react'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
-function ListField({ label, items, onAdd, onRemove, placeholder, max, phone }) {
+function ListField({ label, items, onAdd, onRemove, placeholder, max, phone, allowExceed }) {
   const [val, setVal] = useState('')
   const atMax = !!max && items.length >= max
+  const blocked = atMax && !allowExceed   // admins (allowExceed) may go past the limit
   const valid = phone ? isValidPhone(val) : !!val.trim()
   const add = () => {
-    if (atMax || !valid) return
+    if (blocked || !valid) return
     onAdd(phone ? val : val.trim())
     setVal('')
   }
@@ -52,20 +53,25 @@ function ListField({ label, items, onAdd, onRemove, placeholder, max, phone }) {
           ))}
         </div>
       )}
-      {atMax ? (
+      {blocked ? (
         <p className="text-xs text-[var(--text-muted)]">הגעת למקסימום שהוגדר לבניין ({max})</p>
       ) : (
-        <div className="flex gap-2">
-          <Input
-            value={val}
-            onChange={e => setVal(phone ? sanitizePhone(e.target.value) : e.target.value)}
-            inputMode={phone ? 'numeric' : undefined}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-            placeholder={phone ? '0501234567' : (placeholder || 'הקלד ולחץ הוסף...')}
-            className="flex-1"
-          />
-          <Button type="button" variant="outline" size="sm" onClick={add} disabled={!valid}>הוסף</Button>
-        </div>
+        <>
+          <div className="flex gap-2">
+            <Input
+              value={val}
+              onChange={e => setVal(phone ? sanitizePhone(e.target.value) : e.target.value)}
+              inputMode={phone ? 'numeric' : undefined}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+              placeholder={phone ? '0501234567' : (placeholder || 'הקלד ולחץ הוסף...')}
+              className="flex-1"
+            />
+            <Button type="button" variant="outline" size="sm" onClick={add} disabled={!valid}>הוסף</Button>
+          </div>
+          {atMax && allowExceed && (
+            <p className="text-xs text-amber-600">מעבר למגבלת הדיירים ({max}) — הוספה מותרת למנהל בלבד</p>
+          )}
+        </>
       )}
     </div>
   )
@@ -1264,6 +1270,7 @@ function Units() {
                   onRemove={removeFromList('parking_gate_phones')}
                   max={buildingMap[form.buildingId]?.max_gate_phones || 2}
                   phone
+                  allowExceed
                 />
                 {/* Garage selection — only when the building defines parking lots */}
                 {(() => {
