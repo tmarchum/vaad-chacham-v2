@@ -78,20 +78,10 @@ export function ResidentOnboarding() {
     setSaving(true)
     setError(null)
     try {
-      // Link unit_residents row with this user's email
-      // Note: unit_residents has no building_id column — only unit_id
-      await supabase
-        .from('unit_residents')
-        .upsert(
-          {
-            unit_id: selectedUnit.id,
-            email: user.email,
-            first_name: user.user_metadata?.given_name || '',
-            last_name: user.user_metadata?.family_name || '',
-            is_primary: false,
-          },
-          { onConflict: 'unit_id,email', ignoreDuplicates: false }
-        )
+      // Link the profile to the chosen unit/building. The unit_residents row
+      // (primary resident) is created right after, in the mandatory
+      // RequirePrimaryResident step in the portal — once the profile is linked
+      // the resident is authorised to write it.
       await completeOnboarding(selectedUnit.id, selectedBuilding.id)
     } catch (e) {
       console.error('onboarding error', e)
