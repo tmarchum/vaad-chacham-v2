@@ -51,6 +51,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [ok, setOk] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
 
   const resource = resources.find(r => r.id === resourceId) || resources[0] || null
 
@@ -126,6 +127,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
     if (!d.canBook) return
     setSelectedDk(d.dk)
     setSlot(d.available[0])
+    setTermsAccepted(false)
     setError(null); setOk(false)
   }
 
@@ -174,6 +176,11 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
 
   const submit = async () => {
     if (!resource || !selectedDay || !slot) return
+    // Rental terms must be accepted when the resource defines them
+    if (resource.rental_terms && !termsAccepted) {
+      setError('יש לאשר את תנאי ההשכרה כדי להמשיך')
+      return
+    }
     setSaving(true); setError(null)
     const bookingData = {
       building_id: profile.building_id,
@@ -187,6 +194,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       status: 'pending',
       payment_status: 'pending',
       price: slotPrice(slot),
+      terms_accepted: !!resource.rental_terms && termsAccepted,
     }
     const { error } = await supabase.from('bookings').insert(bookingData)
     if (error) { setSaving(false); console.error('booking insert error', error); setError('שגיאה בשליחת הבקשה. נסה שוב.'); return }
@@ -367,9 +375,27 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
           />
 
+          {/* Rental terms — must be accepted before submitting */}
+          {resource.rental_terms && (
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <p className="text-[11px] font-bold text-slate-600 mb-1">תנאי השכרה</p>
+              <div className="max-h-28 overflow-y-auto text-xs text-slate-600 whitespace-pre-line leading-relaxed mb-2 pl-1">
+                {resource.rental_terms}
+              </div>
+              <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox" checked={termsAccepted}
+                  onChange={e => setTermsAccepted(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                />
+                קראתי ואני מאשר/ת את תנאי ההשכרה
+              </label>
+            </div>
+          )}
+
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
-            onClick={submit} disabled={saving || !slot}
+            onClick={submit} disabled={saving || !slot || (!!resource.rental_terms && !termsAccepted)}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
