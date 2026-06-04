@@ -200,39 +200,17 @@ export function ResidentPortal() {
             </p>
           </div>
 
-          {/* ── Details-confirmation banner ── */}
+          {/* ── Details-confirmation: status at top, the confirm action is at the BOTTOM
+               (after the resident has scrolled through all their details) ── */}
           {confirmedAt ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm text-emerald-700">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                <span>הפרטים אושרו ב-{formatDate(confirmedAt)}</span>
-              </div>
-              <button onClick={confirmDetails} disabled={confirming || !contactOk}
-                className="text-xs font-medium text-emerald-700 hover:underline disabled:opacity-40">
-                עדכן שוב
-              </button>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>הפרטים אושרו ב-{formatDate(confirmedAt)}</span>
             </div>
           ) : (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 space-y-3">
-              <p className="text-sm font-bold text-amber-800">נא לעדכן ולאשר את הפרטים שלך</p>
-              <p className="text-xs text-amber-700">
-                ודא/י שהפרטים מעודכנים — שם וטלפון, דיירי הדירה, ובמיוחד <b>מספרי הטלפון לפתיחת שער החניה</b> — ואז אשר/י.
-              </p>
-              <div className="space-y-1 text-xs">
-                <div className={`flex items-center gap-1.5 ${contactOk ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  {contactOk ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                  דייר ראשי עם טלפון (10 ספרות) ומייל
-                </div>
-                <div className={`flex items-center gap-1.5 ${gatePhonesCount > 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  {gatePhonesCount > 0 ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                  מספר/י טלפון לשער חניה {gatePhonesCount > 0 ? `(${gatePhonesCount})` : '(הוסף בפרטי הדירה אם יש לך חניה)'}
-                </div>
-              </div>
-              <button onClick={confirmDetails} disabled={confirming || !contactOk}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
-                {confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {contactOk ? 'אישור — הפרטים מעודכנים' : 'יש להשלים דייר ראשי עם טלפון ומייל'}
-              </button>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center gap-2 text-sm text-amber-800">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>עברו על כל הפרטים בעמוד — כולל טלפוני שער החניה — והאישור בתחתית.</span>
             </div>
           )}
 
@@ -405,6 +383,31 @@ export function ResidentPortal() {
                   )
                 })}
               </div>
+            </div>
+          )}
+
+          {/* ── Details-confirmation action — at the BOTTOM, after reviewing everything ── */}
+          {!confirmedAt && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 space-y-3">
+              <p className="text-sm font-bold text-amber-800">סיום — אישור הפרטים</p>
+              <p className="text-xs text-amber-700">
+                לאחר שעברת על כל הפרטים למעלה (שם, טלפון, דיירי הדירה, ובמיוחד <b>טלפוני שער החניה</b>) — אשר/י שהכל מעודכן.
+              </p>
+              <div className="space-y-1 text-xs">
+                <div className={`flex items-center gap-1.5 ${contactOk ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {contactOk ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                  דייר ראשי עם טלפון (10 ספרות) ומייל
+                </div>
+                <div className={`flex items-center gap-1.5 ${gatePhonesCount > 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {gatePhonesCount > 0 ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                  מספר/י טלפון לשער חניה {gatePhonesCount > 0 ? `(${gatePhonesCount})` : '(הוסף בפרטי הדירה אם יש לך חניה)'}
+                </div>
+              </div>
+              <button onClick={confirmDetails} disabled={confirming || !contactOk}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+                {confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {contactOk ? 'בדקתי — הפרטים מעודכנים, אשר' : 'יש להשלים דייר ראשי עם טלפון ומייל'}
+              </button>
             </div>
           )}
 
