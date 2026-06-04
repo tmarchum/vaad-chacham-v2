@@ -584,16 +584,17 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
 }
 
 /* ── Small array editor (chips + add) ── */
-function ListEditor({ label, items, onChange, placeholder }) {
+function ListEditor({ label, items, onChange, placeholder, max }) {
   const [val, setVal] = useState('')
+  const atMax = !!max && items.length >= max
   const add = () => {
     const v = val.trim()
-    if (!v) return
+    if (!v || atMax) return
     onChange([...items, v]); setVal('')
   }
   return (
     <div>
-      <p className="text-xs text-slate-500 mb-1">{label}</p>
+      <p className="text-xs text-slate-500 mb-1">{label}{max ? ` (עד ${max})` : ''}</p>
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-1.5">
           {items.map((it, i) => (
@@ -606,6 +607,9 @@ function ListEditor({ label, items, onChange, placeholder }) {
           ))}
         </div>
       )}
+      {atMax ? (
+        <p className="text-[11px] text-slate-400">הגעת למקסימום שהוגדר לבניין ({max})</p>
+      ) : (
       <div className="flex gap-2">
         <input
           value={val} onChange={e => setVal(e.target.value)}
@@ -615,6 +619,7 @@ function ListEditor({ label, items, onChange, placeholder }) {
         />
         <button type="button" onClick={add} className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50">הוסף</button>
       </div>
+      )}
     </div>
   )
 }
@@ -635,6 +640,7 @@ const buildUnitForm = (unit) => {
     storage_numbers: Array.isArray(cf.storage_numbers) ? cf.storage_numbers : (unit.storage_number ? [unit.storage_number] : []),
     key_numbers: Array.isArray(unit.key_numbers) ? unit.key_numbers : [],
     parking_gate_phones: Array.isArray(cf.parking_gate_phones) ? cf.parking_gate_phones : (unit.parking_gate_phone ? [unit.parking_gate_phone] : []),
+    parking_lot: cf.parking_lot || '',
     notes: unit.notes || '',
   }
 }
@@ -779,6 +785,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
         unit_type: form.unit_type,
         storage_numbers: form.storage_numbers,
         parking_gate_phones: form.parking_gate_phones,
+        parking_lot: form.parking_lot || '',
       },
       notes: form.notes,
       updated_at: new Date().toISOString(),
@@ -798,6 +805,8 @@ function UnitDetailsSection({ unit, building, onSaved }) {
   const parkingList = Array.isArray(unit.parking_spots) ? unit.parking_spots : []
   const keyList = Array.isArray(unit.key_numbers) ? unit.key_numbers : []
   const effectiveFee = (unit.monthly_fee && unit.monthly_fee > 0) ? unit.monthly_fee : (building?.monthly_fee ?? null)
+  const maxGatePhones = building?.max_gate_phones || 2
+  const parkingLots = Array.isArray(building?.parking_lots) ? building.parking_lots : []
 
   const Row = ({ icon: Icon, label, value }) => (
     <div className="flex items-start gap-2.5 text-sm py-1">
@@ -849,7 +858,15 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           <ListEditor label="מספרי חניה" items={form.parking_spots} onChange={v => set('parking_spots', v)} placeholder="למשל: 12" />
           <ListEditor label="מספרי מחסן" items={form.storage_numbers} onChange={v => set('storage_numbers', v)} placeholder="למשל: B4" />
           <ListEditor label="מפתחות / תגים" items={form.key_numbers} onChange={v => set('key_numbers', v)} placeholder="למשל: A1" />
-          <ListEditor label="טלפון לפתיחת שער חניה" items={form.parking_gate_phones} onChange={v => set('parking_gate_phones', v)} placeholder="למשל: *3456" />
+          <ListEditor label="טלפון לפתיחת שער חניה" items={form.parking_gate_phones} onChange={v => set('parking_gate_phones', v)} placeholder="למשל: *3456" max={maxGatePhones} />
+          {parkingLots.length > 0 && (
+            <label className="text-xs text-slate-500 block">חניון
+              <select value={form.parking_lot} onChange={e => set('parking_lot', e.target.value)} className={`${inputCls} bg-white`}>
+                <option value="">ללא / לא נבחר</option>
+                {parkingLots.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </label>
+          )}
           <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
             <input type="checkbox" checked={form.board_member} onChange={e => set('board_member', e.target.checked)}
               className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
@@ -882,6 +899,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           <Row icon={KeyRound} label="מחסנים"   value={storageList.join(', ')} />
           <Row icon={KeyRound} label="מפתחות"   value={keyList.join(', ')} />
           <Row icon={Phone}   label="שער חניה"  value={gatePhones.join(', ')} />
+          {cf.parking_lot && <Row icon={Car} label="חניון" value={cf.parking_lot} />}
           <Row icon={Star}    label="חבר ועד"   value={unit.board_member ? 'כן' : 'לא'} />
           {effectiveFee != null && (
             <Row icon={CreditCard} label="דמי ועד" value={formatCurrency(effectiveFee)} />

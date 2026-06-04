@@ -96,6 +96,7 @@ const EMPTY_FORM = {
   name: '', alias: '', street: '', house_number: '', city: '',
   total_units: '', floors: '', year_built: '',
   parking: '', storage: '', elevators: '0',
+  max_gate_phones: '', parking_lots: [],
   generator: false, water_pump: false, fire_suppression: false,
   intercom: false, shared_roof: false, gym: false, pool: false,
   residents_room: false, management_company: false,
@@ -169,6 +170,8 @@ function Buildings() {
       parking: b.parking ?? '',
       storage: b.storage ?? '',
       elevators: String(b.elevators ?? 0),
+      max_gate_phones: b.max_gate_phones ?? '',
+      parking_lots: Array.isArray(b.parking_lots) ? b.parking_lots : [],
       generator: !!b.generator,
       water_pump: !!b.water_pump,
       fire_suppression: !!b.fire_suppression,
@@ -208,6 +211,8 @@ function Buildings() {
       parking: form.parking ? Number(form.parking) : 0,
       storage: form.storage ? Number(form.storage) : 0,
       elevators: Number(form.elevators),
+      max_gate_phones: form.max_gate_phones ? Number(form.max_gate_phones) : 2,
+      parking_lots: (form.parking_lots || []).map(s => (s || '').trim()).filter(Boolean),
       generator: !!form.generator,
       water_pump: !!form.water_pump,
       fire_suppression: !!form.fire_suppression,
@@ -250,6 +255,11 @@ function Buildings() {
     const val = e?.target?.value !== undefined ? e.target.value : e
     setForm(prev => ({ ...prev, [field]: val }))
   }
+
+  // Parking-lot (garage) name list helpers
+  const addLot = () => setForm(p => ({ ...p, parking_lots: [...(p.parking_lots || []), ''] }))
+  const removeLot = idx => setForm(p => ({ ...p, parking_lots: p.parking_lots.filter((_, i) => i !== idx) }))
+  const updateLot = (idx, val) => setForm(p => ({ ...p, parking_lots: p.parking_lots.map((l, i) => i === idx ? val : l) }))
 
   const handleDelete = async () => {
     if (deleteTarget) {
@@ -379,6 +389,8 @@ function Buildings() {
             <DetailRow label="שנת בנייה" value={detailBuilding.year_built} />
             <DetailRow label="חניות" value={detailBuilding.parking} />
             <DetailRow label="מחסנים" value={detailBuilding.storage} />
+            <DetailRow label="מקס׳ טלפוני שער חניה" value={detailBuilding.max_gate_phones} />
+            <DetailRow label="חניונים" value={Array.isArray(detailBuilding.parking_lots) && detailBuilding.parking_lots.length ? detailBuilding.parking_lots.join(', ') : null} />
             <DetailRow label="מעליות" value={detailBuilding.elevators} />
             <DetailRow label="גנרטור" value={detailBuilding.generator ? 'כן' : null} />
             <DetailRow label="משאבת מים" value={detailBuilding.water_pump ? 'כן' : null} />
@@ -455,6 +467,45 @@ function Buildings() {
               <FormField label="שנת בנייה" type="number" value={form.year_built} onChange={setField('year_built')} />
               <FormField label="חניות" type="number" value={form.parking} onChange={setField('parking')} />
               <FormField label="מחסנים" type="number" value={form.storage} onChange={setField('storage')} />
+            </div>
+
+            {/* Parking */}
+            <div>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">חניה</h4>
+              <FormField
+                label="מספר טלפונים מקסימלי לשער חניה (לכל דירה)"
+                type="number"
+                value={form.max_gate_phones}
+                onChange={setField('max_gate_phones')}
+                placeholder="למשל: 2"
+              />
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
+                  חניונים בבניין
+                </label>
+                <p className="text-xs text-[var(--text-muted)] mb-2">
+                  שמות החניונים (למשל: חניון תחתון, חניון עליון). יוצגו לבחירה בכל דירה.
+                </p>
+                <div className="space-y-2">
+                  {(form.parking_lots || []).map((lot, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        value={lot}
+                        onChange={e => updateLot(idx, e.target.value)}
+                        placeholder="למשל: חניון תחתון"
+                        className="flex-1"
+                      />
+                      <button type="button" onClick={() => removeLot(idx)} className="text-[var(--text-muted)] hover:text-red-500 shrink-0">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addLot}>
+                  <Plus className="h-3.5 w-3.5" />
+                  הוסף חניון
+                </Button>
+              </div>
             </div>
 
             {/* Facilities */}

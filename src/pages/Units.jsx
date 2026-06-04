@@ -17,18 +17,21 @@ import { FilterPills } from '@/components/common/FilterPills'
 import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays } from 'lucide-react'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
-function ListField({ label, items, onAdd, onRemove, placeholder }) {
+function ListField({ label, items, onAdd, onRemove, placeholder, max }) {
   const [val, setVal] = useState('')
+  const atMax = !!max && items.length >= max
   const add = () => {
     const v = val.trim()
-    if (!v) return
+    if (!v || atMax) return
     onAdd(v)
     setVal('')
   }
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-[var(--text-secondary)]">{label}</label>
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">
+          {label}{max ? ` (עד ${max})` : ''}
+        </label>
       )}
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -49,16 +52,20 @@ function ListField({ label, items, onAdd, onRemove, placeholder }) {
           ))}
         </div>
       )}
-      <div className="flex gap-2">
-        <Input
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-          placeholder={placeholder || 'הקלד ולחץ הוסף...'}
-          className="flex-1"
-        />
-        <Button type="button" variant="outline" size="sm" onClick={add}>הוסף</Button>
-      </div>
+      {atMax ? (
+        <p className="text-xs text-[var(--text-muted)]">הגעת למקסימום שהוגדר לבניין ({max})</p>
+      ) : (
+        <div className="flex gap-2">
+          <Input
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+            placeholder={placeholder || 'הקלד ולחץ הוסף...'}
+            className="flex-1"
+          />
+          <Button type="button" variant="outline" size="sm" onClick={add}>הוסף</Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -151,6 +158,7 @@ const EMPTY_FORM = {
   storage_numbers: [],
   key_numbers: [],
   parking_gate_phones: [],
+  parking_lot: '',
   notes: '',
   residents: [],
   owners: [],
@@ -361,6 +369,7 @@ function Units() {
         : (unit.parking_gate_phone || unit.parkingGatePhone
           ? [unit.parking_gate_phone || unit.parkingGatePhone]
           : []),
+      parking_lot: cf.parking_lot || '',
       notes: unit.notes || '',
       residents,
       owners,
@@ -443,6 +452,7 @@ function Units() {
           unit_type: form.unit_type,
           storage_numbers: form.storage_numbers,
           parking_gate_phones: form.parking_gate_phones,
+          parking_lot: form.parking_lot || '',
           tier_label: form.tier_label || '',
           ...(ownerObj ? { owner: ownerObj } : {}),
         },
@@ -827,6 +837,7 @@ function Units() {
               }
             />
             <DetailRow label="טלפון לחניה" value={pgPhones.length ? pgPhones.join(', ') : undefined} />
+            <DetailRow label="חניון" value={cf.parking_lot || undefined} />
             <DetailRow label="הערות" value={detailUnit.notes} />
 
             {/* ── Archived residents history ─────────────────────────── */}
@@ -1219,7 +1230,21 @@ function Units() {
                   onAdd={addToList('parking_gate_phones')}
                   onRemove={removeFromList('parking_gate_phones')}
                   placeholder="למשל: *3456"
+                  max={buildingMap[form.buildingId]?.max_gate_phones || 2}
                 />
+                {/* Garage selection — only when the building defines parking lots */}
+                {(() => {
+                  const lots = buildingMap[form.buildingId]?.parking_lots
+                  if (!Array.isArray(lots) || lots.length === 0) return null
+                  return (
+                    <FormSelect
+                      label="חניון"
+                      value={form.parking_lot}
+                      onChange={setFieldEv('parking_lot')}
+                      options={[{ value: '', label: 'ללא / לא נבחר' }, ...lots.map(l => ({ value: l, label: l }))]}
+                    />
+                  )
+                })()}
               </div>
             </div>
 
