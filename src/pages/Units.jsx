@@ -193,6 +193,7 @@ function Units() {
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState(() => selectedBuilding?.id || 'all')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [confirmFilter, setConfirmFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -263,6 +264,11 @@ function Units() {
     } else if (typeFilter === 'rented') {
       result = result.filter(u => getUnitType(u) === 'rented')
     }
+    if (confirmFilter === 'confirmed') {
+      result = result.filter(u => u.details_confirmed_at || u.detailsConfirmedAt)
+    } else if (confirmFilter === 'pending') {
+      result = result.filter(u => !(u.details_confirmed_at || u.detailsConfirmedAt))
+    }
     if (search) {
       const q = search.toLowerCase()
       result = result.filter(u => {
@@ -280,7 +286,7 @@ function Units() {
       const nb = parseInt(b.number || b.unit_number || '0', 10)
       return na - nb
     })
-  }, [allUnits, buildingFilter, typeFilter, search, residentsByUnit])
+  }, [allUnits, buildingFilter, typeFilter, confirmFilter, search, residentsByUnit])
 
   // ── Open form ──────────────────────────────────────────────────────────────
   const openCreate = () => {
@@ -579,6 +585,9 @@ function Units() {
     </div>
   )
 
+  const scopeUnits = buildingFilter === 'all' ? allUnits : allUnits.filter(u => (u.buildingId || u.building_id) === buildingFilter)
+  const confirmedCount = scopeUnits.filter(u => u.details_confirmed_at || u.detailsConfirmedAt).length
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -586,7 +595,7 @@ function Units() {
         icon={Home}
         iconColor="indigo"
         title="דירות"
-        subtitle={`${allUnits.length} דירות`}
+        subtitle={`${scopeUnits.length} דירות · ${confirmedCount} אישרו פרטים`}
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
@@ -618,6 +627,17 @@ function Units() {
         ]}
         value={typeFilter}
         onChange={setTypeFilter}
+      />
+
+      {/* Details-confirmation filter */}
+      <FilterPills
+        options={[
+          { key: 'all', label: 'הכל' },
+          { key: 'confirmed', label: `אישרו פרטים (${confirmedCount})` },
+          { key: 'pending', label: `טרם אישרו (${scopeUnits.length - confirmedCount})` },
+        ]}
+        value={confirmFilter}
+        onChange={setConfirmFilter}
       />
 
       <SearchBar
@@ -703,6 +723,11 @@ function Units() {
                     <Badge variant={unitType === 'rented' ? 'info' : 'default'} className="text-[10px] px-2 py-0.5">
                       {unitType === 'rented' ? 'שכירות' : 'בעלים'}
                     </Badge>
+                    {(u.details_confirmed_at || u.detailsConfirmedAt) ? (
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">✓ אושרו פרטים</span>
+                    ) : (
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">טרם אושרו</span>
+                    )}
                     {u.floor != null && (
                       <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
                         קומה {u.floor}
@@ -780,6 +805,12 @@ function Units() {
             <DetailRow label="סוג" value={unitType === 'rented' ? 'שכירות' : 'בבעלות'} />
             <DetailRow label="ועד חודשי" value={formatCurrency(getDisplayFee(detailUnit))} />
             <DetailRow label="חבר ועד" value={detailUnit.board_member ? 'כן' : 'לא'} />
+            <DetailRow
+              label="אישור פרטים ע״י הדייר"
+              value={(detailUnit.details_confirmed_at || detailUnit.detailsConfirmedAt)
+                ? `אושר ${new Date(detailUnit.details_confirmed_at || detailUnit.detailsConfirmedAt).toLocaleDateString('he-IL')}`
+                : 'טרם אושר'}
+            />
 
             {/* Residents */}
             {tenants.length > 0 && (
