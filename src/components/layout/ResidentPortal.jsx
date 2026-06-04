@@ -171,6 +171,16 @@ export function ResidentPortal() {
         <div className="flex justify-center items-center min-h-[50vh]">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
         </div>
+      ) : !contactOk ? (
+        /* Mandatory: a valid primary resident (name + 10-digit phone + email) is
+           required before the resident can use the portal. */
+        <RequirePrimaryResident
+          existing={primaryResident}
+          profile={profile}
+          user={user}
+          unitType={unit?.custom_fields?.unit_type || 'owned'}
+          onDone={loadUnitScoped}
+        />
       ) : (
         <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
 
@@ -404,6 +414,84 @@ export function ResidentPortal() {
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Mandatory primary-resident gate — blocks the portal until a valid
+   primary resident (name + 10-digit phone + email) is filled in.
+   ════════════════════════════════════════════════════════════════ */
+function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
+  const [form, setForm] = useState({
+    first_name: existing?.first_name || profile?.first_name || user?.user_metadata?.given_name || '',
+    last_name:  existing?.last_name  || profile?.last_name  || user?.user_metadata?.family_name || '',
+    phone:      sanitizePhone(existing?.phone || profile?.phone || ''),
+    email:      existing?.email || user?.email || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const valid = form.first_name.trim() && isValidPhone(form.phone) && form.email.trim()
+  const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!valid) { setError('יש למלא שם פרטי, נייד (10 ספרות) ומייל'); return }
+    setSaving(true); setError(null)
+    const payload = {
+      first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+      phone: form.phone.trim(), email: form.email.trim(), is_primary: true,
+    }
+    let error
+    if (existing) {
+      ({ error } = await supabase.from('unit_residents')
+        .update({ ...payload, updated_at: new Date().toISOString() }).eq('id', existing.id))
+    } else {
+      ({ error } = await supabase.from('unit_residents')
+        .insert({ unit_id: profile.unit_id, resident_type: unitType === 'rented' ? 'tenant' : 'owner', ...payload }))
+    }
+    setSaving(false)
+    if (error) { console.error('primary resident save error', error); setError('שגיאה בשמירה. נסה שוב.'); return }
+    onDone?.()
+  }
+
+  return (
+    <div className="max-w-xl mx-auto px-4 py-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <UserCog className="h-5 w-5 text-blue-600" />
+          <p className="font-extrabold text-slate-900">פרטי הדייר הראשי — חובה</p>
+        </div>
+        <p className="text-sm text-slate-500 mb-4">
+          כדי להמשיך, יש למלא את פרטי הדייר הראשי של הדירה. כל השדות חובה.
+        </p>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs text-slate-500">שם פרטי *
+              <input type="text" required value={form.first_name}
+                onChange={e => setForm({ ...form, first_name: e.target.value })} className={inputCls} />
+            </label>
+            <label className="text-xs text-slate-500">שם משפחה
+              <input type="text" value={form.last_name}
+                onChange={e => setForm({ ...form, last_name: e.target.value })} className={inputCls} />
+            </label>
+          </div>
+          <label className="text-xs text-slate-500 block">נייד * (10 ספרות)
+            <input type="tel" inputMode="numeric" required value={form.phone}
+              onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })} className={inputCls} />
+          </label>
+          <label className="text-xs text-slate-500 block">מייל *
+            <input type="email" required value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })} className={inputCls} />
+          </label>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <button type="submit" disabled={saving || !valid}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            שמירה והמשך
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
