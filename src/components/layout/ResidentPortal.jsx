@@ -927,16 +927,13 @@ function UnitDetailsSection({ unit, building, onSaved }) {
 
   const startEdit = () => { setForm(buildUnitForm(unit)); setError(null); setEditing(true) }
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-  // מספר דירה הוא שדה חובה
-  const valid = String(form.number).trim() !== ''
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!valid) { setError('מספר דירה הוא שדה חובה'); return }
     setSaving(true); setError(null)
     const cf = unit.custom_fields || {}
+    // מספר דירה הוא עוגן מידע שנקבע בהרשמה — לא נכלל בעדכון ואינו ניתן לשינוי
     const { data, error } = await supabase.from('units').update({
-      number: form.number,
       floor: form.floor === '' ? null : Number(form.floor),
       rooms: form.rooms === '' ? null : Number(form.rooms),
       area: form.area === '' ? null : Number(form.area),
@@ -999,8 +996,11 @@ function UnitDetailsSection({ unit, building, onSaved }) {
       {editing ? (
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-slate-500">מספר דירה *
-              <input type="text" required value={form.number} onChange={e => set('number', e.target.value)} className={inputCls} />
+            <label className="text-xs text-slate-500">מספר דירה
+              <div className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-500 flex items-center justify-between">
+                <span>{unit.unit_number || unit.number || '—'}</span>
+                <span className="text-[10px] text-slate-400">לא ניתן לשינוי</span>
+              </div>
             </label>
             <label className="text-xs text-slate-500">סוג
               <select value={form.unit_type} onChange={e => set('unit_type', e.target.value)} className={`${inputCls} bg-white`}>
@@ -1038,7 +1038,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={saving || !valid}
+            <button type="submit" disabled={saving}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               עדכן פרטים
