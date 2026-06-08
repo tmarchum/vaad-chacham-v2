@@ -525,6 +525,9 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  // Required to save: first name + a valid 10-digit mobile.
+  const valid = form.first_name.trim() && isValidPhone(form.phone)
+
   const startEdit = () => {
     setForm({
       first_name: profile?.first_name || user?.user_metadata?.given_name || '',
@@ -537,7 +540,7 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (form.phone && !isValidPhone(form.phone)) { setError('מספר טלפון חייב להיות בדיוק 10 ספרות'); return }
+    if (!valid) { setError('יש למלא שם פרטי ונייד תקין (10 ספרות)'); return }
     setSaving(true); setError(null)
     try {
       await updateProfile({
@@ -574,7 +577,7 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <input
-              type="text" placeholder="שם פרטי"
+              type="text" required placeholder="שם פרטי *"
               value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })}
               className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
@@ -585,7 +588,7 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
             />
           </div>
           <input
-            type="tel" inputMode="numeric" placeholder="טלפון (10 ספרות)"
+            type="tel" inputMode="numeric" required placeholder="טלפון * (10 ספרות)"
             value={form.phone} onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })}
             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
@@ -598,11 +601,11 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <button
-              type="submit" disabled={saving}
+              type="submit" disabled={saving || !valid}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              שמירה
+              עדכן פרטים
             </button>
             <button
               type="button" onClick={() => setEditing(false)}
@@ -886,7 +889,7 @@ function OwnerDetails({ unit, onSaved }) {
             <button type="submit" disabled={saving || !ownerValid}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              שמירה
+              עדכן פרטים
             </button>
             <button type="button" onClick={() => setEditing(false)}
               className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors">
@@ -924,9 +927,12 @@ function UnitDetailsSection({ unit, building, onSaved }) {
 
   const startEdit = () => { setForm(buildUnitForm(unit)); setError(null); setEditing(true) }
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  // מספר דירה הוא שדה חובה
+  const valid = String(form.number).trim() !== ''
 
   const submit = async (e) => {
     e.preventDefault()
+    if (!valid) { setError('מספר דירה הוא שדה חובה'); return }
     setSaving(true); setError(null)
     const cf = unit.custom_fields || {}
     const { data, error } = await supabase.from('units').update({
@@ -993,8 +999,8 @@ function UnitDetailsSection({ unit, building, onSaved }) {
       {editing ? (
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-slate-500">מספר דירה
-              <input type="text" value={form.number} onChange={e => set('number', e.target.value)} className={inputCls} />
+            <label className="text-xs text-slate-500">מספר דירה *
+              <input type="text" required value={form.number} onChange={e => set('number', e.target.value)} className={inputCls} />
             </label>
             <label className="text-xs text-slate-500">סוג
               <select value={form.unit_type} onChange={e => set('unit_type', e.target.value)} className={`${inputCls} bg-white`}>
@@ -1032,10 +1038,10 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
-            <button type="submit" disabled={saving}
+            <button type="submit" disabled={saving || !valid}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              שמירה
+              עדכן פרטים
             </button>
             <button type="button" onClick={() => setEditing(false)}
               className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors">
@@ -1222,10 +1228,10 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
                   <PersonFields value={editForm} onChange={setEditForm} />
                   {error && <p className="text-xs text-red-500">{error}</p>}
                   <div className="flex gap-2">
-                    <button type="submit" disabled={saving}
+                    <button type="submit" disabled={saving || !editValid}
                       className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
                       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                      שמירה
+                      עדכן פרטים
                     </button>
                     <button type="button" onClick={() => setEditingId(null)}
                       className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors">
