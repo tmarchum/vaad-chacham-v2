@@ -14,7 +14,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, calcUnitFee, cn, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FilterPills } from '@/components/common/FilterPills'
-import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays } from 'lucide-react'
+import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays, CheckCircle2, RotateCcw } from 'lucide-react'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
 function ListField({ label, items, onAdd, onRemove, placeholder, max, phone, allowExceed }) {
@@ -518,6 +518,26 @@ function Units() {
     }
   }
 
+  // ── Admin: confirm / un-confirm a unit's details on the resident's behalf ──
+  const [confirmingUnit, setConfirmingUnit] = useState(false)
+  const toggleDetailsConfirmed = async (unit) => {
+    const already = !!(unit.details_confirmed_at || unit.detailsConfirmedAt)
+    const newVal = already ? null : new Date().toISOString()
+    setConfirmingUnit(true)
+    try {
+      await update(unit.id, { details_confirmed_at: newVal })
+      setDetailUnit(u => u ? { ...u, details_confirmed_at: newVal, detailsConfirmedAt: newVal } : u)
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: newVal ? 'הפרטים סומנו כמאושרים' : 'אישור הפרטים בוטל', type: 'success' },
+      }))
+    } catch (err) {
+      console.error('toggle details_confirmed failed', err)
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה: ${err.message}`, type: 'error' } }))
+    } finally {
+      setConfirmingUnit(false)
+    }
+  }
+
   // ── Archive residents ────────────────────────────────────────────────────
   const openArchiveDialog = (unit) => {
     const residents = residentsByUnit[unit.id] || []
@@ -817,6 +837,25 @@ function Units() {
                 ? `אושר ${new Date(detailUnit.details_confirmed_at || detailUnit.detailsConfirmedAt).toLocaleDateString('he-IL')}`
                 : 'טרם אושר'}
             />
+            {isCommittee && (
+              <div className="pt-1 pb-1">
+                {(detailUnit.details_confirmed_at || detailUnit.detailsConfirmedAt) ? (
+                  <Button variant="outline" size="sm" disabled={confirmingUnit}
+                    onClick={() => toggleDetailsConfirmed(detailUnit)}
+                    className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50">
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    בטל אישור פרטים
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" disabled={confirmingUnit}
+                    onClick={() => toggleDetailsConfirmed(detailUnit)}
+                    className="gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    אשר פרטים עבור הדירה
+                  </Button>
+                )}
+              </div>
+            )}
 
             {/* Residents */}
             {tenants.length > 0 && (
