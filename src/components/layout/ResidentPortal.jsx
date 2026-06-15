@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
+import { openGate } from '@/lib/gate'
 import { ResidentBooking } from './ResidentBooking'
 import {
   Home, CreditCard, Megaphone, LogOut, Building2,
   CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp,
   Wrench, CalendarDays, Users, Plus, X, Send, Loader2,
   UserCog, Mail, Phone, Pencil, Trash2, Ruler, Car, KeyRound,
-  Layers, Hash, StickyNote, Check, Star,
+  Layers, Hash, StickyNote, Check, Star, DoorOpen,
 } from 'lucide-react'
 
 const STATUS_MAP = {
@@ -204,6 +205,12 @@ export function ResidentPortal() {
               )}
             </p>
           </div>
+
+          {/* ── Open gate — calls the gate controller from the resident's own
+               (already-authorized) number. Native Android app → direct call, no
+               dialer; web/iOS → opens the dialer. Shown only if the building has
+               a gate number configured. ── */}
+          {building?.gate_phone && <GateOpenButton number={building.gate_phone} />}
 
           {/* ── Details-confirmation: status at top, the confirm action is at the BOTTOM
                (after the resident has scrolled through all their details) ── */}
@@ -508,6 +515,43 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
           </button>
         </form>
       </div>
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Open gate button — dials the gate controller. In the native Android
+   app the call is placed directly (no dialer); on web/iOS it falls back
+   to the dialer. Works because the resident's own number is already on
+   the gate's authorized list.
+   ════════════════════════════════════════════════════════════════ */
+function GateOpenButton({ number }) {
+  const [busy, setBusy] = useState(false)
+  const [hint, setHint] = useState(null)
+
+  const open = async () => {
+    setBusy(true); setHint(null)
+    try {
+      const mode = await openGate(number)
+      // 'direct' → the call went out with no dialer; 'dialer' → dialer opened.
+      if (mode === 'dialer') setHint('נפתח החייגן — לחצו "התקשר" כדי לפתוח את השער')
+    } catch (e) {
+      console.error('open gate error', e)
+      setHint('שגיאה בפתיחת השער. נסו שוב.')
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+      <button
+        onClick={open} disabled={busy}
+        className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-base font-extrabold shadow-sm disabled:opacity-50 transition-colors"
+      >
+        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <DoorOpen className="h-5 w-5" />}
+        פתח שער
+      </button>
+      {hint && <p className="text-[11px] text-slate-500 text-center mt-2">{hint}</p>}
     </div>
   )
 }

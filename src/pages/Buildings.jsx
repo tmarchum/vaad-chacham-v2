@@ -9,7 +9,7 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
 import { Input } from '@/components/ui/input'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, cn, sanitizePhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Building2, Plus, Pencil, Trash2, X } from 'lucide-react'
 
@@ -96,7 +96,7 @@ const EMPTY_FORM = {
   name: '', alias: '', street: '', house_number: '', city: '',
   total_units: '', floors: '', year_built: '',
   parking: '', storage: '', elevators: '0',
-  max_gate_phones: '', parking_lots: [],
+  max_gate_phones: '', parking_lots: [], gate_phone: '',
   generator: false, water_pump: false, fire_suppression: false,
   intercom: false, shared_roof: false, gym: false, pool: false,
   residents_room: false, management_company: false,
@@ -172,6 +172,7 @@ function Buildings() {
       elevators: String(b.elevators ?? 0),
       max_gate_phones: b.max_gate_phones ?? '',
       parking_lots: Array.isArray(b.parking_lots) ? b.parking_lots : [],
+      gate_phone: b.gate_phone ?? '',
       generator: !!b.generator,
       water_pump: !!b.water_pump,
       fire_suppression: !!b.fire_suppression,
@@ -213,6 +214,7 @@ function Buildings() {
       elevators: Number(form.elevators),
       max_gate_phones: form.max_gate_phones ? Number(form.max_gate_phones) : 2,
       parking_lots: (form.parking_lots || []).map(s => (s || '').trim()).filter(Boolean),
+      gate_phone: sanitizePhone(form.gate_phone || ''),
       generator: !!form.generator,
       water_pump: !!form.water_pump,
       fire_suppression: !!form.fire_suppression,
@@ -389,6 +391,7 @@ function Buildings() {
             <DetailRow label="שנת בנייה" value={detailBuilding.year_built} />
             <DetailRow label="חניות" value={detailBuilding.parking} />
             <DetailRow label="מחסנים" value={detailBuilding.storage} />
+            <DetailRow label="טלפון לפתיחת השער" value={detailBuilding.gate_phone} />
             <DetailRow label="מקס׳ טלפוני שער חניה" value={detailBuilding.max_gate_phones} />
             <DetailRow label="חניונים" value={Array.isArray(detailBuilding.parking_lots) && detailBuilding.parking_lots.length ? detailBuilding.parking_lots.join(', ') : null} />
             <DetailRow label="מעליות" value={detailBuilding.elevators} />
@@ -472,6 +475,16 @@ function Buildings() {
             {/* Parking */}
             <div>
               <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">חניה</h4>
+              <FormField
+                label="מספר טלפון לפתיחת השער (היעד שמחייגים אליו)"
+                type="tel"
+                value={form.gate_phone}
+                onChange={e => setField('gate_phone')(sanitizePhone(e.target.value))}
+                placeholder="למשל: 0501234567"
+              />
+              <p className="text-xs text-[var(--text-muted)] -mt-2 mb-3">
+                המספר של בקר השער. כפתור "פתח שער" בפורטל הדייר יחייג אליו.
+              </p>
               <FormField
                 label="מספר טלפונים מקסימלי לשער חניה (לכל דירה)"
                 type="number"
