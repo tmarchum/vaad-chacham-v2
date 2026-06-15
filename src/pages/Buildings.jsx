@@ -11,7 +11,8 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { Input } from '@/components/ui/input'
 import { formatCurrency, cn, sanitizePhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
-import { Building2, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Building2, Plus, Pencil, Trash2, X, DoorOpen } from 'lucide-react'
+import { openGate } from '@/lib/gate'
 
 const ELEVATOR_OPTIONS = [0,1,2,3,4,5].map(n => ({ value: String(n), label: String(n) }))
 
@@ -392,6 +393,18 @@ function Buildings() {
             <DetailRow label="חניות" value={detailBuilding.parking} />
             <DetailRow label="מחסנים" value={detailBuilding.storage} />
             <DetailRow label="טלפון לפתיחת השער" value={detailBuilding.gate_phone} />
+            {detailBuilding.gate_phone && (
+              <div className="py-1">
+                <Button type="button" size="sm" onClick={() => openGate(detailBuilding.gate_phone)}
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+                  <DoorOpen className="h-4 w-4" />
+                  פתח שער (בדיקה)
+                </Button>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                  במחשב — פותח חייגן/לא זמין; בנייד שמספרו מורשה בשער — פותח את השער.
+                </p>
+              </div>
+            )}
             <DetailRow label="מקס׳ טלפוני שער חניה" value={detailBuilding.max_gate_phones} />
             <DetailRow label="חניונים" value={Array.isArray(detailBuilding.parking_lots) && detailBuilding.parking_lots.length ? detailBuilding.parking_lots.join(', ') : null} />
             <DetailRow label="מעליות" value={detailBuilding.elevators} />
