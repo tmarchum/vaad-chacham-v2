@@ -37,9 +37,10 @@ public class AutoGateService extends Service {
     public static final String CH_ID = "vaadplus_autogate_ch";
     private static final int NOTIF_ID = 4711;
 
+    private static final long CALL_COOLDOWN_MS = 60_000L;
+
     private FusedLocationProviderClient fused;
     private LocationCallback callback;
-    private boolean inside = false;
 
     @Override
     public void onCreate() {
@@ -100,11 +101,27 @@ public class AutoGateService extends Service {
         Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), lat, lng, dist);
         float d = dist[0];
 
+        // State persists across service restarts so the OS restarting us while
+        // you're home does NOT re-open the gate.
+        boolean inside = p.getBoolean("inside", false);
+
+        // First fix after enabling: just record where we are WITHOUT calling, so
+        // turning the toggle on while already home never opens the gate. Only a
+        // genuine outside→inside arrival later triggers a call.
+        if (!p.getBoolean("primed", false)) {
+            p.edit().putBoolean("primed", true).putBoolean("inside", d <= radius).apply();
+            return;
+        }
+
         if (!inside && d <= radius) {
-            inside = true;
-            placeCall(number);
+            p.edit().putBoolean("inside", true).apply();
+            long now = System.currentTimeMillis();
+            if (now - p.getLong("lastCall", 0) > CALL_COOLDOWN_MS) {
+                p.edit().putLong("lastCall", now).apply();
+                placeCall(number);
+            }
         } else if (inside && d > radius * 1.4f) {
-            inside = false; // re-arm after leaving so the next arrival re-triggers
+            p.edit().putBoolean("inside", false).apply(); // re-arm after leaving
         }
     }
 

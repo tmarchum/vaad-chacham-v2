@@ -35,6 +35,10 @@ public class AutoGatePlugin extends Plugin {
                 .putLong("lng", Double.doubleToRawLongBits(lng))
                 .putInt("radius", radius)
                 .putString("number", number)
+                // Re-prime: the next location fix records position WITHOUT calling,
+                // so enabling while already home doesn't open the gate.
+                .putBoolean("primed", false)
+                .putBoolean("inside", false)
                 .apply();
         Intent svc = new Intent(ctx, AutoGateService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(svc);
