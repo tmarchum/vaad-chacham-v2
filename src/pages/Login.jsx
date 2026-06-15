@@ -77,6 +77,18 @@ export default function Login() {
         <p className="text-xs text-gray-400">
           הגישה מותרת לדיירים, חברי ועד ומנהלים בלבד
         </p>
+
+        {/* Android app download */}
+        <div className="border-t border-gray-100 pt-5">
+          <a
+            href="https://github.com/tmarchum/vaad-chacham-v2/releases/download/android-latest/vaadplus.apk"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-gray-800 transition-colors"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 16l-4-4h2.5V4h3v8H16l-4 4zm-7 2h14v2H5v-2z"/></svg>
+            הורד אפליקציית אנדרואיד
+          </a>
+          <p className="text-[11px] text-gray-400 mt-2">לאנדרואיד בלבד · התקנה ישירה (APK)</p>
+        </div>
       </div>
     </div>
   )
