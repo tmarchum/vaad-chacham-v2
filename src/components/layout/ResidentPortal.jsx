@@ -556,13 +556,19 @@ function AppDownloadBanner() {
 function GateOpenButton({ number }) {
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState(null)
+  const [diag, setDiag] = useState(null)
 
   const open = async () => {
-    setBusy(true); setHint(null)
+    setBusy(true); setHint(null); setDiag(null)
     try {
-      const mode = await openGate(number)
-      // 'direct' → the call went out with no dialer; 'dialer' → dialer opened.
-      if (mode === 'dialer') setHint('נפתח החייגן — לחצו "התקשר" כדי לפתוח את השער')
+      const res = await openGate(number)
+      // res.mode: 'direct' → call placed, no dialer; 'dialer' → fell back.
+      if (res.mode === 'dialer') {
+        setHint('נפתח החייגן — לחצו "התקשר" כדי לפתוח את השער')
+        // On the native app a dialer fallback means something went wrong —
+        // surface diagnostics so we can pinpoint it.
+        if (res.native) setDiag(res)
+      }
     } catch (e) {
       console.error('open gate error', e)
       setHint('שגיאה בפתיחת השער. נסו שוב.')
@@ -580,6 +586,11 @@ function GateOpenButton({ number }) {
         פתח שער
       </button>
       {hint && <p className="text-[11px] text-slate-500 text-center mt-2">{hint}</p>}
+      {diag && (
+        <p dir="ltr" className="text-[10px] text-slate-400 text-center mt-1 font-mono break-all">
+          plugin:{String(diag.pluginFound)} · err:{diag.error || 'none'} · build:{import.meta.env.VITE_BUILD || 'dev'}
+        </p>
+      )}
     </div>
   )
 }

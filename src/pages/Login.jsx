@@ -88,6 +88,7 @@ export default function Login() {
             הורד אפליקציית אנדרואיד
           </a>
           <p className="text-[11px] text-gray-400 mt-2">לאנדרואיד בלבד · התקנה ישירה (APK)</p>
+          <p dir="ltr" className="text-[10px] text-gray-300 mt-1 font-mono">build {import.meta.env.VITE_BUILD || 'dev'}</p>
         </div>
       </div>
     </div>
