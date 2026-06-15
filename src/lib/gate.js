@@ -31,7 +31,8 @@ function requestCallPermission() {
 
 function directCall(number) {
   return new Promise((resolve, reject) => {
-    const cn = window.cordova?.plugins?.CallNumber
+    // The cordova-plugin-call-number API is exposed at window.plugins.CallNumber.
+    const cn = window.plugins?.CallNumber || window.cordova?.plugins?.CallNumber
     if (!cn) return reject(new Error('CallNumber unavailable'))
     // bypassAppChooser = true → ACTION_CALL (direct, no dialer)
     cn.callNumber(() => resolve(true), (err) => reject(err), number, true)
