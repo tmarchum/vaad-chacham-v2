@@ -9,8 +9,11 @@ import {
   CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp,
   Wrench, CalendarDays, Users, Plus, X, Send, Loader2,
   UserCog, Mail, Phone, Pencil, Trash2, Ruler, Car, KeyRound,
-  Layers, Hash, StickyNote, Check, Star, DoorOpen,
+  Layers, Hash, StickyNote, Check, Star, DoorOpen, Download,
 } from 'lucide-react'
+
+// Stable public download URL — the Android workflow publishes the APK here.
+const ANDROID_APK_URL = 'https://github.com/tmarchum/vaad-chacham-v2/releases/download/android-latest/vaadplus.apk'
 
 const STATUS_MAP = {
   paid:    { label: 'שולם', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle2 },
@@ -205,6 +208,9 @@ export function ResidentPortal() {
               )}
             </p>
           </div>
+
+          {/* ── Download the Android app (web visitors on Android only) ── */}
+          <AppDownloadBanner />
 
           {/* ── Open gate — calls the gate controller from the resident's own
                (already-authorized) number. Native Android app → direct call, no
@@ -516,6 +522,28 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
         </form>
       </div>
     </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Download-the-app banner — shown to Android users browsing the web
+   portal (hidden once running inside the native app).
+   ════════════════════════════════════════════════════════════════ */
+function AppDownloadBanner() {
+  const inNativeApp = !!window.Capacitor?.isNativePlatform?.()
+  const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+  if (inNativeApp || !isAndroid) return null
+  return (
+    <a
+      href={ANDROID_APK_URL}
+      className="flex items-center gap-3 bg-slate-900 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-slate-800 transition-colors"
+    >
+      <Download className="h-5 w-5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-sm">הורד את אפליקציית האנדרואיד</p>
+        <p className="text-slate-300 text-[11px]">לפתיחת שער מהירה ועדכונים — התקנה ישירה</p>
+      </div>
+    </a>
   )
 }
 

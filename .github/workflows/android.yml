@@ -14,6 +14,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to publish the APK to a Release
     steps:
       - uses: actions/checkout@v4
 
@@ -46,9 +48,25 @@ jobs:
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk vaadplus.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: vaadplus-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: vaadplus.apk
           if-no-files-found: error
+
+      # Publish to a fixed-tag Release so the portal has a stable public
+      # download URL: .../releases/download/android-latest/vaadplus.apk
+      - name: Publish to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: אפליקציית וועד+ (אנדרואיד)
+          body: |
+            הגרסה האחרונה של אפליקציית האנדרואיד. הורד את vaadplus.apk והתקן בנייד.
+            (נבנה אוטומטית מ-${{ github.sha }})
+          files: vaadplus.apk
+          make_latest: 'true'
