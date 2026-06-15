@@ -16,10 +16,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Fixed keystore so every build is signed identically — APK updates install
+    // over the previous version without uninstalling.
+    signingConfigs {
+        shared {
+            storeFile file('vaadplus.keystore')
+            storePassword 'vaadplus'
+            keyAlias 'vaadplus'
+            keyPassword 'vaadplus'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.shared
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.shared
         }
     }
 }
