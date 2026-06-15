@@ -7,5 +7,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    // PKCE so the native app can complete OAuth via a deep-link redirect
+    // (we exchange the ?code= ourselves in useAuth on appUrlOpen).
+    flowType: 'pkce',
   }
 })

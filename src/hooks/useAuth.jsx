@@ -1,5 +1,11 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { Browser } from '@capacitor/browser'
+import { App } from '@capacitor/app'
 import { supabase } from '@/lib/supabase'
+
+// Deep link the OAuth redirect comes back to inside the native app.
+const NATIVE_REDIRECT = 'vaadplus://auth-callback'
 
 const AuthContext = createContext(null)
 
@@ -67,13 +73,41 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe()
   }, [fetchProfile])
 
+  // Native app only: when Google OAuth redirects back to the app via the
+  // vaadplus:// deep link, complete the PKCE exchange and close the browser.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    let handle
+    App.addListener('appUrlOpen', async ({ url }) => {
+      if (!url || !url.includes('code=')) return
+      const code = (() => {
+        try { return new URL(url).searchParams.get('code') } catch { return null }
+      })() || url.match(/[?&]code=([^&]+)/)?.[1]
+      if (!code) return
+      try {
+        await supabase.auth.exchangeCodeForSession(code)
+      } catch (e) {
+        console.error('exchangeCodeForSession error', e)
+      }
+      try { await Browser.close() } catch { /* may already be closed */ }
+    }).then(h => { handle = h })
+    return () => { handle?.remove?.() }
+  }, [])
+
   const signInWithGoogle = useCallback(async () => {
-    await supabase.auth.signInWithOAuth({
+    const native = Capacitor.isNativePlatform()
+    const { data } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
-      }
+        redirectTo: native ? NATIVE_REDIRECT : window.location.origin,
+        // In the app, open the OAuth page ourselves (in an in-app browser tab)
+        // so the vaadplus:// redirect lands back in the app.
+        skipBrowserRedirect: native,
+      },
     })
+    if (native && data?.url) {
+      await Browser.open({ url: data.url })
+    }
   }, [])
 
   const signOut = useCallback(async () => {
