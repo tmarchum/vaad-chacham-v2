@@ -66,6 +66,19 @@ public class AutoGatePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void status(PluginCall call) {
+        SharedPreferences p = getContext().getSharedPreferences(AutoGateService.PREFS, Context.MODE_PRIVATE);
+        JSObject r = new JSObject();
+        r.put("enabled", p.getBoolean("enabled", false));
+        r.put("inside", p.getBoolean("inside", false));
+        r.put("primed", p.getBoolean("primed", false));
+        r.put("lastDist", p.getFloat("lastDist", -1f));
+        r.put("lastUpdate", p.getLong("lastUpdate", 0));
+        r.put("lastCall", p.getLong("lastCall", 0));
+        call.resolve(r);
+    }
+
+    @PluginMethod
     public void openBatterySettings(PluginCall call) {
         startSettings(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, true);
         call.resolve();

@@ -6,6 +6,7 @@ import { openGate } from '@/lib/gate'
 import {
   autoGateSupported, requestAutoGatePermissions, enableAutoGate,
   disableAutoGate, isAutoGateRunning, openBatterySettings,
+  openOverlaySettings, autoGateStatus,
 } from '@/lib/autoGate'
 import { ResidentBooking } from './ResidentBooking'
 import {
@@ -611,11 +612,16 @@ function AutoGateToggle({ building }) {
   const [on, setOn] = useState(false)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [stat, setStat] = useState(null)
 
   useEffect(() => {
     let active = true
     isAutoGateRunning().then(v => { if (active) setOn(v) })
-    return () => { active = false }
+    // Poll the background service status so the user can see it working live.
+    const tick = () => autoGateStatus().then(s => { if (active) setStat(s) })
+    tick()
+    const id = setInterval(tick, 5000)
+    return () => { active = false; clearInterval(id) }
   }, [])
 
   // Only meaningful inside the native Android app.
@@ -672,10 +678,21 @@ function AutoGateToggle({ building }) {
       </div>
       {msg && <p className="text-[11px] text-slate-500">{msg}</p>}
       {on && (
-        <button onClick={openBatterySettings}
-          className="w-full text-[11px] text-blue-600 font-medium underline-offset-2 hover:underline text-right">
-          הגדרות סוללה — בטל אופטימיזציה לאפליקציה ›
-        </button>
+        <div className="space-y-1.5 pt-1 border-t border-slate-100">
+          <button onClick={openBatterySettings}
+            className="block w-full text-[11px] text-blue-600 font-medium hover:underline text-right">
+            1. בטל אופטימיזציית סוללה לאפליקציה ›
+          </button>
+          <button onClick={openOverlaySettings}
+            className="block w-full text-[11px] text-blue-600 font-medium hover:underline text-right">
+            2. אפשר "הצגה מעל אפליקציות אחרות" (נדרש לחיוג ברקע) ›
+          </button>
+          {stat && (
+            <p dir="ltr" className="text-[10px] text-slate-400 font-mono break-all pt-1">
+              dist:{stat.lastDist >= 0 ? Math.round(stat.lastDist) + 'm' : '—'} · upd:{stat.lastUpdate ? Math.round((Date.now() - stat.lastUpdate) / 1000) + 's ago' : 'never'} · inside:{String(stat.inside)} · primed:{String(stat.primed)}
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

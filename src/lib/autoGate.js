@@ -49,5 +49,11 @@ export async function isAutoGateRunning() {
   try { return !!(await AutoGate.isRunning()).enabled } catch { return false }
 }
 
+// Live diagnostics from the background service (distance, last update, etc.).
+export async function autoGateStatus() {
+  if (!autoGateSupported()) return null
+  try { return await AutoGate.status() } catch { return null }
+}
+
 export const openBatterySettings = () => autoGateSupported() && AutoGate.openBatterySettings()
 export const openOverlaySettings = () => autoGateSupported() && AutoGate.openOverlaySettings()

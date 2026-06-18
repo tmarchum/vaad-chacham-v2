@@ -101,6 +101,10 @@ public class AutoGateService extends Service {
         Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), lat, lng, dist);
         float d = dist[0];
 
+        // Live diagnostics: persist + show distance so the whole flow is visible.
+        p.edit().putFloat("lastDist", d).putLong("lastUpdate", System.currentTimeMillis()).apply();
+        updateNotification("מרחק לשער: " + Math.round(d) + " מ' (טווח " + radius + ")");
+
         // State persists across service restarts so the OS restarting us while
         // you're home does NOT re-open the gate.
         boolean inside = p.getBoolean("inside", false);
@@ -119,10 +123,16 @@ public class AutoGateService extends Service {
             if (now - p.getLong("lastCall", 0) > CALL_COOLDOWN_MS) {
                 p.edit().putLong("lastCall", now).apply();
                 placeCall(number);
+                updateNotification("חייגתי לשער בהגעה ✓ (" + Math.round(d) + " מ')");
             }
         } else if (inside && d > radius * 1.4f) {
             p.edit().putBoolean("inside", false).apply(); // re-arm after leaving
         }
+    }
+
+    private void updateNotification(String text) {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm != null) nm.notify(NOTIF_ID, buildNotification(text));
     }
 
     private void placeCall(String number) {
