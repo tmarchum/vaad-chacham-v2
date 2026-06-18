@@ -54,6 +54,18 @@ function Dashboard() {
   const { data: allDocuments } = useCollection('documents')
   const { data: allVendors } = useCollection('vendors')
   const { data: allRecurringTasks } = useCollection('recurringTasks')
+  const { data: allBankAccounts } = useCollection('bankAccounts')
+
+  // Warn if a bank scrape hasn't run in a while — catches the import silently
+  // stalling (which is how transactions stopped flowing in unnoticed).
+  const STALE_DAYS = 4
+  const staleScrape = (allBankAccounts || [])
+    .filter(a => (a.is_active ?? a.isActive) !== false)
+    .filter(a => {
+      const scraped = a.last_scraped_at || a.lastScrapedAt
+      if (!scraped) return true
+      return (Date.now() - new Date(scraped).getTime()) > STALE_DAYS * 86400000
+    })
 
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -299,6 +311,18 @@ function Dashboard() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+
+      {/* ── Stale bank-scrape warning ── */}
+      {staleScrape.length > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle className="h-5 w-5 shrink-0" />
+          <span>
+            ייבוא תנועות הבנק לא רץ ביותר מ-{STALE_DAYS} ימים
+            {staleScrape.some(a => a.label) ? ` (${staleScrape.map(a => a.label).filter(Boolean).join(', ')})` : ''} —
+            ייתכן שתנועות חדשות לא נקלטות. כדאי להריץ את הסורק.
+          </span>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════
           ── Welcome banner ──
