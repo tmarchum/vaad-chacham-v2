@@ -312,42 +312,69 @@ export default function BankTransactions() {
   }
 
   // Auto-match: try to match unmatched credits to units by resident name
+  // Deterministic, explainable scoring of a transaction against a unit.
+  // (Deterministic on purpose — financial matching must not be hallucinated.)
+  const scoreTxUnit = (tx, unit) => {
+    const desc = (tx.description || '').toLowerCase()
+    const txParts = extractNameParts(tx.description).map(p => p.toLowerCase())
+    const name = residentMap[unit.id] || ''
+    const nameParts = name.split(/\s+/).filter(p => p.length >= 3).map(p => p.toLowerCase())
+    const nameHits = nameParts.filter(np =>
+      desc.includes(np) || txParts.some(tp => tp.includes(np) || np.includes(tp))
+    ).length
+    const credit = Number(tx.credit) || 0
+    const fee = calcUnitFee(unit, selectedBuilding)
+    const num = String(unit.number || unit.unit_number || '')
+    const numMatch = !!num && new RegExp(`(^|\\D)${num}(\\D|$)`).test(desc)
+    const amountMatch = fee > 0 && Math.abs(credit - fee) <= 1
+    const tooBig = fee > 0 && credit > fee * 2
+    const score = nameHits * 10 + (numMatch ? 5 : 0) + (amountMatch ? 4 : 0) - (tooBig ? 100 : 0)
+    return { score, nameHits, numMatch, amountMatch }
+  }
+
   const handleAutoMatch = async () => {
     const unmatched = transactions.filter(tx => tx.match_status === 'unmatched' && Number(tx.credit) > 0)
-    let matched = 0
+    let matched = 0, suggested = 0
+    const creditsByUnit = {} // unitId -> { month -> total } for payment sync
 
     for (const tx of unmatched) {
-      const desc = (tx.description || '').toLowerCase()
-      const fee = calcUnitFee(tx, selectedBuilding)
-      // Skip high-amount transactions (likely not regular payments)
-      if (Number(tx.credit) > 1500) continue
-      // Try to find a unit whose resident name appears in the transaction description
+      let best = null
       for (const unit of units) {
-        const name = residentMap[unit.id]
-        if (!name) continue
-        const parts = name.split(' ').filter(p => p.length >= 3)
-        const matchingParts = parts.filter(part => desc.includes(part.toLowerCase()))
-        // Require at least 2 matching name parts (first + last name)
-        if (parts.length >= 2 && matchingParts.length >= 2) {
-          const unitFee = calcUnitFee(unit, selectedBuilding)
-          if (Number(tx.credit) > unitFee * 2) continue
-          await updateTx(tx.id, { unit_id: unit.id, match_status: 'matched', month: monthKey })
-          matched++
-          break
+        if (!residentMap[unit.id]) continue
+        const s = scoreTxUnit(tx, unit)
+        if (!best || s.score > best.score) best = { unit, ...s }
+      }
+      if (!best || best.score <= 0) continue
+      // High confidence → auto-match. Otherwise → suggest for human approval.
+      const high = best.nameHits >= 2 || (best.nameHits >= 1 && (best.amountMatch || best.numMatch))
+      const medium = best.nameHits >= 1 || (best.numMatch && best.amountMatch)
+      if (high) {
+        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'matched', month: monthKey })
+        const m = tx.month || monthKey
+        if (!creditsByUnit[best.unit.id]) {
+          creditsByUnit[best.unit.id] = {}
+          allTx.filter(t => t.building_id === selectedBuilding?.id && t.match_status === 'matched' && t.unit_id === best.unit.id)
+            .forEach(t => { const mm = t.month || monthKey; creditsByUnit[best.unit.id][mm] = (creditsByUnit[best.unit.id][mm] || 0) + (Number(t.credit) || 0) })
         }
+        creditsByUnit[best.unit.id][m] = (creditsByUnit[best.unit.id][m] || 0) + (Number(tx.credit) || 0)
+        matched++
+      } else if (medium) {
+        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'suggested', month: monthKey })
+        suggested++
       }
     }
 
-    if (matched > 0) {
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: `שויכו ${matched} תנועות אוטומטית`, type: 'success' }
-      }))
-    } else {
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'לא נמצאו התאמות אוטומטיות', type: 'warning' }
-      }))
-    }
     await refresh()
+    for (const [unitId, byMonth] of Object.entries(creditsByUnit)) {
+      for (const [month, total] of Object.entries(byMonth)) await syncPayment(unitId, month, total)
+    }
+
+    const msg = matched || suggested
+      ? `שויכו ${matched} אוטומטית${suggested ? `, ${suggested} הצעות לאישור` : ''}`
+      : 'לא נמצאו התאמות'
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: msg, type: matched || suggested ? 'success' : 'warning' }
+    }))
   }
 
   // Assign a category to a transaction + auto-apply to all matching descriptions
@@ -413,7 +440,7 @@ export default function BankTransactions() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleAutoMatch} className="gap-2">
               <Link2 className="h-4 w-4" />
-              שיוך אוטומטי
+              שיוך חכם
             </Button>
             <Button variant="outline" onClick={() => setPaymentSummaryOpen(true)} className="gap-2">
               <CheckCircle2 className="h-4 w-4" />
