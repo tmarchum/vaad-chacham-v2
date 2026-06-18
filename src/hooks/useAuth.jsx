@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core'
 import { Browser } from '@capacitor/browser'
 import { App } from '@capacitor/app'
 import { supabase } from '@/lib/supabase'
+import { registerPush } from '@/lib/push'
 
 // Deep link the OAuth redirect comes back to inside the native app.
 const NATIVE_REDIRECT = 'vaadplus://auth-callback'
@@ -61,6 +62,7 @@ export function AuthProvider({ children }) {
       const u = session?.user ?? null
       setUser(u)
       fetchProfile(u?.id, u?.email).finally(() => setLoading(false))
+      if (u?.id) registerPush(u.id)
     })
 
     // Listen for auth changes
@@ -68,6 +70,7 @@ export function AuthProvider({ children }) {
       const u = session?.user ?? null
       setUser(u)
       fetchProfile(u?.id, u?.email)
+      if (u?.id) registerPush(u.id)
     })
 
     return () => subscription.unsubscribe()
