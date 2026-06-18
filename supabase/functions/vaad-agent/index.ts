@@ -407,8 +407,10 @@ Deno.serve(async (req: Request) => {
 
     const anthropic = new Anthropic({ apiKey })
 
+    // Model is configurable via the CLAUDE_MODEL secret; defaults to the
+    // latest Sonnet (much faster + smarter than Sonnet 4 for the same cost).
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-4-6',
       max_tokens: 2000,
       system: SYSTEM_PROMPTS[agentType],
       messages: [
