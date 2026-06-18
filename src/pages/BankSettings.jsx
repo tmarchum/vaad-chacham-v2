@@ -372,6 +372,11 @@ export default function BankSettings() {
             {bankFields.length > 0 && (
               <div className="border-t pt-4 space-y-3">
                 <p className="text-sm font-medium text-[var(--text-secondary)]">פרטי התחברות</p>
+                {editingId && (
+                  <p className="text-xs text-[var(--text-muted)] -mt-1">
+                    מטעמי אבטחה הסיסמה אינה מוצגת. השאר ריק כדי לשמור את הסיסמה הקיימת, או מלא כדי להחליף.
+                  </p>
+                )}
                 {bankFields.map((field) => (
                   <div key={field.key} className="relative">
                     <FormField
