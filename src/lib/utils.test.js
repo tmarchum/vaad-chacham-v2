@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calcUnitFee, sanitizePhone, isValidPhone } from './utils'
+import { calcUnitFee, sanitizePhone, isValidPhone, sortByUnitNumber, parseJson } from './utils'
 
 describe('calcUnitFee', () => {
   it('returns 0 for missing unit or building', () => {
@@ -82,5 +82,24 @@ describe('isValidPhone', () => {
     expect(isValidPhone('05012345678')).toBe(false)
     expect(isValidPhone('05012a4567')).toBe(false)
     expect(isValidPhone(null)).toBe(false)
+  })
+})
+
+describe('sortByUnitNumber', () => {
+  it('sorts numerically, not lexically', () => {
+    const units = [{ number: '10' }, { number: '2' }, { number: '1' }, { unit_number: '21' }]
+    const sorted = [...units].sort(sortByUnitNumber).map(u => u.number || u.unit_number)
+    expect(sorted).toEqual(['1', '2', '10', '21'])
+  })
+})
+
+describe('parseJson', () => {
+  it('parses valid JSON', () => {
+    expect(parseJson('{"a":1}')).toEqual({ a: 1 })
+  })
+  it('returns fallback on invalid/null', () => {
+    expect(parseJson('not json', 'fb')).toBe('fb')
+    expect(parseJson(null, 'fb')).toBe('fb')
+    expect(parseJson('null', 'fb')).toBe('fb')
   })
 })
