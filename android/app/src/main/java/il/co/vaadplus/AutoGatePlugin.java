@@ -39,6 +39,7 @@ public class AutoGatePlugin extends Plugin {
                 // so enabling while already home doesn't open the gate.
                 .putBoolean("primed", false)
                 .putBoolean("inside", false)
+                .putString("log", "")
                 .apply();
         Intent svc = new Intent(ctx, AutoGateService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(svc);
@@ -75,6 +76,7 @@ public class AutoGatePlugin extends Plugin {
         r.put("lastDist", p.getFloat("lastDist", -1f));
         r.put("lastUpdate", p.getLong("lastUpdate", 0));
         r.put("lastCall", p.getLong("lastCall", 0));
+        r.put("log", p.getString("log", ""));
         call.resolve(r);
     }
 

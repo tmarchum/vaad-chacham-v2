@@ -688,9 +688,16 @@ function AutoGateToggle({ building }) {
             2. אפשר "הצגה מעל אפליקציות אחרות" (נדרש לחיוג ברקע) ›
           </button>
           {stat && (
-            <p dir="ltr" className="text-[10px] text-slate-400 font-mono break-all pt-1">
-              dist:{stat.lastDist >= 0 ? Math.round(stat.lastDist) + 'm' : '—'} · upd:{stat.lastUpdate ? Math.round((Date.now() - stat.lastUpdate) / 1000) + 's ago' : 'never'} · inside:{String(stat.inside)} · primed:{String(stat.primed)}
-            </p>
+            <>
+              <p dir="ltr" className="text-[10px] text-slate-400 font-mono break-all pt-1">
+                dist:{stat.lastDist >= 0 ? Math.round(stat.lastDist) + 'm' : '—'} · upd:{stat.lastUpdate ? Math.round((Date.now() - stat.lastUpdate) / 1000) + 's ago' : 'never'} · inside:{String(stat.inside)} · primed:{String(stat.primed)}
+              </p>
+              {stat.log ? (
+                <pre dir="ltr" className="text-[9px] text-slate-500 bg-slate-50 rounded-lg p-2 mt-1 whitespace-pre-wrap break-all max-h-32 overflow-auto">{stat.log}</pre>
+              ) : (
+                <p dir="ltr" className="text-[9px] text-slate-400 mt-1">log empty — no events yet</p>
+              )}
+            </>
           )}
         </div>
       )}

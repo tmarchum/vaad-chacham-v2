@@ -15,6 +15,10 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 
@@ -55,6 +59,7 @@ public class AutoGateService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        log(p, "service started");
         startInForeground();
         startLocationUpdates();
         return START_STICKY;
@@ -85,6 +90,7 @@ public class AutoGateService extends Service {
         try {
             fused.requestLocationUpdates(req, callback, Looper.getMainLooper());
         } catch (SecurityException e) {
+            log(getSharedPreferences(PREFS, MODE_PRIVATE), "location permission denied");
             stopSelf();
         }
     }
@@ -114,6 +120,7 @@ public class AutoGateService extends Service {
         // genuine outside→inside arrival later triggers a call.
         if (!p.getBoolean("primed", false)) {
             p.edit().putBoolean("primed", true).putBoolean("inside", d <= radius).apply();
+            log(p, "primed (d=" + Math.round(d) + "m, inside=" + (d <= radius) + ")");
             return;
         }
 
@@ -122,11 +129,15 @@ public class AutoGateService extends Service {
             long now = System.currentTimeMillis();
             if (now - p.getLong("lastCall", 0) > CALL_COOLDOWN_MS) {
                 p.edit().putLong("lastCall", now).apply();
-                placeCall(number);
+                log(p, "ARRIVE d=" + Math.round(d) + "m → calling");
+                placeCall(p, number);
                 updateNotification("חייגתי לשער בהגעה ✓ (" + Math.round(d) + " מ')");
+            } else {
+                log(p, "arrive d=" + Math.round(d) + "m (cooldown, skipped)");
             }
         } else if (inside && d > radius * 1.4f) {
             p.edit().putBoolean("inside", false).apply(); // re-arm after leaving
+            log(p, "left d=" + Math.round(d) + "m → re-armed");
         }
     }
 
@@ -135,14 +146,30 @@ public class AutoGateService extends Service {
         if (nm != null) nm.notify(NOTIF_ID, buildNotification(text));
     }
 
-    private void placeCall(String number) {
+    private void placeCall(SharedPreferences p, String number) {
         try {
             Intent call = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + number));
             call.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(call);
+            log(p, "call sent OK");
         } catch (Exception e) {
             // CALL_PHONE missing or background-activity-start blocked (needs overlay perm)
+            log(p, "call FAIL: " + e.getClass().getSimpleName() + " " + e.getMessage());
         }
+    }
+
+    // Rolling in-app event log (newest first, ~12 lines) so we can see what the
+    // background service did without device logcat access.
+    private void log(SharedPreferences p, String msg) {
+        String stamp = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
+        String combined = stamp + " " + msg + "\n" + p.getString("log", "");
+        String[] lines = combined.split("\n");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(lines.length, 12); i++) {
+            if (i > 0) sb.append("\n");
+            sb.append(lines[i]);
+        }
+        p.edit().putString("log", sb.toString()).apply();
     }
 
     private Notification buildNotification(String text) {
