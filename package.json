@@ -17,6 +17,7 @@
     "@capacitor/cli": "^8.4.0",
     "@capacitor/core": "^8.4.0",
     "@hebcal/core": "^6.2.0",
+    "@sentry/react": "^10.58.0",
     "@supabase/supabase-js": "^2.100.1",
     "@tailwindcss/vite": "^4.2.2",
     "clsx": "^2.1.1",

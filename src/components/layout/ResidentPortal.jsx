@@ -327,6 +327,15 @@ export function ResidentPortal() {
                 טרם הופק חיוב לחודש {currentMonth}
               </div>
             )}
+
+            {/* Pay dues — opens the building's PayBox/Bit link */}
+            {building?.dues_payment_url && (
+              <a href={building.dues_payment_url} target="_blank" rel="noopener noreferrer"
+                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
+                <CreditCard className="h-4 w-4" />
+                שלם דמי ועד
+              </a>
+            )}
           </div>
 
           {/* ── Payment history ── */}

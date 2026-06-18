@@ -1,11 +1,21 @@
 import { StrictMode, Component, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import * as Sentry from '@sentry/react'
+
+// Error monitoring — inert until VITE_SENTRY_DSN is set (add it in Vercel env).
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: 0.1,
+  })
+}
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
-  componentDidCatch(error, info) { console.error('App crash:', error, info) }
+  componentDidCatch(error, info) { console.error('App crash:', error, info); Sentry.captureException(error) }
   render() {
     if (this.state.error) {
       return (

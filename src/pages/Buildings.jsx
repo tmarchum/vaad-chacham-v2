@@ -97,7 +97,7 @@ const EMPTY_FORM = {
   name: '', alias: '', street: '', house_number: '', city: '',
   total_units: '', floors: '', year_built: '',
   parking: '', storage: '', elevators: '0',
-  max_gate_phones: '', parking_lots: [], gate_phone: '',
+  max_gate_phones: '', parking_lots: [], gate_phone: '', dues_payment_url: '',
   generator: false, water_pump: false, fire_suppression: false,
   intercom: false, shared_roof: false, gym: false, pool: false,
   residents_room: false, management_company: false,
@@ -174,6 +174,7 @@ function Buildings() {
       max_gate_phones: b.max_gate_phones ?? '',
       parking_lots: Array.isArray(b.parking_lots) ? b.parking_lots : [],
       gate_phone: b.gate_phone ?? '',
+      dues_payment_url: b.dues_payment_url ?? '',
       generator: !!b.generator,
       water_pump: !!b.water_pump,
       fire_suppression: !!b.fire_suppression,
@@ -216,6 +217,7 @@ function Buildings() {
       max_gate_phones: form.max_gate_phones ? Number(form.max_gate_phones) : 2,
       parking_lots: (form.parking_lots || []).map(s => (s || '').trim()).filter(Boolean),
       gate_phone: sanitizePhone(form.gate_phone || ''),
+      dues_payment_url: (form.dues_payment_url || '').trim(),
       generator: !!form.generator,
       water_pump: !!form.water_pump,
       fire_suppression: !!form.fire_suppression,
@@ -497,6 +499,15 @@ function Buildings() {
               />
               <p className="text-xs text-[var(--text-muted)] -mt-2 mb-3">
                 המספר של בקר השער. כפתור "פתח שער" בפורטל הדייר יחייג אליו.
+              </p>
+              <FormField
+                label="קישור לתשלום דמי ועד (PayBox / ביט)"
+                value={form.dues_payment_url}
+                onChange={setField('dues_payment_url')}
+                placeholder="https://payboxapp.page.link/..."
+              />
+              <p className="text-xs text-[var(--text-muted)] -mt-2 mb-3">
+                כפתור "שלם דמי ועד" בפורטל הדייר יפתח את הקישור הזה.
               </p>
               <FormField
                 label="מספר טלפונים מקסימלי לשער חניה (לכל דירה)"
