@@ -865,6 +865,13 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
     onCreated()
   }
 
+  // Resident rates a resolved issue → secure RPC → feeds the vendor's reputation.
+  const rateIssue = async (issueId, rating) => {
+    const { error } = await supabase.rpc('rate_resolved_issue', { p_issue: issueId, p_rating: rating })
+    if (error) { console.error('rate issue error', error); return }
+    onCreated()
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center justify-between mb-3">
@@ -926,15 +933,28 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
         <div className="space-y-2">
           {issues.map(i => {
             const st = ISSUE_STATUS_MAP[i.status] || ISSUE_STATUS_MAP.reported
+            const ratable = ['resolved', 'closed'].includes(i.status)
+            const rated = i.resident_rating || 0
             return (
-              <div key={i.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">{i.title}</p>
-                  <p className="text-xs text-slate-400">
-                    {i.category ? `${i.category} • ` : ''}{i.created_at ? formatDate(i.created_at) : ''}
-                  </p>
+              <div key={i.id} className="py-2 px-3 rounded-lg bg-slate-50">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{i.title}</p>
+                    <p className="text-xs text-slate-400">
+                      {i.category ? `${i.category} • ` : ''}{i.created_at ? formatDate(i.created_at) : ''}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${st.bg} ${st.color}`}>{st.label}</span>
                 </div>
-                <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${st.bg} ${st.color}`}>{st.label}</span>
+                {ratable && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400">{rated ? 'דירגת את הטיפול:' : 'דרג/י את הטיפול:'}</span>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} type="button" disabled={!!rated} onClick={() => rateIssue(i.id, n)}
+                        className={`text-base leading-none ${n <= rated ? 'text-amber-400' : 'text-slate-300'} ${!rated ? 'hover:text-amber-400' : ''}`}>★</button>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
