@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { useAuth } from '@/hooks/useAuth'
+import { upcomingMaintenance } from '@/lib/maintenance'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
@@ -20,6 +21,7 @@ import {
   ChevronLeft,
   Building2,
   Clock,
+  CalendarClock,
   ShieldAlert,
 } from 'lucide-react'
 import { HEBREW_MONTHS } from '@/lib/constants'
@@ -55,6 +57,18 @@ function Dashboard() {
   const { data: allVendors } = useCollection('vendors')
   const { data: allRecurringTasks } = useCollection('recurringTasks')
   const { data: allBankAccounts } = useCollection('bankAccounts')
+  const { data: allBuildingAssets } = useCollection('buildingAssets')
+
+  // Proactive maintenance — upcoming/overdue services, legal inspections, certs.
+  const maintenanceDue = useMemo(() => {
+    const bid = selectedBuilding?.id
+    const f = (arr) => (arr || []).filter((x) => !bid || x.building_id === bid || x.buildingId === bid)
+    return upcomingMaintenance({
+      assets: f(allBuildingAssets),
+      compliance: f(allCompliance),
+      recurringTasks: f(allRecurringTasks),
+    }, 45).slice(0, 6)
+  }, [allBuildingAssets, allCompliance, allRecurringTasks, selectedBuilding])
 
   // Warn if a bank scrape hasn't run in a while — catches the import silently
   // stalling (which is how transactions stopped flowing in unnoticed).
@@ -322,6 +336,34 @@ function Dashboard() {
             ייתכן שתנועות חדשות לא נקלטות. כדאי להריץ את הסורק.
           </span>
         </div>
+      )}
+
+      {/* ── Proactive maintenance — upcoming/overdue services & legal certs ── */}
+      {maintenanceDue.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarClock className="h-4 w-4 text-amber-500" />
+              תחזוקה מתקרבת
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-1.5">
+              {maintenanceDue.map((m, i) => (
+                <Link key={i} to="/recurring-tasks"
+                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm hover:bg-[var(--bg-secondary)] transition-colors">
+                  <span className="flex items-center gap-2 min-w-0">
+                    {m.requiredByLaw && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 shrink-0">חוק</span>}
+                    <span className="truncate text-[var(--text-primary)]">{m.title}</span>
+                  </span>
+                  <span className={`text-xs shrink-0 font-medium ${m.overdue ? 'text-red-600' : m.daysUntil <= 7 ? 'text-amber-600' : 'text-[var(--text-muted)]'}`}>
+                    {m.overdue ? `באיחור ${Math.abs(m.daysUntil)} ימים` : m.daysUntil === 0 ? 'היום' : `בעוד ${m.daysUntil} ימים`}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
