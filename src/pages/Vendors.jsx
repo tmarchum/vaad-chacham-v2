@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
 import { cn } from '@/lib/utils'
+import { vendorReputation } from '@/lib/reputation'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
   Shield, Clock, Search, BarChart3, GitCompare,
@@ -108,6 +109,7 @@ function getVendorStats(vendor, workOrders) {
     totalSpent,
     avgResponseDays,
     onTimeRate,
+    reputation: vendorReputation(vendor, workOrders),
   }
 }
 
@@ -195,6 +197,15 @@ function VendorCard({ vendor, stats, onClick, compareMode, isSelected, onToggleC
             {/* Rating */}
             {vendor.rating > 0 && (
               <StarRating rating={vendor.rating} />
+            )}
+            {/* Reputation flag from completed-job ratings */}
+            {stats?.reputation?.flag && stats.reputation.flag !== 'good' && (
+              <span className={`mt-1 inline-block text-[10px] px-1.5 py-0.5 rounded ${
+                stats.reputation.flag === 'blacklist' ? 'bg-red-50 text-red-600'
+                : stats.reputation.flag === 'watch' ? 'bg-amber-50 text-amber-600'
+                : 'bg-emerald-50 text-emerald-600'}`}>
+                {stats.reputation.label} ({stats.reputation.jobCount} עבודות)
+              </span>
             )}
           </div>
         </div>
