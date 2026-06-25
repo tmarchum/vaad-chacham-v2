@@ -16,6 +16,7 @@ import { SearchBar } from '@/components/common/SearchBar';
 import { StatCard } from '@/components/common/StatCard';
 import { FilterPills } from '@/components/common/FilterPills';
 import { formatDate } from '@/lib/utils';
+import { requiredApproval } from '@/lib/approval';
 import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus,
@@ -206,21 +207,21 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
           </div>
 
           {/* Cost section */}
-          {(order.estimatedCost || order.actualCost) && (
-            <div className="text-left min-w-[90px] shrink-0">
-              {order.actualCost ? (
-                <>
-                  <div className="text-[14px] font-bold text-[var(--text-primary)]">{formatCost(order.actualCost)}</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">בפועל</div>
-                </>
-              ) : (
-                <>
-                  <div className="text-[14px] font-bold text-[var(--text-primary)]">{formatCost(order.estimatedCost)}</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">הערכה</div>
-                </>
-              )}
-            </div>
-          )}
+          {(order.estimatedCost || order.actualCost) && (() => {
+            const approval = requiredApproval(order.actualCost || order.estimatedCost)
+            const approved = !!(order.approvedAt || order.approved_at)
+            return (
+              <div className="text-left min-w-[90px] shrink-0">
+                <div className="text-[14px] font-bold text-[var(--text-primary)]">{formatCost(order.actualCost || order.estimatedCost)}</div>
+                <div className="text-[11px] text-[var(--text-muted)]">{order.actualCost ? 'בפועל' : 'הערכה'}</div>
+                {approval.needsApproval && (
+                  <div className={`mt-0.5 text-[10px] px-1.5 py-0.5 rounded inline-block ${approved ? 'bg-emerald-50 text-emerald-600' : approval.level === 'board' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                    {approved ? '✓ אושר' : `דורש: ${approval.label}`}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Status with dot */}
           <div className="flex items-center gap-2 min-w-[80px] shrink-0">
