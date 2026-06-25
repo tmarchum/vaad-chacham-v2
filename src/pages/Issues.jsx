@@ -17,6 +17,8 @@ import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
+import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
+import { analyzeQuotes } from '@/lib/quotes'
 import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
   FileText, Calendar, Users, LayoutList, Columns3,
@@ -394,12 +396,15 @@ function Issues() {
   )
 
   // Suggested vendors for the issue being edited — the "dispatcher".
+  const issueForMatch = { category: form.category, title: form.title, priority: form.priority }
   const suggestedVendors = useMemo(
-    () => rankVendorsForIssue(
-      { category: form.category, title: form.title, priority: form.priority },
-      allVendors,
-    ).slice(0, 3),
-    [form.category, form.title, form.priority, allVendors]
+    () => rankVendorsForIssue(issueForMatch, allVendors).slice(0, 3),
+    [form.category, form.title, form.priority, allVendors] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  // Emergency on-call vendor for urgent issues.
+  const emergencyVendor = useMemo(
+    () => (isEmergency(issueForMatch) ? emergencyVendorFor(issueForMatch, allVendors) : null),
+    [form.category, form.title, form.priority, allVendors] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const vendorFilterOptions = useMemo(
@@ -1145,6 +1150,21 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               {issueQuotes.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-[var(--border)]">
                   <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">הצעות מחיר ({issueQuotes.length})</h4>
+                  {(() => {
+                    const a = analyzeQuotes(issueQuotes.map(q => ({ ...q, valid_until: q.validUntil, amount: q.amount })), { requireMin: 3 })
+                    if (a.count === 0) return null
+                    return (
+                      <div className="mb-3 rounded-lg bg-[var(--bg-secondary)] p-2.5 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[var(--text-secondary)]">מומלצת (הזולה התקפה)</span>
+                          <span className="font-bold text-emerald-600">{a.recommended.vendorName} · {formatCurrency(a.recommended.amount)}</span>
+                        </div>
+                        {a.count > 1 && <div className="flex items-center justify-between"><span className="text-[var(--text-secondary)]">פער בין הצעות</span><span className={a.spreadPct > 30 ? 'text-amber-600 font-medium' : 'text-[var(--text-muted)]'}>{a.spreadPct}%</span></div>}
+                        {a.outliers.length > 0 && <p className="text-amber-600">⚠ {a.outliers.length} הצעות גבוהות ב-30%+ מהחציון</p>}
+                        {a.needsMore && <p className="text-red-600">⚠ חסרות {a.missing} הצעות (מומלץ 3 לפני אישור)</p>}
+                      </div>
+                    )
+                  })()}
                   <div className="space-y-2">
                     {issueQuotes.map((q) => (
                       <div key={q.id} className="flex items-center justify-between p-2 rounded-lg bg-[var(--surface-hover)] text-sm">
@@ -1924,6 +1944,15 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               value={form.resolvedAt}
               onChange={setField('resolvedAt')}
             />
+            {emergencyVendor && emergencyVendor.phone && (
+              <a href={`tel:${emergencyVendor.phone}`}
+                className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 hover:bg-red-100 transition-colors">
+                <span className="flex items-center gap-2 text-sm font-bold text-red-700">
+                  🚨 הזעקת חירום — {emergencyVendor.name}
+                </span>
+                <span className="text-xs text-red-600">{emergencyVendor.phone} ›</span>
+              </a>
+            )}
             {suggestedVendors.length > 0 && (
               <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
                 <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לתקלה זו</p>
