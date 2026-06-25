@@ -742,7 +742,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 נדרשת הצעת מחיר לעבודה הבאה:
 📋 *${iss.title}*
 🔧 קטגוריה: ${iss.category || 'כללי'}
-📝 ${iss.description || ''}
+📝 ${iss.description || ''}${iss.photo_url ? `\n📷 תמונת התקלה: ${iss.photo_url}` : ''}
 
 אנא שלחו הצעת מחיר בהקדם. נשמח לתאם ביקור לסקירה.
 
@@ -1133,6 +1133,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               <DetailRow label="דירה" value={getUnitDisplay(iss.unitId || iss.reportedBy)} />
               <DetailRow label="קטגוריה" value={iss.category} />
               <DetailRow label="תיאור" value={iss.description} />
+              {iss.photo_url && (
+                <a href={iss.photo_url} target="_blank" rel="noopener noreferrer" className="block">
+                  <img src={iss.photo_url} alt="תמונת התקלה" className="mt-1 max-h-48 rounded-lg border border-[var(--border)] object-cover" />
+                </a>
+              )}
               <DetailRow
                 label="עדיפות"
                 value={

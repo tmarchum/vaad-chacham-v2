@@ -842,13 +842,25 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
    ════════════════════════════════════════════════════════════════ */
 function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }) {
   const [form, setForm] = useState({ title: '', description: '', category: '', priority: 'medium' })
+  const [photo, setPhoto] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  // Upload the fault photo to storage and return its public URL (or null).
+  const uploadPhoto = async () => {
+    if (!photo) return null
+    const ext = (photo.name?.split('.').pop() || 'jpg').toLowerCase()
+    const path = `${profile.unit_id}/${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('issue-photos').upload(path, photo, { upsert: false })
+    if (upErr) { console.error('photo upload error', upErr); return null }
+    return supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
+  }
 
   const submit = async (e) => {
     e.preventDefault()
     if (!form.title.trim()) return
     setSaving(true); setError(null)
+    const photoUrl = await uploadPhoto()
     const { error } = await supabase.from('issues').insert({
       building_id: profile.building_id,
       unit_id: profile.unit_id,
@@ -858,10 +870,12 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
       priority: form.priority,
       reported_by: user?.id || null,
       status: 'reported',
+      photo_url: photoUrl,
     })
     setSaving(false)
     if (error) { console.error('issue insert error', error); setError('שגיאה בשליחת התקלה. נסה שוב.'); return }
     setForm({ title: '', description: '', category: '', priority: 'medium' })
+    setPhoto(null)
     onCreated()
   }
 
@@ -895,10 +909,16 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           <textarea
-            rows={3} placeholder="תיאור התקלה"
+            rows={3} placeholder="תיאור התקלה — פרט/י ככל האפשר (לטובת הצעת מחיר מדויקת)"
             value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
             className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
           />
+          {/* Fault photo — helps the vendor quote accurately */}
+          <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 cursor-pointer hover:bg-slate-50">
+            <input type="file" accept="image/*" capture="environment" className="hidden"
+              onChange={e => setPhoto(e.target.files?.[0] || null)} />
+            {photo ? `📷 ${photo.name}` : '📷 צרף/י תמונה של התקלה (אופציונלי)'}
+          </label>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
