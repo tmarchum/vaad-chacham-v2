@@ -772,27 +772,6 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     if (vendor.phone) window.open(buildWhatsAppLink(vendor.phone, message), '_blank')
   }
 
-  // Email the quote request to the vendor WITH the fault photo embedded in the
-  // body (email has no WhatsApp link limit). Committee-initiated, no caseId — so
-  // the collection gate never applies.
-  const sendQuoteEmail = async (iss, vendor, building) => {
-    if (!vendor.email) return
-    const text = buildVendorQuoteMessage(iss, vendor, building)
-      .replace(/\n📷 תמונת התקלה:.*$/m, '') // image goes inline below instead
-    const html = `<div dir="rtl" style="font-family:Arial,sans-serif;white-space:pre-wrap;font-size:15px">${text}</div>` +
-      (iss.photo_url ? `<div style="margin-top:14px"><img src="${iss.photo_url}" alt="תמונת התקלה" style="max-width:480px;border-radius:8px;border:1px solid #e2e8f0"/></div>` : '')
-    try {
-      const { data, error } = await supabase.functions.invoke('send-notification', {
-        body: { to: vendor.email, subject: `בקשת הצעת מחיר — ${iss.title}`, html, buildingId: building?.id },
-      })
-      if (error || data?.success === false) throw new Error('send failed')
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `נשלח מייל ל-${vendor.name}`, type: 'success' } }))
-    } catch (e) {
-      console.error('quote email error', e)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשליחת המייל', type: 'error' } }))
-    }
-  }
-
   // Search for external vendors via Madrag scraping — uses AI search terms when available
   const searchExternalVendors = async (category, building) => {
     setVendorSearchLoading(true)
@@ -1557,9 +1536,6 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                               <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `vendor_${v.id}`)}>
                                 {quoteRequestCopied === `vendor_${v.id}` || copiedField === `vendor_${v.id}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
                               </Button>
-                              {v.email && (
-                                <Button size="sm" variant="outline" onClick={() => sendQuoteEmail(workflowIssue, v, building)}>📧 מייל</Button>
-                              )}
                               {workflowIssue?.photo_url && (
                                 <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
                               )}
