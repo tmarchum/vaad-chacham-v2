@@ -110,17 +110,22 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ── Gate: block collection notifications when toggle is off ──────────────
-    // caseId is only present for collection-case emails.
-    // Check buildings.collection_notifications_enabled before sending.
-    if (caseId && buildingId) {
-      const { data: building } = await supabase
-        .from("buildings")
-        .select("collection_notifications_enabled")
-        .eq("id", buildingId)
-        .single();
+    // ── Gate: collection emails (caseId present) are sent ONLY if the building's
+    // toggle is EXPLICITLY enabled. Fail CLOSED — missing buildingId, a lookup
+    // error, or a null/disabled value all block. (Previously this failed open:
+    // if the buildings lookup returned null it skipped the block and sent.)
+    if (caseId) {
+      let enabled = false;
+      if (buildingId) {
+        const { data: building } = await supabase
+          .from("buildings")
+          .select("collection_notifications_enabled")
+          .eq("id", buildingId)
+          .single();
+        enabled = building?.collection_notifications_enabled === true;
+      }
 
-      if (building && building.collection_notifications_enabled === false) {
+      if (!enabled) {
         // Log as blocked (not failed) so we have an audit trail
         try {
           await supabase.from("notification_log").insert({

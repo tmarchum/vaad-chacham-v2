@@ -248,6 +248,35 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
       let success = false
       let errorMsg = ''
 
+      // FAIL-SAFE: never send a collection email unless the building's toggle is
+      // EXPLICITLY enabled. Missing building / disabled / unknown → blocked.
+      // (Closes the bypass where dunning letters went out despite the toggle.)
+      {
+        let enabled = false
+        if (building_id) {
+          const { data: b } = await supabase
+            .from('buildings')
+            .select('collection_notifications_enabled')
+            .eq('id', building_id)
+            .single()
+          enabled = b?.collection_notifications_enabled === true
+        }
+        if (!enabled) {
+          await supabase.from('notification_log').insert({
+            building_id: building_id || null,
+            unit_id: unit_id || null,
+            case_id: case_id || null,
+            channel: 'email',
+            recipient: to,
+            subject,
+            body: html,
+            status: 'blocked',
+            error_message: 'collection_notifications_disabled (send_email fail-safe)',
+          })
+          return { success: false, blocked: true, error: 'collection notifications disabled for this building' }
+        }
+      }
+
       // Send via Gmail SMTP using fetch to a mail API, or log if not configured
       if (GMAIL_USER && GMAIL_APP_PASSWORD) {
         try {
