@@ -245,74 +245,23 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
 
     case 'send_email': {
       const { to, subject, html, building_id, unit_id, case_id } = args as Record<string, string>
-      let success = false
-      let errorMsg = ''
 
-      // FAIL-SAFE: never send a collection email unless the building's toggle is
-      // EXPLICITLY enabled. Missing building / disabled / unknown → blocked.
-      // (Closes the bypass where dunning letters went out despite the toggle.)
-      {
-        let enabled = false
-        if (building_id) {
-          const { data: b } = await supabase
-            .from('buildings')
-            .select('collection_notifications_enabled')
-            .eq('id', building_id)
-            .single()
-          enabled = b?.collection_notifications_enabled === true
-        }
-        if (!enabled) {
-          await supabase.from('notification_log').insert({
-            building_id: building_id || null,
-            unit_id: unit_id || null,
-            case_id: case_id || null,
-            channel: 'email',
-            recipient: to,
-            subject,
-            body: html,
-            status: 'blocked',
-            error_message: 'collection_notifications_disabled (send_email fail-safe)',
-          })
-          return { success: false, blocked: true, error: 'collection notifications disabled for this building' }
-        }
-      }
-
-      // Send via Gmail SMTP using fetch to a mail API, or log if not configured
-      if (GMAIL_USER && GMAIL_APP_PASSWORD) {
-        try {
-          // Use Supabase send-notification function
-          const res = await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            },
-            body: JSON.stringify({ to, subject, html, buildingId: building_id, unitId: unit_id, caseId: case_id }),
-          })
-          const result = await res.json()
-          success = result.success
-          if (!success) errorMsg = 'send-notification returned false'
-        } catch (e) {
-          errorMsg = (e as Error).message
-        }
-      } else {
-        // Log only
-        await supabase.from('notification_log').insert({
-          building_id: building_id || null,
-          unit_id: unit_id || null,
-          case_id: case_id || null,
-          channel: 'email',
-          recipient: to,
-          subject,
-          body: html,
-          status: 'logged',
-          error_message: 'No email provider configured in MCP proxy',
-        })
-        success = true
-        errorMsg = 'logged_only'
-      }
-
-      return { success, error: errorMsg }
+      // HARD-DISABLED by user request: automated collection emails are turned off
+      // completely. This tool no longer sends — it only records the attempt as
+      // blocked. Re-enable in code only if the user explicitly asks. (Defense on
+      // top of the fail-closed toggle gate + the removed collection agent.)
+      await supabase.from('notification_log').insert({
+        building_id: building_id || null,
+        unit_id: unit_id || null,
+        case_id: case_id || null,
+        channel: 'email',
+        recipient: to,
+        subject,
+        body: html,
+        status: 'blocked',
+        error_message: 'send_email disabled (automated collection emails off)',
+      })
+      return { success: false, blocked: true, disabled: true, error: 'automated emails are disabled' }
     }
 
     case 'write_alerts': {
