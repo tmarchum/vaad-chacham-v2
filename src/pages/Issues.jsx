@@ -749,6 +749,29 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 תודה`
   }
 
+  // Share the quote request WITH the fault photo attached, via the native share
+  // sheet (the user picks WhatsApp → image + text go together). Falls back to a
+  // text-only wa.me link when files can't be shared (e.g. desktop).
+  const shareQuoteWithPhoto = async (iss, vendor, building) => {
+    const message = buildVendorQuoteMessage(iss, vendor, building)
+    if (iss.photo_url && navigator.canShare) {
+      try {
+        const res = await fetch(iss.photo_url)
+        const blob = await res.blob()
+        const file = new File([blob], 'fault.jpg', { type: blob.type || 'image/jpeg' })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text: message })
+          return
+        }
+      } catch (e) {
+        if (e?.name === 'AbortError') return // user cancelled
+        console.error('share with photo failed', e)
+      }
+    }
+    // Fallback: text-only to the vendor's number.
+    if (vendor.phone) window.open(buildWhatsAppLink(vendor.phone, message), '_blank')
+  }
+
   // Search for external vendors via Madrag scraping — uses AI search terms when available
   const searchExternalVendors = async (category, building) => {
     setVendorSearchLoading(true)
@@ -1513,6 +1536,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                               <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `vendor_${v.id}`)}>
                                 {quoteRequestCopied === `vendor_${v.id}` || copiedField === `vendor_${v.id}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
                               </Button>
+                              {workflowIssue?.photo_url && (
+                                <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
+                              )}
                               {v.phone && (
                                 <a href={buildWhatsAppLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
                                   <Button size="sm" variant="outline">💬 שלח</Button>
@@ -1546,6 +1572,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                               <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `ext_${i}`)}>
                                 {copiedField === `ext_${i}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
                               </Button>
+                              {workflowIssue?.photo_url && (
+                                <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
+                              )}
                               {v.phone && (
                                 <a href={buildWhatsAppLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
                                   <Button size="sm" variant="outline">💬 שלח</Button>
