@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
   FileText, Calendar, Users, LayoutList, Columns3,
@@ -390,6 +391,15 @@ function Issues() {
       ...allVendors.map((v) => ({ value: v.name, label: `${v.name} (${v.category || ''})` })),
     ],
     [allVendors]
+  )
+
+  // Suggested vendors for the issue being edited — the "dispatcher".
+  const suggestedVendors = useMemo(
+    () => rankVendorsForIssue(
+      { category: form.category, title: form.title, priority: form.priority },
+      allVendors,
+    ).slice(0, 3),
+    [form.category, form.title, form.priority, allVendors]
   )
 
   const vendorFilterOptions = useMemo(
@@ -1914,6 +1924,25 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               value={form.resolvedAt}
               onChange={setField('resolvedAt')}
             />
+            {suggestedVendors.length > 0 && (
+              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+                <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לתקלה זו</p>
+                <div className="space-y-1.5">
+                  {suggestedVendors.map(({ vendor, reasons, warnings }) => (
+                    <button
+                      key={vendor.id} type="button"
+                      onClick={() => setField('vendor_name')(vendor.name)}
+                      className={`w-full text-right flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${form.vendor_name === vendor.name ? 'bg-blue-600 text-white' : 'bg-white hover:bg-blue-100 text-slate-700 border border-slate-200'}`}
+                    >
+                      <span className="font-medium truncate">{vendor.name}</span>
+                      <span className={`text-[10px] truncate ${form.vendor_name === vendor.name ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {reasons.join(' · ')}{warnings.length ? ` · ⚠ ${warnings.join(', ')}` : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <FormSelect
               label="ספק"
               value={form.vendor_name}
