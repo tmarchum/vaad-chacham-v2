@@ -846,21 +846,28 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
-  // Upload the fault photo to storage and return its public URL (or null).
+  // Upload the fault photo to storage and return its public URL. NEVER throws —
+  // a photo failure must not block creating the issue itself.
   const uploadPhoto = async () => {
-    if (!photo) return null
-    const ext = (photo.name?.split('.').pop() || 'jpg').toLowerCase()
-    const path = `${profile.unit_id}/${Date.now()}.${ext}`
-    const { error: upErr } = await supabase.storage.from('issue-photos').upload(path, photo, { upsert: false })
-    if (upErr) { console.error('photo upload error', upErr); return null }
-    return supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
+    if (!photo) return { url: null, failed: false }
+    try {
+      const ext = (photo.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+      const path = `${profile.unit_id || 'u'}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('issue-photos')
+        .upload(path, photo, { upsert: false, contentType: photo.type || 'image/jpeg' })
+      if (upErr) { console.error('photo upload error', upErr); return { url: null, failed: true } }
+      return { url: supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl, failed: false }
+    } catch (e) {
+      console.error('photo upload exception', e)
+      return { url: null, failed: true }
+    }
   }
 
   const submit = async (e) => {
     e.preventDefault()
     if (!form.title.trim()) return
     setSaving(true); setError(null)
-    const photoUrl = await uploadPhoto()
+    const { url: photoUrl, failed: photoFailed } = await uploadPhoto()
     const { error } = await supabase.from('issues').insert({
       building_id: profile.building_id,
       unit_id: profile.unit_id,
@@ -874,6 +881,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
     })
     setSaving(false)
     if (error) { console.error('issue insert error', error); setError('שגיאה בשליחת התקלה. נסה שוב.'); return }
+    if (photoFailed) setError('התקלה נפתחה, אך העלאת התמונה נכשלה — אפשר להוסיף תמונה מאוחר יותר.')
     setForm({ title: '', description: '', category: '', priority: 'medium' })
     setPhoto(null)
     onCreated()
