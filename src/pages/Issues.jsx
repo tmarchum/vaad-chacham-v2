@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { callVaadAgent } from '@/lib/vaadAgent'
 import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hooks/useStore'
@@ -108,6 +108,7 @@ const EMPTY_FORM = {
   vendor_name: '',
   cost: '',
   estimatedCost: '',
+  assigned_to: '',
 }
 
 const QUOTE_FILTERS = [
@@ -395,6 +396,22 @@ function Issues() {
     [allVendors]
   )
 
+  // Committee members for assigning a handler ("נציג מטפל"). Admins can list
+  // them (RLS); for non-admins the list may be empty — they self-handle.
+  const [assignMembers, setAssignMembers] = useState([])
+  useEffect(() => {
+    supabase.from('profiles').select('id, first_name, last_name')
+      .in('role', ['admin', 'committee'])
+      .then(({ data }) => setAssignMembers(data || []))
+  }, [])
+  const memberOptions = useMemo(
+    () => [
+      { value: '', label: 'לא שויך' },
+      ...assignMembers.map((m) => ({ value: m.id, label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'חבר ועד' })),
+    ],
+    [assignMembers]
+  )
+
   // Suggested vendors for the issue being edited — the "dispatcher".
   const issueForMatch = { category: form.category, title: form.title, priority: form.priority }
   const suggestedVendors = useMemo(
@@ -543,6 +560,7 @@ function Issues() {
       vendor_name: iss.vendor_name || '',
       cost: iss.cost ?? '',
       estimatedCost: iss.estimatedCost ?? '',
+      assigned_to: iss.assigned_to || '',
     })
     setFormOpen(true)
     setDetailIssue(null)
@@ -568,6 +586,7 @@ function Issues() {
       unitId: form.unitId || null,
       category: form.category || null,
       vendor_name: form.vendor_name || null,
+      assigned_to: form.assigned_to || null,
       cost: form.cost !== '' ? Number(form.cost) : null,
       estimatedCost: form.estimatedCost !== '' ? Number(form.estimatedCost) : null,
       reportedAt: form.reportedAt ? new Date(form.reportedAt).toISOString() : null,
@@ -1972,6 +1991,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 </div>
               </div>
             )}
+            <FormSelect
+              label="נציג ועד מטפל"
+              value={form.assigned_to}
+              onChange={setField('assigned_to')}
+              options={memberOptions}
+              placeholder="שייך לנציג"
+            />
             <FormSelect
               label="ספק"
               value={form.vendor_name}
