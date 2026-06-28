@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { PageHeader } from '@/components/common/PageHeader'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
 import { Settings, Users, Database, Building, Shield, Key, MessageCircle } from 'lucide-react'
+import { resetWhatsappEnabledCache } from '@/lib/whatsapp'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 
 // ---------------------------------------------------------------------------
@@ -679,6 +680,7 @@ function WhatsappTab() {
       return
     }
     setForm((p) => ({ ...p, api_token: '' }))
+    resetWhatsappEnabledCache() // so an enabled/disabled change takes effect without a refresh
     window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: data.has_token ? 'נשמר. טוקן מאוחסן ✓' : 'נשמר (ללא טוקן — יש להזין טוקן)', type: data.has_token ? 'success' : 'error' } }))
     load()
   }
