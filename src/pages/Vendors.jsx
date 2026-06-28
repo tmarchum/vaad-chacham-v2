@@ -45,10 +45,16 @@ const CATEGORY_OPTIONS = [
   { value: 'איטום וגגות', label: 'איטום וגגות' },
   { value: 'צבע ושיפוצים', label: 'צבע ושיפוצים' },
   { value: 'זגגות', label: 'זגגות' },
+  { value: 'בריכת שחייה', label: 'בריכת שחייה' },
+  { value: 'חדר כושר', label: 'חדר כושר' },
+  { value: 'גז מרכזי', label: 'גז מרכזי' },
+  { value: 'פינוי אשפה ודחסנים', label: 'פינוי אשפה ודחסנים' },
   { value: 'בדיקת מעליות', label: 'בדיקת מעליות (בקרה)' },
   { value: 'בדיקת חשמל', label: 'בדיקת חשמל (בקרה)' },
   { value: 'בטיחות אש - בדיקות ואישורים', label: 'בטיחות אש — בדיקות ואישורים (בקרה)' },
+  { value: 'חיטוי מאגרי מים', label: 'חיטוי מאגרי מים (בקרה)' },
   { value: 'מהנדס בניין', label: 'מהנדס בניין (בקרה)' },
+  { value: 'יועץ נגישות', label: 'יועץ נגישות (בקרה)' },
   { value: 'בנייה ושיפוצים', label: 'בנייה ושיפוצים' },
   { value: 'אחזקה כללית', label: 'אחזקה כללית' },
   { value: 'שירותי חירום', label: 'שירותי חירום' },
@@ -62,9 +68,11 @@ const CATEGORY_OPTIONS = [
 const SERVICE_TYPE = {
   'מעליות': 'regular', 'גנרטור': 'regular', 'משאבות מים': 'regular',
   'אינטרקום': 'regular', 'גינון': 'regular', 'ניקיון': 'regular',
-  'הדברה': 'regular', 'כיבוי וגילוי אש': 'regular',
+  'הדברה': 'regular', 'כיבוי וגילוי אש': 'regular', 'בריכת שחייה': 'regular',
+  'חדר כושר': 'regular', 'גז מרכזי': 'regular', 'פינוי אשפה ודחסנים': 'regular',
   'בדיקת מעליות': 'control', 'בדיקת חשמל': 'control',
   'בטיחות אש - בדיקות ואישורים': 'control', 'מהנדס בניין': 'control',
+  'חיטוי מאגרי מים': 'control', 'יועץ נגישות': 'control',
 }
 const serviceTypeOf = (cat) => SERVICE_TYPE[cat] || 'occasional'
 const SERVICE_GROUPS = [
@@ -143,7 +151,6 @@ function getVendorStats(vendor, workOrders) {
 
 function getVendorTags(vendor) {
   const tags = []
-  if (vendor.is_regular) tags.push({ label: 'ספק קבוע', variant: 'success' })
   if (vendor.preferred) tags.push({ label: 'מומלץ', variant: 'success' })
   if (vendor.available_24_7) tags.push({ label: 'זמין 24/7', variant: 'info' })
   if (vendor.insurance_expiry) tags.push({ label: 'מבוטח', variant: 'default' })
@@ -542,8 +549,6 @@ function Vendors() {
     }
     if (statusFilter === 'blacklisted') {
       result = result.filter((v) => v.is_blacklisted === true)
-    } else if (statusFilter === 'regular') {
-      result = result.filter((v) => v.is_regular === true)
     }
     return result
   }, [allVendors, search, categoryFilter, statusFilter])
@@ -701,7 +706,7 @@ function Vendors() {
 
           {/* Status filter pills */}
           <div className="flex flex-wrap gap-2">
-            {[{ key: 'all', label: 'הכל' }, { key: 'regular', label: 'נותני שירות קבועים' }, { key: 'blacklisted', label: 'רשימה שחורה' }].map((pill) => (
+            {[{ key: 'all', label: 'הכל' }, { key: 'blacklisted', label: 'רשימה שחורה' }].map((pill) => (
               <Button
                 key={pill.key}
                 variant={statusFilter === pill.key ? 'default' : 'outline'}
@@ -709,7 +714,6 @@ function Vendors() {
                 onClick={() => setStatusFilter(pill.key)}
               >
                 {pill.key === 'blacklisted' && <Ban className="h-3.5 w-3.5 ml-1" />}
-                {pill.key === 'regular' && <Award className="h-3.5 w-3.5 ml-1" />}
                 {pill.label}
               </Button>
             ))}
@@ -934,10 +938,6 @@ function Vendors() {
             <DetailRow label="תוקף ביטוח" value={detailVendor.insurance_expiry} />
             <DetailRow label="אזור שירות" value={detailVendor.service_area} />
             <DetailRow
-              label="נותן שירות קבוע"
-              value={detailVendor.is_regular ? <Badge variant="success">קבוע לבניין</Badge> : 'לא'}
-            />
-            <DetailRow
               label="סטטוס במאגר"
               value={(() => { const m = MEMBERSHIP[detailVendor.membership_status || 'pending']; return <Badge variant={m.variant}>{m.label}</Badge> })()}
             />
@@ -1151,11 +1151,6 @@ function Vendors() {
               placeholder="מחזירי דלתות, צירים, ידיות, סגרי שמן, תיקון מנעולים, התקנת דלתות"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormBool
-                label="נותן שירות קבוע לבניין"
-                value={form.is_regular}
-                onChange={setField('is_regular')}
-              />
               <FormBool
                 label="זמין 24/7"
                 value={form.available_24_7}
