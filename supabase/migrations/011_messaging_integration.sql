@@ -10,6 +10,7 @@ create table if not exists public.messaging_integrations (
   sender_number text,
   sender_label text,
   enabled boolean default false,
+  has_token boolean default false,
   status text,
   last_checked_at timestamptz,
   updated_at timestamptz default now()
