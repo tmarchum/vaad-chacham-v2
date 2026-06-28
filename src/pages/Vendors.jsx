@@ -36,6 +36,8 @@ const CATEGORY_OPTIONS = [
   { value: 'שערים ודלתות אוטומטיות', label: 'שערים ודלתות אוטומטיות' },
   { value: 'מצלמות ואזעקות', label: 'מצלמות ואזעקות' },
   { value: 'כיבוי וגילוי אש', label: 'כיבוי וגילוי אש' },
+  { value: 'גנרטור', label: 'גנרטור' },
+  { value: 'משאבות מים', label: 'משאבות מים' },
   { value: 'גינון', label: 'גינון' },
   { value: 'ניקיון', label: 'ניקיון' },
   { value: 'הדברה', label: 'הדברה' },
@@ -43,12 +45,33 @@ const CATEGORY_OPTIONS = [
   { value: 'איטום וגגות', label: 'איטום וגגות' },
   { value: 'צבע ושיפוצים', label: 'צבע ושיפוצים' },
   { value: 'זגגות', label: 'זגגות' },
+  { value: 'בדיקת מעליות', label: 'בדיקת מעליות (בקרה)' },
+  { value: 'בדיקת חשמל', label: 'בדיקת חשמל (בקרה)' },
+  { value: 'בטיחות אש - בדיקות ואישורים', label: 'בטיחות אש — בדיקות ואישורים (בקרה)' },
+  { value: 'מהנדס בניין', label: 'מהנדס בניין (בקרה)' },
   { value: 'בנייה ושיפוצים', label: 'בנייה ושיפוצים' },
   { value: 'אחזקה כללית', label: 'אחזקה כללית' },
   { value: 'שירותי חירום', label: 'שירותי חירום' },
   { value: 'אחר', label: 'אחר' },
 ]
 
+// Division of the pool by the nature of the service:
+//   regular    — ongoing maintenance / standing contracts (קבוע)
+//   control    — periodic mandatory inspections & approvals (בקרה)
+//   occasional — fault-driven, called when needed (מזדמן, the default)
+const SERVICE_TYPE = {
+  'מעליות': 'regular', 'גנרטור': 'regular', 'משאבות מים': 'regular',
+  'אינטרקום': 'regular', 'גינון': 'regular', 'ניקיון': 'regular',
+  'הדברה': 'regular', 'כיבוי וגילוי אש': 'regular',
+  'בדיקת מעליות': 'control', 'בדיקת חשמל': 'control',
+  'בטיחות אש - בדיקות ואישורים': 'control', 'מהנדס בניין': 'control',
+}
+const serviceTypeOf = (cat) => SERVICE_TYPE[cat] || 'occasional'
+const SERVICE_GROUPS = [
+  { key: 'regular', label: 'נותני שירות קבועים', desc: 'אחזקה שוטפת וחוזי שירות' },
+  { key: 'control', label: 'גורמי בקרה ובדיקות', desc: 'בדיקות ואישורים תקופתיים מחויבים' },
+  { key: 'occasional', label: 'ספקים לפי צורך', desc: 'נקראים בעת תקלה' },
+]
 
 const EMPTY_FORM = {
   name: '',
@@ -726,18 +749,32 @@ function Vendors() {
               onAction={!search && !categoryFilter ? openCreate : undefined}
             />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map((vendor) => (
-                <VendorCard
-                  key={vendor.id}
-                  vendor={vendor}
-                  stats={statsMap[vendor.id] || { totalJobs: 0, completedJobs: 0, totalSpent: 0, avgResponseDays: null, onTimeRate: null }}
-                  onClick={() => setDetailVendor(vendor)}
-                  compareMode={compareIds.length > 0}
-                  isSelected={compareIds.includes(vendor.id)}
-                  onToggleCompare={toggleCompare}
-                />
-              ))}
+            <div className="space-y-6">
+              {SERVICE_GROUPS.map((g) => {
+                const group = filtered.filter((v) => serviceTypeOf(v.category) === g.key)
+                if (group.length === 0) return null
+                return (
+                  <div key={g.key} className="space-y-3">
+                    <div className="flex items-baseline gap-2 border-b border-[var(--border)] pb-1.5">
+                      <h3 className="text-sm font-bold text-[var(--text-primary)]">{g.label}</h3>
+                      <span className="text-xs text-[var(--text-muted)]">{g.desc} · {group.length}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {group.map((vendor) => (
+                        <VendorCard
+                          key={vendor.id}
+                          vendor={vendor}
+                          stats={statsMap[vendor.id] || { totalJobs: 0, completedJobs: 0, totalSpent: 0, avgResponseDays: null, onTimeRate: null }}
+                          onClick={() => setDetailVendor(vendor)}
+                          compareMode={compareIds.length > 0}
+                          isSelected={compareIds.includes(vendor.id)}
+                          onToggleCompare={toggleCompare}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
