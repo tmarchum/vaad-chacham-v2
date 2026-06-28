@@ -23,25 +23,28 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
+// Canonical service domains (תחומי שירות) — covers all building needs and
+// matches the seeded vendor database. Keep in sync with vendorMatch synonyms.
 const CATEGORY_OPTIONS = [
   { value: 'אינסטלציה', label: 'אינסטלציה' },
   { value: 'חשמל', label: 'חשמל' },
-  { value: 'ניקיון', label: 'ניקיון' },
-  { value: 'בנייה ושיפוצים', label: 'בנייה ושיפוצים' },
-  { value: 'צבע', label: 'צבע' },
   { value: 'מיזוג אוויר', label: 'מיזוג אוויר' },
+  { value: 'דוד שמש', label: 'דוד שמש' },
+  { value: 'ביוב ושאיבה', label: 'ביוב ושאיבה' },
   { value: 'מעליות', label: 'מעליות' },
+  { value: 'אינטרקום', label: 'אינטרקום' },
+  { value: 'שערים ודלתות אוטומטיות', label: 'שערים ודלתות אוטומטיות' },
+  { value: 'מצלמות ואזעקות', label: 'מצלמות ואזעקות' },
+  { value: 'כיבוי וגילוי אש', label: 'כיבוי וגילוי אש' },
   { value: 'גינון', label: 'גינון' },
-  { value: 'מנעולנות', label: 'מנעולנות' },
-  { value: 'אלומיניום וזכוכית', label: 'אלומיניום וזכוכית' },
-  { value: 'איטום', label: 'איטום' },
-  { value: 'ריצוף', label: 'ריצוף' },
-  { value: 'פסולת ופינוי', label: 'פסולת ופינוי' },
+  { value: 'ניקיון', label: 'ניקיון' },
   { value: 'הדברה', label: 'הדברה' },
-  { value: 'דלתות וחלונות', label: 'דלתות וחלונות' },
-  { value: 'מסגרות', label: 'מסגרות' },
-  { value: 'מערכות בטיחות אש', label: 'מערכות בטיחות אש' },
-  { value: 'גגות', label: 'גגות' },
+  { value: 'מנעולן', label: 'מנעולן' },
+  { value: 'איטום וגגות', label: 'איטום וגגות' },
+  { value: 'צבע ושיפוצים', label: 'צבע ושיפוצים' },
+  { value: 'זגגות', label: 'זגגות' },
+  { value: 'בנייה ושיפוצים', label: 'בנייה ושיפוצים' },
+  { value: 'אחזקה כללית', label: 'אחזקה כללית' },
   { value: 'שירותי חירום', label: 'שירותי חירום' },
   { value: 'אחר', label: 'אחר' },
 ]
@@ -52,9 +55,11 @@ const EMPTY_FORM = {
   category: '',
   phone: '',
   email: '',
+  address: '',
   license_number: '',
   insurance_expiry: '',
   service_area: '',
+  is_regular: false,
   available_24_7: false,
   preferred: false,
   rating: '3',
@@ -115,6 +120,7 @@ function getVendorStats(vendor, workOrders) {
 
 function getVendorTags(vendor) {
   const tags = []
+  if (vendor.is_regular) tags.push({ label: 'ספק קבוע', variant: 'success' })
   if (vendor.preferred) tags.push({ label: 'מומלץ', variant: 'success' })
   if (vendor.available_24_7) tags.push({ label: 'זמין 24/7', variant: 'info' })
   if (vendor.insurance_expiry) tags.push({ label: 'מבוטח', variant: 'default' })
@@ -490,6 +496,8 @@ function Vendors() {
     }
     if (statusFilter === 'blacklisted') {
       result = result.filter((v) => v.is_blacklisted === true)
+    } else if (statusFilter === 'regular') {
+      result = result.filter((v) => v.is_regular === true)
     }
     return result
   }, [allVendors, search, categoryFilter, statusFilter])
@@ -516,9 +524,11 @@ function Vendors() {
       category: vendor.category || '',
       phone: vendor.phone || '',
       email: vendor.email || '',
+      address: vendor.address || '',
       license_number: vendor.license_number || '',
       insurance_expiry: vendor.insurance_expiry || '',
       service_area: vendor.service_area || '',
+      is_regular: vendor.is_regular || false,
       available_24_7: vendor.available_24_7 || false,
       preferred: vendor.preferred || false,
       rating: String(vendor.rating || 3),
@@ -635,7 +645,7 @@ function Vendors() {
 
           {/* Status filter pills */}
           <div className="flex flex-wrap gap-2">
-            {[{ key: 'all', label: 'הכל' }, { key: 'blacklisted', label: 'רשימה שחורה' }].map((pill) => (
+            {[{ key: 'all', label: 'הכל' }, { key: 'regular', label: 'נותני שירות קבועים' }, { key: 'blacklisted', label: 'רשימה שחורה' }].map((pill) => (
               <Button
                 key={pill.key}
                 variant={statusFilter === pill.key ? 'default' : 'outline'}
@@ -643,6 +653,7 @@ function Vendors() {
                 onClick={() => setStatusFilter(pill.key)}
               >
                 {pill.key === 'blacklisted' && <Ban className="h-3.5 w-3.5 ml-1" />}
+                {pill.key === 'regular' && <Award className="h-3.5 w-3.5 ml-1" />}
                 {pill.label}
               </Button>
             ))}
@@ -786,9 +797,14 @@ function Vendors() {
             <DetailRow label="התמחות" value={detailVendor.category} />
             <DetailRow label="טלפון" value={detailVendor.phone} />
             <DetailRow label="אימייל" value={detailVendor.email} />
+            <DetailRow label="כתובת" value={detailVendor.address} />
             <DetailRow label="מספר רישיון" value={detailVendor.license_number} />
             <DetailRow label="תוקף ביטוח" value={detailVendor.insurance_expiry} />
             <DetailRow label="אזור שירות" value={detailVendor.service_area} />
+            <DetailRow
+              label="נותן שירות קבוע"
+              value={detailVendor.is_regular ? <Badge variant="success">קבוע לבניין</Badge> : 'לא'}
+            />
             {detailVendor.specialties && (
               <DetailRow
                 label="התמחויות"
@@ -983,6 +999,11 @@ function Vendors() {
               />
             </div>
             <FormField
+              label="כתובת"
+              value={form.address}
+              onChange={setField('address')}
+            />
+            <FormField
               label="אזור שירות"
               value={form.service_area}
               onChange={setField('service_area')}
@@ -994,6 +1015,11 @@ function Vendors() {
               placeholder="מחזירי דלתות, צירים, ידיות, סגרי שמן, תיקון מנעולים, התקנת דלתות"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormBool
+                label="נותן שירות קבוע לבניין"
+                value={form.is_regular}
+                onChange={setField('is_regular')}
+              />
               <FormBool
                 label="זמין 24/7"
                 value={form.available_24_7}

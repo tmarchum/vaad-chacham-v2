@@ -340,8 +340,6 @@ function Issues() {
   const [workflowIssue, setWorkflowIssue] = useState(null)
   const [workflowStep, setWorkflowStep] = useState(1) // 1=analysis, 2=committee, 3=vendor
   const [committeeMembers, setCommitteeMembers] = useState([])
-  const [vendorSearchLoading, setVendorSearchLoading] = useState(false)
-  const [externalVendors, setExternalVendors] = useState([])
   const [quoteRequestCopied, setQuoteRequestCopied] = useState(null)
 
   // Memoized handlers for IssueCard
@@ -689,7 +687,6 @@ function Issues() {
   const openWorkflow = async (iss) => {
     setWorkflowIssue(iss)
     setWorkflowStep(1)
-    setExternalVendors([])
     setQuoteRequestCopied(null)
 
     // Load committee members for this building
@@ -772,44 +769,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     if (vendor.phone) window.open(buildWhatsAppLink(vendor.phone, message), '_blank')
   }
 
-  // Search for external vendors via Madrag scraping — uses AI search terms when available
-  const searchExternalVendors = async (category, building) => {
-    setVendorSearchLoading(true)
-    setExternalVendors([])
-    const searchTerms = aiAnalysisResult?.recommended_search_terms || category
-    try {
-      const result = await callVaadAgent('vendor_search', building?.name || 'הבניין', {
-        category,
-        searchTerms,
-        city: building?.city || '',
-        address: building?.address || '',
-      })
-      setExternalVendors(result.vendors ?? [])
-    } catch (e) {
-      // Fallback: generate search links
-      setExternalVendors([])
-    } finally {
-      setVendorSearchLoading(false)
-    }
-  }
-
-  // Approve issue for quotes
+  // Approve issue for quotes — routed to the in-house vendor database only.
+  // (No web search: the committee pre-builds a broad vendor pool, so issues
+  // are dispatched straight from it.)
   const approveForQuotes = (iss) => {
     update(iss.id, { status: 'approved_for_quotes' })
     setWorkflowIssue((prev) => prev ? { ...prev, status: 'approved_for_quotes' } : prev)
     setWorkflowStep(3)
-    // Auto-search externally if fewer than 2 local vendor matches
-    const category = aiAnalysisResult?.recommended_vendor_category || iss.category || ''
-    const ic = category.toLowerCase()
-    const localMatches = allVendors.filter((v) => {
-      if (v.is_blacklisted) return false
-      const vc = (v.category || '').toLowerCase()
-      return vc.includes(ic) || ic.includes(vc)
-    })
-    if (localMatches.length < 2) {
-      const building = buildingMap[iss.buildingId]
-      searchExternalVendors(category, building)
-    }
   }
 
   // Reject/close issue by committee
@@ -1462,32 +1428,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             const building = buildingMap[workflowIssue.buildingId]
             const category = aiAnalysisResult?.recommended_vendor_category || workflowIssue.category || ''
 
-            // Find matching vendors from DB — multi-signal: category + specialties + AI terms
-            const issueText = `${workflowIssue.title} ${workflowIssue.description || ''} ${aiAnalysisResult?.recommended_search_terms || ''}`.toLowerCase()
-            const matchedVendors = allVendors.filter((v) => {
-              if (v.is_blacklisted) return false
-              const vc = (v.category || '').toLowerCase()
-              const ic = category.toLowerCase()
-              // Category match (existing logic)
-              const categoryMatch = ic && (vc.includes(ic) || ic.includes(vc))
-              // Specialties match: check if any specialty keyword appears in issue text or AI search terms
-              const specialties = (v.specialties || '').toLowerCase()
-              const specialtyMatch = specialties && specialties.split(',').some((s) => {
-                const term = s.trim()
-                return term && (issueText.includes(term) || term.includes(ic))
-              })
-              return categoryMatch || specialtyMatch
-            }).sort((a, b) => {
-              // Score-based: preferred first, then specialties relevance, then rating
-              let scoreA = (a.preferred ? 10 : 0) + (a.rating || 0)
-              let scoreB = (b.preferred ? 10 : 0) + (b.rating || 0)
-              if ((a.specialties || '').split(',').some((s) => s.trim() && issueText.includes(s.trim().toLowerCase()))) scoreA += 5
-              if ((b.specialties || '').split(',').some((s) => s.trim() && issueText.includes(s.trim().toLowerCase()))) scoreB += 5
-              return scoreB - scoreA
-            }).slice(0, 6)
-
-            const totalVendors = matchedVendors.length + externalVendors.length
-            const needsMore = matchedVendors.length < 2
+            // Dispatch from the in-house vendor database only — synonym-aware
+            // ranking (regular providers + rating + 24/7 boosted). No web search.
+            const issueForDispatch = {
+              category,
+              ai_category: aiAnalysisResult?.recommended_vendor_category,
+              ai_search_terms: aiAnalysisResult?.recommended_search_terms,
+              title: workflowIssue.title,
+              description: workflowIssue.description,
+              priority: workflowIssue.priority,
+            }
+            const ranked = rankVendorsForIssue(issueForDispatch, allVendors)
+            const matchedVendors = ranked.map((r) => r.vendor).slice(0, 8)
 
             return (
               <div className="space-y-4">
@@ -1498,24 +1450,15 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                       ספקים מתאימים — {category || 'כללי'}
                     </p>
                     <p className="text-xs text-[var(--text-secondary)]">
-                      {matchedVendors.length} במאגר{externalVendors.length > 0 ? ` + ${externalVendors.length} ממדרג` : ''}
+                      {matchedVendors.length} ספקים ממאגר הבניין
                     </p>
                   </div>
-                  {needsMore && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => searchExternalVendors(category, building)}
-                      disabled={vendorSearchLoading}
-                    >
-                      {vendorSearchLoading ? <><RefreshCw className="h-3.5 w-3.5 animate-spin ml-1" />מחפש...</> : '🔍 חפש במדרג'}
-                    </Button>
-                  )}
                 </div>
 
-                {needsMore && externalVendors.length === 0 && !vendorSearchLoading && (
+                {matchedVendors.length === 0 && (
                   <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                    נמצאו פחות מ-2 ספקים במאגר לקטגוריה זו. לחץ "חפש במדרג" לאיתור ספקים נוספים.
+                    לא נמצא ספק תואם במאגר לקטגוריה "{category || 'כללי'}". הוסף ספק חדש במסך
+                    "ספקים" — כל התקלות מנותבות למאגר הספקים של הבניין ללא חיפוש ברשת.
                   </div>
                 )}
 
@@ -1552,72 +1495,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </div>
                 )}
 
-                {/* External vendors from Madrag */}
-                {externalVendors.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">ממדרג / חיפוש חיצוני</p>
-                    {externalVendors.map((v, i) => {
-                      const quoteMsg = buildVendorQuoteMessage(workflowIssue, v, building)
-                      return (
-                        <div key={i} className="rounded-lg border border-[var(--border)] p-3 space-y-2 border-dashed">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-sm text-[var(--text-primary)]">{v.name || v.business_name}</p>
-                              <p className="text-xs text-[var(--text-secondary)]">
-                                {v.category || category}{v.rating ? ` · ⭐ ${v.rating}` : ''}{v.phone ? ` · ${v.phone}` : ''}
-                                {v.source && <span className="mr-1 text-[var(--text-muted)]">· {v.source}</span>}
-                              </p>
-                            </div>
-                            <div className="flex gap-1.5">
-                              <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `ext_${i}`)}>
-                                {copiedField === `ext_${i}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-                              </Button>
-                              {workflowIssue?.photo_url && (
-                                <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
-                              )}
-                              {v.phone && (
-                                <a href={buildWhatsAppLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
-                                  <Button size="sm" variant="outline">💬 שלח</Button>
-                                </a>
-                              )}
-                              {v.url && (
-                                <a href={v.url} target="_blank" rel="noopener noreferrer">
-                                  <Button size="sm" variant="ghost">🔗</Button>
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* External search links — always visible for manual search */}
-                {!vendorSearchLoading && (() => {
-                  const searchQuery = aiAnalysisResult?.recommended_search_terms || category
-                  return (
-                    <div className="rounded-xl border border-[var(--border)] p-3 space-y-2">
-                      <p className="text-xs font-semibold text-[var(--text-secondary)]">חיפוש ידני:</p>
-                      <div className="flex flex-wrap gap-2">
-                        <a href={`https://www.madrag.co.il/search/?q=${encodeURIComponent(searchQuery)}&loc=${encodeURIComponent(building?.city || '')}`} target="_blank" rel="noopener noreferrer">
-                          <Button size="sm" variant="outline">🔍 מדרג</Button>
-                        </a>
-                        <a href={`https://www.google.com/search?q=${encodeURIComponent(`${searchQuery} ${building?.city || ''} ספק`)}`} target="_blank" rel="noopener noreferrer">
-                          <Button size="sm" variant="outline">🔍 Google</Button>
-                        </a>
-                        <a href={`https://www.d.co.il/search/?q=${encodeURIComponent(searchQuery + ' ' + (building?.city || ''))}`} target="_blank" rel="noopener noreferrer">
-                          <Button size="sm" variant="outline">🔍 דפי זהב</Button>
-                        </a>
-                      </div>
-                    </div>
-                  )
-                })()}
 
                 <div className="pt-2 border-t border-[var(--border)]">
                   <Button
                     onClick={() => { update(workflowIssue.id, { status: 'quoted' }); setWorkflowIssue(null) }}
-                    disabled={totalVendors < 1}
+                    disabled={matchedVendors.length < 1}
                   >
                     סיים — המשך למעקב הצעות
                   </Button>
