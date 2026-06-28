@@ -13,6 +13,7 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { PageHeader } from '@/components/common/PageHeader'
 import { cn } from '@/lib/utils'
 import { vendorReputation } from '@/lib/reputation'
+import { waLink, telHref, isWhatsappable } from '@/lib/phone'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
   Shield, Clock, Search, BarChart3, GitCompare,
@@ -167,10 +168,6 @@ const MEMBERSHIP = {
   agreed: { label: 'אישר הצטרפות', variant: 'success' },
   declined: { label: 'סירב', variant: 'danger' },
 }
-
-// Normalize an Israeli number to wa.me format (drop non-digits, 0 → 972).
-const waLink = (phone, text) =>
-  `https://wa.me/${String(phone || '').replace(/\D/g, '').replace(/^0/, '972')}?text=${encodeURIComponent(text)}`
 
 function buildInviteMessage(vendor) {
   return `שלום${vendor?.name ? ' ' + vendor.name : ''},\n` +
@@ -618,9 +615,11 @@ function Vendors() {
     }
   }
 
-  // Open WhatsApp with the invitation and mark the vendor as invited.
+  // Open WhatsApp (or a phone call, for numbers WhatsApp can't reach) with the
+  // invitation, and mark the vendor as invited.
   const sendInvite = async (vendor) => {
-    window.open(waLink(vendor.phone, buildInviteMessage(vendor)), '_blank')
+    const link = waLink(vendor.phone, buildInviteMessage(vendor)) || telHref(vendor.phone)
+    if (link) window.open(link, '_blank')
     await update(vendor.id, { membership_status: 'invited', invited_at: new Date().toISOString() })
   }
 
@@ -848,7 +847,7 @@ function Vendors() {
                       <div className="flex gap-1.5 shrink-0">
                         {v.phone && (
                           <Button size="sm" variant="outline" onClick={() => sendInvite(v)}>
-                            📨 {status === 'pending' ? 'שלח הזמנה' : 'שלח שוב'}
+                            {isWhatsappable(v.phone) ? '📨' : '📞'} {status === 'pending' ? 'שלח הזמנה' : 'שלח שוב'}
                           </Button>
                         )}
                         {status !== 'agreed' && (

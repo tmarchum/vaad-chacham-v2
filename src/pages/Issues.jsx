@@ -17,6 +17,7 @@ import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
+import { waLink, telHref, isWhatsappable } from '@/lib/phone'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
 import {
@@ -715,12 +716,9 @@ function Issues() {
     }
   }
 
-  // Generate WhatsApp link for a phone number + message
-  const buildWhatsAppLink = (phone, message) => {
-    const cleaned = (phone || '').replace(/\D/g, '').replace(/^0/, '972')
-    const encoded = encodeURIComponent(message)
-    return `https://wa.me/${cleaned}?text=${encoded}`
-  }
+  // WhatsApp link when the number supports it, otherwise a tel: call link —
+  // gas/national-service numbers (*3626, 1-800…) can't use WhatsApp.
+  const buildContactLink = (phone, message) => waLink(phone, message) || telHref(phone)
 
   // Generate committee notification message for an issue
   const buildCommitteeMessage = (iss, analysis) => {
@@ -777,8 +775,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         console.error('share with photo failed', e)
       }
     }
-    // Fallback: text-only to the vendor's number.
-    if (vendor.phone) window.open(buildWhatsAppLink(vendor.phone, message), '_blank')
+    // Fallback: text-only to the vendor's number (WhatsApp or a call).
+    const link = buildContactLink(vendor.phone, message)
+    if (link) window.open(link, '_blank')
   }
 
   // Approve issue for quotes — routed to the in-house vendor database only.
@@ -1429,8 +1428,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                             <p className="text-xs text-[var(--text-secondary)]">{m.role === 'committee_chair' ? 'יו"ר ועד' : m.role === 'committee' ? 'חבר ועד' : 'מנהל'}{phone ? ` · ${phone}` : ''}</p>
                           </div>
                           {phone ? (
-                            <a href={buildWhatsAppLink(phone, msg)} target="_blank" rel="noopener noreferrer">
-                              <Button size="sm" variant="outline">💬 שלח WhatsApp</Button>
+                            <a href={buildContactLink(phone, msg)} target="_blank" rel="noopener noreferrer">
+                              <Button size="sm" variant="outline">{isWhatsappable(phone) ? '💬 שלח WhatsApp' : '📞 התקשר'}</Button>
                             </a>
                           ) : (
                             <span className="text-xs text-[var(--text-secondary)]">אין טלפון</span>
@@ -1548,8 +1547,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                                 <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
                               )}
                               {v.phone && (
-                                <a href={buildWhatsAppLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
-                                  <Button size="sm" variant="outline">💬 שלח</Button>
+                                <a href={buildContactLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
+                                  <Button size="sm" variant="outline">{isWhatsappable(v.phone) ? '💬 שלח' : '📞 התקשר'}</Button>
                                 </a>
                               )}
                             </div>
