@@ -306,91 +306,84 @@ Deno.serve(async (req: Request) => {
     const { agentType, buildingName, contextData } = await req.json()
 
     // ---------------------------------------------------------------------------
-    // Special handler: vendor_search — scrapes Madrag + Google (no Claude needed)
+    // Special handler: vendor_search — finds real vendors via Claude's web search
+    // tool. (The old Madrag/דפי-זהב HTML scraping is dead — those sites block
+    // bots, returning HTTP 000. Claude's server-side web_search runs the search
+    // on Anthropic's infrastructure and returns live, structured results.)
     // ---------------------------------------------------------------------------
     if (agentType === 'vendor_search') {
       const { category, city, address, searchTerms } = contextData as Record<string, string>
       const query = searchTerms || category
-      const vendors: Array<Record<string, string>> = []
+      const where = city || address || 'ישראל'
 
-      // Try Madrag
+      const model = Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-4-6'
+
+      const searchPrompt = `חפש 4-5 בעלי מקצוע / ספקים אמיתיים בקטגוריה "${category}"${query !== category ? ` (${query})` : ''} באזור ${where} בישראל, עם מספר טלפון. העדף עסקים מקומיים עם ביקורות.
+החזר אך ורק JSON תקין, ללא טקסט נוסף וללא backticks:
+{ "vendors": [ { "name": "שם העסק", "phone": "טלפון", "rating": "דירוג אם קיים", "category": "${category}", "source": "מקור", "url": "קישור" } ] }
+אם לא מצאת טלפון, השאר ריק אך כלול קישור למקור.`
+
+      // Use a RAW fetch (not the npm SDK), and the LIGHTER web_search_20250305
+      // tool. The newer _20260209 uses dynamic filtering that reads full pages
+      // (~28K tokens pulled, ~40-120s, variable — blew past the platform's 150s
+      // idle limit from the edge). The _20250305 snippet search returns business
+      // name + phone from result snippets in ~13s, which is plenty here.
+      // AbortController still caps it; on timeout/failure we degrade to links.
+      let vendors: Array<Record<string, string>> = []
+      let searchNote = ''
+      const ctrl = new AbortController()
+      const abortTimer = setTimeout(() => ctrl.abort(), 120_000)
       try {
-        const madragUrl = `https://www.madrag.co.il/search/?q=${encodeURIComponent(query)}&loc=${encodeURIComponent(city || '')}`
-        const madragRes = await fetch(madragUrl, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; VaadBot/1.0)' },
-          signal: AbortSignal.timeout(8000),
+        const aRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          signal: ctrl.signal,
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: 1500,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
+            messages: [{ role: 'user', content: searchPrompt }],
+          }),
         })
-        if (madragRes.ok) {
-          const html = await madragRes.text()
-          // Parse business cards — Madrag structure: data-business-id, class="business-name", class="phone"
-          const nameMatches = html.matchAll(/class="[^"]*business[^"]*name[^"]*"[^>]*>([^<]{2,60})</gi)
-          const phoneMatches = html.matchAll(/(?:href="tel:|class="[^"]*phone[^"]*"[^>]*>)\+?[\d\-\s]{7,15}/gi)
-          const ratingMatches = html.matchAll(/class="[^"]*rating[^"]*"[^>]*>\s*([\d.]+)/gi)
-          const urlMatches = html.matchAll(/href="(https?:\/\/(?:www\.)?madrag\.co\.il\/business\/[^"]+)"/gi)
+        const data = await aRes.json()
+        if (!aRes.ok) throw new Error(data?.error?.message || `anthropic_${aRes.status}`)
 
-          const names = [...nameMatches].map((m) => m[1].trim()).filter((n) => n.length > 1)
-          const phones = [...phoneMatches].map((m) => m[0].replace(/[^\d+]/g, ''))
-          const ratings = [...ratingMatches].map((m) => m[1])
-          const urls = [...urlMatches].map((m) => m[1])
+        // Concatenate all text blocks (web search interleaves text + results).
+        const rawText = (data.content || [])
+          .filter((b: { type: string }) => b.type === 'text')
+          .map((b: { text: string }) => b.text)
+          .join('\n')
 
-          for (let i = 0; i < Math.min(names.length, 6); i++) {
-            vendors.push({
-              name: names[i],
-              phone: phones[i] || '',
-              rating: ratings[i] || '',
-              category: category,
-              source: 'מדרג',
-              url: urls[i] || madragUrl,
-            })
-          }
-        }
-      } catch (_e) {
-        // Madrag scraping failed — continue to fallbacks
+        const cleaned = rawText.replace(/```\w*/g, '').replace(/```/g, '').trim()
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+        const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(cleaned || '{}')
+        if (Array.isArray(parsed.vendors)) vendors = parsed.vendors
+      } catch (e) {
+        // Web search timed out / failed — return the manual links below so the
+        // user always has a working path. Surface a short reason for the UI.
+        searchNote = e instanceof Error ? e.message : 'web_search_failed'
+      } finally {
+        clearTimeout(abortTimer)
       }
 
-      // Try Yad2 / דפי זהב API if Madrag returned nothing
-      if (vendors.length === 0) {
-        try {
-          const dzUrl = `https://www.d.co.il/search/?q=${encodeURIComponent(query + ' ' + city)}`
-          const dzRes = await fetch(dzUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(6000),
-          })
-          if (dzRes.ok) {
-            const html = await dzRes.text()
-            const nameMatches = html.matchAll(/class="[^"]*business[^"]*title[^"]*"[^>]*>([^<]{2,60})</gi)
-            const phoneMatches = html.matchAll(/[\d]{2,3}-[\d]{7}/g)
-            const names = [...nameMatches].map((m) => m[1].trim()).filter((n) => n.length > 1)
-            const phones = [...phoneMatches].map((m) => m[0])
-            for (let i = 0; i < Math.min(names.length, 5); i++) {
-              vendors.push({
-                name: names[i],
-                phone: phones[i] || '',
-                rating: '',
-                category: category,
-                source: 'דפי זהב',
-                url: dzUrl,
-              })
-            }
-          }
-        } catch (_e) {
-          // fallback failed
-        }
-      }
-
-      // Always return search links even if scraping failed
+      // Always return manual search links too, as a fallback / "see more" path.
       return new Response(
         JSON.stringify({
           result: {
             vendors,
             search_links: {
               madrag: `https://www.madrag.co.il/search/?q=${encodeURIComponent(query)}&loc=${encodeURIComponent(city || '')}`,
-              google: `https://www.google.com/search?q=${encodeURIComponent(query + ' ' + city + ' ביקורות')}`,
-              dafey_zahav: `https://www.d.co.il/search/?q=${encodeURIComponent(query + ' ' + city)}`,
+              google: `https://www.google.com/search?q=${encodeURIComponent(query + ' ' + where + ' ביקורות')}`,
+              dafey_zahav: `https://www.d.co.il/search/?q=${encodeURIComponent(query + ' ' + where)}`,
             },
             category,
             city,
             searchTerms: query,
+            note: searchNote,
           },
           agentType,
         }),
