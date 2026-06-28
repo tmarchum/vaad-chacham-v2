@@ -52,6 +52,7 @@ const Payments         = lazy(() => import('@/pages/Payments'))
 const Expenses         = lazy(() => import('@/pages/Expenses'))
 const Issues           = lazy(() => import('@/pages/Issues'))
 const Vendors          = lazy(() => import('@/pages/Vendors'))
+const Supervisors      = lazy(() => import('@/pages/Supervisors'))
 const Compliance       = lazy(() => import('@/pages/Compliance'))
 const RecurringTasks   = lazy(() => import('@/pages/RecurringTasks'))
 const BuildingAgent    = lazy(() => import('@/pages/BuildingAgent'))
@@ -105,6 +106,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="expenses" element={<Suspense fallback={<PageLoader />}><Expenses /></Suspense>} />
               <Route path="issues" element={<Suspense fallback={<PageLoader />}><Issues /></Suspense>} />
               <Route path="vendors" element={<Suspense fallback={<PageLoader />}><Vendors /></Suspense>} />
+              <Route path="supervisors" element={<Suspense fallback={<PageLoader />}><Supervisors /></Suspense>} />
               <Route path="compliance" element={<Suspense fallback={<PageLoader />}><Compliance /></Suspense>} />
               <Route path="recurring-tasks" element={<Suspense fallback={<PageLoader />}><RecurringTasks /></Suspense>} />
               <Route path="building-assets" element={<Suspense fallback={<PageLoader />}><BuildingAssets /></Suspense>} />

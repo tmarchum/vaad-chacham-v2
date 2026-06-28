@@ -307,6 +307,7 @@ function Issues() {
   )
   const { data: allUnits } = useCollection('units')
   const { data: allVendors } = useCollection('vendors')
+  const { data: supervisors } = useCollection('supervisors')
   const { data: allQuotes, create: createQuote, update: updateQuote } = useCollection('quotes')
 
   // State
@@ -826,6 +827,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     const v = userId || null
     update(iss.id, { assigned_to: v })
     setWorkflowIssue((prev) => (prev ? { ...prev, assigned_to: v } : prev))
+  }
+
+  // Generic: persist a field on the issue being handled + keep the workflow copy in sync.
+  const setWorkflowField = (iss, field, value) => {
+    update(iss.id, { [field]: value })
+    setWorkflowIssue((prev) => (prev ? { ...prev, [field]: value } : prev))
   }
 
   // Mark as sent to committee
@@ -1578,6 +1585,32 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </div>
                 )}
 
+
+                {/* Supervisor (מפקח) — optional, from the separate supervisors list */}
+                <div className="pt-2 border-t border-[var(--border)] space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)] cursor-pointer">
+                    <input type="checkbox" checked={!!workflowIssue.needs_supervisor}
+                      onChange={(e) => setWorkflowField(workflowIssue, 'needs_supervisor', e.target.checked)}
+                      className="h-4 w-4 rounded accent-[var(--primary)]" />
+                    נדרש מפקח לליווי העבודה
+                  </label>
+                  {workflowIssue.needs_supervisor && (
+                    supervisors.length === 0 ? (
+                      <p className="text-xs text-amber-600">אין מפקחים ברשימה — הוסף במסך "מפקחים".</p>
+                    ) : (
+                      <select
+                        value={workflowIssue.supervisor_id || ''}
+                        onChange={(e) => setWorkflowField(workflowIssue, 'supervisor_id', e.target.value || null)}
+                        className="w-full h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)]/25"
+                      >
+                        <option value="">— בחר מפקח מהרשימה —</option>
+                        {supervisors.filter((s) => s.is_active !== false).map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}{s.specialty ? ` · ${s.specialty}` : ''}</option>
+                        ))}
+                      </select>
+                    )
+                  )}
+                </div>
 
                 <div className="pt-2 border-t border-[var(--border)]">
                   <Button

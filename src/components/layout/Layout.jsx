@@ -60,6 +60,7 @@ const PAGE_TITLES = {
   '/work-orders': 'הזמנות עבודה',
   '/vendor-finder': 'מציאת ספקים',
   '/vendors': 'ספקים',
+  '/supervisors': 'מפקחים',
   '/recurring-tasks': 'משימות חוזרות',
   '/building-assets': 'ציוד ומערכות',
   '/compliance': 'רגולציה',

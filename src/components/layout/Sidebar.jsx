@@ -46,6 +46,7 @@ const NAV_SECTIONS = [
       { to: '/work-orders',   label: 'הזמנות עבודה',   icon: ClipboardList },
       { to: '/vendor-finder', label: 'מציאת ספקים',    icon: Search },
       { to: '/vendors',       label: 'ספקים',          icon: Store },
+      { to: '/supervisors',   label: 'מפקחים',         icon: ShieldCheck },
       { to: '/recurring-tasks', label: 'משימות חוזרות', icon: CalendarClock },
       { to: '/building-assets', label: 'ציוד ומערכות', icon: Cog },
     ],

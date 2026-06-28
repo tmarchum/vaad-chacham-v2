@@ -19,6 +19,7 @@ export const TABLE_MAP = {
   expenses: 'expenses',
   issues: 'issues',
   vendors: 'vendors',
+  supervisors: 'supervisors',
   compliance: 'compliance',
   recurringTasks: 'recurring_tasks',
   buildingAssets: 'building_assets',
