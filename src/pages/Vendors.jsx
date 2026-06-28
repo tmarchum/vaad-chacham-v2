@@ -71,7 +71,7 @@ const EMPTY_FORM = {
 
 const TABS = [
   { key: 'my-vendors', label: 'הספקים שלי' },
-  { key: 'find-vendor', label: 'מצא ספק' },
+  { key: 'invites', label: 'הזמנות למאגר' },
   { key: 'compare', label: 'השוואת ספקים' },
 ]
 
@@ -126,6 +126,28 @@ function getVendorTags(vendor) {
   if (vendor.insurance_expiry) tags.push({ label: 'מבוטח', variant: 'default' })
   if (vendor.license_number) tags.push({ label: 'רישיון', variant: 'default' })
   return tags
+}
+
+// Vendor membership in the Vaad Plus pool — after the database is finalized the
+// committee invites each vendor (WhatsApp) to confirm they want to receive the
+// building's work requests.
+const MEMBERSHIP = {
+  pending: { label: 'ממתין להזמנה', variant: 'default' },
+  invited: { label: 'הוזמן', variant: 'info' },
+  agreed: { label: 'אישר הצטרפות', variant: 'success' },
+  declined: { label: 'סירב', variant: 'danger' },
+}
+
+// Normalize an Israeli number to wa.me format (drop non-digits, 0 → 972).
+const waLink = (phone, text) =>
+  `https://wa.me/${String(phone || '').replace(/\D/g, '').replace(/^0/, '972')}?text=${encodeURIComponent(text)}`
+
+function buildInviteMessage(vendor) {
+  return `שלום${vendor?.name ? ' ' + vendor.name : ''},\n` +
+    `אנחנו ועד הבית ומנהלים את הבניין באמצעות מערכת "ועד פלוס".\n` +
+    `אנו בונים מאגר ספקים מומלצים שאליו נפנה ישירות בעת תקלות ועבודות בבניין — בלי לחפש כל פעם מחדש.\n` +
+    `נשמח לצרף אתכם בתחום ${vendor?.category || 'השירות שלכם'}. האם תהיו מעוניינים להיכלל במאגר ולקבל מאיתנו פניות לעבודות והצעות מחיר?\n` +
+    `תודה רבה!`
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +480,7 @@ function Vendors() {
   const { data: workOrders } = useCollection('workOrders')
 
   const [activeTab, setActiveTab] = useState('my-vendors')
+  const [membershipFilter, setMembershipFilter] = useState('pending')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -565,6 +588,16 @@ function Vendors() {
       await remove(deleteTarget.id)
       setDeleteTarget(null)
     }
+  }
+
+  // Open WhatsApp with the invitation and mark the vendor as invited.
+  const sendInvite = async (vendor) => {
+    window.open(waLink(vendor.phone, buildInviteMessage(vendor)), '_blank')
+    await update(vendor.id, { membership_status: 'invited', invited_at: new Date().toISOString() })
+  }
+
+  const setMembership = async (vendor, status) => {
+    await update(vendor.id, { membership_status: status })
   }
 
   const handleBlacklist = async (vendor) => {
@@ -711,25 +744,87 @@ function Vendors() {
       )}
 
       {/* ================================================================== */}
-      {/* TAB 2 - Find Vendor (Coming Soon) */}
+      {/* TAB 2 - Membership invitations */}
       {/* ================================================================== */}
-      {activeTab === 'find-vendor' && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center mb-6 shadow-lg">
-            <Store className="h-10 w-10 text-white" />
+      {activeTab === 'invites' && (() => {
+        const counts = allVendors.reduce((acc, v) => {
+          const s = v.membership_status || 'pending'
+          acc[s] = (acc[s] || 0) + 1
+          return acc
+        }, {})
+        const list = allVendors
+          .filter((v) => !v.is_blacklisted)
+          .filter((v) => (membershipFilter === 'all' ? true : (v.membership_status || 'pending') === membershipFilter))
+          .slice()
+          .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he'))
+
+        return (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--primary-bg)]/40 p-4">
+              <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">הזמנת ספקים למאגר ועד פלוס</h3>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                לאחר השלמת המאגר, שלח לכל ספק הזמנה בוואטסאפ לאישור הצטרפות. ההודעה מסבירה במה מדובר.
+                לחיצה על "שלח הזמנה" פותחת וואטסאפ ומסמנת את הספק כ"הוזמן" — לאחר תשובת הספק סמן "אישר" או "סירב".
+              </p>
+            </div>
+
+            {/* Status filter */}
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'pending', label: `ממתינים (${counts.pending || 0})` },
+                { key: 'invited', label: `הוזמנו (${counts.invited || 0})` },
+                { key: 'agreed', label: `אישרו (${counts.agreed || 0})` },
+                { key: 'declined', label: `סירבו (${counts.declined || 0})` },
+                { key: 'all', label: 'הכל' },
+              ].map((pill) => (
+                <Button
+                  key={pill.key}
+                  variant={membershipFilter === pill.key ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMembershipFilter(pill.key)}
+                >
+                  {pill.label}
+                </Button>
+              ))}
+            </div>
+
+            {list.length === 0 ? (
+              <EmptyState icon={Users} title="אין ספקים בסטטוס זה" description="בחר סטטוס אחר או הוסף ספקים." />
+            ) : (
+              <div className="space-y-2">
+                {list.map((v) => {
+                  const status = v.membership_status || 'pending'
+                  const m = MEMBERSHIP[status]
+                  return (
+                    <div key={v.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border border-[var(--border)] p-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm text-[var(--text-primary)] truncate">{v.name}</p>
+                          <Badge variant={m.variant} className="text-[10px] shrink-0">{m.label}</Badge>
+                        </div>
+                        <p className="text-xs text-[var(--text-secondary)]">{v.category}{v.phone ? ` · ${v.phone}` : ''}</p>
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        {v.phone && (
+                          <Button size="sm" variant="outline" onClick={() => sendInvite(v)}>
+                            📨 {status === 'pending' ? 'שלח הזמנה' : 'שלח שוב'}
+                          </Button>
+                        )}
+                        {status !== 'agreed' && (
+                          <Button size="sm" variant="ghost" className="text-emerald-600" onClick={() => setMembership(v, 'agreed')}>✓ אישר</Button>
+                        )}
+                        {status !== 'declined' && (
+                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => setMembership(v, 'declined')}>✗ סירב</Button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
-          <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">מאגר ספקים בבנייה</h3>
-          <p className="text-sm text-[var(--text-secondary)] max-w-sm leading-relaxed">
-            מאגר ספקים מורשים לניהול בניינים יהיה זמין בקרוב. בינתיים, הוסף ספקים ידנית ללשונית "הספקים שלי".
-          </p>
-          <div className="mt-6">
-            <span className="inline-flex items-center gap-2 text-xs text-[var(--text-muted)] bg-slate-50 border border-[var(--border)] rounded-full px-4 py-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              בקרוב
-            </span>
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ================================================================== */}
       {/* TAB 3 - Compare Vendors */}
@@ -804,6 +899,10 @@ function Vendors() {
             <DetailRow
               label="נותן שירות קבוע"
               value={detailVendor.is_regular ? <Badge variant="success">קבוע לבניין</Badge> : 'לא'}
+            />
+            <DetailRow
+              label="סטטוס במאגר"
+              value={(() => { const m = MEMBERSHIP[detailVendor.membership_status || 'pending']; return <Badge variant={m.variant}>{m.label}</Badge> })()}
             />
             {detailVendor.specialties && (
               <DetailRow

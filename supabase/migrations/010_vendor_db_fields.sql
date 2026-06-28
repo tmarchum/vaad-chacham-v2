@@ -10,3 +10,10 @@
 
 alter table public.vendors add column if not exists address text;
 alter table public.vendors add column if not exists is_regular boolean default false;
+
+-- Vaad Plus membership: once the database is finalized, the committee invites
+-- each vendor (WhatsApp) to confirm they want to receive the building's work
+-- requests. pending → invited → agreed | declined (managed in the Vendors page,
+-- "הזמנות למאגר" tab).
+alter table public.vendors add column if not exists membership_status text default 'pending';
+alter table public.vendors add column if not exists invited_at timestamptz;
