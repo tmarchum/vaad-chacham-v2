@@ -171,6 +171,7 @@ const IssueCard = React.memo(function IssueCard({
   iss,
   issueQuotes,
   buildingName,
+  accompanier,
   onOpen,
   onAcknowledge,
   onOpenQuoteDialog,
@@ -273,10 +274,13 @@ const IssueCard = React.memo(function IssueCard({
           )}
         </div>
         <div className="flex items-center justify-between pt-2 border-t border-[var(--border-light,var(--border))]">
-          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)]">
+          <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] flex-wrap">
             {iss.reportedAt && <span>{timeAgo(iss.reportedAt)}</span>}
             {iss.vendor_name && <span>{iss.reportedAt ? '·' : ''} {iss.vendor_name}</span>}
             {buildingName && <span>· {buildingName}</span>}
+            {accompanier
+              ? <span className="text-[var(--text-secondary)]">· 👤 מלווה: {accompanier}</span>
+              : (!['closed', 'completed'].includes(iss.status) && <span className="text-amber-600 font-medium">· ללא מלווה</span>)}
           </div>
           {displayCost != null && <span className="text-[12px] font-semibold text-[var(--text-primary)]">{formatCurrency(displayCost)}</span>}
         </div>
@@ -409,6 +413,14 @@ function Issues() {
     ],
     [assignMembers]
   )
+  // assigned_to (profile id) → display name, for the accompanying member badge.
+  const memberNameById = useMemo(() => {
+    const map = {}
+    assignMembers.forEach((m) => {
+      map[m.id] = `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'חבר ועד'
+    })
+    return map
+  }, [assignMembers])
 
   // Suggested vendors for the issue being edited — the "dispatcher".
   const issueForMatch = { category: form.category, title: form.title, priority: form.priority }
@@ -778,10 +790,24 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setWorkflowStep(3)
   }
 
-  // Reject/close issue by committee
+  // Close issue by committee — only the accompanying committee member
+  // (חבר ועד מלווה) may close it, so an assignment is required first.
   const closeByCommittee = (iss) => {
+    if (!iss.assigned_to) {
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'יש לשייך חבר ועד מלווה לפני סגירת התקלה — הוא האחראי לסגירה', type: 'error' },
+      }))
+      return
+    }
     update(iss.id, { status: 'closed' })
     setWorkflowIssue(null)
+  }
+
+  // Set the accompanying committee member on the issue being handled.
+  const assignAccompanier = (iss, userId) => {
+    const v = userId || null
+    update(iss.id, { assigned_to: v })
+    setWorkflowIssue((prev) => (prev ? { ...prev, assigned_to: v } : prev))
   }
 
   // Mark as sent to committee
@@ -872,7 +898,16 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setCompleteCost('')
   }
 
-  const handleClose = useCallback((iss) => { update(iss.id, { status: 'closed' }) }, [update])
+  // Closing is the accompanying committee member's responsibility — require one.
+  const handleClose = useCallback((iss) => {
+    if (!iss.assigned_to) {
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: 'יש לשייך חבר ועד מלווה לפני סגירת התקלה — הוא האחראי לסגירה', type: 'error' },
+      }))
+      return
+    }
+    update(iss.id, { status: 'closed' })
+  }, [update])
 
   // Refresh detail issue from latest data
   const currentDetailIssue = useMemo(() => {
@@ -1055,6 +1090,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               iss={iss}
               issueQuotes={quotesByIssue[iss.id] || []}
               buildingName={buildingMap[iss.buildingId]?.name}
+              accompanier={memberNameById[iss.assigned_to]}
               onOpen={handleOpenDetail}
               onAcknowledge={handleAcknowledge}
               onOpenQuoteDialog={handleOpenQuoteDialog}
@@ -1089,6 +1125,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                         iss={iss}
                         issueQuotes={quotesByIssue[iss.id] || []}
                         buildingName={buildingMap[iss.buildingId]?.name}
+                        accompanier={memberNameById[iss.assigned_to]}
                         onOpen={handleOpenDetail}
                         onAcknowledge={handleAcknowledge}
                         onOpenQuoteDialog={handleOpenQuoteDialog}
@@ -1406,6 +1443,29 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   <p className="text-sm text-[var(--text-secondary)]">לא הוגדרו חברי ועד לבניין זה. ניתן להוסיף בהגדרות מערכת.</p>
                 )}
 
+                {/* Accompanying committee member — owns the issue and is the
+                    one responsible for closing it. */}
+                <div className="pt-2 border-t border-[var(--border)]">
+                  <label className="block text-sm font-semibold text-[var(--text-primary)] mb-1.5">
+                    חבר ועד מלווה (אחראי לטיפול ולסגירה)
+                  </label>
+                  <select
+                    value={workflowIssue.assigned_to || ''}
+                    onChange={(e) => assignAccompanier(workflowIssue, e.target.value)}
+                    className="w-full h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--text-primary)] focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)]/25"
+                  >
+                    <option value="">— בחר חבר ועד מלווה —</option>
+                    {committeeMembers.map((m) => {
+                      const p = m.profiles
+                      const name = p ? [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email : m.user_id
+                      return <option key={m.user_id} value={m.user_id}>{name}</option>
+                    })}
+                  </select>
+                  {!workflowIssue.assigned_to && (
+                    <p className="text-xs text-amber-600 mt-1">חובה לשייך מלווה — הוא האחראי לסגירת התקלה.</p>
+                  )}
+                </div>
+
                 {/* Decision buttons */}
                 <div className="pt-2 border-t border-[var(--border)]">
                   <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">החלטת ועד:</p>
@@ -1414,7 +1474,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                       <CheckCheck className="h-4 w-4" />
                       אשר — קבל הצעות מחיר
                     </Button>
-                    <Button variant="destructive" onClick={() => closeByCommittee(workflowIssue)}>
+                    <Button
+                      variant="destructive"
+                      onClick={() => closeByCommittee(workflowIssue)}
+                      disabled={!workflowIssue.assigned_to}
+                      title={!workflowIssue.assigned_to ? 'יש לשייך חבר ועד מלווה לפני סגירה' : ''}
+                    >
                       סגור תקלה
                     </Button>
                   </div>
@@ -1908,11 +1973,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               </div>
             )}
             <FormSelect
-              label="נציג ועד מטפל"
+              label="חבר ועד מלווה (אחראי לסגירה)"
               value={form.assigned_to}
               onChange={setField('assigned_to')}
               options={memberOptions}
-              placeholder="שייך לנציג"
+              placeholder="שייך חבר ועד מלווה"
             />
             <FormSelect
               label="ספק"
