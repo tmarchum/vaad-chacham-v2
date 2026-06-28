@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
-import { Settings, Users, Database, Building, Shield, Key } from 'lucide-react'
+import { Settings, Users, Database, Building, Shield, Key, MessageCircle } from 'lucide-react'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 
 // ---------------------------------------------------------------------------
@@ -625,6 +625,140 @@ function BuildingsCommitteesTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Tab 4 — WhatsApp (GreenAPI) integration
+// ---------------------------------------------------------------------------
+
+function WhatsappTab() {
+  const [form, setForm] = useState({
+    id_instance: '', api_url: '', sender_number: '', sender_label: '', enabled: false, api_token: '',
+  })
+  const [meta, setMeta] = useState({ status: null, last_checked_at: null })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('messaging_integrations').select('*').eq('provider', 'greenapi').maybeSingle()
+    if (data) {
+      setForm((p) => ({
+        ...p,
+        id_instance: data.id_instance || '',
+        api_url: data.api_url || '',
+        sender_number: data.sender_number || '',
+        sender_label: data.sender_label || '',
+        enabled: !!data.enabled,
+        api_token: '',
+      }))
+      setMeta({ status: data.status, last_checked_at: data.last_checked_at })
+    }
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const set = (f) => (e) =>
+    setForm((p) => ({ ...p, [f]: e?.target?.value !== undefined ? e.target.value : e }))
+
+  const save = async () => {
+    if (!form.id_instance.trim()) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'יש להזין idInstance', type: 'error' } }))
+      return
+    }
+    setSaving(true)
+    const { api_token, ...config } = form
+    const { error: e1 } = await supabase.from('messaging_integrations').upsert({
+      provider: 'greenapi',
+      ...config,
+      updated_at: new Date().toISOString(),
+    })
+    let e2 = null
+    if (api_token && api_token.trim()) {
+      ;({ error: e2 } = await supabase.from('messaging_secrets').upsert({
+        provider: 'greenapi', api_token: api_token.trim(), updated_at: new Date().toISOString(),
+      }))
+    }
+    setSaving(false)
+    if (e1 || e2) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירה: ' + (e1 || e2).message, type: 'error' } }))
+      return
+    }
+    setForm((p) => ({ ...p, api_token: '' }))
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'הגדרות הוואטסאפ נשמרו', type: 'success' } }))
+    load()
+  }
+
+  const test = async () => {
+    setTesting(true); setTestResult(null)
+    const { data, error } = await supabase.functions.invoke('green-whatsapp', { body: { action: 'status' } })
+    setTesting(false)
+    if (error) { setTestResult({ ok: false, text: error.message }); return }
+    if (data?.error) { setTestResult({ ok: false, text: data.error === 'not_configured' ? 'יש לשמור idInstance + טוקן תחילה' : data.error }); load(); return }
+    const authorized = data?.state === 'authorized'
+    setTestResult({ ok: authorized, text: authorized ? 'מחובר ומאומת ✓' : `מצב: ${data?.state || 'לא ידוע'}` })
+    load()
+  }
+
+  if (loading) return <p className="text-[var(--text-secondary)] py-8 text-center">טוען הגדרות...</p>
+
+  return (
+    <div className="space-y-6" dir="rtl">
+      <Card className="overflow-hidden border border-[var(--border)]">
+        <div className="h-1 bg-gradient-to-r from-green-500 to-emerald-600" />
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-sm">
+              <MessageCircle size={16} className="text-white" />
+            </div>
+            חיבור וואטסאפ (GreenAPI)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+            הזן את פרטי האינסטנס מקונסולת GreenAPI (idInstance, ApiTokenInstance, ובמידת הצורך apiUrl).
+            הטוקן נשמר מוצפן בצד השרת ואינו מוצג חזרה — בעריכה השאר ריק כדי לא לשנותו.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="idInstance" value={form.id_instance} onChange={set('id_instance')} placeholder="1101234567" dir="ltr" />
+            <FormField label="ApiTokenInstance (סודי)" type="password" value={form.api_token} onChange={set('api_token')} placeholder="מאוחסן — השאר ריק לשמירה" dir="ltr" />
+            <FormField label="apiUrl (רשות)" value={form.api_url} onChange={set('api_url')} placeholder="https://api.green-api.com" dir="ltr" />
+            <FormField label="מספר השולח (וואטסאפ)" value={form.sender_number} onChange={set('sender_number')} placeholder="0501234567" dir="ltr" />
+            <FormField label="תווית השולח" value={form.sender_label} onChange={set('sender_label')} placeholder="ועד הבית" />
+            <FormBool label="חיבור פעיל (אפשר שליחה מהמערכת)" value={form.enabled} onChange={set('enabled')} />
+          </div>
+
+          {/* Status row */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-[var(--text-secondary)]">סטטוס אחרון:</span>
+            {meta.status
+              ? <Badge variant={meta.status === 'authorized' ? 'success' : 'warning'}>{meta.status}</Badge>
+              : <span className="text-[var(--text-muted)]">לא נבדק</span>}
+            {meta.last_checked_at && <span className="text-[var(--text-muted)]">· {new Date(meta.last_checked_at).toLocaleString('he-IL')}</span>}
+          </div>
+
+          {testResult && (
+            <div className={`rounded-lg border p-3 text-sm ${testResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+              {testResult.text}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <Button onClick={save} disabled={saving}>{saving ? 'שומר...' : 'שמור הגדרות'}</Button>
+            <Button variant="outline" onClick={test} disabled={testing}>{testing ? 'בודק...' : 'בדוק חיבור'}</Button>
+          </div>
+
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
+            ⚠️ ערוץ זה מיועד לפנייה לספקים (יזום ע"י הוועד). הודעות לדיירים — ובמיוחד דרישות תשלום/גבייה — יישארו יזומות-ידנית ולא יישלחו אוטומטית דרכו.
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -632,6 +766,7 @@ const TABS = [
   { key: 'users', label: 'משתמשים' },
   { key: 'fields', label: 'שדות מותאמים' },
   { key: 'buildings', label: 'בניינים ועדים' },
+  { key: 'whatsapp', label: 'וואטסאפ' },
 ]
 
 export default function AdminSettings() {
@@ -656,6 +791,7 @@ export default function AdminSettings() {
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'fields' && <CustomFieldsTab />}
         {activeTab === 'buildings' && <BuildingsCommitteesTab />}
+        {activeTab === 'whatsapp' && <WhatsappTab />}
       </div>
     </div>
   )
