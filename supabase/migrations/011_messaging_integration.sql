@@ -30,10 +30,16 @@ drop policy if exists mi_admin_all on public.messaging_integrations;
 create policy mi_admin_all on public.messaging_integrations
   for all using (public.is_admin()) with check (public.is_admin());
 
--- Secret: admin can write, NOBODY can SELECT (service role bypasses RLS).
+-- Secret: admin can write + read. A SELECT policy is required for upsert
+-- (INSERT … ON CONFLICT must read the existing row) — without it the write is
+-- rejected. The app never selects api_token; only the green-whatsapp Edge
+-- Function reads it (via the service role).
 drop policy if exists ms_admin_ins on public.messaging_secrets;
 create policy ms_admin_ins on public.messaging_secrets
   for insert with check (public.is_admin());
 drop policy if exists ms_admin_upd on public.messaging_secrets;
 create policy ms_admin_upd on public.messaging_secrets
   for update using (public.is_admin()) with check (public.is_admin());
+drop policy if exists ms_admin_sel on public.messaging_secrets;
+create policy ms_admin_sel on public.messaging_secrets
+  for select using (public.is_admin());
