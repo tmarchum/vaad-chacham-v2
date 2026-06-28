@@ -43,12 +43,39 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'forbidden' }, 403)
     }
 
-    const { action, chatId, message, fileUrl, fileName } = await req.json()
+    const body = await req.json()
+    const { action, chatId, message, fileUrl, fileName } = body
+
+    // Save credentials through the service role (avoids any RLS-write ambiguity
+    // on the secret). Admin only.
+    if (action === 'save') {
+      if (prof.role !== 'admin') return json({ error: 'forbidden' }, 403)
+      const cfg = body.config || {}
+      const hasNewToken = typeof body.api_token === 'string' && body.api_token.trim().length > 0
+      await svc.from('messaging_integrations').upsert({
+        provider: 'greenapi',
+        id_instance: cfg.id_instance ?? null,
+        api_url: cfg.api_url ?? null,
+        sender_number: cfg.sender_number ?? null,
+        sender_label: cfg.sender_label ?? null,
+        enabled: cfg.enabled === true,
+        ...(hasNewToken ? { has_token: true } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      if (hasNewToken) {
+        await svc.from('messaging_secrets').upsert({
+          provider: 'greenapi', api_token: body.api_token.trim(), updated_at: new Date().toISOString(),
+        })
+      }
+      const { data: sec } = await svc.from('messaging_secrets')
+        .select('api_token').eq('provider', 'greenapi').maybeSingle()
+      return json({ ok: true, has_token: !!sec?.api_token })
+    }
 
     const { data: integ } = await svc
-      .from('messaging_integrations').select('*').eq('provider', 'greenapi').single()
+      .from('messaging_integrations').select('*').eq('provider', 'greenapi').maybeSingle()
     const { data: secret } = await svc
-      .from('messaging_secrets').select('api_token').eq('provider', 'greenapi').single()
+      .from('messaging_secrets').select('api_token').eq('provider', 'greenapi').maybeSingle()
 
     const idInstance = integ?.id_instance
     const token = secret?.api_token
@@ -56,7 +83,11 @@ Deno.serve(async (req: Request) => {
     // friendly message instead of a generic "non-2xx" error.
     if (!idInstance || !token) return json({ ok: false, error: 'not_configured' }, 200)
 
-    const base = (integ.api_url || 'https://api.green-api.com').replace(/\/+$/, '')
+    // GreenAPI host: use the configured apiUrl, else derive from the instance
+    // prefix (e.g. 7103… → https://7103.api.greenapi.com).
+    const prefix = String(idInstance).slice(0, 4)
+    const base = ((integ.api_url && integ.api_url.trim()) || `https://${prefix}.api.greenapi.com`)
+      .replace(/\/+$/, '')
 
     if (action === 'status') {
       const r = await fetch(`${base}/waInstance${idInstance}/getStateInstance/${token}`, {
@@ -67,7 +98,7 @@ Deno.serve(async (req: Request) => {
       await svc.from('messaging_integrations')
         .update({ status: state || `http_${r.status}`, last_checked_at: new Date().toISOString() })
         .eq('provider', 'greenapi')
-      return json({ ok: r.ok, state, raw: j })
+      return json({ ok: r.ok, state, has_token: true, base, raw: j })
     }
 
     if (action === 'send') {

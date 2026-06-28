@@ -632,7 +632,7 @@ function WhatsappTab() {
   const [form, setForm] = useState({
     id_instance: '', api_url: '', sender_number: '', sender_label: '', enabled: false, api_token: '',
   })
-  const [meta, setMeta] = useState({ status: null, last_checked_at: null })
+  const [meta, setMeta] = useState({ status: null, last_checked_at: null, has_token: false })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -652,7 +652,7 @@ function WhatsappTab() {
         enabled: !!data.enabled,
         api_token: '',
       }))
-      setMeta({ status: data.status, last_checked_at: data.last_checked_at })
+      setMeta({ status: data.status, last_checked_at: data.last_checked_at, has_token: !!data.has_token })
     }
     setLoading(false)
   }, [])
@@ -668,24 +668,18 @@ function WhatsappTab() {
     }
     setSaving(true)
     const { api_token, ...config } = form
-    const { error: e1 } = await supabase.from('messaging_integrations').upsert({
-      provider: 'greenapi',
-      ...config,
-      updated_at: new Date().toISOString(),
+    // Saved through the Edge Function (service role) so the token write never
+    // depends on browser-side RLS.
+    const { data, error } = await supabase.functions.invoke('green-whatsapp', {
+      body: { action: 'save', config, api_token },
     })
-    let e2 = null
-    if (api_token && api_token.trim()) {
-      ;({ error: e2 } = await supabase.from('messaging_secrets').upsert({
-        provider: 'greenapi', api_token: api_token.trim(), updated_at: new Date().toISOString(),
-      }))
-    }
     setSaving(false)
-    if (e1 || e2) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירה: ' + (e1 || e2).message, type: 'error' } }))
+    if (error || !data?.ok) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירה: ' + (error?.message || data?.error || 'unknown'), type: 'error' } }))
       return
     }
     setForm((p) => ({ ...p, api_token: '' }))
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'הגדרות הוואטסאפ נשמרו', type: 'success' } }))
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: data.has_token ? 'נשמר. טוקן מאוחסן ✓' : 'נשמר (ללא טוקן — יש להזין טוקן)', type: data.has_token ? 'success' : 'error' } }))
     load()
   }
 
@@ -722,7 +716,7 @@ function WhatsappTab() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="idInstance" value={form.id_instance} onChange={set('id_instance')} placeholder="1101234567" dir="ltr" />
-            <FormField label="ApiTokenInstance (סודי)" type="password" value={form.api_token} onChange={set('api_token')} placeholder="מאוחסן — השאר ריק לשמירה" dir="ltr" />
+            <FormField label="ApiTokenInstance (סודי)" type="password" value={form.api_token} onChange={set('api_token')} placeholder={meta.has_token ? 'מאוחסן — השאר ריק לשמירה' : 'הזן את הטוקן (חובה)'} dir="ltr" />
             <FormField label="apiUrl (רשות)" value={form.api_url} onChange={set('api_url')} placeholder="https://api.green-api.com" dir="ltr" />
             <FormField label="מספר השולח (וואטסאפ)" value={form.sender_number} onChange={set('sender_number')} placeholder="0501234567" dir="ltr" />
             <FormField label="תווית השולח" value={form.sender_label} onChange={set('sender_label')} placeholder="ועד הבית" />
@@ -731,7 +725,9 @@ function WhatsappTab() {
 
           {/* Status row */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[var(--text-secondary)]">סטטוס אחרון:</span>
+            <span className="text-[var(--text-secondary)]">טוקן:</span>
+            <Badge variant={meta.has_token ? 'success' : 'danger'}>{meta.has_token ? 'מאוחסן' : 'לא הוזן'}</Badge>
+            <span className="text-[var(--text-secondary)] mr-2">סטטוס אחרון:</span>
             {meta.status
               ? <Badge variant={meta.status === 'authorized' ? 'success' : 'warning'}>{meta.status}</Badge>
               : <span className="text-[var(--text-muted)]">לא נבדק</span>}
