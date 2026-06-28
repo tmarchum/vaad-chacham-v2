@@ -11,7 +11,7 @@
 // collection messages must NOT be wired to auto-send through here — keep that
 // human-initiated and toggle-gated (see the collection-email incident).
 
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -52,7 +52,9 @@ Deno.serve(async (req: Request) => {
 
     const idInstance = integ?.id_instance
     const token = secret?.api_token
-    if (!idInstance || !token) return json({ error: 'not_configured' }, 400)
+    // Expected state (nothing saved yet) — return 200 so the UI can show a
+    // friendly message instead of a generic "non-2xx" error.
+    if (!idInstance || !token) return json({ ok: false, error: 'not_configured' }, 200)
 
     const base = (integ.api_url || 'https://api.green-api.com').replace(/\/+$/, '')
 
