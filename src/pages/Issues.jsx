@@ -18,6 +18,7 @@ import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { waLink, telHref, isWhatsappable } from '@/lib/phone'
+import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
 import {
@@ -407,6 +408,9 @@ function Issues() {
       .in('role', ['admin', 'committee'])
       .then(({ data }) => setAssignMembers(data || []))
   }, [])
+  // Warm the WhatsApp-gateway flag so a button click can send (or fall back to
+  // a manual link) without a blocking fetch consuming the click gesture.
+  useEffect(() => { isWhatsappSystemEnabled() }, [])
   const memberOptions = useMemo(
     () => [
       { value: '', label: 'לא שויך' },
@@ -720,6 +724,16 @@ function Issues() {
   // gas/national-service numbers (*3626, 1-800…) can't use WhatsApp.
   const buildContactLink = (phone, message) => waLink(phone, message) || telHref(phone)
 
+  const toast = (message, type = 'success') =>
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message, type } }))
+
+  // Send a vendor quote — via the GreenAPI gateway when enabled, else opens
+  // manual WhatsApp / phone.
+  const handleVendorSend = async (vendor, message) => {
+    const sent = await sendOrOpen(vendor.phone, message)
+    if (sent) toast('הבקשה נשלחה לספק בוואטסאפ דרך המערכת')
+  }
+
   // Generate committee notification message for an issue
   const buildCommitteeMessage = (iss, analysis) => {
     const building = buildingMap[iss.buildingId]
@@ -761,6 +775,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // text-only wa.me link when files can't be shared (e.g. desktop).
   const shareQuoteWithPhoto = async (iss, vendor, building) => {
     const message = buildVendorQuoteMessage(iss, vendor, building)
+    // Prefer the system gateway — it sends the photo as a file with the text.
+    if (iss.photo_url && (await isWhatsappSystemEnabled())) {
+      const res = await systemSendWhatsapp(vendor.phone, message, { fileUrl: iss.photo_url, fileName: 'fault.jpg' })
+      if (res.sent) { toast('נשלח לספק עם התמונה בוואטסאפ דרך המערכת'); return }
+    }
     if (iss.photo_url && navigator.canShare) {
       try {
         const res = await fetch(iss.photo_url)
@@ -1547,9 +1566,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                                 <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
                               )}
                               {v.phone && (
-                                <a href={buildContactLink(v.phone, quoteMsg)} target="_blank" rel="noopener noreferrer">
-                                  <Button size="sm" variant="outline">{isWhatsappable(v.phone) ? '💬 שלח' : '📞 התקשר'}</Button>
-                                </a>
+                                <Button size="sm" variant="outline" onClick={() => handleVendorSend(v, quoteMsg)}>
+                                  {isWhatsappable(v.phone) ? '💬 שלח' : '📞 התקשר'}
+                                </Button>
                               )}
                             </div>
                           </div>

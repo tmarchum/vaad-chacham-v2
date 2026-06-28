@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useCollection } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,8 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { PageHeader } from '@/components/common/PageHeader'
 import { cn } from '@/lib/utils'
 import { vendorReputation } from '@/lib/reputation'
-import { waLink, telHref, isWhatsappable } from '@/lib/phone'
+import { isWhatsappable } from '@/lib/phone'
+import { sendOrOpen, isWhatsappSystemEnabled } from '@/lib/whatsapp'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
   Shield, Clock, Search, BarChart3, GitCompare,
@@ -508,6 +509,7 @@ function Vendors() {
 
   const [activeTab, setActiveTab] = useState('my-vendors')
   const [membershipFilter, setMembershipFilter] = useState('pending')
+  useEffect(() => { isWhatsappSystemEnabled() }, []) // warm the gateway flag
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -615,11 +617,13 @@ function Vendors() {
     }
   }
 
-  // Open WhatsApp (or a phone call, for numbers WhatsApp can't reach) with the
-  // invitation, and mark the vendor as invited.
+  // Invite a vendor to the pool — via the GreenAPI gateway when enabled, else
+  // opens manual WhatsApp / phone. Marks the vendor invited either way.
   const sendInvite = async (vendor) => {
-    const link = waLink(vendor.phone, buildInviteMessage(vendor)) || telHref(vendor.phone)
-    if (link) window.open(link, '_blank')
+    const sent = await sendOrOpen(vendor.phone, buildInviteMessage(vendor))
+    if (sent) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'ההזמנה נשלחה בוואטסאפ דרך המערכת', type: 'success' } }))
+    }
     await update(vendor.id, { membership_status: 'invited', invited_at: new Date().toISOString() })
   }
 
