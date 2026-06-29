@@ -111,6 +111,7 @@ const EMPTY_FORM = {
   cost: '',
   estimatedCost: '',
   assigned_to: '',
+  photo_url: '',
 }
 
 const QUOTE_FILTERS = [
@@ -577,6 +578,7 @@ function Issues() {
       cost: iss.cost ?? '',
       estimatedCost: iss.estimatedCost ?? '',
       assigned_to: iss.assigned_to || '',
+      photo_url: iss.photo_url || '',
     })
     setFormOpen(true)
     setDetailIssue(null)
@@ -608,6 +610,7 @@ function Issues() {
       reportedAt: form.reportedAt ? new Date(form.reportedAt).toISOString() : null,
       resolvedAt: form.resolvedAt ? new Date(form.resolvedAt).toISOString() : null,
       scheduledDate: form.scheduledDate || null,
+      photo_url: form.photo_url || null,
     }
     if (editingId) {
       await update(editingId, data)
@@ -615,6 +618,28 @@ function Issues() {
       await create(data)
     }
     setFormOpen(false)
+  }
+
+  // Committee photo management on the issue form — upload to the issue-photos
+  // bucket and set form.photo_url. Works from camera or gallery.
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const uploadIssuePhoto = async (file) => {
+    if (!file) return
+    setPhotoUploading(true)
+    try {
+      const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+      const path = `${form.buildingId || 'b'}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('issue-photos')
+        .upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' })
+      if (error) { toast('שגיאה בהעלאת התמונה', 'error'); return }
+      const url = supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
+      setForm((p) => ({ ...p, photo_url: url }))
+      toast('התמונה הועלתה')
+    } catch {
+      toast('שגיאה בהעלאת התמונה', 'error')
+    } finally {
+      setPhotoUploading(false)
+    }
   }
 
   const setField = (field) => (e) => {
@@ -1962,6 +1987,38 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               value={form.description}
               onChange={setField('description')}
             />
+
+            {/* Photo — committee can add / replace / delete before requesting a quote */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-[var(--text-secondary)]">תמונת התקלה</label>
+              {form.photo_url && (
+                <img src={form.photo_url} alt="תמונת התקלה" className="max-h-44 rounded-lg border border-[var(--border)] object-cover" />
+              )}
+              <div className="flex flex-wrap gap-2">
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={(e) => { uploadIssuePhoto(e.target.files?.[0]); e.target.value = '' }} />
+                  <span className="inline-flex items-center gap-1 text-sm px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-hover)]">
+                    📷 {form.photo_url ? 'צלם מחדש' : 'צלם תמונה'}
+                  </span>
+                </label>
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={(e) => { uploadIssuePhoto(e.target.files?.[0]); e.target.value = '' }} />
+                  <span className="inline-flex items-center gap-1 text-sm px-3 py-2 rounded-lg border border-[var(--border)] hover:bg-[var(--surface-hover)]">
+                    🖼️ {form.photo_url ? 'החלף מהגלריה' : 'הוסף מהגלריה'}
+                  </span>
+                </label>
+                {form.photo_url && (
+                  <button type="button" onClick={() => setForm((p) => ({ ...p, photo_url: '' }))}
+                    className="inline-flex items-center gap-1 text-sm px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50">
+                    🗑️ מחק תמונה
+                  </button>
+                )}
+              </div>
+              {photoUploading && <p className="text-xs text-[var(--text-muted)]">מעלה תמונה...</p>}
+            </div>
+
             <FormSelect
               label="קטגוריה"
               value={form.category}
