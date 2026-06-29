@@ -407,21 +407,19 @@ function Issues() {
 
   // Committee members for assigning a handler ("נציג מטפל"). Admins can list
   // them (RLS); for non-admins the list may be empty — they self-handle.
-  // The accompanying-member pool: admins/committee by profile role PLUS anyone
-  // who is a committee member of a building (building_memberships) — those often
-  // have a 'resident' profile role, so a role filter alone misses them.
+  // Committee members are the primary residents of units flagged board_member
+  // (committee status is marked on the unit, not on the profile). Keyed by the
+  // unit_resident id — assigned_to has no FK, so that's a fine identifier.
   const [assignMembers, setAssignMembers] = useState([])
   useEffect(() => {
-    (async () => {
-      const [{ data: byRole }, { data: mems }] = await Promise.all([
-        supabase.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'committee']),
-        supabase.from('building_memberships').select('profiles(id, first_name, last_name)'),
-      ])
-      const map = new Map()
-      ;(byRole || []).forEach((p) => map.set(p.id, p))
-      ;(mems || []).forEach((m) => { const p = m.profiles; if (p) map.set(p.id, p) })
-      setAssignMembers([...map.values()])
-    })()
+    supabase.from('unit_residents')
+      .select('id, first_name, last_name, units!inner(building_id, board_member)')
+      .eq('units.board_member', true)
+      .eq('is_primary', true)
+      .not('archived', 'is', true)
+      .then(({ data }) => setAssignMembers(
+        (data || []).map((r) => ({ id: r.id, first_name: r.first_name, last_name: r.last_name, building_id: r.units?.building_id })),
+      ))
   }, [])
   // Warm the WhatsApp-gateway flag so a button click can send (or fall back to
   // a manual link) without a blocking fetch consuming the click gesture.
@@ -429,9 +427,11 @@ function Issues() {
   const memberOptions = useMemo(
     () => [
       { value: '', label: 'לא שויך' },
-      ...assignMembers.map((m) => ({ value: m.id, label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'חבר ועד' })),
+      ...assignMembers
+        .filter((m) => !form.buildingId || m.building_id === form.buildingId)
+        .map((m) => ({ value: m.id, label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'חבר ועד' })),
     ],
-    [assignMembers]
+    [assignMembers, form.buildingId]
   )
   // assigned_to (profile id) → display name, for the accompanying member badge.
   const memberNameById = useMemo(() => {
@@ -745,13 +745,21 @@ function Issues() {
     setWorkflowStep(1)
     setQuoteRequestCopied(null)
 
-    // Load committee members for this building
-    const { data: memberships } = await supabase
-      .from('building_memberships')
-      .select('*, profiles(first_name, last_name, email)')
-      .eq('building_id', iss.buildingId)
-      .in('role', ['committee_chair', 'committee', 'manager'])
-    setCommitteeMembers(memberships ?? [])
+    // Load committee members for this building — primary residents of
+    // board_member units.
+    const { data: residents } = await supabase
+      .from('unit_residents')
+      .select('id, first_name, last_name, email, phone, units!inner(building_id, board_member)')
+      .eq('units.board_member', true)
+      .eq('units.building_id', iss.buildingId)
+      .eq('is_primary', true)
+      .not('archived', 'is', true)
+    setCommitteeMembers((residents ?? []).map((r) => ({
+      id: r.id,
+      user_id: r.id,
+      role: 'committee',
+      profiles: { first_name: r.first_name, last_name: r.last_name, email: r.email, phone: r.phone },
+    })))
 
     // If no AI analysis yet, trigger it
     if (!aiAnalysisResult || aiAnalysisIssue?.id !== iss.id) {
