@@ -13,8 +13,8 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { PageHeader } from '@/components/common/PageHeader'
 import { cn } from '@/lib/utils'
 import { vendorReputation } from '@/lib/reputation'
-import { isWhatsappable } from '@/lib/phone'
-import { sendOrOpen, isWhatsappSystemEnabled } from '@/lib/whatsapp'
+import { isWhatsappable, waNumber } from '@/lib/phone'
+import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
   Shield, Clock, Search, BarChart3, GitCompare,
@@ -619,14 +619,41 @@ function Vendors() {
     }
   }
 
+  const toast = (message, type = 'success') =>
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message, type } }))
+
   // Invite a vendor to the pool — via the GreenAPI gateway when enabled, else
   // opens manual WhatsApp / phone. Marks the vendor invited either way.
   const sendInvite = async (vendor) => {
     const sent = await sendOrOpen(vendor.phone, buildInviteMessage(vendor))
-    if (sent) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'ההזמנה נשלחה בוואטסאפ דרך המערכת', type: 'success' } }))
-    }
+    if (sent) toast('ההזמנה נשלחה בוואטסאפ דרך המערכת')
     await update(vendor.id, { membership_status: 'invited', invited_at: new Date().toISOString() })
+  }
+
+  // Bulk: send the invite to every pending vendor in sequence (system gateway
+  // only — paced to avoid spam flags). Manual wa.me would open many tabs, so it
+  // requires the GreenAPI connection to be active.
+  const [bulk, setBulk] = useState({ running: false, done: 0, total: 0 })
+  const sendBulkInvites = async () => {
+    if (!(await isWhatsappSystemEnabled())) {
+      toast('לשליחה מרוכזת יש להפעיל "חיבור פעיל" בהגדרות מערכת ← וואטסאפ', 'error')
+      return
+    }
+    const targets = allVendors.filter(
+      (v) => !v.is_blacklisted && (v.membership_status || 'pending') === 'pending' && waNumber(v.phone),
+    )
+    if (targets.length === 0) { toast('אין ספקים ממתינים עם מספר וואטסאפ תקין', 'info'); return }
+    if (!window.confirm(`לשלוח הזמנת שיתוף פעולה ל-${targets.length} ספקים ממתינים? השליחה תיקח כדקה לכל ~50 ספקים.`)) return
+    setBulk({ running: true, done: 0, total: targets.length })
+    let sent = 0
+    for (const v of targets) {
+      const res = await systemSendWhatsapp(v.phone, buildInviteMessage(v))
+      if (res.sent) { sent++; await update(v.id, { membership_status: 'invited', invited_at: new Date().toISOString() }) }
+      setBulk((b) => ({ ...b, done: b.done + 1 }))
+      await new Promise((r) => setTimeout(r, 1200)) // pacing between messages
+    }
+    setBulk({ running: false, done: 0, total: 0 })
+    toast(`נשלחו ${sent} הזמנות מתוך ${targets.length}`, sent > 0 ? 'success' : 'error')
   }
 
   const setMembership = async (vendor, status) => {
@@ -807,11 +834,18 @@ function Vendors() {
         return (
           <div className="space-y-4">
             <div className="rounded-xl border border-[var(--border)] bg-[var(--primary-bg)]/40 p-4">
-              <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">הזמנת ספקים למאגר ועד פלוס</h3>
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                לאחר השלמת המאגר, שלח לכל ספק הזמנה בוואטסאפ לאישור הצטרפות. ההודעה מסבירה במה מדובר.
-                לחיצה על "שלח הזמנה" פותחת וואטסאפ ומסמנת את הספק כ"הוזמן" — לאחר תשובת הספק סמן "אישר" או "סירב".
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text-primary)] mb-1">הזמנת ספקים למאגר ועד פלוס</h3>
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                    שלח לכל ספק הזמנה בוואטסאפ לאישור הצטרפות. לחיצה על "שלח הזמנה" מסמנת אותו כ"הוזמן";
+                    לאחר תשובת הספק סמן "אישר" או "סירב". רק ספק שאישר מקבל בקשות לקריאות.
+                  </p>
+                </div>
+                <Button size="sm" onClick={sendBulkInvites} disabled={bulk.running} className="shrink-0">
+                  {bulk.running ? `שולח ${bulk.done}/${bulk.total}...` : `📨 שלח לכל הממתינים (${counts.pending || 0})`}
+                </Button>
+              </div>
             </div>
 
             {/* Status filter */}
