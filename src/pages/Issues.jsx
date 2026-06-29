@@ -1562,20 +1562,29 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           {/* STEP 3: Vendors */}
           {workflowStep === 3 && workflowIssue && (() => {
             const building = buildingMap[workflowIssue.buildingId]
-            const category = aiAnalysisResult?.recommended_vendor_category || workflowIssue.category || ''
+            // The agent's category (set automatically on every issue, or when the
+            // committee runs analysis) is the primary signal; fall back to the
+            // manual category.
+            const category = aiAnalysisResult?.recommended_vendor_category
+              || workflowIssue.ai_category || workflowIssue.category || ''
 
-            // Dispatch from the in-house vendor database only — synonym-aware
-            // ranking (regular providers + rating + 24/7 boosted). No web search.
-            const issueForDispatch = {
-              category,
-              ai_category: aiAnalysisResult?.recommended_vendor_category,
-              ai_search_terms: aiAnalysisResult?.recommended_search_terms,
-              title: workflowIssue.title,
-              description: workflowIssue.description,
-              priority: workflowIssue.priority,
-            }
-            const ranked = rankVendorsForIssue(issueForDispatch, allVendors)
-            const matchedVendors = ranked.map((r) => r.vendor).slice(0, 8)
+            // Prefer an EXACT category match (clean + relevant) — the agent
+            // already disambiguated. Only fall back to fuzzy synonym ranking when
+            // no exact-category vendor exists.
+            const exact = category
+              ? allVendors
+                  .filter((v) => !v.is_blacklisted && v.category === category)
+                  .sort((a, b) => ((b.preferred ? 10 : 0) + (Number(b.rating) || 0)) - ((a.preferred ? 10 : 0) + (Number(a.rating) || 0)))
+              : []
+            const matchedVendors = exact.length > 0
+              ? exact.slice(0, 8)
+              : rankVendorsForIssue({
+                  category,
+                  ai_search_terms: aiAnalysisResult?.recommended_search_terms || workflowIssue.ai_search_terms,
+                  title: workflowIssue.title,
+                  description: workflowIssue.description,
+                  priority: workflowIssue.priority,
+                }, allVendors).map((r) => r.vendor).slice(0, 8)
 
             return (
               <div className="space-y-4">
