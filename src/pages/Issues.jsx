@@ -1558,24 +1558,33 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">ממאגר הספקים</p>
                     {matchedVendors.map((v) => {
                       const quoteMsg = buildVendorQuoteMessage(workflowIssue, v, building)
+                      // Only vendors who confirmed cooperation ("agreed") may
+                      // receive call requests.
+                      const approved = v.membership_status === 'agreed'
                       return (
-                        <div key={v.id} className="rounded-lg border border-[var(--border)] p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-sm text-[var(--text-primary)]">{v.name}</p>
+                        <div key={v.id} className={`rounded-lg border border-[var(--border)] p-3 space-y-2 ${approved ? '' : 'opacity-70'}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-medium text-sm text-[var(--text-primary)] truncate">{v.name}</p>
                               <p className="text-xs text-[var(--text-secondary)]">{v.category}{v.rating ? ` · ⭐ ${v.rating}` : ''}{v.phone ? ` · ${v.phone}` : ''}</p>
                             </div>
-                            <div className="flex gap-1.5">
-                              <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `vendor_${v.id}`)}>
-                                {quoteRequestCopied === `vendor_${v.id}` || copiedField === `vendor_${v.id}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-                              </Button>
-                              {workflowIssue?.photo_url && (
-                                <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
-                              )}
-                              {v.phone && (
-                                <Button size="sm" variant="outline" onClick={() => handleVendorSend(v, quoteMsg)}>
-                                  {isWhatsappable(v.phone) ? '💬 שלח' : '📞 התקשר'}
-                                </Button>
+                            <div className="flex gap-1.5 shrink-0 items-center">
+                              {approved ? (
+                                <>
+                                  <Button size="sm" variant="ghost" onClick={() => copyToClipboard(quoteMsg, `vendor_${v.id}`)}>
+                                    {quoteRequestCopied === `vendor_${v.id}` || copiedField === `vendor_${v.id}` ? <CheckCheck className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                  </Button>
+                                  {workflowIssue?.photo_url && (
+                                    <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
+                                  )}
+                                  {v.phone && (
+                                    <Button size="sm" variant="outline" onClick={() => handleVendorSend(v, quoteMsg)}>
+                                      {isWhatsappable(v.phone) ? '💬 שלח' : '📞 התקשר'}
+                                    </Button>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[11px] text-amber-600 font-medium whitespace-nowrap">טרם אישר הצטרפות — אשר במסך ספקים</span>
                               )}
                             </div>
                           </div>
