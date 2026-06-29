@@ -10,6 +10,7 @@ create table if not exists public.supervisors (
   email text,
   area text,
   specialty text,
+  call_price numeric,
   rating numeric,
   notes text,
   is_active boolean default true,

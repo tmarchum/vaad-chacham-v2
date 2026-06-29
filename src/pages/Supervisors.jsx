@@ -16,7 +16,7 @@ import { ShieldCheck, Plus, Pencil, Trash2, Phone, Mail, Star, MapPin } from 'lu
 // a vendor's work on an issue when the committee decides one is needed.
 
 const EMPTY_FORM = {
-  name: '', phone: '', email: '', area: '', specialty: '', rating: '', notes: '', is_active: true,
+  name: '', phone: '', email: '', area: '', specialty: '', call_price: '', rating: '', notes: '', is_active: true,
 }
 
 export default function Supervisors() {
@@ -42,7 +42,8 @@ export default function Supervisors() {
     setEditingId(s.id)
     setForm({
       name: s.name || '', phone: s.phone || '', email: s.email || '', area: s.area || '',
-      specialty: s.specialty || '', rating: s.rating != null ? String(s.rating) : '',
+      specialty: s.specialty || '', call_price: s.call_price != null ? String(s.call_price) : '',
+      rating: s.rating != null ? String(s.rating) : '',
       notes: s.notes || '', is_active: s.is_active !== false,
     })
     setFormOpen(true)
@@ -51,7 +52,11 @@ export default function Supervisors() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return
-    const data = { ...form, rating: form.rating === '' ? null : Number(form.rating) }
+    const data = {
+      ...form,
+      rating: form.rating === '' ? null : Number(form.rating),
+      call_price: form.call_price === '' ? null : Number(form.call_price),
+    }
     if (editingId) await update(editingId, data)
     else await create(data)
     setFormOpen(false)
@@ -100,6 +105,7 @@ export default function Supervisors() {
                   </div>
                   <div className="text-xs text-[var(--text-secondary)] space-y-1">
                     {s.area && <p className="flex items-center gap-1.5"><MapPin className="h-3 w-3 text-[var(--text-muted)]" />{s.area}</p>}
+                    {s.call_price != null && s.call_price !== '' && <p className="font-medium text-[var(--text-primary)]">מחיר לקריאה: ₪{s.call_price}</p>}
                     {s.phone && <p className="flex items-center gap-1.5"><Phone className="h-3 w-3 text-[var(--text-muted)]" />{s.phone}</p>}
                     {s.email && <p className="flex items-center gap-1.5"><Mail className="h-3 w-3 text-[var(--text-muted)]" />{s.email}</p>}
                   </div>
@@ -130,9 +136,10 @@ export default function Supervisors() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField label="תחום פיקוח / התמחות" value={form.specialty} onChange={set('specialty')} placeholder="מהנדס בניין, בודק חשמל, מפקח עבודות..." />
-              <FormField label="אזור שירות" value={form.area} onChange={set('area')} />
+              <FormField label="אזור שירות" value={form.area} onChange={set('area')} placeholder="פתח תקווה, גוש דן..." />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <FormField label="מחיר לקריאה (₪)" type="number" value={form.call_price} onChange={set('call_price')} />
               <FormField label="דירוג (1-5)" type="number" value={form.rating} onChange={set('rating')} />
               <FormBool label="פעיל" value={form.is_active} onChange={set('is_active')} />
             </div>
