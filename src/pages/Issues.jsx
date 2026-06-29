@@ -17,7 +17,7 @@ import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
-import { waLink, telHref, isWhatsappable } from '@/lib/phone'
+import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
@@ -779,6 +779,29 @@ function Issues() {
   const handleVendorSend = async (vendor, message) => {
     const sent = await sendOrOpen(vendor.phone, message)
     if (sent) toast('הבקשה נשלחה לספק בוואטסאפ דרך המערכת')
+  }
+
+  // Send the quote request to ALL approved relevant vendors at once (gateway
+  // only — paced). Lets the committee get competing quotes in one click.
+  const [quoteBulk, setQuoteBulk] = useState({ running: false, done: 0, total: 0 })
+  const sendQuoteToAll = async (vendors, iss, building) => {
+    if (!(await isWhatsappSystemEnabled())) {
+      toast('לשליחה לכל הספקים יש להפעיל "חיבור פעיל" בהגדרות מערכת ← וואטסאפ', 'error'); return
+    }
+    const targets = vendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone))
+    if (targets.length === 0) { toast('אין ספקים מאושרים עם וואטסאפ לשליחה', 'info'); return }
+    if (!window.confirm(`לשלוח בקשת הצעת מחיר ל-${targets.length} ספקים מאושרים?`)) return
+    setQuoteBulk({ running: true, done: 0, total: targets.length })
+    let sent = 0
+    for (const v of targets) {
+      const msg = buildVendorQuoteMessage(iss, v, building)
+      const res = await systemSendWhatsapp(v.phone, msg, iss.photo_url ? { fileUrl: iss.photo_url, fileName: 'fault.jpg' } : {})
+      if (res.sent) sent++
+      setQuoteBulk((b) => ({ ...b, done: b.done + 1 }))
+      await new Promise((r) => setTimeout(r, 1200))
+    }
+    setQuoteBulk({ running: false, done: 0, total: 0 })
+    toast(`נשלחו ${sent} בקשות הצעה מתוך ${targets.length}`, sent > 0 ? 'success' : 'error')
   }
 
   // Generate committee notification message for an issue
@@ -1590,15 +1613,20 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             return (
               <div className="space-y-4">
                 {/* Summary */}
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-[var(--text-primary)]">
                       ספקים מתאימים — {category || 'כללי'}
                     </p>
                     <p className="text-xs text-[var(--text-secondary)]">
-                      {matchedVendors.length} ספקים ממאגר הבניין
+                      {matchedVendors.length} ספקים ממאגר הבניין · שלח למומלץ או לכולם
                     </p>
                   </div>
+                  {matchedVendors.some((v) => v.membership_status === 'agreed') && (
+                    <Button size="sm" onClick={() => sendQuoteToAll(matchedVendors, workflowIssue, building)} disabled={quoteBulk.running} className="shrink-0">
+                      {quoteBulk.running ? `שולח ${quoteBulk.done}/${quoteBulk.total}...` : '📨 שלח לכל המומלצים'}
+                    </Button>
+                  )}
                 </div>
 
                 {matchedVendors.length === 0 && (
@@ -1612,16 +1640,19 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 {matchedVendors.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">ממאגר הספקים</p>
-                    {matchedVendors.map((v) => {
+                    {matchedVendors.map((v, idx) => {
                       const quoteMsg = buildVendorQuoteMessage(workflowIssue, v, building)
                       // Only vendors who confirmed cooperation ("agreed") may
                       // receive call requests.
                       const approved = v.membership_status === 'agreed'
                       return (
-                        <div key={v.id} className={`rounded-lg border border-[var(--border)] p-3 space-y-2 ${approved ? '' : 'opacity-70'}`}>
+                        <div key={v.id} className={`rounded-lg border p-3 space-y-2 ${idx === 0 ? 'border-[var(--primary)] bg-[var(--primary-bg)]/30' : 'border-[var(--border)]'} ${approved ? '' : 'opacity-70'}`}>
                           <div className="flex items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <p className="font-medium text-sm text-[var(--text-primary)] truncate">{v.name}</p>
+                              <p className="font-medium text-sm text-[var(--text-primary)] truncate">
+                                {idx === 0 && <span className="text-[10px] font-bold text-[var(--primary)] ml-1">★ מומלץ</span>}
+                                {v.name}
+                              </p>
                               <p className="text-xs text-[var(--text-secondary)]">{v.category}{v.rating ? ` · ⭐ ${v.rating}` : ''}{v.phone ? ` · ${v.phone}` : ''}</p>
                             </div>
                             <div className="flex gap-1.5 shrink-0 items-center">
