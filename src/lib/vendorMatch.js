@@ -22,15 +22,25 @@ const SYNONYMS = [
   ['אינטרקום', 'קודן', 'דלתון', 'בקרת גישה'],
   ['מצלמ', 'אזעק', 'אבטחה'],
   ['מנעול', 'מנעולן', 'פריצה', 'צילינדר', 'מחזיר שמן', 'מחזיר', 'בולם', 'דלת', 'ציר', 'ידית', 'פלדלת'],
-  ['הדברה', 'מדביר', 'מזיק', 'תיקן'],
+  ['הדברה', 'מדביר', 'מזיק', 'תיקן', 'גוק', 'גוקים', 'נמל', 'נמלים', 'עכבר', 'מכרסם', 'יתוש', 'פשפש', 'חרק', 'טרמיט', 'פרעוש', 'דבור', 'צרעה'],
   ['גנרטור', 'גינרטור', 'גיבוי', 'דיזל'],
   ['משאב', 'הידרופור', 'לחץ מים', 'מאגר', 'בוסטר'],
 ]
 
-const norm = (s) => String(s || '').toLowerCase().trim()
+// Lowercase, trim, and drop apostrophes / Hebrew geresh so slang like "ג'וק"
+// normalizes to "גוק" (matches the pest synonyms regardless of how it's typed).
+const norm = (s) => String(s || '').toLowerCase().replace(/['׳’`]/g, '').trim()
+
+// Common Hebrew function words — dropped so short stopwords can't substring-match
+// vendor terms (e.g. "לי" inside "מנעולים").
+const STOP = new Set([
+  'לי', 'יש', 'על', 'של', 'את', 'אם', 'גם', 'לא', 'כי', 'זה', 'הוא', 'היא', 'אני',
+  'עם', 'אך', 'או', 'כל', 'מה', 'מי', 'רק', 'עד', 'כך', 'בו', 'בה', 'לו', 'לה',
+  'הם', 'הן', 'אנו', 'אתה', 'אבל', 'כדי', 'אז', 'יותר', 'מאוד', 'כבר',
+])
 
 function tokens(...vals) {
-  return vals.flatMap((v) => norm(v).split(/[\s,/|]+/)).filter(Boolean)
+  return vals.flatMap((v) => norm(v).split(/[\s,/|]+/)).filter((t) => t && !STOP.has(t))
 }
 
 // Does any issue token relate to any vendor token (direct or via synonyms)?
