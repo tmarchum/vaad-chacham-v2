@@ -1252,6 +1252,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 }
               />
               <DetailRow label="ספק" value={iss.vendor_name} />
+              <DetailRow label="הערכת עלות (AI)" value={iss.ai_cost_estimate || null} />
               <DetailRow label="עלות משוערת" value={iss.estimatedCost != null && iss.estimatedCost !== '' ? formatCurrency(iss.estimatedCost) : null} />
               <DetailRow label="עלות בפועל" value={iss.cost != null && iss.cost !== '' ? formatCurrency(iss.cost) : null} />
               <DetailRow label="תאריך דיווח" value={iss.reportedAt ? formatDate(iss.reportedAt) : null} />

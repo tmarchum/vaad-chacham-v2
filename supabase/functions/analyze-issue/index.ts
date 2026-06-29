@@ -44,8 +44,10 @@ Deno.serve(async (req: Request) => {
 רשימת הקטגוריות הזמינות (בחר בדיוק אחת מהן, המתאימה ביותר):
 ${categories.map((c) => `- ${c}`).join('\n')}
 
+הערך גם טווח עלות משוער בש"ח לתיקון תקלה כזו בישראל (הערכה ראשונית גסה לוועד; cost_min ו-cost_max כמספרים בלבד).
+
 החזר אך ורק JSON תקין (ללא טקסט נוסף, ללא backticks):
-{ "category": "<אחת מהקטגוריות בדיוק כפי שמופיעה ברשימה>", "search_terms": "2-4 מילות חיפוש לבעל המקצוע", "reason": "משפט קצר" }
+{ "category": "<אחת מהקטגוריות בדיוק כפי שמופיעה ברשימה>", "search_terms": "2-4 מילות חיפוש לבעל המקצוע", "cost_min": <מספר>, "cost_max": <מספר>, "reason": "משפט קצר" }
 דוגמאות: "מזגן מטפטף"→מיזוג אוויר; "ג'וקים"→הדברה; "מחזיר שמן בדלת"→מנעולן; "שמשה שבורה"→זגגות; "צביעת חדר מדרגות"→צבע ושיפוצים; "המעלית תקועה"→מעליות.`
 
     const msg = await anthropic.messages.create({
@@ -65,12 +67,18 @@ ${categories.map((c) => `- ${c}`).join('\n')}
       category = categories.find((c) => c.includes(category) || category.includes(c)) || ''
     }
     const searchTerms = typeof parsed.search_terms === 'string' ? parsed.search_terms : ''
+    const min = Number(parsed.cost_min)
+    const max = Number(parsed.cost_max)
+    const hasCost = Number.isFinite(min) && Number.isFinite(max) && max > 0
+    const costEstimate = hasCost ? `₪${Math.round(min).toLocaleString()}–₪${Math.round(max).toLocaleString()}` : null
+    const costMid = hasCost ? Math.round((min + max) / 2) : null
 
     const update: Record<string, unknown> = { ai_search_terms: searchTerms || null }
     if (category) update.ai_category = category
+    if (costEstimate) { update.ai_cost_estimate = costEstimate; update.estimated_cost = costMid }
     await svc.from('issues').update(update).eq('id', issueId)
 
-    return json({ ok: true, category, search_terms: searchTerms })
+    return json({ ok: true, category, search_terms: searchTerms, cost_estimate: costEstimate })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'unknown' }, 500)
   }
