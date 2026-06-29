@@ -9,6 +9,7 @@ import {
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, Menu, X, ChevronDown, ChevronLeft, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
+  Coins,
 } from 'lucide-react'
 
 const NAV_SECTIONS = [
@@ -246,6 +247,16 @@ function Sidebar({ open, onClose }) {
                 >
                   <Settings className="h-4 w-4 text-slate-500" />
                   הגדרות מערכת
+                </Link>
+              )}
+              {isAdmin && (
+                <Link
+                  to="/billing"
+                  onClick={() => { setUserMenuOpen(false); onClose() }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.05] transition-all"
+                >
+                  <Coins className="h-4 w-4 text-slate-500" />
+                  הכנסות פלטפורמה
                 </Link>
               )}
               <button

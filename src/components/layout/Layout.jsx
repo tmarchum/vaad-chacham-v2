@@ -61,6 +61,7 @@ const PAGE_TITLES = {
   '/vendor-finder': 'מציאת ספקים',
   '/vendors': 'ספקים',
   '/supervisors': 'מפקחים',
+  '/billing': 'הכנסות פלטפורמה',
   '/recurring-tasks': 'משימות חוזרות',
   '/building-assets': 'ציוד ומערכות',
   '/compliance': 'רגולציה',
