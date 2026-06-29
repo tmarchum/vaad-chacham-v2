@@ -394,21 +394,34 @@ function Issues() {
     }))
   }, [allUnits, form.buildingId])
 
-  const vendorOptions = useMemo(
-    () => [
+  // Only vendors whose trade fits the issue (synonym-aware). Falls back to all
+  // vendors when the issue has no category/title to match on.
+  const vendorOptions = useMemo(() => {
+    const ranked = rankVendorsForIssue({ category: form.category, title: form.title, priority: form.priority }, allVendors)
+    const base = ranked.length > 0 ? ranked.map((r) => r.vendor) : allVendors
+    return [
       { value: '', label: 'ללא ספק' },
-      ...allVendors.map((v) => ({ value: v.name, label: `${v.name} (${v.category || ''})` })),
-    ],
-    [allVendors]
-  )
+      ...base.map((v) => ({ value: v.name, label: `${v.name} (${v.category || ''})` })),
+    ]
+  }, [form.category, form.title, allVendors]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Committee members for assigning a handler ("נציג מטפל"). Admins can list
   // them (RLS); for non-admins the list may be empty — they self-handle.
+  // The accompanying-member pool: admins/committee by profile role PLUS anyone
+  // who is a committee member of a building (building_memberships) — those often
+  // have a 'resident' profile role, so a role filter alone misses them.
   const [assignMembers, setAssignMembers] = useState([])
   useEffect(() => {
-    supabase.from('profiles').select('id, first_name, last_name')
-      .in('role', ['admin', 'committee'])
-      .then(({ data }) => setAssignMembers(data || []))
+    (async () => {
+      const [{ data: byRole }, { data: mems }] = await Promise.all([
+        supabase.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'committee']),
+        supabase.from('building_memberships').select('profiles(id, first_name, last_name)'),
+      ])
+      const map = new Map()
+      ;(byRole || []).forEach((p) => map.set(p.id, p))
+      ;(mems || []).forEach((m) => { const p = m.profiles; if (p) map.set(p.id, p) })
+      setAssignMembers([...map.values()])
+    })()
   }, [])
   // Warm the WhatsApp-gateway flag so a button click can send (or fall back to
   // a manual link) without a blocking fetch consuming the click gesture.
