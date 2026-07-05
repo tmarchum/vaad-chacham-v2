@@ -11,8 +11,8 @@
 
 | רכיב | איפה רץ | תזמון | מה עושה | מתג כיבוי |
 |---|---|---|---|---|
-| `Scrape` — חשבון ועד משורר 18 | GitHub Actions — `tmarchum/moneyman-ui` | 2×יום | סקרייפ (moneyman docker) → גיליון Google (בקונפיג) → `process-vaad.mjs`: דחיפה ל‑`bank_transactions` + הוצאות → דה־דופ → שיוך אוטומטי → סנכרון `payments` → ניתוח גבייה/כספים דטרמיניסטי (ללא מיילים!) → דוח מייל לבעלים | `gh workflow disable Scrape -R tmarchum/moneyman-ui` |
-| `Scrape` — פאג"י 184993 (אישי) | אותו workflow | 2×יום | סקרייפ → webhook → דוח מייל. לא נוגע ב‑DB של הוועד | עריכת `accounts.json` (`enabled:false`) |
+| ג'וב `vaad` — כל חשבונות הוועד | GitHub Actions — `tmarchum/moneyman-ui` (`scrape-vaad.mjs`) | 2×יום (13:00, 01:00) | **החשבונות מגיעים מהאפליקציה** (מסך הגדרות בנק → `bank_accounts` + `bank_account_secrets`; הוספת חשבון במסך = נסרק אוטומטית). לכל בניין: סקרייפ → גיליון Google → `bank_transactions` + הוצאות → דה־דופ → שיוך אוטומטי → סנכרון `payments` → ניתוח גבייה/כספים דטרמיניסטי (ללא מיילים!) → [שישי: סקירת סוכנים] → דוח מייל לבעלים | `gh workflow disable Scrape -R tmarchum/moneyman-ui` |
+| ג'וב `scrape` — פאג"י 184993 (אישי) | אותו workflow | 2×יום | סקרייפ → webhook → דוח מייל. לא נוגע ב‑DB של הוועד | עריכת `accounts.json` (`enabled:false`) |
 | סוכנים מנוהלים שבועיים (פיננסי + גבייה) | בתוך `process-vaad.mjs`, ימי שישי בלבד | שישי | ניתוח בלבד דרך `mcp-proxy`; כותבים `agent_alerts`. **לא** יכולים לעדכן תיקים (upsert מנוטרל בשרת) ו**לא** לשלוח מייל (מתג fail-closed) | הסרת `ANTHROPIC_API_KEY` מסודות moneyman-ui |
 | `Keep Alive` | GitHub Actions — moneyman-ui | 1/11/21 בחודש | קומיט ריק אם הריפו רדום >20 יום — מונע השבתה אוטומטית של הקרון ע"י GitHub (זה מה שהשבית את מיילי התנועות ב‑26.6) | — |
 | `monthly-summary` | GitHub Actions — vaad-chacham-v2 → Edge Function | 1 בחודש 08:00 UTC | סיכום כספי חודשי במייל **למנהלים בלבד** | השבתת ה-workflow |
