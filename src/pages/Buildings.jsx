@@ -13,6 +13,7 @@ import { formatCurrency, cn, sanitizePhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Building2, Plus, Pencil, Trash2, X, DoorOpen } from 'lucide-react'
 import { openGate } from '@/lib/gate'
+import { AutoGateToggle } from '@/components/common/AutoGateToggle'
 
 const ELEVATOR_OPTIONS = [0,1,2,3,4,5].map(n => ({ value: String(n), label: String(n) }))
 
@@ -407,6 +408,12 @@ function Buildings() {
                 </p>
               </div>
             )}
+            {/* GPS auto-open settings — renders only inside the Android app.
+                Admins never see the resident portal, so this is their access
+                point to the auto-gate feature. */}
+            <div className="py-1">
+              <AutoGateToggle building={detailBuilding} />
+            </div>
             <DetailRow label="מקס׳ טלפוני שער חניה" value={detailBuilding.max_gate_phones} />
             <DetailRow label="חניונים" value={Array.isArray(detailBuilding.parking_lots) && detailBuilding.parking_lots.length ? detailBuilding.parking_lots.join(', ') : null} />
             <DetailRow label="מעליות" value={detailBuilding.elevators} />
