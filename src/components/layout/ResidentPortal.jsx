@@ -713,7 +713,7 @@ function AutoGateToggle({ building }) {
           {stat && (
             <>
               <p dir="ltr" className="text-[10px] text-slate-400 font-mono break-all pt-1">
-                dist:{stat.lastDist >= 0 ? Math.round(stat.lastDist) + 'm' : '—'} · upd:{stat.lastUpdate ? Math.round((Date.now() - stat.lastUpdate) / 1000) + 's ago' : 'never'} · inside:{String(stat.inside)} · primed:{String(stat.primed)}
+                dist:{stat.lastDist >= 0 ? Math.round(stat.lastDist) + 'm' : '—'} · acc:{stat.lastAcc >= 0 ? '±' + stat.lastAcc + 'm' : '—'} · upd:{stat.lastUpdate ? Math.round((Date.now() - stat.lastUpdate) / 1000) + 's ago' : 'never'} · inside:{String(stat.inside)} · primed:{String(stat.primed)}
               </p>
               {stat.log ? (
                 <pre dir="ltr" className="text-[9px] text-slate-500 bg-slate-50 rounded-lg p-2 mt-1 whitespace-pre-wrap break-all max-h-32 overflow-auto">{stat.log}</pre>

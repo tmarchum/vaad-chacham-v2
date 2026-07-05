@@ -76,9 +76,11 @@ public class AutoGateService extends Service {
 
     private void startLocationUpdates() {
         if (callback != null) return;
-        LocationRequest req = new LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 8000L)
-                .setMinUpdateIntervalMillis(4000L)
-                .setMinUpdateDistanceMeters(10f)
+        // HIGH_ACCURACY is required: BALANCED never powers the GPS chip, so in
+        // a car (no WiFi context) fixes are cell-tower-grade (300-2000m) and a
+        // 100m radius crossing is simply invisible — arrivals were never seen.
+        LocationRequest req = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
+                .setMinUpdateIntervalMillis(2500L)
                 .build();
         callback = new LocationCallback() {
             @Override
@@ -106,10 +108,13 @@ public class AutoGateService extends Service {
         float[] dist = new float[1];
         Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), lat, lng, dist);
         float d = dist[0];
+        int acc = Math.round(loc.getAccuracy());
 
-        // Live diagnostics: persist + show distance so the whole flow is visible.
-        p.edit().putFloat("lastDist", d).putLong("lastUpdate", System.currentTimeMillis()).apply();
-        updateNotification("מרחק לשער: " + Math.round(d) + " מ' (טווח " + radius + ")");
+        // Live diagnostics: persist + show distance AND fix accuracy, so a
+        // coarse-fix problem (huge acc) is visible at a glance.
+        p.edit().putFloat("lastDist", d).putLong("lastUpdate", System.currentTimeMillis())
+                .putInt("lastAcc", acc).apply();
+        updateNotification("מרחק לשער: " + Math.round(d) + " מ' (טווח " + radius + ", דיוק ±" + acc + ")");
 
         // State persists across service restarts so the OS restarting us while
         // you're home does NOT re-open the gate.
@@ -153,9 +158,36 @@ public class AutoGateService extends Service {
             startActivity(call);
             log(p, "call sent OK");
         } catch (Exception e) {
-            // CALL_PHONE missing or background-activity-start blocked (needs overlay perm)
-            log(p, "call FAIL: " + e.getClass().getSimpleName() + " " + e.getMessage());
+            // CALL_PHONE missing or background-activity-start blocked (needs
+            // overlay perm). Degrade gracefully: heads-up notification whose
+            // tap places the call — user interaction, so it's always allowed.
+            log(p, "call FAIL: " + e.getClass().getSimpleName() + " → tap-notification fallback");
+            showTapToOpenNotification(number);
         }
+    }
+
+    // One-tap fallback when silent dialing is blocked by the OS.
+    private void showTapToOpenNotification(String number) {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (nm == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(CH_ID + "_arrive", "הגעה לשער",
+                    NotificationManager.IMPORTANCE_HIGH);
+            nm.createNotificationChannel(ch);
+        }
+        PendingIntent callPi = PendingIntent.getActivity(this, 1,
+                new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + number))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        Notification n = new NotificationCompat.Builder(this, CH_ID + "_arrive")
+                .setContentTitle("הגעת הביתה 🏠")
+                .setContentText("הקש לפתיחת השער")
+                .setSmallIcon(android.R.drawable.ic_menu_call)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(callPi)
+                .build();
+        nm.notify(NOTIF_ID + 1, n);
     }
 
     // Rolling in-app event log (newest first, ~12 lines) so we can see what the

@@ -74,6 +74,7 @@ public class AutoGatePlugin extends Plugin {
         r.put("inside", p.getBoolean("inside", false));
         r.put("primed", p.getBoolean("primed", false));
         r.put("lastDist", p.getFloat("lastDist", -1f));
+        r.put("lastAcc", p.getInt("lastAcc", -1));
         r.put("lastUpdate", p.getLong("lastUpdate", 0));
         r.put("lastCall", p.getLong("lastCall", 0));
         r.put("log", p.getString("log", ""));
