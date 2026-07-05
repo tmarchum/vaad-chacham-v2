@@ -93,6 +93,8 @@ export default function CollectionCases() {
   const { data: allResidents } = useCollection('residents')
   const { data: allPayments } = useCollection('payments', selectedBuilding ? { building_id: selectedBuilding.id } : {})
   const { update: updateBuilding } = useCollection('buildings')
+  // Audit trail of the kill switch (written by a DB trigger, admin-readable).
+  const { data: toggleAudit } = useCollection('settingsAudit')
   const [recomputing, setRecomputing] = useState(false)
 
   // ── Deterministic collection: debt comes ONLY from real unpaid/partial/overdue
@@ -422,6 +424,21 @@ export default function CollectionCases() {
           </div>
         }
       />
+
+      {/* Kill-switch audit line — when was the toggle last flipped */}
+      {(() => {
+        const last = (toggleAudit || [])
+          .filter((a) => a.field === 'collection_notifications_enabled' && a.row_id === selectedBuilding?.id)
+          .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at))[0]
+        if (!last) return null
+        return (
+          <p className="text-xs text-[var(--text-muted)] -mt-3">
+            מתג ההתראות שונה לאחרונה ל
+            {last.new_value === 'true' ? '„פעיל"' : '„כבוי"'} ב-{new Date(last.changed_at).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}
+            {' '}(מתועד ביומן הביקורת)
+          </p>
+        )
+      })()}
 
       {/* Notifications-disabled banner */}
       {!notificationsEnabled && (
