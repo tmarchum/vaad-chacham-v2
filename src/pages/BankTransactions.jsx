@@ -284,6 +284,41 @@ export default function BankTransactions() {
     }
   }
 
+  // Approve ALL pending suggestions in one click — marks them matched and
+  // syncs payments once per affected unit+month (instead of 24 separate taps).
+  const handleApproveAllSuggestions = async () => {
+    const pending = allTx.filter(t =>
+      t.building_id === selectedBuilding?.id && t.match_status === 'suggested' && t.unit_id)
+    if (pending.length === 0) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'אין הצעות ממתינות', type: 'info' } }))
+      return
+    }
+    if (!window.confirm(`לאשר ${pending.length} שיוכים מוצעים? תשלומים יעודכנו בהתאם.`)) return
+
+    for (const tx of pending) {
+      await updateTx(tx.id, { match_status: 'matched' })
+    }
+    // Recompute unit+month totals over matched + just-approved rows.
+    const approvedIds = new Set(pending.map(t => t.id))
+    const creditsByUnitMonth = {}
+    allTx.filter(t =>
+      t.building_id === selectedBuilding?.id && t.unit_id &&
+      (t.match_status === 'matched' || approvedIds.has(t.id))
+    ).forEach(t => {
+      const key = `${t.unit_id}|${t.month || monthKey}`
+      creditsByUnitMonth[key] = (creditsByUnitMonth[key] || 0) + (Number(t.credit) || 0)
+    })
+    const affectedUnits = new Set(pending.map(t => t.unit_id))
+    for (const [key, total] of Object.entries(creditsByUnitMonth)) {
+      const [unitId, month] = key.split('|')
+      if (affectedUnits.has(unitId)) await syncPayment(unitId, month, total)
+    }
+    await refresh()
+    window.dispatchEvent(new CustomEvent('app-toast', {
+      detail: { message: `אושרו ${pending.length} שיוכים ✓`, type: 'success' },
+    }))
+  }
+
   // Reject a suggestion — revert to unmatched
   const handleRejectSuggestion = async (tx) => {
     await updateTx(tx.id, { match_status: 'unmatched', unit_id: null })
@@ -438,6 +473,12 @@ export default function BankTransactions() {
         subtitle="צפייה בתנועות, שיוך לדירות ומעקב תשלומים"
         actions={
           <div className="flex gap-2">
+            {summary.suggested > 0 && (
+              <Button onClick={handleApproveAllSuggestions} className="gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                אשר את כל ההצעות ({summary.suggested})
+              </Button>
+            )}
             <Button variant="outline" onClick={handleAutoMatch} className="gap-2">
               <Link2 className="h-4 w-4" />
               שיוך חכם
