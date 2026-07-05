@@ -33,18 +33,40 @@ import {
 
 const STATUSES = ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes', 'quoted', 'approved', 'scheduled', 'in_progress', 'completed', 'closed']
 
-const STATUS_MAP = {
-  reported:          { label: 'דווח',           variant: 'danger' },
-  pending_committee: { label: 'ממתין לועד',     variant: 'warning' },
-  acknowledged:      { label: 'אושר קבלה',      variant: 'warning' },
-  approved_for_quotes: { label: 'אושר להצעות מחיר', variant: 'info' },
-  quoted:       { label: 'הצעת מחיר', variant: 'info' },
-  approved:     { label: 'מאושר',     variant: 'info' },
-  scheduled:    { label: 'מתוזמן',    variant: 'default' },
-  in_progress:  { label: 'בטיפול',    variant: 'warning' },
-  completed:    { label: 'הושלם',     variant: 'success' },
-  closed:       { label: 'סגור',      variant: 'success' },
+// Five committee-facing statuses. Internally an issue still carries a
+// fine-grained status (reported, approved_for_quotes, quoted, scheduled…) that
+// drives the per-step workflow; for the board, badges, filters and the edit
+// form we collapse them into these five so the committee sees one simple
+// lifecycle: חדשה → בטיפול → לתשלום וסגירה → סגורה, plus נדחתה (committee
+// decided not to handle). STATUSES (above) stays as the fine-grained order used
+// by the workflow's internal step transitions.
+const STATUS_BUCKETS = [
+  { key: 'new',              label: 'חדשה',          variant: 'danger'  },
+  { key: 'in_progress',      label: 'בטיפול',         variant: 'info'    },
+  { key: 'awaiting_payment', label: 'לתשלום וסגירה',  variant: 'warning' },
+  { key: 'closed',           label: 'סגורה',          variant: 'success' },
+  { key: 'rejected',         label: 'נדחתה',          variant: 'default' },
+]
+const BUCKET_MAP = Object.fromEntries(STATUS_BUCKETS.map((b) => [b.key, b]))
+const STATUS_TO_BUCKET = {
+  reported: 'new', pending_committee: 'new', acknowledged: 'new', new: 'new',
+  approved_for_quotes: 'in_progress', quoted: 'in_progress', approved: 'in_progress',
+  scheduled: 'in_progress', in_progress: 'in_progress',
+  completed: 'awaiting_payment', awaiting_payment: 'awaiting_payment',
+  closed: 'closed', resolved: 'closed',
+  rejected: 'rejected', declined: 'rejected',
 }
+const bucketOf = (s) => STATUS_TO_BUCKET[s] || 'new'
+const bucketInfo = (s) => BUCKET_MAP[bucketOf(s)] || STATUS_BUCKETS[0]
+// When the committee picks a bucket manually in the edit form, store a
+// representative fine status so the per-step quick-actions keep working.
+const BUCKET_TO_STATUS = {
+  new: 'reported', in_progress: 'in_progress',
+  awaiting_payment: 'completed', closed: 'closed', rejected: 'rejected',
+}
+// Buckets that count as "done" — excluded from SLA timers and "ללא מלווה" nags.
+const DONE_BUCKETS = new Set(['awaiting_payment', 'closed', 'rejected'])
+const isDone = (s) => DONE_BUCKETS.has(bucketOf(s))
 
 const PRIORITY_MAP = {
   low:    { label: 'נמוכה', variant: 'default', order: 4, color: 'bg-green-100 text-green-800' },
@@ -71,11 +93,11 @@ const PRIORITY_OPTIONS = [
   { value: 'urgent', label: 'דחוף' },
 ]
 
-const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: STATUS_MAP[s].label }))
+const STATUS_OPTIONS = STATUS_BUCKETS.map((b) => ({ value: b.key, label: b.label }))
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'הכל' },
-  ...STATUSES.map((s) => ({ key: s, label: STATUS_MAP[s].label })),
+  ...STATUS_BUCKETS.map((b) => ({ key: b.key, label: b.label })),
 ]
 
 const PRIORITY_FILTERS = [
@@ -184,19 +206,19 @@ const IssueCard = React.memo(function IssueCard({
   onClose,
 }) {
   const priority = PRIORITY_MAP[iss.priority] || PRIORITY_MAP.medium
-  const status = STATUS_MAP[iss.status] || STATUS_MAP.reported
+  const status = bucketInfo(iss.status)
   const pendingCount = issueQuotes.filter((q) => q.status === 'pending').length
   const receivedCount = issueQuotes.filter((q) => q.status === 'received').length
   const displayCost = iss.cost != null && iss.cost !== '' ? iss.cost
     : iss.estimatedCost != null && iss.estimatedCost !== '' ? iss.estimatedCost : null
 
   // SLA badge (inlined)
-  const isOverdue = iss.reportedAt && !['completed','closed'].includes(iss.status) && (() => {
+  const isOverdue = iss.reportedAt && !isDone(iss.status) && (() => {
     const slaHours = SLA_HOURS[iss.priority] || SLA_HOURS.medium
     return (Date.now() - new Date(iss.reportedAt)) / 3600000 > slaHours
   })()
 
-  const slaBadge = iss.reportedAt && !['completed','closed'].includes(iss.status) ? (
+  const slaBadge = iss.reportedAt && !isDone(iss.status) ? (
     <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-green-600'}`}>
       <Clock className="h-3 w-3" />
       {isOverdue ? 'חריגת SLA' : 'בזמן'}
@@ -283,7 +305,7 @@ const IssueCard = React.memo(function IssueCard({
             {buildingName && <span>· {buildingName}</span>}
             {accompanier
               ? <span className="text-[var(--text-secondary)]">· 👤 מלווה: {accompanier}</span>
-              : (!['closed', 'completed'].includes(iss.status) && <span className="text-amber-600 font-medium">· ללא מלווה</span>)}
+              : (!isDone(iss.status) && <span className="text-amber-600 font-medium">· ללא מלווה</span>)}
           </div>
           {displayCost != null && <span className="text-[12px] font-semibold text-[var(--text-primary)]">{formatCurrency(displayCost)}</span>}
         </div>
@@ -470,7 +492,7 @@ function Issues() {
       result = result.filter((iss) => iss.buildingId === buildingFilter)
     }
     if (statusFilter !== 'all') {
-      result = result.filter((iss) => iss.status === statusFilter)
+      result = result.filter((iss) => bucketOf(iss.status) === statusFilter)
     }
     if (priorityFilter !== 'all') {
       result = result.filter((iss) => iss.priority === priorityFilter)
@@ -878,16 +900,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setWorkflowStep(3)
   }
 
-  // Close issue by committee — only the accompanying committee member
-  // (חבר ועד מלווה) may close it, so an assignment is required first.
+  // Committee declines to handle the issue → "נדחתה" (distinct from "סגורה",
+  // which means handled & paid). Declining doesn't need an accompanying member.
   const closeByCommittee = (iss) => {
-    if (!iss.assigned_to) {
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'יש לשייך חבר ועד מלווה לפני סגירת התקלה — הוא האחראי לסגירה', type: 'error' },
-      }))
-      return
-    }
-    update(iss.id, { status: 'closed' })
+    update(iss.id, { status: 'rejected' })
     setWorkflowIssue(null)
   }
 
@@ -1198,9 +1214,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       ) : (
         /* Kanban view */
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {STATUSES.map((statusKey) => {
-            const statusInfo = STATUS_MAP[statusKey]
-            const columnIssues = filtered.filter((iss) => iss.status === statusKey)
+          {STATUS_BUCKETS.map((statusInfo) => {
+            const statusKey = statusInfo.key
+            const columnIssues = filtered.filter((iss) => bucketOf(iss.status) === statusKey)
             return (
               <div key={statusKey} className="min-w-[280px] max-w-[320px] flex-shrink-0">
                 <div className="flex items-center gap-2 mb-3 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200">
@@ -1269,8 +1285,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               <DetailRow
                 label="סטטוס"
                 value={
-                  <Badge variant={STATUS_MAP[iss.status]?.variant}>
-                    {STATUS_MAP[iss.status]?.label}
+                  <Badge variant={bucketInfo(iss.status).variant}>
+                    {bucketInfo(iss.status).label}
                   </Badge>
                 }
               />
@@ -1572,10 +1588,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <Button
                       variant="destructive"
                       onClick={() => closeByCommittee(workflowIssue)}
-                      disabled={!workflowIssue.assigned_to}
-                      title={!workflowIssue.assigned_to ? 'יש לשייך חבר ועד מלווה לפני סגירה' : ''}
                     >
-                      סגור תקלה
+                      דחה — לא לטיפול
                     </Button>
                   </div>
                 </div>
@@ -2098,8 +2112,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               />
               <FormSelect
                 label="סטטוס"
-                value={form.status}
-                onChange={setField('status')}
+                value={bucketOf(form.status)}
+                onChange={(e) => {
+                  const bucket = e?.target?.value ?? e
+                  setForm((p) => ({ ...p, status: BUCKET_TO_STATUS[bucket] || 'reported' }))
+                }}
                 options={STATUS_OPTIONS}
               />
             </div>

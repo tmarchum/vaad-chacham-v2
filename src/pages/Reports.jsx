@@ -711,19 +711,23 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
   const CATEGORY_COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#22c55e', '#06b6d4', '#a855f7']
 
   function statusBadge(status) {
-    const STATUS_MAP = {
-      reported:     { label: 'דווח',       variant: 'default' },
-      acknowledged: { label: 'התקבל',      variant: 'info'    },
-      quoted:       { label: 'הוצע מחיר',  variant: 'info'    },
-      approved:     { label: 'אושר',       variant: 'warning' },
-      scheduled:    { label: 'מתוכנן',     variant: 'warning' },
-      in_progress:  { label: 'בטיפול',     variant: 'warning' },
-      completed:    { label: 'הושלם',      variant: 'success' },
-      closed:       { label: 'סגור',       variant: 'success' },
+    // Collapsed to the same five committee-facing buckets used on the Issues board.
+    const BUCKET = {
+      reported: 'new', open: 'new', pending_committee: 'new', acknowledged: 'new', new: 'new',
+      approved_for_quotes: 'in_progress', quoted: 'in_progress', approved: 'in_progress',
+      scheduled: 'in_progress', in_progress: 'in_progress',
+      completed: 'awaiting_payment', awaiting_payment: 'awaiting_payment',
+      closed: 'closed', resolved: 'closed', rejected: 'rejected', declined: 'rejected',
     }
-    const s = STATUS_MAP[status]
-    if (s) return <Badge variant={s.variant}>{s.label}</Badge>
-    return <Badge>{status}</Badge>
+    const MAP = {
+      new:              { label: 'חדשה',          variant: 'default' },
+      in_progress:      { label: 'בטיפול',         variant: 'info'    },
+      awaiting_payment: { label: 'לתשלום וסגירה',  variant: 'warning' },
+      closed:           { label: 'סגורה',          variant: 'success' },
+      rejected:         { label: 'נדחתה',          variant: 'default' },
+    }
+    const s = MAP[BUCKET[status] || 'new']
+    return <Badge variant={s.variant}>{s.label}</Badge>
   }
 
   return (

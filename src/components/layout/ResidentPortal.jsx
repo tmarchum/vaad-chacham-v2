@@ -29,12 +29,26 @@ const STATUS_MAP = {
 }
 
 // Issue lifecycle statuses (issues.status — default 'reported')
+// Resident-facing issue status — collapsed to the same simple lifecycle the
+// committee sees (חדשה / בטיפול / טופל / נדחתה), so a resident never sees the
+// internal fine-grained steps.
 const ISSUE_STATUS_MAP = {
-  reported:    { label: 'דווח',    color: 'text-amber-600',   bg: 'bg-amber-50' },
-  open:        { label: 'פתוח',    color: 'text-amber-600',   bg: 'bg-amber-50' },
-  in_progress: { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
-  resolved:    { label: 'טופל',    color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  closed:      { label: 'סגור',    color: 'text-slate-500',   bg: 'bg-slate-100' },
+  reported:          { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
+  open:              { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
+  new:               { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
+  pending_committee: { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
+  acknowledged:      { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
+  approved_for_quotes: { label: 'בטיפול', color: 'text-blue-600',  bg: 'bg-blue-50' },
+  quoted:            { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  approved:          { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  scheduled:         { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  in_progress:       { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  completed:         { label: 'הושלם',   color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  awaiting_payment:  { label: 'הושלם',   color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  resolved:          { label: 'טופל',    color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  closed:            { label: 'סגור',    color: 'text-slate-500',   bg: 'bg-slate-100' },
+  rejected:          { label: 'נדחתה',   color: 'text-rose-600',    bg: 'bg-rose-50' },
+  declined:          { label: 'נדחתה',   color: 'text-rose-600',    bg: 'bg-rose-50' },
 }
 
 const ISSUE_CATEGORIES = [
