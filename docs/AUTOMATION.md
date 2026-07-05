@@ -7,11 +7,14 @@
 
 ## רכיבים פעילים (הכול בענן)
 
+**צינור הבנק המאוחד (מ‑5.7.2026): ריפו אחד — `tmarchum/moneyman-ui` (פרטי).** קרון שעתי בוחר אילו חשבונות אמורים לרוץ (כרגע: 13:00 ו‑01:00 שעון ישראל לכל חשבון), כל חשבון נסרק **פעם אחת** לכל חלון:
+
 | רכיב | איפה רץ | תזמון | מה עושה | מתג כיבוי |
 |---|---|---|---|---|
-| `Scrape` (dynamic-scrape.mjs) | GitHub Actions — `tmarchum/moneyman` | 2×יום (13:05, 01:05 שעון ישראל) | משיכת תנועות בנק (פאג"י) → `bank_transactions` + הוצאות → דה־דופ → שיוך אוטומטי לדירות → סנכרון `payments` → ניתוח גבייה/כספים דטרמיניסטי (ללא מיילים!) → כתיבה לגיליון Google | `gh workflow disable Scrape -R tmarchum/moneyman` |
-| סוכנים מנוהלים שבועיים (פיננסי + גבייה) | בתוך אותה ריצה, ימי שישי בלבד | שישי | ניתוח בלבד דרך `mcp-proxy`; כותבים `agent_alerts`. **לא** יכולים לעדכן תיקים (upsert מנוטרל בשרת) ו**לא** לשלוח מייל (מתג fail-closed) | הסרת `ANTHROPIC_API_KEY` מסודות הריפו |
-| `Keep Alive` | GitHub Actions — moneyman | 1/11/21 בחודש | קומיט ריק אם הריפו רדום >20 יום — מונע השבתה אוטומטית של הקרון ע"י GitHub | — |
+| `Scrape` — חשבון ועד משורר 18 | GitHub Actions — `tmarchum/moneyman-ui` | 2×יום | סקרייפ (moneyman docker) → גיליון Google (בקונפיג) → `process-vaad.mjs`: דחיפה ל‑`bank_transactions` + הוצאות → דה־דופ → שיוך אוטומטי → סנכרון `payments` → ניתוח גבייה/כספים דטרמיניסטי (ללא מיילים!) → דוח מייל לבעלים | `gh workflow disable Scrape -R tmarchum/moneyman-ui` |
+| `Scrape` — פאג"י 184993 (אישי) | אותו workflow | 2×יום | סקרייפ → webhook → דוח מייל. לא נוגע ב‑DB של הוועד | עריכת `accounts.json` (`enabled:false`) |
+| סוכנים מנוהלים שבועיים (פיננסי + גבייה) | בתוך `process-vaad.mjs`, ימי שישי בלבד | שישי | ניתוח בלבד דרך `mcp-proxy`; כותבים `agent_alerts`. **לא** יכולים לעדכן תיקים (upsert מנוטרל בשרת) ו**לא** לשלוח מייל (מתג fail-closed) | הסרת `ANTHROPIC_API_KEY` מסודות moneyman-ui |
+| `Keep Alive` | GitHub Actions — moneyman-ui | 1/11/21 בחודש | קומיט ריק אם הריפו רדום >20 יום — מונע השבתה אוטומטית של הקרון ע"י GitHub (זה מה שהשבית את מיילי התנועות ב‑26.6) | — |
 | `monthly-summary` | GitHub Actions — vaad-chacham-v2 → Edge Function | 1 בחודש 08:00 UTC | סיכום כספי חודשי במייל **למנהלים בלבד** | השבתת ה-workflow |
 | `analyze-issue` | Supabase (טריגר pg_net על INSERT ל-issues) | בכל תקלה חדשה | סיווג AI לקטגוריית ספק + הערכת עלות | הסרת הטריגר `issues_ai_analyze` |
 | green-whatsapp / send-notification / mcp-proxy / vaad-agent | Supabase Edge Functions | לפי קריאה | שליחות וניתוחים לפי בקשת המשתמש | — |
@@ -30,6 +33,7 @@
 | משימת Windows‏ `VaadBankScraper` (nightly.bat → scraper.js + agents.js) | Disabled; קבצים שונו ל-`*.DISABLED` ב-`Documents\bank-scraper` | **מקור התקרית** — סוכן עם SMTP משלו, בלי בדיקת מתג, רץ בכל הדלקת מחשב |
 | GitHub `tmarchum/bank-scraper` → workflow "Bank Scraper" | disabled_manually | סקרייפר Playwright ביתי שנשבר כשהבנק שינה את דף הכניסה (7/2026); הוחלף ב-moneyman |
 | משימת Claude מקומית `moneyman-daily-scrape` | Disabled | הגיליון מוזן עכשיו מהענן |
+| GitHub `tmarchum/moneyman` → `Scrape` + `Keep Alive` | disabled_manually (5.7.2026) | אוחד לתוך moneyman-ui — סקרייפ כפול של אותו חשבון (4 כניסות בנק ביום) גרם לחסימות מצד הבנק |
 
 ## צ'ק-ליסט הוצאה משימוש (חובה כשמחליפים רכיב)
 
