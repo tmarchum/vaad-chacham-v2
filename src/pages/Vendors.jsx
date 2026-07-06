@@ -511,6 +511,7 @@ function Vendors() {
 
   const [activeTab, setActiveTab] = useState('my-vendors')
   const [membershipFilter, setMembershipFilter] = useState('pending')
+  const [inviteCategoryFilter, setInviteCategoryFilter] = useState('')
   useEffect(() => { isWhatsappSystemEnabled() }, []) // warm the gateway flag
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -595,6 +596,12 @@ function Vendors() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // Vendors are WhatsApp-first: a valid Israeli mobile is required so the
+    // whole flow (invite → confirm → quote requests) can run over WhatsApp.
+    if (!waNumber(form.phone)) {
+      toast('נדרש מספר נייד ישראלי תקין (05X) — כל התקשורת עם ספקים היא בוואטסאפ', 'error')
+      return
+    }
     const data = {
       ...form,
       rating: Number(form.rating),
@@ -825,9 +832,13 @@ function Vendors() {
           acc[s] = (acc[s] || 0) + 1
           return acc
         }, {})
+        // Vendors are WhatsApp-first: only mobile numbers that can receive
+        // WhatsApp appear in the invite flow (others are counted + surfaced).
+        const noMobile = allVendors.filter((v) => !v.is_blacklisted && !waNumber(v.phone)).length
         const list = allVendors
-          .filter((v) => !v.is_blacklisted)
+          .filter((v) => !v.is_blacklisted && waNumber(v.phone))
           .filter((v) => (membershipFilter === 'all' ? true : (v.membership_status || 'pending') === membershipFilter))
+          .filter((v) => (inviteCategoryFilter ? v.category === inviteCategoryFilter : true))
           .slice()
           .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he'))
 
@@ -848,8 +859,8 @@ function Vendors() {
               </div>
             </div>
 
-            {/* Status filter */}
-            <div className="flex flex-wrap gap-2">
+            {/* Status + category filters */}
+            <div className="flex flex-wrap items-center gap-2">
               {[
                 { key: 'pending', label: `ממתינים (${counts.pending || 0})` },
                 { key: 'invited', label: `הוזמנו (${counts.invited || 0})` },
@@ -866,6 +877,19 @@ function Vendors() {
                   {pill.label}
                 </Button>
               ))}
+              <select
+                value={inviteCategoryFilter}
+                onChange={(e) => setInviteCategoryFilter(e.target.value)}
+                className="h-8 rounded-lg border border-[var(--border)] bg-white px-2 text-xs text-[var(--text-primary)]"
+              >
+                <option value="">כל הקטגוריות</option>
+                {CATEGORY_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
+              {noMobile > 0 && (
+                <span className="text-[11px] text-amber-600">
+                  ({noMobile} ספקים ללא נייד וואטסאפ מוסתרים — עדכן להם מספר נייד)
+                </span>
+              )}
             </div>
 
             {list.length === 0 ? (

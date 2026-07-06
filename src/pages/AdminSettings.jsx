@@ -696,6 +696,17 @@ function WhatsappTab() {
     load()
   }
 
+  // One-time: point GreenAPI's incoming webhook here, so vendor replies
+  // ("מאשר"/"מסרב") update membership_status automatically.
+  const [settingUpReplies, setSettingUpReplies] = useState(false)
+  const setupReplies = async () => {
+    setSettingUpReplies(true); setTestResult(null)
+    const { data, error } = await supabase.functions.invoke('green-whatsapp', { body: { action: 'setup-replies' } })
+    setSettingUpReplies(false)
+    if (error || data?.error) { setTestResult({ ok: false, text: error?.message || data?.error }); return }
+    setTestResult({ ok: !!data?.ok, text: data?.ok ? 'מענה אוטומטי הופעל ✓ — תשובות "מאשר"/"מסרב" מספקים יעודכנו במערכת מעצמן' : 'GreenAPI סירב לעדכון ההגדרות' })
+  }
+
   if (loading) return <p className="text-[var(--text-secondary)] py-8 text-center">טוען הגדרות...</p>
 
   return (
@@ -742,9 +753,12 @@ function WhatsappTab() {
             </div>
           )}
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1">
             <Button onClick={save} disabled={saving}>{saving ? 'שומר...' : 'שמור הגדרות'}</Button>
             <Button variant="outline" onClick={test} disabled={testing}>{testing ? 'בודק...' : 'בדוק חיבור'}</Button>
+            <Button variant="outline" onClick={setupReplies} disabled={settingUpReplies}>
+              {settingUpReplies ? 'מגדיר...' : '🔁 הפעל מענה אוטומטי מספקים'}
+            </Button>
           </div>
 
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
