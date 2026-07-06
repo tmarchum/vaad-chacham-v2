@@ -13,7 +13,7 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { PageHeader } from '@/components/common/PageHeader'
 import { cn } from '@/lib/utils'
 import { vendorReputation } from '@/lib/reputation'
-import { isWhatsappable, waNumber } from '@/lib/phone'
+import { isWhatsappable, waNumber, isMobile } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
@@ -598,7 +598,7 @@ function Vendors() {
     e.preventDefault()
     // Vendors are WhatsApp-first: a valid Israeli mobile is required so the
     // whole flow (invite → confirm → quote requests) can run over WhatsApp.
-    if (!waNumber(form.phone)) {
+    if (!isMobile(form.phone)) {
       toast('נדרש מספר נייד ישראלי תקין (05X) — כל התקשורת עם ספקים היא בוואטסאפ', 'error')
       return
     }
@@ -647,7 +647,7 @@ function Vendors() {
       return
     }
     const targets = allVendors.filter(
-      (v) => !v.is_blacklisted && (v.membership_status || 'pending') === 'pending' && waNumber(v.phone),
+      (v) => !v.is_blacklisted && (v.membership_status || 'pending') === 'pending' && isMobile(v.phone),
     )
     if (targets.length === 0) { toast('אין ספקים ממתינים עם מספר וואטסאפ תקין', 'info'); return }
     if (!window.confirm(`לשלוח הזמנת שיתוף פעולה ל-${targets.length} ספקים ממתינים? השליחה תיקח כדקה לכל ~50 ספקים.`)) return
@@ -834,9 +834,9 @@ function Vendors() {
         }, {})
         // Vendors are WhatsApp-first: only mobile numbers that can receive
         // WhatsApp appear in the invite flow (others are counted + surfaced).
-        const noMobile = allVendors.filter((v) => !v.is_blacklisted && !waNumber(v.phone)).length
+        const noMobile = allVendors.filter((v) => !v.is_blacklisted && !isMobile(v.phone)).length
         const list = allVendors
-          .filter((v) => !v.is_blacklisted && waNumber(v.phone))
+          .filter((v) => !v.is_blacklisted && isMobile(v.phone))
           .filter((v) => (membershipFilter === 'all' ? true : (v.membership_status || 'pending') === membershipFilter))
           .filter((v) => (inviteCategoryFilter ? v.category === inviteCategoryFilter : true))
           .slice()

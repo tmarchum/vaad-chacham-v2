@@ -12,6 +12,12 @@ export function isWhatsappable(phone) {
   return /^0\d{8,9}$/.test(digits)
 }
 
+// Israeli MOBILE only (05X, 10 digits). Vendors must satisfy this — all
+// vendor communication is WhatsApp, and landlines don't have WhatsApp.
+export function isMobile(phone) {
+  return /^05\d{8}$/.test(String(phone || '').replace(/\D/g, ''))
+}
+
 // International form for wa.me (972…), or null if not WhatsApp-able.
 export function waNumber(phone) {
   if (!isWhatsappable(phone)) return null
