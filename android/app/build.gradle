@@ -7,8 +7,9 @@ android {
         applicationId "il.co.vaadplus"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // CI stamps the run number so every published APK is a real upgrade.
+        versionCode (System.getenv("VERSION_CODE") ?: "1").toInteger()
+        versionName "1.0." + (System.getenv("VERSION_CODE") ?: "0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,18 +18,27 @@ android {
         }
     }
     // Fixed keystore so every build is signed identically — APK updates install
-    // over the previous version without uninstalling.
+    // over the previous version without uninstalling. The keystore and its
+    // password live OUTSIDE the repo (the old committed vaadplus.keystore with
+    // a plaintext password was burned — anyone could ship a same-signature
+    // trojan "update"): CI gets them from the ANDROID_KEYSTORE_* secrets, a
+    // local build reads KEYSTORE_FILE / KEYSTORE_PASSWORD env vars.
     signingConfigs {
         shared {
-            storeFile file('vaadplus.keystore')
-            storePassword 'vaadplus'
-            keyAlias 'vaadplus'
-            keyPassword 'vaadplus'
+            def ksFile = System.getenv("KEYSTORE_FILE")
+            def ksPass = System.getenv("KEYSTORE_PASSWORD")
+            if (ksFile != null && ksPass != null) {
+                storeFile file(ksFile)
+                storePassword ksPass
+                keyAlias System.getenv("KEY_ALIAS") ?: 'vaadplus'
+                keyPassword ksPass
+                storeType 'PKCS12'
+            }
         }
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.shared
+            if (System.getenv("KEYSTORE_FILE") != null) signingConfig signingConfigs.shared
         }
         release {
             minifyEnabled false

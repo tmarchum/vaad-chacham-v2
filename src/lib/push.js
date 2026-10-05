@@ -7,11 +7,13 @@
 import { Capacitor } from '@capacitor/core'
 import { supabase } from '@/lib/supabase'
 
-let started = false
+// Track WHO we registered for — a logout/login as another user must re-upsert
+// the token under the new user, not leave it pointing at the first one.
+let startedForUser = null
 
 export async function registerPush(userId) {
-  if (started || !userId || !Capacitor.isNativePlatform()) return
-  started = true
+  if (!userId || startedForUser === userId || !Capacitor.isNativePlatform()) return
+  startedForUser = userId
 
   let PushNotifications
   try {
@@ -21,6 +23,9 @@ export async function registerPush(userId) {
   }
 
   try {
+    // Drop listeners from a previous user's registration so the token can't
+    // be upserted under the old user_id.
+    await PushNotifications.removeAllListeners()
     const perm = await PushNotifications.requestPermissions()
     if (perm.receive !== 'granted') return
 

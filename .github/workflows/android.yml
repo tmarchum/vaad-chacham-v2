@@ -1,15 +1,21 @@
 name: Build Android APK
 
 # Builds the Capacitor Android app in the cloud — no local Android toolchain
-# needed. Run it manually (Actions → "Build Android APK" → Run workflow) or it
-# runs automatically on pushes to the android feature branch. The installable
-# APK is uploaded as a build artifact you can download and sideload.
+# needed. Runs manually (Actions → "Build Android APK" → Run workflow), on
+# pushes to the android feature branch, and on main pushes that touch the
+# native side (so the public android-latest APK never goes stale).
+# The APK is a SIGNED RELEASE build — the keystore comes from repo secrets
+# (the old committed keystore was burned and replaced on 2026-10-05).
 
 on:
   workflow_dispatch:
   push:
     branches:
       - feature/android-app
+      - main
+    paths:
+      - "android/**"
+      - "capacitor.config.json"
 
 jobs:
   build:
@@ -44,19 +50,27 @@ jobs:
       - name: Capacitor sync (Android)
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Write signing keystore from secrets
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/vaadplus-release.p12"
+
+      - name: Build signed release APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/vaadplus-release.p12
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: vaadplus
+          VERSION_CODE: ${{ github.run_number }}
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk vaadplus.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk vaadplus.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vaadplus-debug-apk
+          name: vaadplus-release-apk
           path: vaadplus.apk
           if-no-files-found: error
 
@@ -69,6 +83,7 @@ jobs:
           name: אפליקציית וועד+ (אנדרואיד)
           body: |
             הגרסה האחרונה של אפליקציית האנדרואיד. הורד את vaadplus.apk והתקן בנייד.
+            שים לב: גרסה זו חתומה במפתח חדש — אם מותקנת גרסה מלפני 10/2026, יש להסיר אותה פעם אחת ולהתקין מחדש.
             (נבנה אוטומטית מ-${{ github.sha }})
           files: vaadplus.apk
           make_latest: 'true'

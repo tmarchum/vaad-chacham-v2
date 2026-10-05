@@ -41,10 +41,23 @@ public class AutoGateService extends Service {
     public static final String CH_ID = "vaadplus_autogate_ch";
     private static final int NOTIF_ID = 4711;
 
-    private static final long CALL_COOLDOWN_MS = 60_000L;
+    // 10 minutes: GPS drift around the radius edge must not redial the gate
+    // every minute while parked at home.
+    private static final long CALL_COOLDOWN_MS = 600_000L;
+    // Require this many consecutive qualifying fixes before calling / re-arming,
+    // so one stray fix can't trigger either transition.
+    private static final int STREAK_REQUIRED = 2;
 
     private FusedLocationProviderClient fused;
     private LocationCallback callback;
+    // In-memory debounce state (reset on service restart; priming covers that).
+    private int insideStreak = 0;
+    private int outsideStreak = 0;
+    private long lastNotifUpdate = 0;
+    private float lastNotifDist = Float.MAX_VALUE;
+    // Current location tier: true = HIGH_ACCURACY burst (near home),
+    // false = BALANCED low-power scan (far away).
+    private boolean highTier = true;
 
     @Override
     public void onCreate() {
@@ -76,12 +89,23 @@ public class AutoGateService extends Service {
 
     private void startLocationUpdates() {
         if (callback != null) return;
-        // HIGH_ACCURACY is required: BALANCED never powers the GPS chip, so in
-        // a car (no WiFi context) fixes are cell-tower-grade (300-2000m) and a
-        // 100m radius crossing is simply invisible — arrivals were never seen.
-        LocationRequest req = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-                .setMinUpdateIntervalMillis(2500L)
-                .build();
+        startTier(true); // start in HIGH so the first fix is trustworthy
+    }
+
+    // Two-tier strategy: far from home a BALANCED 30s scan is plenty ("am I
+    // still far away?" needs cell-grade accuracy only) and leaves the GPS chip
+    // off; once possibly within 3km we switch to the HIGH_ACCURACY 5s burst.
+    // HIGH is required near home: BALANCED never powers the GPS chip, so in a
+    // car (no WiFi context) fixes are cell-tower-grade (300-2000m) and a 100m
+    // radius crossing is simply invisible — arrivals were never seen.
+    private void startTier(boolean high) {
+        if (callback != null) fused.removeLocationUpdates(callback);
+        highTier = high;
+        LocationRequest req = high
+                ? new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
+                        .setMinUpdateIntervalMillis(2500L).build()
+                : new LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 30_000L)
+                        .setMinUpdateIntervalMillis(15_000L).build();
         callback = new LocationCallback() {
             @Override
             public void onLocationResult(@NonNull LocationResult result) {
@@ -94,6 +118,20 @@ public class AutoGateService extends Service {
         } catch (SecurityException e) {
             log(getSharedPreferences(PREFS, MODE_PRIVATE), "location permission denied");
             stopSelf();
+        }
+    }
+
+    // Possibly-within distance (d minus the fix's own error). Switching on the
+    // pessimistic bound means a coarse BALANCED fix can never strand us in the
+    // low tier while we're actually close to home.
+    private void maybeSwitchTier(float d, float acc) {
+        float possiblyWithin = d - acc;
+        if (highTier && possiblyWithin > 4000f) {
+            log(getSharedPreferences(PREFS, MODE_PRIVATE), "far (" + Math.round(d) + "m) → low-power scan");
+            startTier(false);
+        } else if (!highTier && possiblyWithin <= 3000f) {
+            log(getSharedPreferences(PREFS, MODE_PRIVATE), "approaching (" + Math.round(d) + "m) → GPS burst");
+            startTier(true);
         }
     }
 
@@ -110,11 +148,29 @@ public class AutoGateService extends Service {
         float d = dist[0];
         int acc = Math.round(loc.getAccuracy());
 
+        maybeSwitchTier(d, loc.getAccuracy());
+
         // Live diagnostics: persist + show distance AND fix accuracy, so a
-        // coarse-fix problem (huge acc) is visible at a glance.
-        p.edit().putFloat("lastDist", d).putLong("lastUpdate", System.currentTimeMillis())
-                .putInt("lastAcc", acc).apply();
-        updateNotification("מרחק לשער: " + Math.round(d) + " מ' (טווח " + radius + ", דיוק ±" + acc + ")");
+        // coarse-fix problem (huge acc) is visible at a glance. Throttled —
+        // rewriting prefs + notification on every 2.5s fix is pointless churn.
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastNotifUpdate > 15_000 || Math.abs(d - lastNotifDist) > 25f) {
+            lastNotifUpdate = nowMs;
+            lastNotifDist = d;
+            p.edit().putFloat("lastDist", d).putLong("lastUpdate", nowMs)
+                    .putInt("lastAcc", acc).apply();
+            updateNotification("מרחק לשער: " + Math.round(d) + " מ' (טווח " + radius + ", דיוק ±" + acc + ")");
+        }
+
+        // Accuracy gate: a coarse fix (urban canyon, cell-grade) must not flip
+        // state in either direction — ±800m "inside" readings used to dial the
+        // gate from the couch. Diagnostics above still update.
+        int accGate = Math.max(50, radius / 2);
+        if (acc > accGate) {
+            insideStreak = 0;
+            outsideStreak = 0;
+            return;
+        }
 
         // State persists across service restarts so the OS restarting us while
         // you're home does NOT re-open the gate.
@@ -130,6 +186,9 @@ public class AutoGateService extends Service {
         }
 
         if (!inside && d <= radius) {
+            // Debounce: two consecutive accurate in-radius fixes before calling.
+            if (++insideStreak < STREAK_REQUIRED) return;
+            outsideStreak = 0;
             p.edit().putBoolean("inside", true).apply();
             long now = System.currentTimeMillis();
             if (now - p.getLong("lastCall", 0) > CALL_COOLDOWN_MS) {
@@ -141,8 +200,14 @@ public class AutoGateService extends Service {
                 log(p, "arrive d=" + Math.round(d) + "m (cooldown, skipped)");
             }
         } else if (inside && d > radius * 1.4f) {
+            // Debounce the exit too — drift past the 1.4x line must not re-arm.
+            if (++outsideStreak < STREAK_REQUIRED) return;
+            insideStreak = 0;
             p.edit().putBoolean("inside", false).apply(); // re-arm after leaving
             log(p, "left d=" + Math.round(d) + "m → re-armed");
+        } else {
+            insideStreak = 0;
+            outsideStreak = 0;
         }
     }
 
@@ -152,15 +217,24 @@ public class AutoGateService extends Service {
     }
 
     private void placeCall(SharedPreferences p, String number) {
+        // Android 10+ silently DROPS a background activity start when the
+        // overlay permission is missing — no exception, no call, no fallback.
+        // Check it up front and go straight to the tap-notification instead.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                && !android.provider.Settings.canDrawOverlays(this)) {
+            log(p, "no overlay permission → tap-notification fallback");
+            showTapToOpenNotification(number);
+            return;
+        }
         try {
             Intent call = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + number));
             call.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(call);
             log(p, "call sent OK");
         } catch (Exception e) {
-            // CALL_PHONE missing or background-activity-start blocked (needs
-            // overlay perm). Degrade gracefully: heads-up notification whose
-            // tap places the call — user interaction, so it's always allowed.
+            // CALL_PHONE missing or background-activity-start blocked. Degrade
+            // gracefully: heads-up notification whose tap places the call —
+            // user interaction, so it's always allowed.
             log(p, "call FAIL: " + e.getClass().getSimpleName() + " → tap-notification fallback");
             showTapToOpenNotification(number);
         }

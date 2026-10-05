@@ -33,3 +33,8 @@ scripts/*.cjs
 # Local tooling / generated
 .claude/
 supabase/.temp/
+
+# Signing keystores must never be committed (the 2026-10 incident: committed keystore + plaintext password = anyone could ship a trojan update)
+*.keystore
+*.jks
+*.p12
