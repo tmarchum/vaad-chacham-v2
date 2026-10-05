@@ -63,7 +63,7 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
         run: cp android/app/build/outputs/apk/release/app-release.apk vaadplus.apk
