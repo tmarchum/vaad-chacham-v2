@@ -8,6 +8,7 @@ import { FormField, FormSelect, FormTextarea, FormBool } from '@/components/comm
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { waLink, telHref } from '@/lib/phone'
 import { PageHeader } from '@/components/common/PageHeader'
 import {
   Search, MessageCircle, Star, CheckCircle, ExternalLink,
@@ -107,11 +108,11 @@ ${issue.description ? `📝 פרטים: ${issue.description}` : ''}
 ועד הבית - ${buildingName}`
 }
 
+// WhatsApp link via the shared, validated helper (the old hand-rolled version
+// mangled non-Israeli / already-international numbers); falls back to a phone
+// call for numbers WhatsApp can't reach (short-codes, 1-800…).
 function buildWhatsAppUrl(phone, message) {
-  let normalized = phone.replace(/[-\s()]/g, '')
-  if (normalized.startsWith('0')) normalized = '972' + normalized.slice(1)
-  if (!normalized.startsWith('972')) normalized = '972' + normalized
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
+  return waLink(phone || '', message) || telHref(phone || '') || '#'
 }
 
 // ---------------------------------------------------------------------------

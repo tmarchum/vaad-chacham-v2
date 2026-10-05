@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, calcUnitFee } from '@/lib/utils'
+import { waLink } from '@/lib/phone'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
@@ -362,14 +363,14 @@ export default function CollectionCases() {
     const amount = formatCurrency(c.total_debt || 0)
     const months = c.months_overdue || 1
     const building = selectedBuilding?.name || 'הבניין'
-    const msg = encodeURIComponent(
+    const msg =
       `שלום ${name},\n\nאנו פונים אליך בעניין יתרת חוב ועד בית לבניין "${building}".\n\n` +
       `סה"כ חוב: ${amount}\nחודשים באיחור: ${months}\n\n` +
       `נבקשך להסדיר את התשלום בהקדם האפשרי.\n\nתודה, ועד הבניין`
-    )
-    const url = phone
-      ? `https://wa.me/972${phone.replace(/^0/, '').replace(/\D/g, '')}?text=${msg}`
-      : `https://wa.me/?text=${msg}`
+    // Deliberately a MANUAL wa.me link (never the GreenAPI system gateway —
+    // that channel is vendor-only; dunning stays human-initiated). waLink
+    // validates the number instead of the old hand-rolled 972-prefix mangling.
+    const url = waLink(phone, msg) || `https://wa.me/?text=${encodeURIComponent(msg)}`
     window.open(url, '_blank')
 
     // Log to history (fire-and-forget is acceptable here; user already has the WA window open)

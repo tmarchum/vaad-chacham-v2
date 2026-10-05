@@ -25,11 +25,15 @@ export function useCollection(collectionName, filters = {}) {
 
   useEffect(() => { refresh() }, [refresh])
 
+  // Mutations merge the returned row into local state instead of re-downloading
+  // the entire table (the store already returns the normalized row). A null
+  // result (store error) falls back to a full refresh to stay consistent.
   const create = useCallback(async (itemData) => {
     setIsSaving(true)
     try {
       const newItem = await collection.create(itemData)
-      await refresh()
+      if (newItem) setData((prev) => [newItem, ...prev])
+      else await refresh()
       return newItem
     } finally {
       setIsSaving(false)
@@ -40,7 +44,8 @@ export function useCollection(collectionName, filters = {}) {
     setIsSaving(true)
     try {
       const updated = await collection.update(id, itemData)
-      await refresh()
+      if (updated) setData((prev) => prev.map((it) => (it.id === id ? updated : it)))
+      else await refresh()
       return updated
     } finally {
       setIsSaving(false)
@@ -51,7 +56,8 @@ export function useCollection(collectionName, filters = {}) {
     setIsSaving(true)
     try {
       const removed = await collection.remove(id)
-      await refresh()
+      if (removed) setData((prev) => prev.filter((it) => it.id !== id))
+      else await refresh()
       return removed
     } finally {
       setIsSaving(false)
@@ -84,13 +90,19 @@ export function useRealtimeCollection(collectionName, filters = {}) {
   useEffect(() => {
     const tableName = TABLE_MAP[collectionName] || collectionName
     const channelName = `rt-${tableName}-${filtersKey}`
+    // Scope the realtime subscription to the building when one is given —
+    // otherwise every change in any building re-fetches the table for every
+    // connected client.
+    const sub = { event: '*', schema: 'public', table: tableName }
+    if (filters.building_id) sub.filter = `building_id=eq.${filters.building_id}`
     const channel = supabase
       .channel(channelName)
-      .on('postgres_changes', { event: '*', schema: 'public', table: tableName }, () => {
+      .on('postgres_changes', sub, () => {
         refresh()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collectionName, filtersKey, refresh])
 
   return result

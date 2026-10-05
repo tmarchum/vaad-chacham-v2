@@ -213,9 +213,16 @@ function createCollection(tableName) {
   const table = TABLE_MAP[tableName] || tableName
 
   return {
+    // filters: column → value equality filters, applied SERVER-SIDE.
+    // Special key `_limit` caps the row count. A filter whose value is
+    // undefined (e.g. building not selected yet) short-circuits to [] instead
+    // of silently fetching the whole table.
     async list(filters = {}) {
+      const { _limit, ...eqFilters } = filters
+      if (Object.values(eqFilters).some((v) => v === undefined)) return []
       let q = supabase.from(table).select('*').order('created_at', { ascending: false })
-      Object.entries(filters).forEach(([col, val]) => { q = q.eq(col, val) })
+      Object.entries(eqFilters).forEach(([col, val]) => { q = q.eq(col, val) })
+      if (_limit) q = q.limit(_limit)
       const { data, error } = await q
       if (error) { emitError('list', tableName, error); return [] }
       return (data || []).map(normalizeRow)

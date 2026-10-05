@@ -47,17 +47,21 @@ function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#3b82f6' }
 function Dashboard() {
   const { selectedBuilding, buildings, isLoading: buildingsLoading } = useBuildingContext()
   const { profile } = useAuth()
-  const { data: allUnits, isLoading } = useCollection('units')
-  const { data: allPayments } = useCollection('payments')
-  const { data: allIssues } = useCollection('issues')
-  const { data: allExpenses } = useCollection('expenses')
-  const { data: allAlerts } = useCollection('agentAlerts')
-  const { data: allCompliance } = useCollection('compliance')
-  const { data: allDocuments } = useCollection('documents')
+  // All queries are building-scoped SERVER-SIDE (vendors stays global — the
+  // vendor pool is shared across buildings). An unselected building yields []
+  // instead of downloading entire tables.
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allUnits, isLoading } = useCollection('units', scope)
+  const { data: allPayments } = useCollection('payments', scope)
+  const { data: allIssues } = useCollection('issues', scope)
+  const { data: allExpenses } = useCollection('expenses', scope)
+  const { data: allAlerts } = useCollection('agentAlerts', scope)
+  const { data: allCompliance } = useCollection('compliance', scope)
+  const { data: allDocuments } = useCollection('documents', scope)
   const { data: allVendors } = useCollection('vendors')
-  const { data: allRecurringTasks } = useCollection('recurringTasks')
-  const { data: allBankAccounts } = useCollection('bankAccounts')
-  const { data: allBuildingAssets } = useCollection('buildingAssets')
+  const { data: allRecurringTasks } = useCollection('recurringTasks', scope)
+  const { data: allBankAccounts } = useCollection('bankAccounts', scope)
+  const { data: allBuildingAssets } = useCollection('buildingAssets', scope)
 
   // Proactive maintenance — upcoming/overdue services, legal inspections, certs.
   const maintenanceDue = useMemo(() => {
