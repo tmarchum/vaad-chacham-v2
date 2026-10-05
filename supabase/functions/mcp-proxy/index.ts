@@ -171,13 +171,19 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
     }
 
     case 'get_units_and_residents': {
-      const { data: units } = await supabase
+      const { data: units, error: unitsErr } = await supabase
         .from('units')
         .select('id, number, monthly_fee, rooms, board_member')
         .eq('building_id', args.building_id)
-      const { data: residents } = await supabase
-        .from('unit_residents')
-        .select('unit_id, first_name, last_name, email, phone, owner_email, owner_phone, is_primary, resident_type')
+      if (unitsErr) throw new Error(unitsErr.message)
+      const unitIds = (units || []).map(u => u.id)
+      const { data: residents, error: resErr } = unitIds.length
+        ? await supabase
+            .from('unit_residents')
+            .select('unit_id, first_name, last_name, email, phone, owner_email, owner_phone, is_primary, resident_type')
+            .in('unit_id', unitIds)
+        : { data: [], error: null }
+      if (resErr) throw new Error(resErr.message)
       // Map residents to units
       const unitMap = (units || []).map(u => {
         const unitResidents = (residents || []).filter(r => r.unit_id === u.id)
@@ -186,27 +192,32 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
       return unitMap
     }
 
+    // NOTE: every read handler below throws on a DB error instead of returning
+    // [] — a failed query must look like an error to the LLM, not like "no
+    // payments exist" (which would steer collection analysis badly).
     case 'get_expenses': {
       const year = (args.year as string) || new Date().getFullYear().toString()
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('expenses')
         .select('date, description, amount, category')
         .eq('building_id', args.building_id)
         .gte('date', `${year}-01-01`)
         .lte('date', `${year}-12-31`)
         .order('date')
+      if (error) throw new Error(error.message)
       return data || []
     }
 
     case 'get_income': {
       const year = (args.year as string) || new Date().getFullYear().toString()
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('bank_transactions')
         .select('transaction_date, credit, month, description')
         .eq('building_id', args.building_id)
         .gt('credit', 0)
         .gte('transaction_date', `${year}-01-01`)
         .order('transaction_date')
+      if (error) throw new Error(error.message)
       return data || []
     }
 
@@ -218,17 +229,19 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
       if (args.month) {
         query = query.eq('month', args.month)
       }
-      const { data } = await query
+      const { data, error } = await query
+      if (error) throw new Error(error.message)
       return data || []
     }
 
     case 'get_collection_cases': {
       const status = (args.status as string) || 'open'
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('collection_cases')
         .select('*')
         .eq('building_id', args.building_id)
         .eq('status', status)
+      if (error) throw new Error(error.message)
       return data || []
     }
 
@@ -304,8 +317,9 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
           status: 'logged',
           error_message: 'No email provider configured in MCP proxy',
         })
-        success = true
-        errorMsg = 'logged_only'
+        // No provider → nothing was actually sent. Report that truthfully —
+        // an LLM caller must not believe the resident was emailed.
+        return { success: false, logged: true, error: 'no_email_provider_configured' }
       }
 
       return { success, error: errorMsg }

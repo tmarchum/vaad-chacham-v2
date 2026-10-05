@@ -1,9 +1,5 @@
 import Anthropic from 'npm:@anthropic-ai/sdk'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, json, serviceClient, identifyCaller, isPrivileged } from '../_shared/mod.ts'
 
 // ---------------------------------------------------------------------------
 // System prompts per agent type
@@ -297,11 +293,13 @@ Deno.serve(async (req: Request) => {
   try {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return json({ error: 'ANTHROPIC_API_KEY not configured' }, 500)
     }
+
+    // AUTH: committee tooling only. Anyone else (residents, anon-key callers)
+    // must not be able to burn Anthropic tokens / web searches on our key.
+    const caller = await identifyCaller(req, serviceClient())
+    if (!isPrivileged(caller)) return json({ error: 'unauthorized' }, 401)
 
     const { agentType, buildingName, contextData } = await req.json()
 
@@ -312,7 +310,14 @@ Deno.serve(async (req: Request) => {
     // on Anthropic's infrastructure and returns live, structured results.)
     // ---------------------------------------------------------------------------
     if (agentType === 'vendor_search') {
-      const { category, city, address, searchTerms } = contextData as Record<string, string>
+      // Length-cap the user-originated fields — they are interpolated into the
+      // prompt and could otherwise carry injection payloads / blow up cost.
+      const cap = (v: unknown, n = 80) => String(v ?? '').slice(0, n).replace(/[\r\n]+/g, ' ').trim()
+      const ctx = (contextData || {}) as Record<string, string>
+      const category = cap(ctx.category)
+      const city = cap(ctx.city, 40)
+      const address = cap(ctx.address)
+      const searchTerms = cap(ctx.searchTerms)
       const query = searchTerms || category
       const where = city || address || 'ישראל'
 
@@ -398,7 +403,9 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    const anthropic = new Anthropic({ apiKey })
+    // 100s hard timeout — same treatment as the vendor_search path; a hung
+    // Anthropic call must not ride the platform's idle limit.
+    const anthropic = new Anthropic({ apiKey, timeout: 100_000 })
 
     // Model is configurable via the CLAUDE_MODEL secret; defaults to the
     // latest Sonnet (much faster + smarter than Sonnet 4 for the same cost).
@@ -414,7 +421,8 @@ Deno.serve(async (req: Request) => {
       ],
     })
 
-    const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
+    const first = message.content?.[0]
+    const rawText = first?.type === 'text' ? first.text : ''
 
     // Extract JSON from the response (Claude often wraps it in ```json ... ```)
     // Remove ALL backtick fences then extract the JSON object

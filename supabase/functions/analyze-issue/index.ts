@@ -5,22 +5,33 @@
 // vendors are already identified. Keyword matching alone over-matches
 // ("מזגן" ⊃ "גן", "שמשה" ⊃ "שמש"); the agent disambiguates by context.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import Anthropic from 'npm:@anthropic-ai/sdk'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-const json = (b: unknown, s = 200) =>
-  new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+import { corsHeaders, json, serviceClient, identifyCaller, isPrivileged } from '../_shared/mod.ts'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
     if (!apiKey) return json({ error: 'no_api_key' }, 500)
-    const svc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+    const svc = serviceClient()
+
+    // AUTH (fail closed): either the internal secret presented by the DB
+    // trigger (trg_analyze_issue reads it from messaging_secrets and sends it
+    // as x-internal-secret), or an admin/committee JWT. Anyone else — including
+    // anon-key callers — is rejected; this both burns no Anthropic tokens for
+    // strangers and stops tampering with ai_* fields on arbitrary issues.
+    const providedSecret = (req.headers.get('x-internal-secret') || '').trim()
+    let authorized = false
+    if (providedSecret) {
+      const { data: sec } = await svc.from('messaging_secrets')
+        .select('api_token').eq('provider', 'edge-internal').maybeSingle()
+      authorized = !!sec?.api_token && providedSecret === sec.api_token
+    }
+    if (!authorized) {
+      const caller = await identifyCaller(req, svc)
+      authorized = isPrivileged(caller)
+    }
+    if (!authorized) return json({ error: 'unauthorized' }, 401)
 
     const { issueId } = await req.json()
     if (!issueId) return json({ error: 'issueId_required' }, 400)
@@ -76,7 +87,8 @@ ${categories.map((c) => `- ${c}`).join('\n')}
     const update: Record<string, unknown> = { ai_search_terms: searchTerms || null }
     if (category) update.ai_category = category
     if (costEstimate) { update.ai_cost_estimate = costEstimate; update.estimated_cost = costMid }
-    await svc.from('issues').update(update).eq('id', issueId)
+    const { error: updErr } = await svc.from('issues').update(update).eq('id', issueId)
+    if (updErr) return json({ error: `update_failed: ${updErr.message}` }, 500)
 
     return json({ ok: true, category, search_terms: searchTerms, cost_estimate: costEstimate })
   } catch (err) {

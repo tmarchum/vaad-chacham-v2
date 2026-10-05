@@ -30,6 +30,19 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 
+// Match a vendor by the last 9 digits of an Israeli number (05x / 9725x / +972
+// all normalize to the same tail). Used both to identify inbound senders and
+// to enforce that outbound sends go only to vendors.
+async function findVendorByLast9(
+  svc: ReturnType<typeof createClient>,
+  last9: string,
+) {
+  const { data: vendors } = await svc.from('vendors')
+    .select('id, name, phone, membership_status')
+  return (vendors || []).find((v) =>
+    String(v.phone || '').replace(/\D/g, '').endsWith(last9)) || null
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -65,11 +78,7 @@ Deno.serve(async (req: Request) => {
       const digitsOnly = chat.replace(/\D/g, '')
       const last9 = digitsOnly.slice(-9)
       if (last9.length < 9) return json({ ok: true, ignored: 'bad_number' })
-      const { data: vendors } = await svc.from('vendors')
-        .select('id, name, phone, membership_status')
-        .like('phone', `%${last9.slice(0, 2)}%`) // cheap prefilter; exact match below
-      const vendor = (vendors || []).find((v) =>
-        String(v.phone || '').replace(/\D/g, '').endsWith(last9))
+      const vendor = await findVendorByLast9(svc, last9)
       if (!vendor) return json({ ok: true, ignored: 'no_vendor_match' })
 
       // Classify the reply. Check decline FIRST ("לא מעוניין" contains "מעוניין").
@@ -80,9 +89,14 @@ Deno.serve(async (req: Request) => {
       else if (approveRe.test(text)) newStatus = 'agreed'
 
       // Only auto-flip vendors that are in the invite flow — a random later
-      // message from an approved vendor must not change their status.
+      // message from an approved vendor must not change their status. A vendor
+      // who declined may still change their mind (the ack invites exactly that),
+      // so declined → agreed is allowed too.
       const current = vendor.membership_status || 'pending'
-      if (newStatus && ['pending', 'invited'].includes(current)) {
+      const allowedFrom = newStatus === 'agreed'
+        ? ['pending', 'invited', 'declined']
+        : ['pending', 'invited']
+      if (newStatus && allowedFrom.includes(current)) {
         await svc.from('vendors').update({ membership_status: newStatus }).eq('id', vendor.id)
         // Audit trail of the inbound reply.
         await svc.from('notification_log').insert({
@@ -176,9 +190,12 @@ Deno.serve(async (req: Request) => {
         .select('webhook_token').eq('provider', 'greenapi').maybeSingle()
       const webhookToken = sec?.webhook_token || crypto.randomUUID().replace(/-/g, '')
       if (!sec?.webhook_token) {
-        await svc.from('messaging_secrets')
-          .update({ webhook_token: webhookToken, updated_at: new Date().toISOString() })
-          .eq('provider', 'greenapi')
+        // Upsert — .update() writes 0 rows when no greenapi row exists yet,
+        // which would hand GreenAPI a token the DB never stored (every webhook
+        // then rejected, silently).
+        const { error: tokErr } = await svc.from('messaging_secrets')
+          .upsert({ provider: 'greenapi', webhook_token: webhookToken, updated_at: new Date().toISOString() })
+        if (tokErr) return json({ error: `webhook_token_save_failed: ${tokErr.message}` }, 500)
       }
       const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/green-whatsapp`
       const r = await fetch(`${base}/waInstance${idInstance}/setSettings/${token}`, {
@@ -210,6 +227,24 @@ Deno.serve(async (req: Request) => {
     if (action === 'send') {
       if (integ.enabled !== true) return json({ error: 'integration_disabled' }, 400)
       if (!chatId) return json({ error: 'chatId_required' }, 400)
+
+      // GUARDRAIL, enforced server-side: this channel sends to VENDORS ONLY.
+      // Resident-facing dunning/collection messages must never flow through
+      // here (see the collection-email incident) — so any chatId that doesn't
+      // match a vendor's phone is rejected, no matter who the caller is.
+      const targetLast9 = String(chatId).replace(/\D/g, '').slice(-9)
+      const targetVendor = targetLast9.length === 9
+        ? await findVendorByLast9(svc, targetLast9)
+        : null
+      if (!targetVendor) {
+        await svc.from('notification_log').insert({
+          channel: 'whatsapp', recipient: String(chatId), status: 'blocked',
+          subject: 'נחסם: יעד שאינו ספק', body: String(message || '').slice(0, 2000),
+          error_message: 'green-whatsapp is vendor-only',
+        }).then(() => {}, () => {})
+        return json({ error: 'not_a_vendor', detail: 'ערוץ זה שולח לספקים בלבד' }, 403)
+      }
+
       let r: Response
       if (fileUrl) {
         r = await fetch(`${base}/waInstance${idInstance}/sendFileByUrl/${token}`, {

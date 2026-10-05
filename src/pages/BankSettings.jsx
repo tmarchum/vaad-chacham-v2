@@ -90,17 +90,31 @@ export default function BankSettings() {
 
   const openNew = () => { setEditingId(null); setForm(EMPTY_FORM); setFormOpen(true) }
 
+  // Write-only credentials: stored values are never loaded back into the form
+  // (the UI already promises this — the code used to echo them anyway).
   const openEdit = (account) => {
     setEditingId(account.id)
-    setForm({ bank_type: account.bank_type, label: account.label || '', credentials: account.credentials || {} })
+    setForm({ bank_type: account.bank_type, label: account.label || '', credentials: {} })
     setFormOpen(true)
   }
 
   const handleSave = async () => {
     if (!form.bank_type) return
-    const payload = { building_id: selectedBuilding.id, bank_type: form.bank_type, label: form.label, credentials: form.credentials, is_active: true }
-    if (editingId) await update(editingId, payload)
-    else await create(payload)
+    const payload = { building_id: selectedBuilding.id, bank_type: form.bank_type, label: form.label, is_active: true }
+    const filled = Object.fromEntries(
+      Object.entries(form.credentials).filter(([, v]) => String(v || '').trim() !== '')
+    )
+    if (editingId) {
+      // Per-field: an empty input keeps the stored value, a filled one replaces it.
+      if (Object.keys(filled).length > 0) {
+        const existing = accounts.find(a => a.id === editingId)?.credentials || {}
+        payload.credentials = { ...existing, ...filled }
+      }
+      await update(editingId, payload)
+    } else {
+      payload.credentials = filled
+      await create(payload)
+    }
     setFormOpen(false)
     refresh()
   }

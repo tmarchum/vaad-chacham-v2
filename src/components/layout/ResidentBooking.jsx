@@ -131,44 +131,18 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
     setError(null); setOk(false)
   }
 
-  // Notify the vaad rep + the resident by email. Booking emails carry no caseId,
-  // so they are NOT blocked by the collection-notifications toggle.
-  const sendBookingNotification = async (booking) => {
+  // Notify the vaad rep + the resident by email. The resident JWT is only
+  // allowed the server-side 'booking' template — recipients and content are
+  // derived in the Edge Function from the booking row itself.
+  const sendBookingNotification = async (bookingId) => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) return
-      const dateStr = new Date(booking.booking_date).toLocaleDateString('he-IL', {
-        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-      })
-      const slotLabel = SLOTS[booking.slot]?.label || booking.slot
-      const row = (k, v) => `<tr><td style="padding:6px 10px;color:#64748b;">${k}</td><td style="padding:6px 10px;font-weight:bold;">${v}</td></tr>`
-      const html = `
-        <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-          <div style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;padding:18px;border-radius:12px 12px 0 0;">
-            <h2 style="margin:0;">שיריון ${resource.name}</h2>
-          </div>
-          <div style="background:#f8fafc;padding:18px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
-            <table style="width:100%;border-collapse:collapse;">
-              ${row('תאריך', dateStr)}
-              ${row('משבצת', slotLabel)}
-              ${row('שם המזמין', booking.booker_name || '')}
-              ${booking.booker_phone ? row('טלפון', booking.booker_phone) : ''}
-              ${booking.booker_email ? row('מייל', booking.booker_email) : ''}
-              ${Number(booking.price) > 0 ? row('מחיר', formatCurrency(booking.price)) : ''}
-            </table>
-            <p style="margin-top:14px;color:#475569;">הבקשה התקבלה וממתינה לאישור נציג הוועד.</p>
-          </div>
-        </div>`
-      const send = (to, subject) => fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      if (!session?.access_token || !bookingId) return
+      await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ to, subject, html, buildingId: profile.building_id }),
+        body: JSON.stringify({ template: 'booking', bookingId }),
       }).catch(e => console.error('booking email send error', e))
-
-      const tasks = []
-      if (resource.notify_email) tasks.push(send(resource.notify_email, `שיריון חדש ממתין לאישור — ${resource.name}`))
-      if (booking.booker_email) tasks.push(send(booking.booker_email, `בקשת השיריון שלך התקבלה — ${resource.name}`))
-      await Promise.all(tasks)
     } catch (e) {
       console.error('sendBookingNotification error', e)
     }
@@ -200,11 +174,11 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       price: slotPrice(slot),
       terms_accepted: !!resource.rental_terms && termsAccepted,
     }
-    const { error } = await supabase.from('bookings').insert(bookingData)
+    const { data: inserted, error } = await supabase.from('bookings').insert(bookingData).select('id').single()
     if (error) { setSaving(false); console.error('booking insert error', error); setError('שגיאה בשליחת הבקשה. נסה שוב.'); return }
 
     // Send the notification emails BEFORE any redirect (so the requests aren't cancelled)
-    await sendBookingNotification(bookingData)
+    await sendBookingNotification(inserted?.id)
 
     setSaving(false)
     setSelectedDk(null); setSlot(null); setOk(true)

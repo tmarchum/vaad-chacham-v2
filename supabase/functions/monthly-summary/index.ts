@@ -27,9 +27,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   // Only the scheduler (or an authorized caller) may trigger this.
+  // Fail CLOSED: a missing CRON_SECRET must deny everything, not allow everything.
   const CRON_SECRET = Deno.env.get("CRON_SECRET");
-  if (CRON_SECRET && req.headers.get("x-cron-secret") !== CRON_SECRET) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: cors });
+  if (!CRON_SECRET || req.headers.get("x-cron-secret") !== CRON_SECRET) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401, headers: { ...cors, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -40,27 +43,43 @@ Deno.serve(async (req) => {
     const sb = createClient(SUPABASE_URL, SERVICE_KEY);
 
     // Recipients: all admins.
-    const { data: admins } = await sb.from("profiles").select("email").eq("role", "admin");
+    const { data: admins, error: adminsErr } = await sb.from("profiles").select("email").eq("role", "admin");
+    if (adminsErr) throw new Error(`profiles query failed: ${adminsErr.message}`);
     const recipients = (admins || []).map((a: any) => a.email).filter(Boolean);
     if (recipients.length === 0) {
-      return new Response(JSON.stringify({ error: "no admin recipients" }), { status: 200, headers: cors });
+      return new Response(JSON.stringify({ error: "no admin recipients" }), {
+        status: 200, headers: { ...cors, "Content-Type": "application/json" },
+      });
     }
 
     let buildingsQ = sb.from("buildings").select("id, name");
     if (onlyBuilding) buildingsQ = buildingsQ.eq("id", onlyBuilding);
-    const { data: buildings } = await buildingsQ;
+    const { data: buildings, error: buildingsErr } = await buildingsQ;
+    if (buildingsErr) throw new Error(`buildings query failed: ${buildingsErr.message}`);
+
+    // First day of the month AFTER `month` — a half-open range [month-01, next-01)
+    // is correct for every month length ("-31" sent 2026-02-31 to Postgres, which
+    // errored and silently zeroed expenses in short months).
+    const [yy, mm] = month.split("-").map(Number);
+    const nextMonth = mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, "0")}-01`;
 
     const results: any[] = [];
     for (const b of buildings || []) {
-      const [{ data: units }, { data: payments }, { data: expenses }] = await Promise.all([
+      const [unitsRes, paymentsRes, expensesRes] = await Promise.all([
         sb.from("units").select("id").eq("building_id", b.id),
         sb.from("payments").select("amount, status").eq("building_id", b.id).eq("month", month),
-        sb.from("expenses").select("amount").eq("building_id", b.id).gte("date", `${month}-01`).lte("date", `${month}-31`),
+        sb.from("expenses").select("amount").eq("building_id", b.id).gte("date", `${month}-01`).lt("date", nextMonth),
       ]);
+      for (const [label, res] of [["units", unitsRes], ["payments", paymentsRes], ["expenses", expensesRes]] as const) {
+        if (res.error) throw new Error(`${label} query failed for ${b.name}: ${res.error.message}`);
+      }
+      const units = unitsRes.data, payments = paymentsRes.data, expenses = expensesRes.data;
 
       const unitCount = (units || []).length;
       const paid = (payments || []).filter((p: any) => p.status === "paid");
-      const collected = (payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0);
+      // "Collected" counts only payments actually marked paid — pending rows
+      // must not inflate the figure.
+      const collected = paid.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0);
       const spent = (expenses || []).reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
       const rate = unitCount ? Math.round((paid.length / unitCount) * 100) : 0;
 
@@ -77,14 +96,24 @@ Deno.serve(async (req) => {
           <p style="color:#94a3b8;font-size:12px;margin-top:16px">הופק אוטומטית ע"י וועד+</p>
         </div>`;
 
-      for (const to of recipients) {
-        await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+      // Send to each admin, recording per-recipient success/failure instead of
+      // assuming every send worked.
+      const sends = await Promise.allSettled(recipients.map(async (to: string) => {
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
           method: "POST",
           headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({ to, subject: `סיכום חודשי ${month} — ${b.name}`, html, buildingId: b.id }),
         });
-      }
-      results.push({ building: b.name, month, rate, collected, spent, sentTo: recipients.length });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j?.success !== true) throw new Error(j?.error || `http_${r.status}`);
+        return to;
+      }));
+      const sent = sends.filter((s) => s.status === "fulfilled").length;
+      const failures = sends
+        .map((s, i) => (s.status === "rejected" ? { to: recipients[i], error: String(s.reason?.message || s.reason) } : null))
+        .filter(Boolean);
+      if (failures.length) console.error(`monthly-summary send failures for ${b.name}:`, failures);
+      results.push({ building: b.name, month, rate, collected, spent, sentTo: sent, failed: failures });
     }
 
     return new Response(JSON.stringify({ ok: true, month, results }), {
@@ -92,6 +121,8 @@ Deno.serve(async (req) => {
       headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e?.message || e) }), { status: 500, headers: cors });
+    return new Response(JSON.stringify({ error: String(e?.message || e) }), {
+      status: 500, headers: { ...cors, "Content-Type": "application/json" },
+    });
   }
 });

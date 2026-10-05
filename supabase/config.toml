@@ -1,0 +1,22 @@
+# Per-function deploy settings — keeps verify_jwt flags codified so a deploy
+# can't silently flip them. Functions that receive non-JWT callers (GreenAPI
+# webhooks, GitHub Actions cron, MCP shared-secret) must stay verify_jwt=false;
+# they authenticate inside the function (fail closed).
+
+[functions.send-notification]
+verify_jwt = true
+
+[functions.analyze-issue]
+verify_jwt = true
+
+[functions.vaad-agent]
+verify_jwt = true
+
+[functions.green-whatsapp]
+verify_jwt = false # GreenAPI webhook authenticates with webhook_token
+
+[functions.mcp-proxy]
+verify_jwt = false # MCP_SECRET shared secret, fail closed
+
+[functions.monthly-summary]
+verify_jwt = false # GitHub Actions cron authenticates with CRON_SECRET, fail closed
