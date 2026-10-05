@@ -36,8 +36,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # NOTE: no setup-android action — the ubuntu-latest image ships the
+      # Android SDK preinstalled, and setup-android@v3 broke on the 2026 image
+      # ("Failed to find package 'tools'").
 
       - name: Install dependencies
         run: npm ci
