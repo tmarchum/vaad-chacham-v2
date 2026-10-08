@@ -409,9 +409,11 @@ function WorkOrderForm({ form, onChange, issuesOptions, vendorsOptions }) {
 
 export default function WorkOrders() {
   const { selectedBuilding } = useBuildingContext();
+  // Building-scoped SERVER-SIDE (vendors stays global); unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id };
   const { data: workOrders = [], create, update, remove, isLoading, isSaving } =
-    useCollection('workOrders', selectedBuilding ? { building_id: selectedBuilding.id } : {});
-  const { data: issues  = [] } = useCollection('issues');
+    useCollection('workOrders', scope);
+  const { data: issues  = [] } = useCollection('issues', scope);
   const { data: vendors = [] } = useCollection('vendors');
 
   // UI state

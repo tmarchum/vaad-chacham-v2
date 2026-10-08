@@ -41,9 +41,9 @@ const EMPTY_FORM = {
 
 function Expenses() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allExpenses, create, update, remove, isSaving, isLoading } = useCollection('expenses',
-    selectedBuilding ? { building_id: selectedBuilding.id } : {}
-  )
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allExpenses, create, update, remove, isSaving, isLoading } = useCollection('expenses', scope)
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))

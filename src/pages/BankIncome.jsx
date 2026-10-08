@@ -16,7 +16,9 @@ import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 export default function BankIncome() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx, update, refresh, isLoading } = useCollection('bankTransactions')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allTx, update, refresh, isLoading } = useCollection('bankTransactions', scope)
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))

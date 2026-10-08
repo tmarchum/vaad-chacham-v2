@@ -61,9 +61,9 @@ function getServiceStatus(nextService) {
 
 function BuildingAssets() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allAssets, create, update, remove, isSaving, isLoading } = useCollection('buildingAssets',
-    selectedBuilding ? { building_id: selectedBuilding.id } : {}
-  )
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allAssets, create, update, remove, isSaving, isLoading } = useCollection('buildingAssets', scope)
 
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')

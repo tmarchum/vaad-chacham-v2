@@ -1000,17 +1000,19 @@ export default function SmartAgents() {
   // Read the notifications toggle from the building record (set by CollectionCases page)
   const notificationsEnabled = selectedBuilding?.collection_notifications_enabled === true
 
-  const { data: allPayments, isLoading } = useCollection('payments')
-  const { data: allUnits } = useCollection('units')
-  const { data: allExpenses } = useCollection('expenses')
-  const { data: allCompliance } = useCollection('compliance')
-  const { data: allTasks } = useCollection('recurringTasks')
+  // Building-scoped SERVER-SIDE (vendors stays global); unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allPayments, isLoading } = useCollection('payments', scope)
+  const { data: allUnits } = useCollection('units', scope)
+  const { data: allExpenses } = useCollection('expenses', scope)
+  const { data: allCompliance } = useCollection('compliance', scope)
+  const { data: allTasks } = useCollection('recurringTasks', scope)
   const { data: allVendors, create: createVendor } = useCollection('vendors')
-  const { data: allIssues } = useCollection('issues')
-  const { create: createAnnouncement } = useCollection('announcements')
-  const { create: createRecurringTask } = useCollection('recurringTasks')
-  const { create: createCompliance } = useCollection('compliance')
-  const { update: updatePayment } = useCollection('payments')
+  const { data: allIssues } = useCollection('issues', scope)
+  const { create: createAnnouncement } = useCollection('announcements', scope)
+  const { create: createRecurringTask } = useCollection('recurringTasks', scope)
+  const { create: createCompliance } = useCollection('compliance', scope)
+  const { update: updatePayment } = useCollection('payments', scope)
 
   const [activeAgent, setActiveAgent] = useState(null)
   const [messageDialog, setMessageDialog] = useState({ open: false, title: '', content: '' })

@@ -1081,6 +1081,8 @@ export default function Reports() {
   const { selectedBuilding, buildings } = useBuildingContext()
   const [buildingFilter, setBuildingFilter] = useState('all')
 
+  // cross-building on purpose — the reports page has an "all buildings" filter
+  // and aggregates totals across every building, so these stay unscoped.
   const { data: payments, isLoading } = useCollection('payments')
   const { data: expenses } = useCollection('expenses')
   const { data: issues } = useCollection('issues')

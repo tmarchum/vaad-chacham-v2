@@ -103,14 +103,16 @@ export default function BuildingAgent() {
     }
   }, [selectedBuilding?.id])
 
-  const { data: allIssues, create: createIssue, isLoading } = useCollection('issues')
-  const { data: allTasks } = useCollection('recurringTasks')
-  const { data: allCompliance } = useCollection('compliance')
-  const { data: allPayments } = useCollection('payments')
-  const { data: allExpenses } = useCollection('expenses')
-  const { data: allAssets } = useCollection('buildingAssets')
+  // Building-scoped SERVER-SIDE (vendors stays global); unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allIssues, create: createIssue, isLoading } = useCollection('issues', scope)
+  const { data: allTasks } = useCollection('recurringTasks', scope)
+  const { data: allCompliance } = useCollection('compliance', scope)
+  const { data: allPayments } = useCollection('payments', scope)
+  const { data: allExpenses } = useCollection('expenses', scope)
+  const { data: allAssets } = useCollection('buildingAssets', scope)
   const { data: allVendors } = useCollection('vendors')
-  const { data: allWorkOrders } = useCollection('workOrders')
+  const { data: allWorkOrders } = useCollection('workOrders', scope)
 
   // ---------------------------------------------------------------------------
   // Health Score

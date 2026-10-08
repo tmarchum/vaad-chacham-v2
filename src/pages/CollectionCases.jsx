@@ -86,13 +86,15 @@ const EMPTY_PAYMENT = {
 
 export default function CollectionCases() {
   const { selectedBuilding, refreshBuildings } = useBuildingContext()
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
   const {
     data: allCases, isLoading, create, update, remove,
-  } = useRealtimeCollection('collectionCases', selectedBuilding ? { building_id: selectedBuilding.id } : {})
-  const { data: allNotifications } = useCollection('notificationLog')
-  const { data: allUnits } = useCollection('units', selectedBuilding ? { building_id: selectedBuilding.id } : {})
+  } = useRealtimeCollection('collectionCases', scope)
+  const { data: allNotifications } = useCollection('notificationLog', scope)
+  const { data: allUnits } = useCollection('units', scope)
   const { data: allResidents } = useCollection('residents')
-  const { data: allPayments } = useCollection('payments', selectedBuilding ? { building_id: selectedBuilding.id } : {})
+  const { data: allPayments } = useCollection('payments', scope)
   const { update: updateBuilding } = useCollection('buildings')
   // Audit trail of the kill switch (written by a DB trigger, admin-readable).
   const { data: toggleAudit } = useCollection('settingsAudit')

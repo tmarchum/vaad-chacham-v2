@@ -997,11 +997,13 @@ function StepRating({ issue, selectedQuote, completionData, vendorsCollection, a
 
 export default function VendorFinder() {
   const { selectedBuilding } = useBuildingContext()
-  const quotesCollection = useCollection('quotes')
-  const workOrdersCollection = useCollection('workOrders')
+  // Building-scoped SERVER-SIDE (vendors stays global); unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const quotesCollection = useCollection('quotes', scope)
+  const workOrdersCollection = useCollection('workOrders', scope)
   const vendorsCollection = useCollection('vendors')
-  const announcementsCollection = useCollection('announcements')
-  const issuesCollection = useCollection('issues')
+  const announcementsCollection = useCollection('announcements', scope)
+  const issuesCollection = useCollection('issues', scope)
   const isLoading = issuesCollection.isLoading
 
   // Workflow state

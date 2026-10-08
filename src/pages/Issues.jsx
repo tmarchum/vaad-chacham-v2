@@ -325,13 +325,13 @@ const IssueCard = React.memo(function IssueCard({
 
 function Issues() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allIssues, create, update, remove, isSaving, isLoading } = useRealtimeCollection('issues',
-    selectedBuilding ? { building_id: selectedBuilding.id } : {}
-  )
-  const { data: allUnits } = useCollection('units')
+  // Building-scoped SERVER-SIDE (vendors/supervisors stay global); unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allIssues, create, update, remove, isSaving, isLoading } = useRealtimeCollection('issues', scope)
+  const { data: allUnits } = useCollection('units', scope)
   const { data: allVendors } = useCollection('vendors')
   const { data: supervisors } = useCollection('supervisors')
-  const { data: allQuotes, create: createQuote, update: updateQuote } = useCollection('quotes')
+  const { data: allQuotes, create: createQuote, update: updateQuote } = useCollection('quotes', scope)
 
   // State
   const [search, setSearch] = useState('')

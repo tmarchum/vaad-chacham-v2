@@ -10,8 +10,10 @@ import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 
 export default function Balance() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx, isLoading } = useCollection('bankTransactions')
-  const { data: allExpenses } = useCollection('expenses')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allTx, isLoading } = useCollection('bankTransactions', scope)
+  const { data: allExpenses } = useCollection('expenses', scope)
 
   const now = new Date()
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))

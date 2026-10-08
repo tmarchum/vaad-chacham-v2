@@ -41,9 +41,11 @@ const EMPTY_FORM = { bank_type: '', label: '', credentials: {} }
 
 export default function BankSettings() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: accounts, create, update, remove, refresh, isSaving, isLoading } = useCollection('bankAccounts')
-  const { data: allScrapeSettings, create: createSettings, update: updateSettings, refresh: refreshSettings } = useCollection('scrapeSettings')
-  const { data: allTx } = useCollection('bankTransactions')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: accounts, create, update, remove, refresh, isSaving, isLoading } = useCollection('bankAccounts', scope)
+  const { data: allScrapeSettings, create: createSettings, update: updateSettings, refresh: refreshSettings } = useCollection('scrapeSettings', scope)
+  const { data: allTx } = useCollection('bankTransactions', scope)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)

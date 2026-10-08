@@ -40,10 +40,12 @@ const TYPE_FILTERS = [
 
 export default function BankTransactions() {
   const { selectedBuilding } = useBuildingContext()
-  const { data: allTx, update: updateTx, refresh, isLoading } = useCollection('bankTransactions')
-  const { data: allUnits } = useCollection('units')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allTx, update: updateTx, refresh, isLoading } = useCollection('bankTransactions', scope)
+  const { data: allUnits } = useCollection('units', scope)
   const { data: allResidents } = useCollection('residents')
-  const { data: allPayments, create: createPayment, update: updatePayment, refresh: refreshPayments } = useCollection('payments')
+  const { data: allPayments, create: createPayment, update: updatePayment, refresh: refreshPayments } = useCollection('payments', scope)
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))

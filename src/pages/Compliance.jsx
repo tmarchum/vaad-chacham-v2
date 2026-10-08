@@ -53,9 +53,9 @@ function getComplianceStatus(expiryDate) {
 
 function Compliance() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allCompliance, create, update, remove, isSaving, isLoading } = useCollection('compliance',
-    selectedBuilding ? { building_id: selectedBuilding.id } : {}
-  )
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allCompliance, create, update, remove, isSaving, isLoading } = useCollection('compliance', scope)
 
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')

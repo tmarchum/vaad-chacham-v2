@@ -188,7 +188,9 @@ function fullName(p) {
 function Units() {
   const { buildings, selectedBuilding } = useBuildingContext()
   const { isCommittee } = useAuth()
-  const { data: allUnits, create, update, remove, isLoading } = useCollection('units')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allUnits, create, update, remove, isLoading } = useCollection('units', scope)
   const {
     data: allResidents,
     create: createResident,

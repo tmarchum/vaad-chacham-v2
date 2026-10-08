@@ -63,12 +63,10 @@ function exportToCSV(filename, headers, rows) {
 
 function Payments() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allPayments, create, update, remove, bulkCreate, refresh, isSaving, isLoading } = useRealtimeCollection('payments',
-    selectedBuilding ? { building_id: selectedBuilding.id } : {}
-  )
-  const { data: allUnits } = useCollection('units',
-    selectedBuilding ? { building_id: selectedBuilding.id } : {}
-  )
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allPayments, create, update, remove, bulkCreate, refresh, isSaving, isLoading } = useRealtimeCollection('payments', scope)
+  const { data: allUnits } = useCollection('units', scope)
   const { data: allResidents } = useCollection('residents')
 
   const now = new Date()

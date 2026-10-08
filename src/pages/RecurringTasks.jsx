@@ -80,10 +80,10 @@ function getNextDate(currentDateStr, frequency) {
 
 function RecurringTasks() {
   const { buildings, selectedBuilding } = useBuildingContext()
-  const { data: allTasks, create, update, remove, isSaving, isLoading } = useCollection('recurringTasks',
-    selectedBuilding ? { building_id: selectedBuilding.id } : {}
-  )
-  const issuesCollection = useCollection('issues')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allTasks, create, update, remove, isSaving, isLoading } = useCollection('recurringTasks', scope)
+  const issuesCollection = useCollection('issues', scope)
 
   const [search, setSearch] = useState('')
   const [buildingFilter, setBuildingFilter] = useState('all')

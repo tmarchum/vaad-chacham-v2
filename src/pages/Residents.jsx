@@ -25,7 +25,9 @@ const RESIDENT_TYPE_OPTIONS = [
 
 function Residents() {
   const { selectedBuilding, buildings, setSelectedBuilding } = useBuildingContext()
-  const { data: allUnits, isLoading } = useCollection('units')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: allUnits, isLoading } = useCollection('units', scope)
   const { data: allResidents, create, update, remove } = useCollection('unitResidents')
 
   const [expandedUnits, setExpandedUnits] = useState({})

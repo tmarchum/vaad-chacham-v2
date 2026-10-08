@@ -53,9 +53,11 @@ const SUPABASE_URL = 'https://stncskqjrmecjckxldvi.supabase.co'
 export default function RoomBooking() {
   const { selectedBuilding } = useBuildingContext()
   const { profile } = useAuth()
-  const { data: resources, create: createResource, update: updateResource, remove: removeResource, refresh: refreshResources, isLoading } = useCollection('bookingResources')
-  const { data: allBookings, create: createBooking, update: updateBooking, refresh: refreshBookings } = useCollection('bookings')
-  const { data: allUnits } = useCollection('units')
+  // Building-scoped SERVER-SIDE; unselected building yields [].
+  const scope = { building_id: selectedBuilding?.id }
+  const { data: resources, create: createResource, update: updateResource, remove: removeResource, refresh: refreshResources, isLoading } = useCollection('bookingResources', scope)
+  const { data: allBookings, create: createBooking, update: updateBooking, refresh: refreshBookings } = useCollection('bookings', scope)
+  const { data: allUnits } = useCollection('units', scope)
   const { data: allResidents } = useCollection('residents')
 
   // ── State ────────────────────────────────────────────────────
