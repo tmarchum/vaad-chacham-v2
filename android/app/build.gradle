@@ -8,8 +8,12 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // CI stamps the run number so every published APK is a real upgrade.
-        versionCode (System.getenv("VERSION_CODE") ?: "1").toInteger()
-        versionName "1.0." + (System.getenv("VERSION_CODE") ?: "0")
+        // (Assigned via a local first — `versionCode (expr).method()` is the
+        // Groovy trap that parses as versionCode(expr) followed by .method()
+        // on its null return.)
+        def ciVersionCode = (System.getenv("VERSION_CODE") ?: "1").toInteger()
+        versionCode ciVersionCode
+        versionName "1.0." + ciVersionCode
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
