@@ -9,7 +9,7 @@ import {
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, Menu, X, ChevronDown, ChevronLeft, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
-  Coins,
+  Coins, Tags,
 } from 'lucide-react'
 
 const NAV_SECTIONS = [
@@ -34,6 +34,7 @@ const NAV_SECTIONS = [
       { to: '/bank-settings',     label: 'חשבונות בנק',    icon: Landmark },
       { to: '/income',             label: 'הכנסות',          icon: ArrowDownLeft },
       { to: '/expenses',          label: 'הוצאות',          icon: Wallet },
+      { to: '/vendor-rules',      label: 'כללי ספקים',      icon: Tags },
       { to: '/balance',           label: 'מאזן',            icon: Scale },
       { to: '/expense-analysis', label: 'ניתוח הוצאות AI', icon: Brain },
       { to: '/reports',           label: 'דוחות',           icon: BarChart2 },

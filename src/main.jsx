@@ -50,6 +50,7 @@ const Units            = lazy(() => import('@/pages/Units'))
 const Residents        = lazy(() => import('@/pages/Residents'))
 const Payments         = lazy(() => import('@/pages/Payments'))
 const Expenses         = lazy(() => import('@/pages/Expenses'))
+const VendorRules      = lazy(() => import('@/pages/VendorRules'))
 const Issues           = lazy(() => import('@/pages/Issues'))
 const Vendors          = lazy(() => import('@/pages/Vendors'))
 const Supervisors      = lazy(() => import('@/pages/Supervisors'))
@@ -105,6 +106,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="residents" element={<Suspense fallback={<PageLoader />}><Residents /></Suspense>} />
               <Route path="payments" element={<Suspense fallback={<PageLoader />}><Payments /></Suspense>} />
               <Route path="expenses" element={<Suspense fallback={<PageLoader />}><Expenses /></Suspense>} />
+              <Route path="vendor-rules" element={<Suspense fallback={<PageLoader />}><VendorRules /></Suspense>} />
               <Route path="issues" element={<Suspense fallback={<PageLoader />}><Issues /></Suspense>} />
               <Route path="vendors" element={<Suspense fallback={<PageLoader />}><Vendors /></Suspense>} />
               <Route path="supervisors" element={<Suspense fallback={<PageLoader />}><Supervisors /></Suspense>} />

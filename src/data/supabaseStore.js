@@ -18,6 +18,7 @@ export const TABLE_MAP = {
   notificationLog: 'notification_log',
   settingsAudit: 'settings_audit',
   expenses: 'expenses',
+  vendorRules: 'vendor_rules',
   issues: 'issues',
   vendors: 'vendors',
   supervisors: 'supervisors',
