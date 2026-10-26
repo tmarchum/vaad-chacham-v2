@@ -8,12 +8,13 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
-import { Tags, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Tags, Plus, Pencil, Trash2, Wand2 } from 'lucide-react'
 import {
   EXPENSE_CATEGORIES,
   findExpenseCategory,
   CATEGORY_BG_COLORS,
 } from '@/lib/categories'
+import store from '@/data/supabaseStore'
 
 const CATEGORY_OPTIONS = EXPENSE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))
 
@@ -33,6 +34,36 @@ function VendorRules() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [error, setError] = useState('')
+  const [applying, setApplying] = useState(false)
+  const [notice, setNotice] = useState('')
+
+  // Apply one rule to EXISTING bank-sourced expenses, right now, from the
+  // browser. Mirrors apply-vendor-rules.mjs: only touches rows whose vendor is
+  // empty or category is still "אחר" (never clobbers a hand-edited row).
+  const applyRuleToExisting = async (rule) => {
+    if (!selectedBuilding?.id) return 0
+    const expenses = await store.expenses.list({ building_id: selectedBuilding.id, source: 'bank' })
+    const matches = expenses.filter((e) => {
+      if (!(e.description || '').includes(rule.match_text)) return false
+      const tagged = e.vendor || (e.category && e.category !== 'אחר')
+      if (tagged && !(e.vendor === rule.vendor && e.category === rule.category)) return false
+      return e.vendor !== rule.vendor || e.category !== rule.category
+    })
+    for (const e of matches) {
+      await store.expenses.update(e.id, { vendor: rule.vendor, category: rule.category })
+    }
+    return matches.length
+  }
+
+  const reapply = async (rule) => {
+    setApplying(true)
+    try {
+      const n = await applyRuleToExisting(rule)
+      setNotice(n > 0 ? `הכלל «${rule.vendor}» הוחל על ${n} תנועות קיימות` : `אין תנועות קיימות שתואמות את «${rule.vendor}»`)
+    } finally {
+      setApplying(false)
+    }
+  }
 
   const sorted = useMemo(
     () => [...(rules || [])].sort((a, b) => (b.priority || 0) - (a.priority || 0) || (a.vendor || '').localeCompare(b.vendor || '')),
@@ -61,6 +92,14 @@ function VendorRules() {
     if (editingId) await update(editingId, payload)
     else await create(payload)
     setFormOpen(false)
+    // Immediately apply the saved rule to existing bank transactions, so the
+    // user doesn't have to wait for the next monthly import.
+    const n = await applyRuleToExisting(payload)
+    setNotice(
+      n > 0
+        ? `נשמר. הכלל «${payload.vendor}» הוחל על ${n} תנועות קיימות (ויחול אוטומטית על ייבואים הבאים)`
+        : `נשמר. אין תנועות קיימות תואמות — הכלל יחול אוטומטית על ייבואים הבאים`,
+    )
   }
 
   if (!selectedBuilding) {
@@ -81,8 +120,16 @@ function VendorRules() {
           כשתנועת הוצאה מהבנק מכילה את <b>הטקסט לזיהוי</b>, המערכת משייכת לה אוטומטית את הספק והקטגוריה —
           בכל ייבוא עתידי. למשל: טקסט <span dir="rtl" className="font-mono bg-[var(--bg-subtle)] px-1 rounded">קונה</span> → ספק «קונה», קטגוריה «אחזקת מעלית».
           אם כמה כללים מתאימים, הארוך ביותר מנצח; בתיקו — העדיפות הגבוהה.
+          <br />שמירת כלל מחילה אותו <b>מיד גם על התנועות הקיימות</b> (ללא דריסה של שיוך ידני).
         </CardContent>
       </Card>
+
+      {notice && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-2.5 text-sm flex items-center justify-between gap-3">
+          <span>{notice}</span>
+          <button onClick={() => setNotice('')} className="text-emerald-600 hover:text-emerald-800 text-xs">סגור</button>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-center py-10 text-[var(--text-muted)]">טוען…</div>
@@ -111,6 +158,7 @@ function VendorRules() {
                       תיאור מכיל: <span dir="rtl" className="font-mono">{r.match_text}</span>
                     </div>
                   </div>
+                  <Button variant="ghost" size="icon" title="החל על תנועות קיימות" disabled={applying} onClick={() => reapply(r)}><Wand2 className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(r)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                 </CardContent>
