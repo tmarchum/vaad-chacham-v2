@@ -9,7 +9,7 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
 import { Input } from '@/components/ui/input'
-import { formatCurrency, cn, sanitizePhone } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Building2, Plus, Pencil, Trash2, X } from 'lucide-react'
 

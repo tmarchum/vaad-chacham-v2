@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { callVaadAgent } from '@/lib/vaadAgent'
 import { PageHeader } from '@/components/common/PageHeader'
+import { toast, toastError } from '@/lib/toast'
 import {
   CreditCard, Store, PiggyBank, ShieldCheck,
   Play, CheckCircle, AlertTriangle, XCircle,
@@ -38,7 +39,6 @@ const MARKETPLACE_VENDORS = [
 // ---------------------------------------------------------------------------
 
 function getBuildingRequirements(building, existingCompliance, existingTasks) {
-  const requirements = []
   const complianceTitles = existingCompliance.map(c => c.title.toLowerCase())
   const taskTitles = existingTasks.map(t => t.title.toLowerCase())
 
@@ -611,9 +611,9 @@ function BudgetAgentPanel({ analysis, onCreateAlert, onExportReport }) {
   }
 
   const {
-    monthlyExpected, annualExpected, totalExpensesYTD, monthlyBudget,
+    annualExpected, totalExpensesYTD, monthlyBudget,
     monthlyData, byCategory, overrunMonths, projectedAnnual, projectedGap,
-    ytdIncome, ytdNet, currentMonth
+    ytdIncome, ytdNet,
   } = analysis
 
   const projectedSurplus = projectedGap >= 0
@@ -809,7 +809,7 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
     )
   }
 
-  const { requirements, missing, covered, coverageRate, expired, overdue } = analysis
+  const { missing, covered, coverageRate, expired, overdue } = analysis
 
   const coverageColor = coverageRate >= 80 ? '#22c55e' : coverageRate >= 50 ? '#f59e0b' : '#ef4444'
 
@@ -1219,7 +1219,7 @@ export default function SmartAgents() {
       }
     } catch (err) {
       console.error('Failed to mark payments as overdue:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בעדכון סטטוס תשלומים', type: 'error' } }))
+      toastError('שגיאה בעדכון סטטוס תשלומים')
     }
   }
 
@@ -1243,7 +1243,7 @@ export default function SmartAgents() {
       })
     } catch (err) {
       console.error('Failed to create announcement:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה ביצירת הודעה', type: 'error' } }))
+      toastError('שגיאה ביצירת הודעה')
     }
   }
 
@@ -1262,10 +1262,10 @@ export default function SmartAgents() {
         description: vendor.description,
         available_24_7: vendor.available_24_7,
       })
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'ספק נוסף בהצלחה', type: 'success' } }))
+      toast('ספק נוסף בהצלחה')
     } catch (err) {
       console.error('Failed to add vendor:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בהוספת ספק', type: 'error' } }))
+      toastError('שגיאה בהוספת ספק')
     }
   }
 

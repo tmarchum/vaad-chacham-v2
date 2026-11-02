@@ -214,7 +214,6 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
   const monthKeys = getLast6MonthKeys()
   const monthlyRows = useMemo(() => {
     return monthKeys.map((key) => {
-      const [y, m] = key.split('-').map(Number)
       const monthPayments = payments.filter((p) => {
         const matchBuilding = !buildingId || buildingId === 'all' || p.buildingId === buildingId
         return matchBuilding && getMonthKey(p.status === 'paid' ? p.paidAt : p.month) === key
@@ -1078,7 +1077,7 @@ export default function Reports() {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
-  const { selectedBuilding, buildings } = useBuildingContext()
+  const { buildings } = useBuildingContext()
   const [buildingFilter, setBuildingFilter] = useState('all')
 
   // cross-building on purpose — the reports page has an "all buildings" filter

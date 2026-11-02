@@ -5,6 +5,7 @@
 // happened). Failures are logged and surfaced as a soft toast.
 
 import { supabase } from '@/lib/supabase'
+import { toastError } from '@/lib/toast'
 
 const SUPABASE_URL = 'https://stncskqjrmecjckxldvi.supabase.co'
 const FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-notification`
@@ -32,9 +33,7 @@ export async function notifyIssueStatus(issueId, kind = 'resolved') {
   try {
     const out = await callSendNotification({ template: 'issue_status', issueId, kind })
     if (out?.success === false && !out?.skipped) {
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'העדכון נשמר, אך שליחת ההודעה לדייר נכשלה', type: 'error' },
-      }))
+      toastError('העדכון נשמר, אך שליחת ההודעה לדייר נכשלה')
     }
     return out
   } catch (e) {

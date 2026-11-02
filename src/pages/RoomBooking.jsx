@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -31,6 +30,7 @@ const SLOTS = {
 }
 
 import { HEBREW_MONTHS } from '@/lib/constants'
+import { toast, toastError } from '@/lib/toast'
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
 
 const STATUS_CONFIG = {
@@ -52,7 +52,6 @@ const SUPABASE_URL = 'https://stncskqjrmecjckxldvi.supabase.co'
 // ═════════════════════════════════════════════════════════════════
 export default function RoomBooking() {
   const { selectedBuilding } = useBuildingContext()
-  const { profile } = useAuth()
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
   const { data: resources, create: createResource, update: updateResource, remove: removeResource, refresh: refreshResources, isLoading } = useCollection('bookingResources', scope)
@@ -244,7 +243,7 @@ export default function RoomBooking() {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ to, subject, html, buildingId: selectedBuilding?.id }),
       }).catch(() => {})
-    } catch {}
+    } catch { /* ignore */ }
   }
 
   const HEBREW_DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
@@ -325,19 +324,19 @@ export default function RoomBooking() {
       if (res) { name = name || res.name; email = email || res.email || ''; phone = phone || res.phone || '' }
     }
     if (!name) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'יש לבחור דירה או למלא שם', type: 'error' } }))
+      toastError('יש לבחור דירה או למלא שם')
       return
     }
     // Check rental terms
     if (selectedResource.rental_terms && !termsAccepted) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'יש לאשר את תנאי ההשכרה', type: 'error' } }))
+      toastError('יש לאשר את תנאי ההשכרה')
       return
     }
     // Check required custom questions
     const questions = selectedResource.custom_questions || []
     for (const q of questions) {
       if (q.required && !answers[q.id]) {
-        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `יש למלא: ${q.text}`, type: 'error' } }))
+        toastError(`יש למלא: ${q.text}`)
         return
       }
     }
@@ -383,11 +382,11 @@ export default function RoomBooking() {
       if (selectedResource.payment_url) {
         setPaymentRedirect({ url: selectedResource.payment_url })
       } else {
-        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נשלח — ממתין לאישור הוועד', type: 'success' } }))
+        toast('השריון נשלח — ממתין לאישור הוועד')
       }
     } catch (err) {
       console.error(err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה ביצירת השריון', type: 'error' } }))
+      toastError('שגיאה ביצירת השריון')
     } finally {
       setSaving(false)
     }
@@ -413,10 +412,10 @@ export default function RoomBooking() {
         sendEmail(bk.booker_email, `${bldNameA} — שריון מאושר: ${selectedResource?.name}`, html)
       }
       setApproveDialog(null)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון אושר', type: 'success' } }))
+      toast('השריון אושר')
     } catch (err) {
       console.error('Approve failed:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה באישור: ${err.message}`, type: 'error' } }))
+      toastError(`שגיאה באישור: ${err.message}`)
     }
   }
 
@@ -436,10 +435,10 @@ export default function RoomBooking() {
         sendEmail(selectedResource.notify_email, `${bldNameR} — שריון נדחה: ${selectedResource?.name}`,
           buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`, { unitNumber: unitNumR, buildingName: bldNameR }))
       }
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון נדחה — המשבצת שוחררה', type: 'success' } }))
+      toast('השריון נדחה — המשבצת שוחררה')
     } catch (err) {
       console.error('Reject failed:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה בדחייה: ${err.message}`, type: 'error' } }))
+      toastError(`שגיאה בדחייה: ${err.message}`)
     }
   }
 
@@ -459,10 +458,10 @@ export default function RoomBooking() {
         sendEmail(selectedResource.notify_email, `${bldNameC} — שריון בוטל: ${selectedResource?.name}`,
           buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
       }
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'השריון בוטל — המשבצת שוחררה', type: 'success' } }))
+      toast('השריון בוטל — המשבצת שוחררה')
     } catch (err) {
       console.error('Cancel failed:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה בביטול: ${err.message}`, type: 'error' } }))
+      toastError(`שגיאה בביטול: ${err.message}`)
     }
   }
 
@@ -506,9 +505,9 @@ export default function RoomBooking() {
         await updateResource(resourceDialog.id, data)
       }
       setResourceDialog(null); refreshResources()
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'נשמר בהצלחה', type: 'success' } }))
+      toast('נשמר בהצלחה')
     } catch {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירה', type: 'error' } }))
+      toastError('שגיאה בשמירה')
     } finally { setSaving(false) }
   }
 
@@ -519,7 +518,7 @@ export default function RoomBooking() {
       if (selectedResourceId === id) setSelectedResourceId(null)
     } catch (err) {
       console.error('Failed to delete resource:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת משאב', type: 'error' } }))
+      toastError('שגיאה במחיקת משאב')
     }
   }
 
@@ -684,7 +683,6 @@ export default function RoomBooking() {
                 const canBook = !day.isPast && !day.isBlocked && !day.isTooFar && !day.hasFullDay
                 const holidayName = day.holidays[0]?.hebrew
                 const pendingBookings = day.bookings.filter(b => b.status === 'pending')
-                const approvedBookings = day.bookings.filter(b => b.status === 'approved')
 
                 return (
                   <div

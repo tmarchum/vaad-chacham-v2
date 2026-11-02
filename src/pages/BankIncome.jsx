@@ -13,6 +13,7 @@ import {
   ArrowDownLeft, Landmark, Pencil, Tag, Check, X as XIcon,
 } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
+import { toast } from '@/lib/toast'
 
 export default function BankIncome() {
   const { selectedBuilding } = useBuildingContext()
@@ -94,9 +95,7 @@ export default function BankIncome() {
         await update(m.id, { category })
       }
       if (matching.length > 0) {
-        window.dispatchEvent(new CustomEvent('app-toast', {
-          detail: { message: `עודכנו ${matching.length} תנועות נוספות עם אותו תיאור`, type: 'success' }
-        }))
+        toast(`עודכנו ${matching.length} תנועות נוספות עם אותו תיאור`)
       }
     }
 

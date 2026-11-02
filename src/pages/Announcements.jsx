@@ -12,6 +12,7 @@ import { FormField, FormSelect, FormTextarea } from '@/components/common/FormFie
 import { formatDate } from '@/lib/utils'
 import { notifyAnnouncement } from '@/lib/notify'
 import { PageHeader } from '@/components/common/PageHeader'
+import { toast } from '@/lib/toast'
 import {
   Plus, Megaphone, FileText, AlertTriangle, Calendar,
   Pencil, Trash2, Wrench, Mail,
@@ -287,9 +288,7 @@ function Announcements() {
               } catch { /* */ }
             })
           )
-          window.dispatchEvent(new CustomEvent('app-toast', {
-            detail: { message: `הודעה נשלחה ל-${sent} דיירים במייל ✓`, type: 'success' },
-          }))
+          toast(`הודעה נשלחה ל-${sent} דיירים במייל ✓`)
         }
       } catch { /* silent — notification failure doesn't block publish */ }
     }
@@ -499,7 +498,6 @@ function Announcements() {
             <div className="space-y-2 overflow-x-auto">
               {filteredAnnouncements.map((ann) => {
                 const typeInfo = TYPE_CONFIG[ann.type] || TYPE_CONFIG.general
-                const priorityInfo = PRIORITY_CONFIG[ann.priority] || PRIORITY_CONFIG.normal
                 const TypeIcon = typeInfo.icon
                 const expired = isExpired(ann.expiresAt)
 

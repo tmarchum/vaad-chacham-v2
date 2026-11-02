@@ -12,6 +12,7 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Plus, Pencil, Trash2, RefreshCw, CheckCircle2, Scale, CalendarClock } from 'lucide-react'
+import { toast } from '@/lib/toast'
 
 const FREQUENCY_MAP = {
   weekly: { label: 'שבועי', variant: 'default', months: 0, weeks: 1 },
@@ -199,9 +200,7 @@ function RecurringTasks() {
       status: 'open',
       reported_at: new Date().toISOString(),
     })
-    window.dispatchEvent(new CustomEvent('app-toast', {
-      detail: { message: 'תקלה נוצרה בהצלחה', type: 'success' }
-    }))
+    toast('תקלה נוצרה בהצלחה')
   }
 
   const handleMarkDone = async (task) => {

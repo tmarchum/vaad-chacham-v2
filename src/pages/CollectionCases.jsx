@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ import {
   StickyNote,
 } from 'lucide-react'
 import { HEBREW_MONTHS } from '@/lib/constants'
+import { toast, toastError } from '@/lib/toast'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -137,10 +138,10 @@ export default function CollectionCases() {
           closed++
         }
       }
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `חושב לפי תשלומים בפועל — ${opened} נפתחו, ${closed} נסגרו`, type: 'success' } }))
+      toast(`חושב לפי תשלומים בפועל — ${opened} נפתחו, ${closed} נסגרו`)
     } catch (e) {
       console.error('recompute error', e)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בחישוב תיקי הגבייה', type: 'error' } }))
+      toastError('שגיאה בחישוב תיקי הגבייה')
     } finally {
       setRecomputing(false)
     }
@@ -163,7 +164,7 @@ export default function CollectionCases() {
     } catch {
       // Revert localStorage on failure
       localStorage.setItem(NOTIF_KEY(selectedBuilding.id), String(!next))
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירת הגדרה', type: 'error' } }))
+      toastError('שגיאה בשמירת הגדרה')
     }
   }, [selectedBuilding, notificationsEnabled, updateBuilding, refreshBuildings])
 
@@ -246,7 +247,7 @@ export default function CollectionCases() {
 
   const handleSaveCase = async () => {
     if (!form.unit_id) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'יש לבחור דירה', type: 'error' } }))
+      toastError('יש לבחור דירה')
       return
     }
     setSaving(true)
@@ -268,7 +269,7 @@ export default function CollectionCases() {
       }
       setCaseDialog(null)
     } catch (e) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירה', type: 'error' } }))
+      toastError('שגיאה בשמירה')
     } finally {
       setSaving(false)
     }
@@ -281,7 +282,7 @@ export default function CollectionCases() {
       setDeleteTarget(null)
       if (expandedId === deleteTarget.id) setExpandedId(null)
     } catch {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקה', type: 'error' } }))
+      toastError('שגיאה במחיקה')
     }
   }
 
@@ -304,7 +305,7 @@ export default function CollectionCases() {
     if (!payDialog) return
     const amount = parseFloat(payForm.payment_amount) || 0
     if (amount <= 0) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'יש להזין סכום תשלום', type: 'error' } }))
+      toastError('יש להזין סכום תשלום')
       return
     }
     setSaving(true)
@@ -324,7 +325,7 @@ export default function CollectionCases() {
       })
       setPayDialog(null)
     } catch {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירת תשלום', type: 'error' } }))
+      toastError('שגיאה בשמירת תשלום')
     } finally {
       setSaving(false)
     }
@@ -354,9 +355,7 @@ export default function CollectionCases() {
   const sendWhatsApp = async (e, c) => {
     e.stopPropagation()
     if (!notificationsEnabled) {
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'יש להפעיל שליחת התראות כדי לשלוח תזכורת', type: 'error' },
-      }))
+      toastError('יש להפעיל שליחת התראות כדי לשלוח תזכורת')
       return
     }
     const live = unitInfo[c.unit_id] || {}
@@ -738,12 +737,7 @@ export default function CollectionCases() {
                     if (lastAction) {
                       const daysSince = Math.ceil((Date.now() - lastAction.getTime()) / (1000 * 60 * 60 * 24))
                       if (daysSince < 14) {
-                        window.dispatchEvent(new CustomEvent('app-toast', {
-                          detail: {
-                            message: `⚠️ הסלמה מהירה: פעולה אחרונה לפני ${daysSince} ימים בלבד. מומלץ להמתין לפחות 14 ימים.`,
-                            type: 'warning'
-                          }
-                        }))
+                        toast(`⚠️ הסלמה מהירה: פעולה אחרונה לפני ${daysSince} ימים בלבד. מומלץ להמתין לפחות 14 ימים.`, 'warning')
                       }
                     }
                   }

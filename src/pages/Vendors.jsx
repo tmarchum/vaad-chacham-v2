@@ -13,8 +13,9 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { PageHeader } from '@/components/common/PageHeader'
 import { cn } from '@/lib/utils'
 import { vendorReputation } from '@/lib/reputation'
-import { isWhatsappable, waNumber, isMobile } from '@/lib/phone'
+import { isWhatsappable, isMobile } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
+import { toast } from '@/lib/toast'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail, Star,
   Shield, Clock, Search, BarChart3, GitCompare,
@@ -626,9 +627,6 @@ function Vendors() {
     }
   }
 
-  const toast = (message, type = 'success') =>
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message, type } }))
-
   // Invite a vendor to the pool — via the GreenAPI gateway when enabled, else
   // opens manual WhatsApp / phone. Marks the vendor invited either way.
   const sendInvite = async (vendor) => {
@@ -669,9 +667,7 @@ function Vendors() {
 
   const handleBlacklist = async (vendor) => {
     await update(vendor.id, { is_blacklisted: !vendor.is_blacklisted })
-    window.dispatchEvent(new CustomEvent('app-toast', {
-      detail: { message: vendor.is_blacklisted ? 'הספק הוסר מהרשימה השחורה' : 'הספק נוסף לרשימה השחורה', type: 'success' }
-    }))
+    toast(vendor.is_blacklisted ? 'הספק הוסר מהרשימה השחורה' : 'הספק נוסף לרשימה השחורה')
   }
 
   const toggleCompare = (id) => {

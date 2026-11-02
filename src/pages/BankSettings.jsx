@@ -7,6 +7,7 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
+import { toast, toastError } from '@/lib/toast'
 import {
   Landmark, Plus, Pencil, Trash2, Eye, EyeOff,
   Play, Settings2, Clock, Calendar, Moon, CheckCircle2, AlertCircle,
@@ -131,12 +132,12 @@ export default function BankSettings() {
     else await createSettings(payload)
     setSettingsOpen(false)
     refreshSettings()
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'הגדרות נשמרו', type: 'success' } }))
+    toast('הגדרות נשמרו')
   }
 
   const handleInitialPull = async () => {
     if (!settingsForm.initial_pull_date) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'יש לבחור תאריך התחלה', type: 'error' } }))
+      toastError('יש לבחור תאריך התחלה')
       return
     }
     // Save settings with the initial pull date
@@ -149,16 +150,14 @@ export default function BankSettings() {
     if (scrapeSettings) await updateSettings(scrapeSettings.id, payload)
     else await createSettings(payload)
     refreshSettings()
-    window.dispatchEvent(new CustomEvent('app-toast', {
-      detail: { message: `משיכה ראשונית הוגדרה מ-${settingsForm.initial_pull_date}. הסקרייפר ימשוך תנועות בהרצה הבאה.`, type: 'success' }
-    }))
+    toast(`משיכה ראשונית הוגדרה מ-${settingsForm.initial_pull_date}. הסקרייפר ימשוך תנועות בהרצה הבאה.`)
   }
 
   const handleMarkInitialDone = async () => {
     if (scrapeSettings) {
       await updateSettings(scrapeSettings.id, { initial_pull_done: true, last_run_status: 'initial_complete' })
       refreshSettings()
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'משיכה ראשונית סומנה כהושלמה. תהליך לילי פעיל.', type: 'success' } }))
+      toast('משיכה ראשונית סומנה כהושלמה. תהליך לילי פעיל.')
     }
   }
 

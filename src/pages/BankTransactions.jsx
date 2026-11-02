@@ -14,6 +14,7 @@ import {
   CheckCircle2, AlertCircle, Check, Tag,
 } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
+import { toast } from '@/lib/toast'
 
 const MATCH_STATUS = {
   unmatched:  { label: 'לא משויך', variant: 'warning', icon: AlertCircle },
@@ -170,7 +171,7 @@ export default function BankTransactions() {
     // Remove common prefixes like "זיכוי מבל"ל מ", "זיכוי מדיסקונט מ"
     const cleaned = desc
       .replace(/זיכוי\s+מ[^\s]*\s+מ/g, '')
-      .replace(/[,."'\/\\]/g, ' ')
+      .replace(/[,."'/\\]/g, ' ')
       .replace(/\d{5,}/g, '') // remove long numbers (reference IDs)
       .trim()
     return cleaned.split(/\s+/).filter(p => p.length > 2 && !GENERIC_WORDS.includes(p))
@@ -234,9 +235,7 @@ export default function BankTransactions() {
       }
 
       if (autoCount > 0) {
-        window.dispatchEvent(new CustomEvent('app-toast', {
-          detail: { message: `שויכו ${autoCount} תנועות נוספות אוטומטית`, type: 'success' }
-        }))
+        toast(`שויכו ${autoCount} תנועות נוספות אוטומטית`)
       }
     }
 
@@ -292,7 +291,7 @@ export default function BankTransactions() {
     const pending = allTx.filter(t =>
       t.building_id === selectedBuilding?.id && t.match_status === 'suggested' && t.unit_id)
     if (pending.length === 0) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'אין הצעות ממתינות', type: 'info' } }))
+      toast('אין הצעות ממתינות', 'info')
       return
     }
     if (!window.confirm(`לאשר ${pending.length} שיוכים מוצעים? תשלומים יעודכנו בהתאם.`)) return
@@ -316,9 +315,7 @@ export default function BankTransactions() {
       if (affectedUnits.has(unitId)) await syncPayment(unitId, month, total)
     }
     await refresh()
-    window.dispatchEvent(new CustomEvent('app-toast', {
-      detail: { message: `אושרו ${pending.length} שיוכים ✓`, type: 'success' },
-    }))
+    toast(`אושרו ${pending.length} שיוכים ✓`)
   }
 
   // Reject a suggestion — revert to unmatched
@@ -409,9 +406,7 @@ export default function BankTransactions() {
     const msg = matched || suggested
       ? `שויכו ${matched} אוטומטית${suggested ? `, ${suggested} הצעות לאישור` : ''}`
       : 'לא נמצאו התאמות'
-    window.dispatchEvent(new CustomEvent('app-toast', {
-      detail: { message: msg, type: matched || suggested ? 'success' : 'warning' }
-    }))
+    toast(msg, matched || suggested ? 'success' : 'warning')
   }
 
   // Assign a category to a transaction + auto-apply to all matching descriptions
@@ -432,9 +427,7 @@ export default function BankTransactions() {
         await updateTx(m.id, { category })
       }
       if (matching.length > 0) {
-        window.dispatchEvent(new CustomEvent('app-toast', {
-          detail: { message: `עודכנו ${matching.length} תנועות נוספות עם אותו תיאור`, type: 'success' }
-        }))
+        toast(`עודכנו ${matching.length} תנועות נוספות עם אותו תיאור`)
       }
     }
 

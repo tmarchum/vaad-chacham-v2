@@ -8,6 +8,7 @@ import { FormField } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
 import { formatCurrency } from '@/lib/utils'
 import { Coins, RefreshCw, Store, Building2 } from 'lucide-react'
+import { toast } from '@/lib/toast'
 
 // Platform revenue (ועד פלוס): vendors pay a fee per service call, buildings pay
 // a monthly usage fee scaled by unit count. This is a ledger — it records and
@@ -62,7 +63,7 @@ export default function Billing() {
       updated_at: new Date().toISOString(),
     })
     setSaving(false)
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: error ? 'שגיאה בשמירה' : 'התעריפים נשמרו', type: error ? 'error' : 'success' } }))
+    toast(error ? 'שגיאה בשמירה' : 'התעריפים נשמרו', error ? 'error' : 'success')
   }
 
   // Generate any missing charges (idempotent): one vendor-call fee per engaged
@@ -94,12 +95,12 @@ export default function Billing() {
 
     if (rows.length === 0) {
       setGenerating(false)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'אין חיובים חדשים להפקה', type: 'info' } }))
+      toast('אין חיובים חדשים להפקה', 'info')
       return
     }
     const { error } = await supabase.from('billing_charges').insert(rows)
     setGenerating(false)
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: error ? 'שגיאה: ' + error.message : `נוצרו ${rows.length} חיובים`, type: error ? 'error' : 'success' } }))
+    toast(error ? 'שגיאה: ' + error.message : `נוצרו ${rows.length} חיובים`, error ? 'error' : 'success')
     if (!error) load()
   }
 

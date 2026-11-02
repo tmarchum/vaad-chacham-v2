@@ -88,7 +88,7 @@ export function ResidentPortal() {
 
   const loadBuildingScoped = useCallback(async (bid) => {
     if (!bid) return
-    const [buildingRes, annRes, resourcesRes, bookingsRes] = await Promise.all([
+    const [buildingRes, annRes, resourcesRes] = await Promise.all([
       supabase.from('buildings').select('*').eq('id', bid).maybeSingle(),
       supabase.from('announcements').select('*').eq('building_id', bid)
         .order('created_at', { ascending: false }).limit(8),
@@ -132,7 +132,7 @@ export function ResidentPortal() {
       const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
       timer = setTimeout(() => {
         import('@hebcal/core').then(({ HDate: HDate2 }) => {
-          try { setHebrewDate(new HDate2().render('he')) } catch {}
+          try { setHebrewDate(new HDate2().render('he')) } catch { /* ignore */ }
         })
       }, msUntilMidnight)
     })
@@ -1185,13 +1185,6 @@ function UnitDetailsSection({ unit, building, onSaved }) {
   const maxGatePhones = building?.max_gate_phones || 2
   const parkingLots = Array.isArray(building?.parking_lots) ? building.parking_lots : []
 
-  const Row = ({ icon: Icon, label, value }) => (
-    <div className="flex items-start gap-2.5 text-sm py-1">
-      <Icon className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-      <span className="text-slate-400 w-24 shrink-0">{label}</span>
-      <span className="text-slate-700 font-medium">{value || '—'}</span>
-    </div>
-  )
   const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
 
   return (
@@ -1297,6 +1290,18 @@ function UnitDetailsSection({ unit, building, onSaved }) {
    ════════════════════════════════════════════════════════════════ */
 const EMPTY_PERSON = { first_name: '', last_name: '', phone: '', email: '' }
 const personFieldCls = 'px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
+
+// Module-level so a parent re-render doesn't remount it (nested definitions
+// recreate the component type every render and drop its DOM state).
+function Row({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-start gap-2.5 text-sm py-1">
+      <Icon className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+      <span className="text-slate-400 w-24 shrink-0">{label}</span>
+      <span className="text-slate-700 font-medium">{value || '—'}</span>
+    </div>
+  )
+}
 
 // Module-level so it doesn't remount on each keystroke (would steal focus)
 function PersonFields({ value, onChange }) {

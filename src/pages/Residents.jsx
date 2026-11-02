@@ -10,6 +10,7 @@ import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Plus, Star, User, Phone, Mail, Home, ChevronDown, Pencil, Trash2, Users } from 'lucide-react'
+import { toastError } from '@/lib/toast'
 
 const EMPTY_FORM = {
   unitId: '', first_name: '', last_name: '', email: '', phone: '',
@@ -38,11 +39,6 @@ function Residents() {
   const [expandedOwnerInfo, setExpandedOwnerInfo] = useState({})
   const [primaryWarnOpen, setPrimaryWarnOpen] = useState(false)
   const [pendingSubmitData, setPendingSubmitData] = useState(null)
-
-  const buildingOptions = useMemo(
-    () => buildings.map((b) => ({ value: b.id, label: b.name })),
-    [buildings]
-  )
 
   const units = useMemo(() => {
     if (!selectedBuilding) return []
@@ -116,7 +112,7 @@ function Residents() {
       setPendingSubmitData(null)
     } catch (err) {
       console.error('Failed to save resident:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירת דייר', type: 'error' } }))
+      toastError('שגיאה בשמירת דייר')
     }
   }
 
@@ -159,7 +155,7 @@ function Residents() {
       await doSubmit(data)
     } catch (err) {
       console.error('Failed to override primary resident:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בעדכון דייר ראשי', type: 'error' } }))
+      toastError('שגיאה בעדכון דייר ראשי')
     }
     setPrimaryWarnOpen(false)
   }
@@ -170,7 +166,7 @@ function Residents() {
         await remove(deleteTarget.id)
       } catch (err) {
         console.error('Failed to delete resident:', err)
-        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת דייר', type: 'error' } }))
+        toastError('שגיאה במחיקת דייר')
       }
       setDeleteTarget(null)
     }

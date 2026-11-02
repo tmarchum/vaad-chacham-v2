@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { waLink, telHref } from '@/lib/phone'
 import { PageHeader } from '@/components/common/PageHeader'
+import { toastError } from '@/lib/toast'
 import {
   Search, MessageCircle, Star, CheckCircle, ExternalLink,
   Phone, Plus, ChevronRight, Clock, ThumbsUp, ThumbsDown,
@@ -439,7 +440,6 @@ function StepContact({ issue, buildingName, pendingVendors, setPendingVendors, o
     )
   }
 
-  const allContacted = pendingVendors.every((v) => v.contacted)
 
   return (
     <div className="space-y-4">
@@ -501,7 +501,7 @@ function StepContact({ issue, buildingName, pendingVendors, setPendingVendors, o
 // Step 3 — קבלת הצעות
 // ---------------------------------------------------------------------------
 
-function StepQuotes({ issue, buildingName, pendingVendors, quotesCollection, localQuotes, setLocalQuotes, onNext }) {
+function StepQuotes({ issue, pendingVendors, quotesCollection, localQuotes, setLocalQuotes, onNext }) {
   const [forms, setForms] = useState(() =>
     Object.fromEntries(
       pendingVendors.map((v) => [v.id, { amount: '', description: '', validUntil: '' }])
@@ -517,7 +517,7 @@ function StepQuotes({ issue, buildingName, pendingVendors, quotesCollection, loc
     const form = forms[vendor.id]
     const parsedAmount = parseFloat(form.amount)
     if (!form.amount || isNaN(parsedAmount) || parsedAmount <= 0) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'נא להזין סכום תקין', type: 'error' } }))
+      toastError('נא להזין סכום תקין')
       return
     }
     const quote = {
@@ -663,7 +663,7 @@ function StepQuotes({ issue, buildingName, pendingVendors, quotesCollection, loc
 // Step 4 — אישור ועד
 // ---------------------------------------------------------------------------
 
-function StepApproval({ issue, selectedQuote, buildingName, announcementsCollection, onApproved, onRejected }) {
+function StepApproval({ issue, selectedQuote, announcementsCollection, onApproved, onRejected }) {
   const defaultText = `לחברי הועד,
 
 התקבלה הצעת מחיר לטיפול בתקלה: ${issue.title}

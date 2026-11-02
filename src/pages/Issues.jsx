@@ -23,6 +23,7 @@ import { notifyIssueStatus } from '@/lib/notify'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
+import { toast, toastError } from '@/lib/toast'
 import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
   FileText, Calendar, Users, LayoutList, Columns3,
@@ -688,7 +689,7 @@ function Issues() {
         await remove(deleteTarget.id)
       } catch (err) {
         console.error('Failed to delete issue:', err)
-        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת תקלה', type: 'error' } }))
+        toastError('שגיאה במחיקת תקלה')
       }
       setDeleteTarget(null)
     }
@@ -788,9 +789,6 @@ function Issues() {
   // WhatsApp link when the number supports it, otherwise a tel: call link —
   // gas/national-service numbers (*3626, 1-800…) can't use WhatsApp.
   const buildContactLink = (phone, message) => waLink(phone, message) || telHref(phone)
-
-  const toast = (message, type = 'success') =>
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message, type } }))
 
   // Send a vendor quote — via the GreenAPI gateway when enabled, else opens
   // manual WhatsApp / phone.
@@ -953,7 +951,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       }
     } catch (err) {
       console.error('Failed to send quote requests:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשליחת בקשות הצעות מחיר', type: 'error' } }))
+      toastError('שגיאה בשליחת בקשות הצעות מחיר')
     }
     setQuoteDialogIssue(null)
   }
@@ -1009,9 +1007,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // Closing is the accompanying committee member's responsibility — require one.
   const handleClose = useCallback((iss) => {
     if (!iss.assigned_to) {
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: 'יש לשייך חבר ועד מלווה לפני סגירת התקלה — הוא האחראי לסגירה', type: 'error' },
-      }))
+      toastError('יש לשייך חבר ועד מלווה לפני סגירת התקלה — הוא האחראי לסגירה')
       return
     }
     update(iss.id, { status: 'closed' })
@@ -1511,7 +1507,6 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
           {/* STEP 2: Committee */}
           {workflowStep === 2 && workflowIssue && (() => {
-            const building = buildingMap[workflowIssue.buildingId]
             const msg = buildCommitteeMessage(workflowIssue, aiAnalysisResult)
             return (
               <div className="space-y-4">

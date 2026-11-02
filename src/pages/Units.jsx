@@ -15,6 +15,7 @@ import { formatCurrency, calcUnitFee, cn, sanitizePhone, isValidPhone } from '@/
 import { PageHeader } from '@/components/common/PageHeader'
 import { FilterPills } from '@/components/common/FilterPills'
 import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays, CheckCircle2, RotateCcw } from 'lucide-react'
+import { toast, toastError } from '@/lib/toast'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
 function ListField({ label, items, onAdd, onRemove, placeholder, max, phone, allowExceed }) {
@@ -395,7 +396,6 @@ function Units() {
   }
 
   // ── Form helpers ───────────────────────────────────────────────────────────
-  const setField = field => val => setForm(prev => ({ ...prev, [field]: val }))
   const setFieldEv = field => e => setForm(prev => ({ ...prev, [field]: e.target.value }))
 
   // List field helpers
@@ -529,12 +529,10 @@ function Units() {
     try {
       await update(unit.id, { details_confirmed_at: newVal })
       setDetailUnit(u => u ? { ...u, details_confirmed_at: newVal, detailsConfirmedAt: newVal } : u)
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: { message: newVal ? 'הפרטים סומנו כמאושרים' : 'אישור הפרטים בוטל', type: 'success' },
-      }))
+      toast(newVal ? 'הפרטים סומנו כמאושרים' : 'אישור הפרטים בוטל')
     } catch (err) {
       console.error('toggle details_confirmed failed', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה: ${err.message}`, type: 'error' } }))
+      toastError(`שגיאה: ${err.message}`)
     } finally {
       setConfirmingUnit(false)
     }
@@ -544,7 +542,7 @@ function Units() {
   const openArchiveDialog = (unit) => {
     const residents = residentsByUnit[unit.id] || []
     if (residents.length === 0) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'אין דיירים פעילים לארכיון', type: 'error' } }))
+      toastError('אין דיירים פעילים לארכיון')
       return
     }
     const unitType = getUnitType(unit)
@@ -567,7 +565,7 @@ function Units() {
       .filter(([, selected]) => selected)
       .map(([id]) => id)
     if (selectedIds.length === 0) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'לא נבחרו דיירים', type: 'error' } }))
+      toastError('לא נבחרו דיירים')
       return
     }
     setArchiving(true)
@@ -582,10 +580,10 @@ function Units() {
       setArchiveDialog(null)
       setArchiveDate('')
       setArchiveSelection({})
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'הדיירים הועברו לארכיון בהצלחה', type: 'success' } }))
+      toast('הדיירים הועברו לארכיון בהצלחה')
     } catch (err) {
       console.error('Archive failed:', err)
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `שגיאה בארכיון: ${err.message}`, type: 'error' } }))
+      toastError(`שגיאה בארכיון: ${err.message}`)
     } finally {
       setArchiving(false)
     }

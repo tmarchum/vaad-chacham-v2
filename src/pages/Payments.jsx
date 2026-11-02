@@ -14,6 +14,7 @@ import { FormField, FormSelect } from '@/components/common/FormField'
 import { formatCurrency, formatDate, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3, Users, AlertTriangle, Wallet, Download } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
+import { toast, toastError } from '@/lib/toast'
 
 const STATUS_MAP = {
   paid: { label: 'שולם', variant: 'success' },
@@ -65,7 +66,7 @@ function Payments() {
   const { buildings, selectedBuilding } = useBuildingContext()
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
-  const { data: allPayments, create, update, remove, bulkCreate, refresh, isSaving, isLoading } = useRealtimeCollection('payments', scope)
+  const { data: allPayments, create, update, remove, bulkCreate, isSaving, isLoading } = useRealtimeCollection('payments', scope)
   const { data: allUnits } = useCollection('units', scope)
   const { data: allResidents } = useCollection('residents')
 
@@ -112,31 +113,12 @@ function Payments() {
     return map
   }, [buildings])
 
-  // Units filtered by building for form select
-  const filteredUnitsForForm = useMemo(() => {
-    if (buildingFilter === 'all') return [...allUnits].sort(sortByUnitNumber)
-    return allUnits.filter((u) => u.buildingId === buildingFilter).sort(sortByUnitNumber)
-  }, [allUnits, buildingFilter])
-
-  const unitOptions = useMemo(
-    () => [...filteredUnitsForForm].sort(sortByUnitNumber).map((u) => ({
-      value: u.id,
-      label: `דירה ${u.unit_number || u.number} - ${u.ownerName || ''}`,
-    })),
-    [filteredUnitsForForm]
-  )
-
   const allUnitOptions = useMemo(
     () => [...allUnits].sort(sortByUnitNumber).map((u) => ({
       value: u.id,
       label: `דירה ${u.unit_number || u.number} - ${u.ownerName || ''} (${buildingMap[u.buildingId]?.name || ''})`,
     })),
     [allUnits, buildingMap]
-  )
-
-  const buildingOptions = useMemo(
-    () => buildings.map((b) => ({ value: b.id, label: b.name })),
-    [buildings]
   )
 
   const monthKey = `${selectedYear}-${selectedMonth}`
@@ -333,7 +315,7 @@ function Payments() {
         await remove(deleteTarget.id)
       } catch (err) {
         console.error('Failed to delete payment:', err)
-        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת תשלום', type: 'error' } }))
+        toastError('שגיאה במחיקת תשלום')
       }
       setDeleteTarget(null)
     }
@@ -361,12 +343,12 @@ function Payments() {
       }))
 
     if (paymentArray.length === 0) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'כל הדירות כבר מופיעות בחודש זה', type: 'info' } }))
+      toast('כל הדירות כבר מופיעות בחודש זה', 'info')
       return
     }
 
     await bulkCreate(paymentArray)
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: `נוצרו ${paymentArray.length} תשלומים חדשים`, type: 'success' } }))
+    toast(`נוצרו ${paymentArray.length} תשלומים חדשים`)
   }
 
   const statusOptions = [

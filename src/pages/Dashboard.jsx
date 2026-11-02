@@ -266,7 +266,7 @@ function Dashboard() {
       const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) - now
       timer = setTimeout(() => {
         import('@hebcal/core').then(({ HDate: HDate2 }) => {
-          try { setHebrewDate(new HDate2().render('he')) } catch {}
+          try { setHebrewDate(new HDate2().render('he')) } catch { /* ignore */ }
         })
       }, msUntilMidnight)
     })
@@ -627,7 +627,7 @@ function Dashboard() {
               </div>
             ) : (
               <div className="divide-y divide-[var(--border-light)]">
-                {debtorUnits.slice(0, 8).map((d, i) => (
+                {debtorUnits.slice(0, 8).map((d) => (
                   <div
                     key={d.id}
                     className="flex items-center justify-between py-3 first:pt-0 last:pb-0 group"

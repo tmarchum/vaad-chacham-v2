@@ -15,5 +15,8 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
+      # --max-warnings is deliberately NOT set: errors gate the build,
+      # warnings (react-hooks compiler rules) stay visible but don't block.
+      - run: npm run lint
       - run: npm test
       - run: npm run build

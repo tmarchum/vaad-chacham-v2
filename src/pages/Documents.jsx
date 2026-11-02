@@ -13,6 +13,7 @@ import { FormField, FormSelect, FormTextarea } from '@/components/common/FormFie
 import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink, FolderOpen, AlertTriangle } from 'lucide-react'
+import { toastError } from '@/lib/toast'
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -474,7 +475,7 @@ export default function Documents() {
         await remove(deleteDoc.id)
       } catch (err) {
         console.error('Failed to delete document:', err)
-        window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה במחיקת מסמך', type: 'error' } }))
+        toastError('שגיאה במחיקת מסמך')
       }
       setDeleteDoc(null)
     }

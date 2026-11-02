@@ -12,6 +12,7 @@ import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
 import { Settings, Users, Database, Building, Shield, Key, MessageCircle } from 'lucide-react'
 import { resetWhatsappEnabledCache } from '@/lib/whatsapp'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
+import { toast, toastError } from '@/lib/toast'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,7 +68,6 @@ function UsersTab() {
   const [newRole, setNewRole] = useState('')
   const [savingRole, setSavingRole] = useState(false)
 
-  const { buildings } = useBuildingContext()
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -102,7 +102,7 @@ function UsersTab() {
     setSavingRole(false)
     setEditRoleUser(null)
     fetchData()
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'התפקיד עודכן בהצלחה', type: 'success' } }))
+    toast('התפקיד עודכן בהצלחה')
   }
 
   if (loading) {
@@ -454,7 +454,7 @@ function BuildingsCommitteesTab() {
       (m) => m.building_id === dialogBuilding.id && m.user_id === memberForm.user_id
     )
     if (alreadyMember) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'המשתמש כבר חבר בועד', type: 'error' } }))
+      toastError('המשתמש כבר חבר בועד')
       return
     }
 
@@ -466,7 +466,7 @@ function BuildingsCommitteesTab() {
     })
     setSaving(false)
     if (error) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בהוספת חבר ועד', type: 'error' } }))
+      toastError('שגיאה בהוספת חבר ועד')
       return
     }
     setDialogBuilding(null)
@@ -664,7 +664,7 @@ function WhatsappTab() {
 
   const save = async () => {
     if (!form.id_instance.trim()) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'יש להזין idInstance', type: 'error' } }))
+      toastError('יש להזין idInstance')
       return
     }
     setSaving(true)
@@ -676,12 +676,12 @@ function WhatsappTab() {
     })
     setSaving(false)
     if (error || !data?.ok) {
-      window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: 'שגיאה בשמירה: ' + (error?.message || data?.error || 'unknown'), type: 'error' } }))
+      toastError('שגיאה בשמירה: ' + (error?.message || data?.error || 'unknown'))
       return
     }
     setForm((p) => ({ ...p, api_token: '' }))
     resetWhatsappEnabledCache() // so an enabled/disabled change takes effect without a refresh
-    window.dispatchEvent(new CustomEvent('app-toast', { detail: { message: data.has_token ? 'נשמר. טוקן מאוחסן ✓' : 'נשמר (ללא טוקן — יש להזין טוקן)', type: data.has_token ? 'success' : 'error' } }))
+    toast(data.has_token ? 'נשמר. טוקן מאוחסן ✓' : 'נשמר (ללא טוקן — יש להזין טוקן)', data.has_token ? 'success' : 'error')
     load()
   }
 
