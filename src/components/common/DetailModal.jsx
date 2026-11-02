@@ -8,7 +8,7 @@ function DetailRow({ label, value, className }) {
 
   return (
     <div className={cn('flex items-start gap-3 py-2.5 border-b border-[var(--border-light)] last:border-0', className)}>
-      <span className="text-[12px] font-semibold text-[var(--text-muted)] uppercase tracking-wide min-w-[100px] shrink-0 pt-0.5">
+      <span className="text-[12px] font-medium text-[var(--text-secondary)] min-w-[110px] shrink-0 pt-0.5">
         {label}
       </span>
       <span className="text-[13px] text-[var(--text-primary)] font-medium">{value}</span>

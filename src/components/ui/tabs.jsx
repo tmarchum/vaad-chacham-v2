@@ -1,32 +1,40 @@
 import { cn } from '@/lib/utils'
 
+// Civic Blue segmented control: tinted track, white raised active segment
+// with primary ink. Same component for page tabs and table filters.
 function TabGroup({ tabs = [], activeTab, onChange, className, ...props }) {
   return (
     <div
-      className={cn('flex gap-0.5 border-b border-[var(--border)]', className)}
+      className={cn(
+        'inline-flex items-center gap-1 p-1 rounded-[var(--radius-lg)] bg-[var(--surface-secondary)] border border-[var(--border)] max-w-full overflow-x-auto',
+        className
+      )}
       role="tablist"
       {...props}
     >
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          role="tab"
-          aria-selected={activeTab === tab.key}
-          onClick={() => onChange?.(tab.key)}
-          className={cn(
-            'px-4 py-2.5 text-[13px] font-semibold transition-all duration-150 cursor-pointer',
-            '-mb-px border-b-2 rounded-t-lg',
-            activeTab === tab.key
-              ? 'border-[var(--primary)] text-[var(--primary)] bg-blue-50/50'
-              : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]'
-          )}
-        >
-          <span className="flex items-center gap-1.5">
-            {tab.icon && <tab.icon className="h-3.5 w-3.5" />}
-            {tab.label}
-          </span>
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const active = activeTab === tab.key
+        return (
+          <button
+            key={tab.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange?.(tab.key)}
+            className={cn(
+              'px-3 py-1.5 rounded-[var(--radius)] text-[12px] leading-4 transition-all duration-150 cursor-pointer whitespace-nowrap',
+              active
+                ? 'bg-[var(--surface)] text-[var(--primary)] font-semibold shadow-[var(--shadow)]'
+                : 'text-[var(--text-secondary)] font-medium hover:text-[var(--text-primary)]'
+            )}
+          >
+            <span className="flex items-center gap-1.5">
+              {tab.icon && <tab.icon className="h-3.5 w-3.5" />}
+              {tab.label}
+              {tab.count != null && <span className="num-tabular opacity-80">({tab.count})</span>}
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }

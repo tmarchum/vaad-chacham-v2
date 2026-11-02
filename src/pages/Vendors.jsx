@@ -514,7 +514,7 @@ function Vendors() {
   const [membershipFilter, setMembershipFilter] = useState('pending')
   const [inviteCategoryFilter, setInviteCategoryFilter] = useState('')
   useEffect(() => { isWhatsappSystemEnabled() }, []) // warm the gateway flag
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('q') || '')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)

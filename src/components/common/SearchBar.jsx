@@ -47,12 +47,12 @@ function SearchBar({ value, onChange, placeholder = 'חיפוש...', className }
         onBlur={() => setFocused(false)}
         placeholder={placeholder}
         className={cn(
-          'h-10 w-full rounded-xl border bg-white pr-10 pl-10 py-2 text-[13px]',
-          'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
-          'transition-all duration-200',
+          'h-[38px] w-full rounded-[var(--radius)] border bg-[var(--surface)] pr-10 pl-9 text-[13px]',
+          'text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/80',
+          'transition-colors duration-150',
           focused
-            ? 'border-[var(--primary)] shadow-[0_0_0_3px_rgba(59,130,246,0.08)]'
-            : 'border-[var(--border)] hover:border-slate-300'
+            ? 'border-[var(--primary)] ring-1 ring-[var(--primary)]'
+            : 'border-[var(--outline-variant)]'
         )}
       />
       {internal && (

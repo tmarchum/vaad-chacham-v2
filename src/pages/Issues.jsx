@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { callVaadAgent } from '@/lib/vaadAgent'
 import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hooks/useStore'
@@ -1012,6 +1013,25 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     }
     update(iss.id, { status: 'closed' })
   }, [update])
+
+  // Deep links from the shell (header/sidebar "קריאה חדשה", global search,
+  // dashboard cards): ?new=1 opens the create form, ?open=<id> the issue.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('new') === '1' && selectedBuilding) {
+      openCreate()
+      setSearchParams({}, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, selectedBuilding])
+  useEffect(() => {
+    const id = searchParams.get('open')
+    if (!id || !allIssues.length) return
+    const iss = allIssues.find((i) => i.id === id)
+    if (iss) setDetailIssue(iss)
+    setSearchParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, allIssues])
 
   // Refresh detail issue from latest data
   const currentDetailIssue = useMemo(() => {

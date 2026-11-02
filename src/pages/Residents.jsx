@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,6 +33,13 @@ function Residents() {
   const { data: allResidents, create, update, remove, refresh } = useCollection('unitResidents')
 
   const [expandedUnits, setExpandedUnits] = useState({})
+  const [searchParams] = useSearchParams()
+  const focusUnit = searchParams.get('unit')
+  useEffect(() => {
+    if (!focusUnit) return
+    setExpandedUnits((p) => ({ ...p, [focusUnit]: true }))
+    setTimeout(() => document.getElementById(`unit-${focusUnit}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300)
+  }, [focusUnit])
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -263,7 +271,7 @@ function Residents() {
             const isExpanded = !!expandedUnits[unit.id]
 
             return (
-              <Card key={unit.id}>
+              <Card key={unit.id} id={`unit-${unit.id}`}>
                 {/* Unit header row */}
                 <div
                   className="flex items-center justify-between px-5 py-4 cursor-pointer select-none hover:bg-[var(--surface-secondary)] transition-colors rounded-t-xl"

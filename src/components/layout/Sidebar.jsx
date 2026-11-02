@@ -7,41 +7,37 @@ import {
   Building2, LayoutDashboard, Home, CreditCard, Wallet,
   Wrench, Store, CalendarClock, ShieldCheck, Bot,
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
-  Users, Settings, LogOut, Menu, X, ChevronDown, ChevronLeft, ClipboardList,
+  Users, Settings, LogOut, X, ChevronDown, ChevronsUpDown, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
-  Coins, Tags, GitBranch, Eye,
+  Coins, Tags, GitBranch, Eye, Plus, Palette,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/common/BrandLogo'
 import { THEMES, getTheme, setTheme } from '@/lib/theme'
 import { enterResidentPreview } from '@/lib/residentPreview'
 
-// Simplified navigation (2026): the daily flow is always in reach, the rest
-// lives under one collapsed "מתקדם" section instead of five crowded groups.
-// Nothing was removed — only moved out of the way.
-const NAV_SECTIONS = [
-  {
-    id: 'daily',
-    label: 'יומיום',
-    items: [
-      { to: '/',              label: 'דשבורד',        icon: LayoutDashboard },
-      { to: '/issues',        label: 'תקלות',          icon: Wrench },
-      { to: '/payments',      label: 'גבייה',           icon: CreditCard },
-      { to: '/announcements', label: 'הודעות',         icon: Megaphone },
-      { to: '/room-booking',  label: 'שריון חדרים',    icon: DoorOpen },
-    ],
-  },
+// Daily flow is flat and always visible (the Civic Blue rail); records and
+// the long tail live in two quiet groups underneath, the second collapsed.
+const PRIMARY_NAV = [
+  { to: '/',              label: 'דשבורד',     icon: LayoutDashboard },
+  { to: '/issues',        label: 'תקלות',       icon: Wrench,     badge: 'issues' },
+  { to: '/payments',      label: 'גבייה',        icon: CreditCard, badge: 'collection' },
+  { to: '/announcements', label: 'הודעות',      icon: Megaphone },
+  { to: '/room-booking',  label: 'שריון חדרים', icon: DoorOpen },
+]
+
+const NAV_GROUPS = [
   {
     id: 'management',
     label: 'ניהול',
     items: [
-      { to: '/buildings',         label: 'בניינים',       icon: Building2 },
-      { to: '/units',             label: 'דירות',         icon: Home },
-      { to: '/residents',         label: 'דיירים',        icon: Users },
-      { to: '/vendors',           label: 'ספקים',         icon: Store },
-      { to: '/expenses',          label: 'הוצאות',        icon: Wallet },
-      { to: '/bank-transactions', label: 'תנועות בנק',   icon: ArrowLeftRight },
-      { to: '/documents',         label: 'מסמכים',        icon: FolderOpen },
-      { to: '/reports',           label: 'דוחות',         icon: BarChart2 },
+      { to: '/units',             label: 'דירות',        icon: Home },
+      { to: '/residents',         label: 'דיירים',       icon: Users },
+      { to: '/vendors',           label: 'ספקים',        icon: Store },
+      { to: '/expenses',          label: 'הוצאות',       icon: Wallet },
+      { to: '/bank-transactions', label: 'תנועות בנק',  icon: ArrowLeftRight },
+      { to: '/documents',         label: 'מסמכים',       icon: FolderOpen },
+      { to: '/reports',           label: 'דוחות',        icon: BarChart2 },
+      { to: '/buildings',         label: 'בניינים',      icon: Building2 },
     ],
   },
   {
@@ -68,7 +64,32 @@ const NAV_SECTIONS = [
   },
 ]
 
-function Sidebar({ open, onClose }) {
+function NavLink({ item, active, badge, onClick }) {
+  const Icon = item.icon
+  return (
+    <Link
+      to={item.to}
+      onClick={onClick}
+      className={cn(
+        'group flex items-center justify-between px-3 py-2.5 rounded-[var(--radius)] transition-colors duration-150',
+        active
+          ? 'bg-[var(--surface-container)] text-[var(--sidebar-text-active)] font-semibold'
+          : 'text-[var(--sidebar-text)] font-medium hover:bg-[var(--sidebar-bg-hover)] hover:text-[var(--text-primary)]'
+      )}
+    >
+      <span className="flex items-center gap-3 min-w-0">
+        <Icon
+          className={cn('h-5 w-5 shrink-0 transition-colors', active ? 'text-[var(--primary)]' : 'text-[var(--sidebar-text-muted)] group-hover:text-[var(--primary)]')}
+          strokeWidth={1.75}
+        />
+        <span className="text-[13px] truncate">{item.label}</span>
+      </span>
+      {badge ?? (active && <span className="h-2 w-2 rounded-full bg-[var(--primary)] shrink-0" />)}
+    </Link>
+  )
+}
+
+function Sidebar({ open, onClose, pulse = {} }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { selectedBuilding, setSelectedBuilding, buildings } = useBuildingContext()
@@ -77,16 +98,24 @@ function Sidebar({ open, onClose }) {
   const [theme, setThemeState] = useState(getTheme())
   const pickTheme = (id) => { setTheme(id); setThemeState(id) }
   const [collapsed, setCollapsed] = useState(() =>
-    Object.fromEntries(NAV_SECTIONS.filter((s) => s.collapsedByDefault).map((s) => [s.id, true])),
+    Object.fromEntries(NAV_GROUPS.filter((s) => s.collapsedByDefault).map((s) => [s.id, true])),
   )
 
-  const isActive = (path) => {
-    if (path === '/') return location.pathname === '/'
-    return location.pathname.startsWith(path)
-  }
+  const isActive = (path) => (path === '/' ? location.pathname === '/' : location.pathname.startsWith(path))
 
-  const toggleSection = (id) => {
-    setCollapsed(prev => ({ ...prev, [id]: !prev[id] }))
+  const badgeFor = (kind) => {
+    if (kind === 'issues' && pulse.openIssues > 0) {
+      return (
+        <span className={cn(
+          'px-2 py-0.5 rounded-full text-[11px] font-semibold num-tabular',
+          pulse.urgentIssues > 0 ? 'bg-[var(--danger-light)] text-[var(--danger)]' : 'bg-[var(--surface-variant)] text-[var(--primary-dark)]'
+        )}>{pulse.openIssues}</span>
+      )
+    }
+    if (kind === 'collection' && pulse.collectionPct != null && pulse.paid > 0) {
+      return <span className="px-2 py-0.5 rounded-full bg-[var(--surface-variant)] text-[var(--primary-dark)] text-[11px] font-semibold num-tabular">{pulse.collectionPct}%</span>
+    }
+    return undefined
   }
 
   const handleSignOut = async () => {
@@ -97,204 +126,156 @@ function Sidebar({ open, onClose }) {
   const fullName = profile
     ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.email
     : ''
+  const initials = [profile?.first_name?.[0], profile?.last_name?.[0]].filter(Boolean).join('') || (profile?.email?.[0] || '?').toUpperCase()
+  const roleLabel = profile?.role === 'admin' ? 'מנהל מערכת' : profile?.role === 'committee' ? 'חבר ועד' : 'דייר'
+  const buildingSub = selectedBuilding
+    ? [selectedBuilding.total_units ? `${selectedBuilding.total_units} דירות` : null, selectedBuilding.city].filter(Boolean).join(' • ')
+    : ''
 
-  const roleLabel = profile?.role === 'admin' ? 'אדמין' : profile?.role === 'committee' ? 'ועד' : 'דייר'
+  const menuItemCls = 'w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius)] text-[13px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)] transition-colors'
 
   return (
     <>
-      {open && (
-        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={onClose} />
-      )}
+      {open && <div className="fixed inset-0 z-40 bg-[#0b1c30]/40 lg:hidden" onClick={onClose} />}
 
       <aside className={cn(
-        'fixed top-0 right-0 z-50 flex h-full w-[260px] flex-col',
-        'bg-[var(--sidebar-bg)] text-[var(--sidebar-text)]',
-        'border-l border-[var(--sidebar-border)] shadow-[1px_0_0_rgba(0,0,0,0.02)]',
-        'transition-transform duration-300 ease-out',
-        'lg:relative lg:translate-x-0',
+        'fixed top-0 right-0 z-50 flex h-full w-64 flex-col justify-between p-4 select-none',
+        'bg-[var(--sidebar-bg)] border-l border-[var(--sidebar-border)]',
+        'transition-transform duration-300 ease-out lg:relative lg:translate-x-0',
         open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
       )}>
-        {/* ── Logo area ── */}
-        <div className="relative px-5 pt-6 pb-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BrandLogo className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/20" />
-              <div>
-                <h1 className="text-xl font-extrabold text-[var(--text-primary)] tracking-tight leading-none">
-                  ועד<span className="text-blue-600">לי</span>
-                </h1>
-                <span className="text-[10px] text-slate-400 font-medium tracking-[0.2em]">VAADLY</span>
-              </div>
-            </div>
-            <button className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 transition-colors" onClick={onClose}>
-              <X className="h-4 w-4 text-slate-500" />
+        <div className="flex flex-col gap-4 min-h-0 flex-1">
+          {/* Brand */}
+          <div className="flex items-center justify-between px-1 pt-1">
+            <Link to="/" onClick={onClose} className="flex items-center gap-3">
+              <BrandLogo className="h-10 w-10 rounded-[var(--radius-lg)] shadow-[var(--shadow)]" />
+              <span>
+                <span className="block text-[22px] leading-none font-bold tracking-tight text-[var(--primary)]">ועדלי</span>
+                <span className="block text-[11px] leading-[14px] text-[var(--text-muted)] mt-1">ניהול ועד בית חכם</span>
+              </span>
+            </Link>
+            <button className="lg:hidden p-1.5 rounded-[var(--radius)] hover:bg-[var(--sidebar-bg-hover)]" onClick={onClose} aria-label="סגירה">
+              <X className="h-4 w-4 text-[var(--text-muted)]" />
             </button>
           </div>
-          {/* Gradient divider */}
-          <div className="absolute bottom-0 left-4 right-4 h-px bg-gradient-to-l from-transparent via-slate-200 to-transparent" />
-        </div>
 
-        {/* ── Building selector ── */}
-        <div className="px-4 py-3">
-          <div className="relative">
-            <Building2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-600 pointer-events-none" />
+          {/* Building picker — a card with a transparent native select on top */}
+          <div className="relative bg-[var(--surface-secondary)] border border-[var(--border)] rounded-[var(--radius-lg)] p-2.5 hover:bg-[var(--surface-container)] transition-colors flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Building2 className="h-5 w-5 text-[var(--primary)] shrink-0" strokeWidth={1.75} />
+              <div className="min-w-0 text-right">
+                <p className="text-[12px] leading-4 font-semibold text-[var(--text-primary)] truncate">{selectedBuilding?.name || 'בחר בניין'}</p>
+                {buildingSub && <p className="text-[11px] leading-[14px] text-[var(--text-muted)] truncate">{buildingSub}</p>}
+              </div>
+            </div>
+            <ChevronsUpDown className="h-4 w-4 text-[var(--text-muted)] shrink-0" />
             <select
+              aria-label="בחירת בניין"
               value={selectedBuilding?.id || ''}
               onChange={(e) => setSelectedBuilding(e.target.value)}
-              className={cn(
-                'w-full h-9 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)]',
-                'pr-8 pl-3 text-[13px] text-[var(--text-secondary)] font-medium',
-                'focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/40',
-                'appearance-none cursor-pointer transition-all'
-              )}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             >
-              {buildings.map((b) => (
-                <option key={b.id} value={b.id} className="text-slate-900 bg-white">
-                  {b.name}
-                </option>
-              ))}
+              {buildings.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </div>
-        </div>
 
-        {/* ── Navigation ── */}
-        <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-          {NAV_SECTIONS.map((section) => {
-            const isSectionActive = section.items.some(item => isActive(item.to))
-            const isCollapsed = collapsed[section.id] && !isSectionActive
-
-            return (
-              <div key={section.id} className="mb-1">
-                {/* Section header */}
-                <button
-                  onClick={() => toggleSection(section.id)}
-                  className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer"
-                >
-                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 group-hover:text-slate-600 transition-colors">
-                    {section.label}
-                  </span>
-                  <ChevronDown className={cn(
-                    'h-3 w-3 text-slate-400 transition-transform duration-200',
-                    isCollapsed && '-rotate-90'
-                  )} />
-                </button>
-
-                {/* Section items */}
-                <div className={cn(
-                  'space-y-0.5 overflow-hidden transition-all duration-200',
-                  isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[700px] opacity-100'
-                )}>
-                  {section.items.map(({ to, label, icon: Icon }) => {
-                    const active = isActive(to)
-                    return (
-                      <Link
-                        key={to}
-                        to={to}
-                        onClick={onClose}
-                        className={cn(
-                          'sidebar-link flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150',
-                          active
-                            ? 'active bg-blue-600/10 text-blue-800 font-semibold'
-                            : 'text-[var(--sidebar-text)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)]'
-                        )}
-                      >
-                        <Icon className={cn(
-                          'h-[18px] w-[18px] shrink-0 transition-colors',
-                          active ? 'text-blue-600' : 'text-slate-400'
-                        )} />
-                        <span>{label}</span>
-                        {active && (
-                          <ChevronLeft className="h-3 w-3 mr-auto text-blue-600/60" />
-                        )}
-                      </Link>
-                    )
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </nav>
-
-        {/* ── User section ── */}
-        <div className="relative">
-          <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-l from-transparent via-slate-200 to-transparent" />
-
+          {/* Primary action */}
           <button
-            onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="w-full flex items-center gap-3 px-4 py-4 hover:bg-[var(--sidebar-bg-hover)] transition-colors text-right"
+            onClick={() => { navigate('/issues?new=1'); onClose() }}
+            className="w-full h-10 px-4 rounded-[var(--radius-lg)] bg-[var(--primary)] text-white text-[14px] font-semibold flex items-center justify-center gap-2 hover:bg-[var(--primary-hover)] active:scale-[0.98] transition-all shadow-[var(--shadow)]"
           >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-lg shadow-blue-500/10">
-              {(profile?.first_name?.[0] || profile?.email?.[0] || '?').toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0 text-right">
-              <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{fullName}</p>
-              <p className="text-[11px] text-slate-400">{roleLabel}</p>
-            </div>
-            <ChevronDown className={cn(
-              'h-3.5 w-3.5 text-slate-400 transition-transform duration-200',
-              userMenuOpen && 'rotate-180'
-            )} />
+            <Plus className="h-[18px] w-[18px]" />
+            קריאה חדשה
           </button>
 
+          {/* Navigation */}
+          <nav aria-label="תפריט ניווט ראשי" className="flex-1 overflow-y-auto -mx-1 px-1 space-y-1 min-h-0">
+            {PRIMARY_NAV.map((item) => (
+              <NavLink key={item.to} item={item} active={isActive(item.to)} badge={item.badge ? badgeFor(item.badge) : undefined} onClick={onClose} />
+            ))}
+
+            {NAV_GROUPS.map((group) => {
+              const groupActive = group.items.some((i) => isActive(i.to))
+              const isCollapsed = collapsed[group.id] && !groupActive
+              return (
+                <div key={group.id} className="pt-3">
+                  <button
+                    onClick={() => setCollapsed((p) => ({ ...p, [group.id]: !p[group.id] }))}
+                    className="w-full flex items-center justify-between px-3 pb-1 group"
+                  >
+                    <span className="text-[11px] font-semibold text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]">{group.label}</span>
+                    <ChevronDown className={cn('h-3.5 w-3.5 text-[var(--text-muted)] transition-transform', isCollapsed && '-rotate-90')} />
+                  </button>
+                  {!isCollapsed && (
+                    <div className="space-y-0.5">
+                      {group.items.map((item) => (
+                        <NavLink key={item.to} item={item} active={isActive(item.to)} onClick={onClose} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </nav>
+        </div>
+
+        {/* Profile footer (menu opens upward) */}
+        <div className="relative pt-3 mt-3 border-t border-[var(--border)]">
           {userMenuOpen && (
-            <div className="px-3 pb-3 space-y-0.5 animate-fade-in-up">
-              {/* Theme picker */}
+            <div className="absolute bottom-full right-0 left-0 mb-2 p-2 space-y-0.5 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] animate-fade-in-up">
               <div className="px-3 py-2">
-                <p className="text-[11px] font-semibold text-slate-400 mb-1.5">ערכת נושא</p>
-                <div className="flex gap-1.5">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--text-muted)] mb-1.5"><Palette className="h-3.5 w-3.5" />ערכת נושא</p>
+                <div className="flex gap-1">
                   {THEMES.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => pickTheme(t.id)}
                       title={t.description}
-                      className={
-                        'flex-1 rounded-lg px-2 py-1.5 text-[12px] font-medium border transition-all ' +
-                        (theme === t.id
-                          ? 'border-blue-500 bg-blue-600/10 text-blue-700'
-                          : 'border-[var(--border)] text-slate-500 hover:bg-[var(--sidebar-bg-hover)]')
-                      }
+                      className={cn(
+                        'flex-1 rounded-[var(--radius)] px-1.5 py-1.5 text-[11px] font-semibold border transition-colors',
+                        theme === t.id
+                          ? 'border-[var(--primary)] bg-[var(--surface-container)] text-[var(--primary)]'
+                          : 'border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--sidebar-bg-hover)]'
+                      )}
                     >
                       {t.label}
                     </button>
                   ))}
                 </div>
               </div>
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  onClick={() => { setUserMenuOpen(false); onClose() }}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-500 hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)] transition-all"
-                >
-                  <Settings className="h-4 w-4 text-slate-400" />
-                  הגדרות מערכת
-                </Link>
-              )}
-              {isAdmin && (
-                <Link
-                  to="/billing"
-                  onClick={() => { setUserMenuOpen(false); onClose() }}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-500 hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)] transition-all"
-                >
-                  <Coins className="h-4 w-4 text-slate-400" />
-                  הכנסות פלטפורמה
-                </Link>
-              )}
-              <button
-                onClick={enterResidentPreview}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-500 hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)] transition-all"
-              >
-                <Eye className="h-4 w-4 text-slate-400" />
-                תצוגת דייר
+              <button onClick={enterResidentPreview} className={menuItemCls}>
+                <Eye className="h-4 w-4 text-[var(--text-muted)]" />תצוגת דייר
               </button>
-              <button
-                onClick={handleSignOut}
-                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all"
-              >
-                <LogOut className="h-4 w-4" />
-                יציאה
+              {isAdmin && (
+                <Link to="/admin" onClick={() => { setUserMenuOpen(false); onClose() }} className={menuItemCls}>
+                  <Settings className="h-4 w-4 text-[var(--text-muted)]" />הגדרות מערכת
+                </Link>
+              )}
+              {isAdmin && (
+                <Link to="/billing" onClick={() => { setUserMenuOpen(false); onClose() }} className={menuItemCls}>
+                  <Coins className="h-4 w-4 text-[var(--text-muted)]" />הכנסות פלטפורמה
+                </Link>
+              )}
+              <button onClick={handleSignOut} className={cn(menuItemCls, 'text-[var(--danger)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]')}>
+                <LogOut className="h-4 w-4" />יציאה
               </button>
             </div>
           )}
+          <button
+            onClick={() => setUserMenuOpen((v) => !v)}
+            className="w-full flex items-center justify-between p-2 rounded-[var(--radius-lg)] hover:bg-[var(--sidebar-bg-hover)] transition-colors"
+          >
+            <span className="flex items-center gap-3 min-w-0">
+              <span className="h-9 w-9 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)] flex items-center justify-center font-bold text-[13px] border border-[var(--outline-variant)]/60 shrink-0">
+                {initials}
+              </span>
+              <span className="text-right min-w-0">
+                <span className="block text-[12px] leading-tight font-semibold text-[var(--text-primary)] truncate">{fullName}</span>
+                <span className="block text-[11px] leading-tight text-[var(--text-muted)] truncate">{roleLabel}</span>
+              </span>
+            </span>
+            <ChevronDown className={cn('h-4 w-4 text-[var(--text-muted)] transition-transform', userMenuOpen && 'rotate-180')} />
+          </button>
         </div>
       </aside>
     </>

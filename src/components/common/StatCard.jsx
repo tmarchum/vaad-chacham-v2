@@ -1,50 +1,55 @@
 import { cn } from '@/lib/utils'
 
 /**
- * Premium stat card with colored accent bar and optional icon.
+ * Civic Blue KPI card: label + tinted icon tile on top, big tabular value
+ * (with optional inline note/delta), a muted sub-line, and an optional
+ * footer strip — either a progress bar (`progress` 0–100) or any node.
  *
- * Usage:
- *   <StatCard
- *     label="סה״כ נגבה"
- *     value="₪12,500"
- *     icon={CreditCard}
- *     color="blue"
- *     sub="מתוך ₪15,000"
- *   />
+ *   <StatCard label="גבייה חודשית" value="₪14,800" note="+8%" icon={Wallet}
+ *     color="blue" sub="מתוך ₪16,200" progress={91} />
  */
-
-const ACCENT_COLORS = {
-  blue:    { bar: 'bg-blue-500',    icon: 'bg-blue-50 text-blue-600',    value: 'text-blue-700' },
-  emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600', value: 'text-emerald-700' },
-  red:     { bar: 'bg-red-500',     icon: 'bg-red-50 text-red-600',      value: 'text-red-700' },
-  amber:   { bar: 'bg-amber-500',   icon: 'bg-amber-50 text-amber-600',  value: 'text-amber-700' },
-  purple:  { bar: 'bg-purple-500',  icon: 'bg-purple-50 text-purple-600', value: 'text-purple-700' },
-  slate:   { bar: 'bg-slate-400',   icon: 'bg-slate-100 text-slate-600', value: 'text-[var(--text-primary)]' },
-  cyan:    { bar: 'bg-cyan-500',    icon: 'bg-cyan-50 text-cyan-600',    value: 'text-cyan-700' },
+const TONES = {
+  blue:    { icon: 'bg-[var(--surface-secondary)] text-[var(--primary)]', value: 'text-[var(--text-primary)]', bar: 'bg-[var(--primary)]' },
+  emerald: { icon: 'bg-[var(--success-light)] text-[var(--success)]',     value: 'text-[var(--text-primary)]', bar: 'bg-[var(--success)]' },
+  red:     { icon: 'bg-[var(--danger-light)] text-[var(--danger)]',       value: 'text-[var(--danger)]',       bar: 'bg-[var(--danger)]' },
+  amber:   { icon: 'bg-[var(--warning-light)] text-[var(--warning)]',     value: 'text-[var(--text-primary)]', bar: 'bg-[var(--warning)]' },
+  purple:  { icon: 'bg-[var(--surface-variant)] text-[var(--primary)]',   value: 'text-[var(--text-primary)]', bar: 'bg-[var(--primary)]' },
+  slate:   { icon: 'bg-[var(--surface-secondary)] text-[var(--text-secondary)]', value: 'text-[var(--text-primary)]', bar: 'bg-[var(--text-muted)]' },
+  cyan:    { icon: 'bg-[var(--surface-variant)] text-[var(--primary)]',   value: 'text-[var(--text-primary)]', bar: 'bg-[var(--primary)]' },
 }
 
-function StatCard({ label, value, icon: Icon, color = 'slate', sub, className }) {
-  const c = ACCENT_COLORS[color] || ACCENT_COLORS.slate
+function StatCard({ label, value, note, icon: Icon, color = 'blue', sub, progress, footer, className, valueClassName }) {
+  const t = TONES[color] || TONES.blue
+  const hasFooter = progress != null || footer
   return (
     <div className={cn(
-      'relative overflow-hidden rounded-xl border border-[var(--border)] bg-white p-4 transition-all duration-200 hover:shadow-md group',
+      'p-4 sm:p-5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] flex flex-col justify-between',
       className
     )}>
-      {/* Right accent bar */}
-      <div className={cn('absolute top-0 right-0 w-1 h-full rounded-r-xl', c.bar)} />
-
-      <div className="flex items-start justify-between gap-3 pr-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium text-[var(--text-muted)] mb-1 truncate">{label}</p>
-          <p className={cn('text-2xl font-extrabold leading-none tracking-tight', c.value)}>{value}</p>
-          {sub && <p className="text-[11px] text-[var(--text-muted)] mt-1.5">{sub}</p>}
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-[12px] leading-4 font-medium text-[var(--text-secondary)] truncate">{label}</span>
+          {Icon && (
+            <span className={cn('p-1.5 rounded-[var(--radius)] shrink-0', t.icon)}>
+              <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            </span>
+          )}
         </div>
-        {Icon && (
-          <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105', c.icon)}>
-            <Icon className="h-5 w-5" />
-          </div>
-        )}
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className={cn('text-[26px] sm:text-[30px] leading-9 font-bold tracking-[-0.02em] num-tabular', t.value, valueClassName)}>{value}</span>
+          {note && <span className="text-[11px] leading-[14px] font-semibold text-[var(--text-muted)] num-tabular">{note}</span>}
+        </div>
+        {sub && <p className="text-[12px] leading-[18px] text-[var(--text-muted)] mt-1 num-tabular">{sub}</p>}
       </div>
+      {hasFooter && (
+        <div className="mt-4 pt-3 border-t border-[var(--border-light)] text-[11px] leading-[14px] text-[var(--text-secondary)]">
+          {progress != null ? (
+            <div className="w-full h-1.5 bg-[var(--surface-container)] rounded-full overflow-hidden">
+              <div className={cn('h-full rounded-full transition-all duration-700', t.bar)} style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+            </div>
+          ) : footer}
+        </div>
+      )}
     </div>
   )
 }

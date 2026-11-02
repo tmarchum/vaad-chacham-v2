@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, Link } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { AlertsPanel } from './AlertsPanel'
-import { Menu, X, AlertCircle, CheckCircle, Bell } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { GlobalSearch } from './GlobalSearch'
+import { Menu, X, AlertCircle, CheckCircle, Bell, FileText, PlusCircle } from 'lucide-react'
+import { cn, formatCurrency } from '@/lib/utils'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { useBuildingPulse } from '@/hooks/useBuildingPulse'
+import { BrandLogo } from '@/components/common/BrandLogo'
 
 // ── Global toast system ──────────────────────────────────────────────────────
-// Other modules dispatch window events to show toasts:
-//   window.dispatchEvent(new CustomEvent('app-toast', { detail: { message, type } }))
-//   type: 'error' | 'success' | 'info'
-
+// Modules call toast()/toastError() from src/lib/toast.js, which dispatches
+// the 'app-toast' window event rendered here.
 function Toast({ toasts, onRemove }) {
   if (!toasts.length) return null
   return (
@@ -19,18 +20,17 @@ function Toast({ toasts, onRemove }) {
         <div
           key={t.id}
           className={cn(
-            'flex items-center gap-3 rounded-xl px-4 py-3 shadow-xl text-sm font-medium pointer-events-auto animate-fade-in-up',
-            'backdrop-blur-sm',
+            'flex items-center gap-3 rounded-[var(--radius)] px-4 py-3 shadow-[var(--shadow-lg)] text-[13px] font-medium pointer-events-auto animate-fade-in-up border',
             t.type === 'error'
-              ? 'bg-red-50/95 border border-red-200 text-red-800'
+              ? 'bg-[var(--danger-light)] border-[var(--danger)]/20 text-[var(--danger)]'
               : t.type === 'success'
-              ? 'bg-green-50/95 border border-green-200 text-green-800'
-              : 'bg-white/95 border border-[var(--border)] text-[var(--text-primary)]'
+              ? 'bg-[var(--success-light)] border-[var(--success)]/20 text-[var(--success)]'
+              : 'bg-[var(--surface)] border-[var(--border)] text-[var(--text-primary)]'
           )}
         >
           {t.type === 'error'
-            ? <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-            : <CheckCircle className="h-4 w-4 shrink-0 text-green-500" />
+            ? <AlertCircle className="h-4 w-4 shrink-0" />
+            : <CheckCircle className="h-4 w-4 shrink-0" />
           }
           <span className="flex-1">{t.message}</span>
           <button onClick={() => onRemove(t.id)} className="opacity-60 hover:opacity-100 transition-opacity">
@@ -42,56 +42,22 @@ function Toast({ toasts, onRemove }) {
   )
 }
 
-const PAGE_TITLES = {
-  '/': 'דשבורד',
-  '/buildings': 'בניינים',
-  '/units': 'דירות',
-  '/residents': 'דיירים',
-  '/payments': 'גבייה',
-  '/collection-cases': 'מעקב גבייה',
-  '/bank-transactions': 'תנועות בנק',
-  '/bank-settings': 'חשבונות בנק',
-  '/income': 'הכנסות',
-  '/expenses': 'הוצאות',
-  '/balance': 'מאזן',
-  '/expense-analysis': 'ניתוח הוצאות AI',
-  '/reports': 'דוחות',
-  '/issues': 'תקלות',
-  '/work-orders': 'הזמנות עבודה',
-  '/vendor-finder': 'מציאת ספקים',
-  '/vendors': 'ספקים',
-  '/supervisors': 'מפקחים',
-  '/billing': 'הכנסות פלטפורמה',
-  '/recurring-tasks': 'משימות חוזרות',
-  '/building-assets': 'ציוד ומערכות',
-  '/compliance': 'רגולציה',
-  '/documents': 'מסמכים',
-  '/announcements': 'הודעות',
-  '/smart-agents': 'סוכנים חכמים',
-  '/building-agent': 'סוכן בריאות',
-  '/admin': 'הגדרות מערכת',
-}
-
 function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [alertsOpen, setAlertsOpen] = useState(false)
   const [toasts, setToasts] = useState([])
   const location = useLocation()
   const { selectedBuilding } = useBuildingContext()
-  const { data: allAlerts, refresh: refreshAlerts } = useCollection('agentAlerts')
-  const alerts = selectedBuilding
-    ? allAlerts.filter(a => a.building_id === selectedBuilding.id)
-    : allAlerts
-  const unreadCount = alerts.filter(a => !a.is_read && !a.is_dismissed).length
-
-  const pageTitle = PAGE_TITLES[location.pathname] || ''
+  const { data: allAlerts, refresh: refreshAlerts } = useCollection('agentAlerts', { building_id: selectedBuilding?.id })
+  const unreadCount = allAlerts.filter(a => !a.is_read && !a.is_dismissed).length
+  // Shell vitals refresh on every page change — counts only, no rows.
+  const pulse = useBuildingPulse(selectedBuilding?.id, location.pathname)
 
   const addToast = (message, type = 'info') => {
     const id = Date.now() + Math.random()
     setToasts(prev => [...prev, { id, message, type }])
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000)
   }
-
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id))
 
   useEffect(() => {
@@ -100,58 +66,94 @@ function Layout() {
     return () => window.removeEventListener('app-toast', handler)
   }, [])
 
+  const balance = selectedBuilding?.balance
+  const statusOk = pulse.urgentIssues === 0
+
   return (
     <div dir="rtl" className="flex h-screen bg-[var(--bg)]">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} pulse={pulse} />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* ── Header ── */}
-        <header className="glass-header sticky top-0 z-30 flex items-center gap-3 border-b border-[var(--border)] px-4 lg:px-6 py-2.5">
-          {/* Mobile menu + branding */}
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        {/* ── Top bar ── */}
+        <header className="h-16 shrink-0 z-30 flex items-center gap-3 bg-[var(--surface)] border-b border-[var(--border)] px-4 lg:px-6">
           <button
-            className="p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors lg:hidden"
+            className="p-2 -mr-1 rounded-[var(--radius)] hover:bg-[var(--surface-secondary)] transition-colors lg:hidden"
             onClick={() => setSidebarOpen(true)}
+            aria-label="תפריט"
           >
             <Menu className="h-5 w-5 text-[var(--text-primary)]" />
           </button>
-          <span className="font-extrabold text-[var(--text-primary)] lg:hidden">
-            וועד<span className="text-[var(--primary)]">+</span>
-          </span>
+          <Link to="/" className="flex items-center gap-2 lg:hidden">
+            <BrandLogo className="w-7 h-7 rounded-md" />
+            <span className="font-bold text-[var(--primary)]">ועדלי</span>
+          </Link>
 
-          {/* Page title (desktop) */}
-          {pageTitle && (
-            <h2 className="hidden lg:block text-[15px] font-semibold text-[var(--text-primary)]">
-              {pageTitle}
-            </h2>
-          )}
+          <GlobalSearch buildingId={selectedBuilding?.id} className="hidden md:block w-full max-w-sm" />
 
-          {/* Spacer + actions */}
-          <div className="mr-auto flex items-center gap-2">
-            {/* Notifications */}
+          <div className="mr-auto flex items-center gap-2 lg:gap-4">
+            {/* Building status */}
+            <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)]">
+              <span className={cn('h-2 w-2 rounded-full', statusOk ? 'bg-[var(--success)]' : 'bg-[var(--danger)]')} />
+              <span className="text-[11px] text-[var(--text-secondary)] font-medium">
+                סטטוס שוטף: <strong className="text-[var(--text-primary)]">{statusOk ? 'תקין' : `${pulse.urgentIssues} דחופות`}</strong>
+              </span>
+            </div>
+
+            {/* Treasury balance */}
+            {balance != null && (
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-[var(--radius)] bg-[var(--bg)] border border-[var(--border)]">
+                <span className="text-[11px] text-[var(--text-muted)]">יתרת קופה:</span>
+                <span className={cn('text-[15px] font-bold num-tabular', balance >= 0 ? 'text-[var(--primary)]' : 'text-[var(--danger)]')}>
+                  {formatCurrency(balance)}
+                </span>
+              </div>
+            )}
+
+            <div className="hidden lg:block h-5 w-px bg-[var(--outline-variant)]/60" />
+
             <button
               onClick={() => setAlertsOpen(!alertsOpen)}
-              className="relative p-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+              className="relative p-2 rounded-[var(--radius)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+              aria-label="התראות"
+              title="התראות"
             >
-              <Bell className="h-5 w-5 text-[var(--text-secondary)]" />
+              <Bell className="h-[22px] w-[22px]" strokeWidth={1.75} />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -left-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white px-1 shadow-sm">
+                <span className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--danger)] text-[9px] font-bold text-white px-1 ring-2 ring-[var(--surface)]">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
+
+            <Link
+              to="/reports"
+              className="hidden md:flex h-[38px] px-3.5 rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] hover:bg-[var(--surface-secondary)] text-[var(--text-primary)] text-[12px] font-semibold items-center gap-2 transition-all active:scale-95"
+            >
+              <FileText className="h-[18px] w-[18px] text-[var(--primary)]" strokeWidth={1.75} />
+              הפקת דוח כספי
+            </Link>
+            <Link
+              to="/issues?new=1"
+              className="h-[38px] px-3 sm:px-3.5 rounded-[var(--radius)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-[12px] font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-[var(--shadow)]"
+            >
+              <PlusCircle className="h-[18px] w-[18px]" strokeWidth={1.75} />
+              <span className="hidden sm:inline">קריאה חדשה</span>
+            </Link>
           </div>
         </header>
 
-        {/* ── Page content ── */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          <Outlet />
+        {/* ── Page canvas ── */}
+        <main className="flex-1 overflow-y-auto px-4 py-5 md:px-6 lg:px-8 lg:py-6">
+          <div className="max-w-[1400px] mx-auto">
+            <Outlet />
+          </div>
         </main>
       </div>
 
       <AlertsPanel
         open={alertsOpen}
         onClose={() => setAlertsOpen(false)}
-        alerts={alerts}
+        alerts={allAlerts}
         refreshAlerts={refreshAlerts}
       />
       <Toast toasts={toasts} onRemove={removeToast} />
