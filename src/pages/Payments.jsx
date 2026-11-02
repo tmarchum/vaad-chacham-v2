@@ -12,8 +12,12 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { formatCurrency, formatDate, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
-import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, BarChart3, Users, AlertTriangle, Wallet, Download } from 'lucide-react'
-import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
+import { CreditCard, Plus, Pencil, Trash2, CalendarPlus, AlertTriangle, Wallet, Download, ChevronRight, ChevronLeft, CalendarDays, CheckCircle2, MessageCircle, PieChart, TrendingUp } from 'lucide-react'
+import { TabGroup } from '@/components/ui/tabs'
+import { SearchBar } from '@/components/common/SearchBar'
+import { useUnitDirectory } from '@/hooks/useUnitDirectory'
+import { waLink } from '@/lib/phone'
+import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS, HEBREW_MONTHS as MONTH_NAMES } from '@/lib/constants'
 import { toast, toastError } from '@/lib/toast'
 
 const STATUS_MAP = {
@@ -68,27 +72,24 @@ function Payments() {
   const scope = { building_id: selectedBuilding?.id }
   const { data: allPayments, create, update, remove, bulkCreate, isSaving, isLoading } = useRealtimeCollection('payments', scope)
   const { data: allUnits } = useCollection('units', scope)
-  const { data: allResidents } = useCollection('residents')
+  // Active residents of this building only (useUnitDirectory) — the old
+  // global unit_residents load also showed residents who had moved out.
+  const dir = useUnitDirectory(selectedBuilding?.id)
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))
   const [statusFilter, setStatusFilter] = useState('all')
-  const [buildingFilter, setBuildingFilter] = useState('all')
+  // Data is scoped to the sidebar's building; the page-level building pills are gone.
+  const buildingFilter = 'all'
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [detailPayment, setDetailPayment] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [viewMode, setViewMode] = useState('monthly') // 'monthly' | 'yearly'
-
-  const yearOptions = useMemo(() => {
-    const currentYear = now.getFullYear()
-    return Array.from({ length: 5 }, (_, i) => {
-      const y = String(currentYear - 2 + i)
-      return { value: y, label: y }
-    })
-  }, [])
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
 
   const unitMap = useMemo(() => {
     const map = {}
@@ -96,16 +97,10 @@ function Payments() {
     return map
   }, [allUnits])
 
-  // Resident name map: unit_id -> full name (primary resident)
-  const residentMap = useMemo(() => {
-    const map = {}
-    allResidents.forEach(r => {
-      if (r.is_primary || !map[r.unit_id]) {
-        map[r.unit_id] = `${r.first_name || ''} ${r.last_name || ''}`.trim()
-      }
-    })
-    return map
-  }, [allResidents])
+  const residentMap = useMemo(
+    () => Object.fromEntries(dir.units.map((u) => [u.id, u.name])),
+    [dir.units]
+  )
 
   const buildingMap = useMemo(() => {
     const map = {}
@@ -116,9 +111,9 @@ function Payments() {
   const allUnitOptions = useMemo(
     () => [...allUnits].sort(sortByUnitNumber).map((u) => ({
       value: u.id,
-      label: `דירה ${u.unit_number || u.number} - ${u.ownerName || ''} (${buildingMap[u.buildingId]?.name || ''})`,
+      label: dir.byId[u.id]?.label || `דירה ${u.number}`,
     })),
-    [allUnits, buildingMap]
+    [allUnits, dir.byId]
   )
 
   const monthKey = `${selectedYear}-${selectedMonth}`
@@ -161,8 +156,8 @@ function Payments() {
 
     let result = [...monthPayments, ...unpaidEntries]
 
-    // Status filter
-    if (statusFilter !== 'all') {
+    // Status filter ('__debtors' is applied by the view, not here)
+    if (statusFilter !== 'all' && statusFilter !== '__debtors') {
       result = result.filter((p) => p.status === statusFilter)
     }
 
@@ -339,7 +334,6 @@ function Payments() {
         month: `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`,
         amount: calcUnitFee(unit, buildingMap[unit.buildingId || unit.building_id]),
         status: 'unpaid',
-        owner_name: getOwnerName(unit.id),
       }))
 
     if (paymentArray.length === 0) {
@@ -399,312 +393,267 @@ function Payments() {
     </div>
   )
 
+  // ── Civic Blue view model ──
+  const monthIdx = Number(selectedMonth) - 1
+  const stepMonth = (delta) => {
+    const d = new Date(Number(selectedYear), monthIdx + delta, 1)
+    setSelectedMonth(String(d.getMonth() + 1).padStart(2, '0'))
+    setSelectedYear(String(d.getFullYear()))
+  }
+  const expectedMonth = allUnits.reduce((s2, u) => s2 + calcUnitFee(u, buildingMap[u.buildingId || u.building_id]), 0)
+  const collectedPct = expectedMonth > 0 ? Math.round((summary.collected / expectedMonth) * 1000) / 10 : 0
+  const paidCount = filtered.filter((p) => p.status === 'paid').length
+  const debtorRows = allPayments.filter((p) => p.month === monthKey && p.status !== 'paid')
+    .concat(filtered.filter((p) => p._virtual))
+  const debtSum = debtorRows.reduce((s2, p) => {
+    const u = unitMap[p.unitId]
+    const fee = calcUnitFee(u, buildingMap[u?.buildingId || u?.building_id])
+    return s2 + (p.status === 'partial' ? Math.max(0, fee - (Number(p.amount) || 0)) : (Number(p.amount) || fee))
+  }, 0)
+  const partialRows = allPayments.filter((p) => p.month === monthKey && p.status === 'partial')
+  const partialRemaining = partialRows.reduce((s2, p) => {
+    const u = unitMap[p.unitId]
+    return s2 + Math.max(0, calcUnitFee(u, buildingMap[u?.buildingId || u?.building_id]) - (Number(p.amount) || 0))
+  }, 0)
+  const yearPct = yearlyTotals.expected > 0 ? Math.round((yearlyTotals.collected / yearlyTotals.expected) * 1000) / 10 : 0
+
+  // unit → month → status, for the 12-cell yearly strip
+  const yearGrid = {}
+  allPayments.forEach((p) => {
+    if (!p.month?.startsWith(selectedYear + '-')) return
+    ;(yearGrid[p.unitId] ||= {})[Number(p.month.slice(5, 7))] = p.status
+  })
+  const nowY = new Date().getFullYear()
+  const nowM = new Date().getMonth() + 1
+  const cellColor = (unitId, m) => {
+    const st = yearGrid[unitId]?.[m]
+    const future = Number(selectedYear) > nowY || (Number(selectedYear) === nowY && m > nowM)
+    if (future) return 'bg-[var(--surface-container)]'
+    if (st === 'paid') return 'bg-[var(--success)]'
+    if (st === 'partial' || st === 'pending') return 'bg-amber-400'
+    if (st === 'overdue' || st === 'unpaid') return 'bg-[var(--danger)]'
+    return 'bg-[var(--outline-variant)]/50'
+  }
+
+  const [tab, setTab] = [viewMode === 'yearly' ? 'yearly' : statusFilter === '__debtors' ? 'debtors' : 'month', (k) => {
+    if (k === 'yearly') { setViewMode('yearly') } else { setViewMode('monthly'); setStatusFilter(k === 'debtors' ? '__debtors' : 'all') }
+  }]
+  const [tableQuery, setTableQuery] = [search, setSearch]
+  const rows = (statusFilter === '__debtors'
+    ? filtered.filter((p) => p.status !== 'paid')
+    : statusFilter === 'all' ? filtered : filtered
+  ).filter((p) => {
+    if (typeFilter !== 'all' && (dir.byId[p.unitId]?.type || 'owned') !== typeFilter) return false
+    if (!tableQuery) return true
+    const u = dir.byId[p.unitId]
+    return String(u?.number) === tableQuery.trim() || (u?.name || '').includes(tableQuery.trim())
+  })
+
+  const markPaid = async (p) => {
+    const unit = unitMap[p.unitId]
+    const fee = calcUnitFee(unit, buildingMap[unit?.buildingId || unit?.building_id])
+    if (p._virtual) {
+      await create({ unitId: p.unitId, buildingId: unit?.buildingId || unit?.building_id, month: monthKey, amount: fee, status: 'paid', paidAt: new Date().toISOString() })
+    } else {
+      await update(p.id, { status: 'paid', amount: p.status === 'partial' ? fee : (Number(p.amount) || fee), paidAt: new Date().toISOString() })
+    }
+  }
+  const statusSel = 'h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 text-[12px] text-[var(--text-primary)]'
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader
-        icon={CreditCard}
-        iconColor="blue"
-        title="תשלומים"
-        subtitle={`${filtered.length} תשלומים`}
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="h-4 w-4" />
-              ייצוא CSV
-            </Button>
-            <Button
-              variant={viewMode === 'yearly' ? 'default' : 'outline'}
-              onClick={() => setViewMode(viewMode === 'yearly' ? 'monthly' : 'yearly')}
-            >
-              <BarChart3 className="h-4 w-4" />
-              סיכום שנתי
-            </Button>
-            {viewMode === 'monthly' && (
-              <>
-                <Button variant="outline" onClick={handleCreateMonthly}>
-                  <CalendarPlus className="h-4 w-4" />
-                  צור תשלומים חודשיים
-                </Button>
-                <Button onClick={openCreate}>
-                  <Plus className="h-4 w-4" />
-                  תשלום חדש
-                </Button>
-              </>
-            )}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">
+            גבייה — {viewMode === 'yearly' ? `שנת ${selectedYear}` : `${MONTH_NAMES[monthIdx]} ${selectedYear}`}
+          </h1>
+          <div className="flex items-center h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)]">
+            <button onClick={() => (viewMode === 'yearly' ? setSelectedYear(String(Number(selectedYear) - 1)) : stepMonth(-1))} className="h-full px-2 text-[var(--text-secondary)] hover:text-[var(--primary)]" aria-label="הקודם"><ChevronRight className="h-4 w-4" /></button>
+            <span className="flex items-center gap-1.5 px-2 text-[13px] font-semibold text-[var(--text-primary)] num-tabular">
+              <CalendarDays className="h-4 w-4 text-[var(--primary)]" />
+              {viewMode === 'yearly' ? selectedYear : `${MONTH_NAMES[monthIdx]} ${selectedYear}`}
+            </span>
+            <button onClick={() => (viewMode === 'yearly' ? setSelectedYear(String(Number(selectedYear) + 1)) : stepMonth(1))} className="h-full px-2 text-[var(--text-secondary)] hover:text-[var(--primary)]" aria-label="הבא"><ChevronLeft className="h-4 w-4" /></button>
           </div>
-        }
-      />
-
-      {/* Month/Year selectors */}
-      <div className="flex flex-wrap gap-3 items-end">
-        {viewMode === 'monthly' && (
-          <FormSelect
-            label="חודש"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            options={HEBREW_MONTHS}
-            className="w-36"
-          />
-        )}
-        <FormSelect
-          label="שנה"
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          options={yearOptions}
-          className="w-28"
-        />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleExport}><Download className="h-4 w-4" />ייצוא לאקסל</Button>
+          {viewMode === 'monthly' && (
+            <>
+              <Button variant="outline" onClick={openCreate}><Plus className="h-4 w-4" />תשלום ידני</Button>
+              <Button onClick={handleCreateMonthly}><CalendarPlus className="h-4 w-4" />הפקת חיוב לחודש</Button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Building filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={buildingFilter === 'all' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBuildingFilter('all')}
-        >
-          כל הבניינים
-        </Button>
-        {buildings.map((b) => (
-          <Button
-            key={b.id}
-            variant={buildingFilter === b.id ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setBuildingFilter(b.id)}
-          >
-            {b.name}
-          </Button>
-        ))}
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="נגבה החודש" icon={Wallet} color="emerald" value={formatCurrency(summary.collected)}
+          note={<span className="px-2 py-0.5 rounded-full bg-[var(--success-light)] text-[var(--success)]">{collectedPct}%</span>}
+          sub={`מתוך ${formatCurrency(expectedMonth)} • ${paidCount} מתוך ${summary.totalUnits} דירות שילמו`}
+          progress={collectedPct} />
+        <StatCard label="חייבים וטרם שילמו" icon={AlertTriangle} color={debtSum > 0 ? 'red' : 'emerald'} value={formatCurrency(debtSum)}
+          note={debtorRows.length ? <span className="px-2 py-0.5 rounded-full bg-[var(--danger-light)] text-[var(--danger)]">{debtorRows.length} דירות</span> : null}
+          sub="חוב חודשי פתוח"
+          footer={<button onClick={() => setTab('debtors')} className="text-[var(--primary)] font-semibold hover:underline">להצגת החייבים ושליחת תזכורות ←</button>} />
+        <StatCard label="תשלומים חלקיים" icon={PieChart} color="amber" value={formatCurrency(partialRemaining)}
+          note={partialRows.length ? <span className="px-2 py-0.5 rounded-full bg-[var(--warning-light)] text-[var(--warning)]">{partialRows.length} בהסדר</span> : null}
+          sub="יתרה פתוחה בתשלומים חלקיים" />
+        <StatCard label={`גבייה שנתית מצטברת (${selectedYear})`} icon={TrendingUp} color="blue" value={formatCurrency(yearlyTotals.collected)}
+          note={<span className="px-2 py-0.5 rounded-full bg-[var(--surface-variant)] text-[var(--primary-dark)]">{yearPct}%</span>}
+          sub={`מתוך ${formatCurrency(yearlyTotals.expected)} צפויים`} />
+      </div>
+
+      {/* Tabs + filters */}
+      <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <TabGroup
+            tabs={[
+              { key: 'month', label: 'חודש נוכחי', count: summary.totalUnits },
+              { key: 'yearly', label: `מבט שנתי ומפת חום ${selectedYear}` },
+              { key: 'debtors', label: 'חייבים', count: debtorRows.length },
+            ]}
+            activeTab={tab}
+            onChange={setTab}
+          />
+          <div className="flex items-center gap-3 text-[11px] text-[var(--text-secondary)] flex-wrap">
+            <span className="font-semibold">מקרא:</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--success)]" />שולם</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-amber-400" />חלקי/ממתין</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--danger)]" />באיחור</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[var(--surface-container)] border border-[var(--border)]" />עתידי</span>
+          </div>
+        </div>
+        {viewMode === 'monthly' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchBar value={tableQuery} onChange={setTableQuery} placeholder="חיפוש לפי שם דייר או מספר דירה..." className="flex-1 min-w-[220px]" />
+            {tab === 'month' && (
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={statusSel} aria-label="סטטוס תשלום">
+                {STATUS_FILTERS.map((f2) => <option key={f2.key} value={f2.key}>{f2.key === 'all' ? 'סטטוס תשלום: הכל' : f2.label}</option>)}
+              </select>
+            )}
+            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={statusSel} aria-label="סוג דייר">
+              <option value="all">סוג דייר: הכל</option>
+              <option value="owned">בעלים</option>
+              <option value="rented">שוכרים</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {viewMode === 'yearly' ? (
-        <>
-          {/* Yearly summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">צפי שנתי</p>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{formatCurrency(yearlyTotals.expected)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">נגבה בפועל</p>
-                <p className="text-2xl font-bold text-[var(--success)]">{formatCurrency(yearlyTotals.collected)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-sm text-[var(--text-secondary)]">פער מצטבר</p>
-                <p className={`text-2xl font-bold ${yearlyTotals.gap > 0 ? 'text-red-500' : 'text-[var(--success)]'}`}>
-                  {formatCurrency(yearlyTotals.gap)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Yearly per-unit table */}
-          <Card>
-            <div className="overflow-x-auto">
-              <table className="premium-table w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border)]">
-                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">דירה</th>
-                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">בעלים</th>
-                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">חיוב חודשי</th>
-                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">צפי ({yearlySummary[0]?.totalMonths || 0} חודשים)</th>
-                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">נגבה</th>
-                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">פער</th>
-                    <th className="text-right p-3 font-medium text-[var(--text-secondary)]">חודשים ששולמו</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {yearlySummary.map((row) => (
-                    <tr key={row.unit.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] transition-colors">
-                      <td className="p-3">דירה {row.unit.unit_number || row.unit.number}</td>
-                      <td className="p-3">{row.unit.ownerName || ''}</td>
-                      <td className="p-3">{formatCurrency(row.fee)}</td>
-                      <td className="p-3">{formatCurrency(row.expected)}</td>
-                      <td className="p-3">{formatCurrency(row.collected)}</td>
-                      <td className="p-3">
-                        <span className={row.gap > 0 ? 'text-red-500 font-medium' : 'text-[var(--success)]'}>
-                          {row.gap > 0 ? `-${formatCurrency(row.gap)}` : formatCurrency(0)}
-                        </span>
+        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="ds-table">
+              <thead>
+                <tr>
+                  <th>דירה</th><th>דייר</th><th>חיוב חודשי</th><th>מפת {selectedYear} (12 חודשים)</th><th>צפי ({yearlySummary[0]?.totalMonths || 0} ח׳)</th><th>נגבה</th><th>פער</th>
+                </tr>
+              </thead>
+              <tbody>
+                {yearlySummary.map((row) => {
+                  const u = dir.byId[row.unit.id]
+                  return (
+                    <tr key={row.unit.id}>
+                      <td className="whitespace-nowrap"><span className="text-[15px] font-bold num-tabular">{row.unit.number}</span>{row.unit.floor != null && <span className="block text-[11px] text-[var(--text-muted)]">קומה {row.unit.floor}</span>}</td>
+                      <td className="whitespace-nowrap">{u?.name || <span className="text-[var(--text-muted)]">—</span>}</td>
+                      <td className="whitespace-nowrap num-tabular">{formatCurrency(row.fee)}</td>
+                      <td>
+                        <div className="flex gap-0.5" dir="rtl">
+                          {Array.from({ length: 12 }, (_, i) => (
+                            <span key={i} title={`${MONTH_NAMES[i]}`} className={`h-4 w-3 rounded-[2px] ${cellColor(row.unit.id, i + 1)}`} />
+                          ))}
+                        </div>
                       </td>
-                      <td className="p-3">
-                        {row.paidMonths}/{row.totalMonths}
-                        {row.partialMonths > 0 && <span className="text-xs text-[var(--warning)] mr-1">({row.partialMonths} חלקי)</span>}
+                      <td className="whitespace-nowrap num-tabular">{formatCurrency(row.expected)}</td>
+                      <td className="whitespace-nowrap num-tabular text-[var(--success)] font-semibold">{formatCurrency(row.collected)}</td>
+                      <td className="whitespace-nowrap num-tabular">
+                        <span className={row.gap > 0 ? 'text-[var(--danger)] font-bold' : 'text-[var(--success)]'}>{row.gap > 0 ? `-${formatCurrency(row.gap)}` : formatCurrency(0)}</span>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </>
-      ) : (
-        <>
-          {/* Status filter pills */}
-          <FilterPills
-            options={STATUS_FILTERS.map(f => ({ key: f.key, label: f.label }))}
-            value={statusFilter}
-            onChange={setStatusFilter}
-          />
-
-          {/* Summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="סה״כ נגבה" value={formatCurrency(summary.collected)} icon={CreditCard} color="emerald" />
-            <StatCard label="לא שולם" value={String(summary.unpaid)} icon={AlertTriangle} color="red" />
-            <StatCard label="ממתינים" value={String(summary.pending)} icon={Wallet} color="amber" />
-            <StatCard label="סה״כ דירות" value={String(summary.totalUnits)} icon={Users} color="blue" />
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-
-          {/* Payment Cards */}
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon={CreditCard}
-              title="אין תשלומים"
-              description="לא נמצאו תשלומים לחודש הנבחר"
-              actionLabel="תשלום חדש"
-              onAction={openCreate}
-            />
-          ) : (
-            <div className="space-y-2">
-              {filtered.map((p) => {
-                const st = STATUS_MAP[p.status] || STATUS_MAP.pending
-                const isVirtual = p._virtual
-                const unit = unitMap[p.unitId]
-                const building = buildingMap[unit?.buildingId || unit?.building_id]
-                const fee = calcUnitFee(unit, building)
-                const paid = Number(p.amount) || 0
-                const pctPaid = fee > 0 ? Math.min(100, Math.round((paid / fee) * 100)) : 0
-                const unitNumber = unit?.unit_number || unit?.number || ''
-                const ownerName = getOwnerName(p.unitId)
-                const buildingName = buildingFilter === 'all' ? getBuildingName(p.unitId) : ''
-
-                // Gradient colors based on status
-                const gradientMap = {
-                  paid: 'from-emerald-500 to-emerald-600',
-                  partial: 'from-amber-400 to-amber-500',
-                  pending: 'from-amber-400 to-amber-500',
-                  overdue: 'from-red-500 to-red-600',
-                  unpaid: 'from-slate-400 to-slate-500',
-                }
-                const circleGradient = gradientMap[p.status] || gradientMap.pending
-
-                // Status dot colors
-                const dotColorMap = {
-                  paid: 'bg-emerald-500',
-                  partial: 'bg-amber-500',
-                  pending: 'bg-amber-500',
-                  overdue: 'bg-red-500',
-                  unpaid: 'bg-red-500',
-                }
-                const dotColor = dotColorMap[p.status] || dotColorMap.pending
-
-                // Status text colors
-                const textColorMap = {
-                  paid: 'text-emerald-700',
-                  partial: 'text-amber-700',
-                  pending: 'text-amber-700',
-                  overdue: 'text-red-700',
-                  unpaid: 'text-red-700',
-                }
-                const statusTextColor = textColorMap[p.status] || textColorMap.pending
-
-                // Progress bar color
-                const barColorMap = {
-                  paid: 'bg-emerald-500',
-                  partial: 'bg-amber-500',
-                  pending: 'bg-amber-400',
-                  overdue: 'bg-red-500',
-                  unpaid: 'bg-slate-300',
-                }
-                const barColor = barColorMap[p.status] || barColorMap.pending
-
-                return (
-                  <div
-                    key={p.id}
-                    className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all ${
-                      isVirtual ? 'opacity-60 border-dashed border-[var(--border)]' : 'border-[var(--border)] cursor-pointer'
-                    }`}
-                    onClick={() => !isVirtual && setDetailPayment(p)}
-                  >
-                    {/* Unit number circle */}
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                      {unitNumber}
-                    </div>
-
-                    {/* Main info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                          דירה {unitNumber}
-                        </span>
-                        {buildingName && (
-                          <span className="text-xs text-[var(--text-muted)]">{buildingName}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-[var(--text-muted)]">{ownerName}</span>
-                      </div>
-                    </div>
-
-                    {/* Amount section */}
-                    <div className="text-left min-w-[120px]">
-                      <div className="text-[15px] font-bold text-[var(--text-primary)]">
-                        {isVirtual ? formatCurrency(0) : formatCurrency(paid)}
-                      </div>
-                      <div className="text-[11px] text-[var(--text-muted)]">מתוך {formatCurrency(fee)}</div>
-                      <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${barColor}`}
-                          style={{ width: (isVirtual ? 0 : pctPaid) + '%' }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Status */}
-                    <div className="flex items-center gap-2 min-w-[80px]">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                      <span className={`text-[12px] font-medium ${statusTextColor}`}>{st.label}</span>
-                    </div>
-
-                    {/* Actions (visible on hover) */}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                      {!isVirtual ? (
-                        <>
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTarget(p)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingId(null)
-                            setForm({ ...EMPTY_FORM, unitId: p.unitId, month: monthKey })
-                            setFormOpen(true)
-                          }}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </>
+        </div>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={CreditCard} title={tab === 'debtors' ? 'אין חייבים החודש 🎉' : 'אין תשלומים'} description={tab === 'debtors' ? 'כל הדירות שילמו' : 'לא נמצאו תשלומים לחודש הנבחר'} />
+      ) : (
+        <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="ds-table">
+              <thead>
+                <tr>
+                  <th>דירה וקומה</th><th>שם דייר וסיווג</th><th className="!text-left">סכום חודשי</th><th>סטטוס תשלום</th><th>מועד / אסמכתא</th><th>אמצעי תשלום</th><th>מפת {selectedYear}</th><th className="!text-center">פעולות</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((p) => {
+                  const st = STATUS_MAP[p.status] || STATUS_MAP.pending
+                  const unit = unitMap[p.unitId]
+                  const u = dir.byId[p.unitId]
+                  const fee = calcUnitFee(unit, buildingMap[unit?.buildingId || unit?.building_id])
+                  const late = p.status === 'overdue' || p.status === 'unpaid'
+                  const msg = `שלום${u?.name ? ' ' + u.name : ''}, תזכורת מוועד הבית: דמי הוועד לחודש ${MONTH_NAMES[monthIdx]} (${formatCurrency(fee)}) טרם התקבלו. תודה 🙏`
+                  return (
+                    <tr key={p.id} className={late ? '!bg-[var(--danger-light)]/25' : ''} onClick={() => !p._virtual && setDetailPayment(p)} style={{ cursor: p._virtual ? 'default' : 'pointer' }}>
+                      <td className="whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-7 min-w-7 px-1 rounded-[var(--radius)] flex items-center justify-center text-[13px] font-bold num-tabular ${late ? 'bg-[var(--danger-light)] text-[var(--danger)]' : 'bg-[var(--surface-container)] text-[var(--primary-dark)]'}`}>{unit?.number}</span>
+                          <span className="text-[11px] text-[var(--text-muted)]">{unit?.floor != null && unit.floor !== '' ? `קומה ${unit.floor}` : ''}{unit?.rooms ? ` • ${unit.rooms} חד׳` : ''}</span>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <span className="text-[13px] font-semibold">{u?.name || <span className="text-[var(--text-muted)] font-normal">ללא דייר רשום</span>}</span>
+                        <span className="mr-2 px-1.5 py-0.5 rounded bg-[var(--surface-container)] text-[var(--text-secondary)] text-[11px]">{u?.type === 'rented' ? 'שוכר' : 'בעלים'}</span>
+                      </td>
+                      <td className="whitespace-nowrap !text-left">
+                        <span className={`text-[15px] font-bold num-tabular ${late ? 'text-[var(--danger)]' : ''}`}>{formatCurrency(p._virtual ? fee : (Number(p.amount) || 0))}</span>
+                        {p.status === 'partial' && <span className="block text-[11px] text-[var(--warning)]">יתרה: {formatCurrency(Math.max(0, fee - (Number(p.amount) || 0)))}</span>}
+                      </td>
+                      <td className="whitespace-nowrap"><Badge variant={st.variant}>{st.label}</Badge></td>
+                      <td className="whitespace-nowrap text-[12px]">
+                        {p.paidAt ? <span className="num-tabular">{formatDate(p.paidAt)}</span> : <span className={late ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}>טרם שולם</span>}
+                      </td>
+                      <td className="whitespace-nowrap text-[12px] text-[var(--text-secondary)]">{p.method || '—'}</td>
+                      <td>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 12 }, (_, i) => <span key={i} title={MONTH_NAMES[i]} className={`h-3.5 w-2.5 rounded-[2px] ${cellColor(p.unitId, i + 1)}`} />)}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          {p.status !== 'paid' && (
+                            <button onClick={() => markPaid(p)} title="סמן כשולם" className="h-8 px-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--success-light)] text-[var(--success)] text-[11px] font-semibold inline-flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5" />שולם
+                            </button>
+                          )}
+                          {p.status !== 'paid' && u?.phone && (
+                            <a href={waLink(u.phone, msg) || '#'} target="_blank" rel="noopener noreferrer" title="תזכורת בוואטסאפ" className="h-8 px-2 rounded-[var(--radius)] bg-[var(--success)] text-white text-[11px] font-semibold inline-flex items-center gap-1 hover:opacity-90">
+                              <MessageCircle className="h-3.5 w-3.5" />תזכורת
+                            </a>
+                          )}
+                          {!p._virtual && (
+                            <>
+                              <button onClick={() => openEdit(p)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => setDeleteTarget(p)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] text-[11px] text-[var(--text-secondary)]">
+            מציג {rows.length} מתוך {summary.totalUnits} דירות בבניין
+          </div>
+        </div>
       )}
 
       {/* Detail Modal */}
