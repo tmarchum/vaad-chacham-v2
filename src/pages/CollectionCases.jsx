@@ -359,8 +359,10 @@ export default function CollectionCases() {
       return
     }
     const live = unitInfo[c.unit_id] || {}
-    const phone = live.phone || c.resident_phone || ''
-    const name = live.residentName || c.resident_name || 'דייר'
+    // The debt belongs to the person on the case, not to whoever lives in
+    // the unit today — prefer the case snapshot over the live resident.
+    const phone = c.resident_phone || live.phone || ''
+    const name = c.resident_name || live.residentName || 'דייר'
     const amount = formatCurrency(c.total_debt || 0)
     const months = c.months_overdue || 1
     const building = selectedBuilding?.name || 'הבניין'
@@ -496,7 +498,8 @@ export default function CollectionCases() {
             const caseNotifs = allNotifications.filter(n => n.case_id === c.id)
             const live      = unitInfo[c.unit_id] || {}
             const unitNumber   = live.number || c.unit_number
-            const residentName = live.residentName || c.resident_name || '-'
+            const residentName = c.resident_name || live.residentName || '-'
+            const currentResident = c.resident_name && live.residentName && live.residentName !== c.resident_name ? live.residentName : ''
             const debtPct   = ((c.total_debt || 0) / maxDebt) * 100
             const escalLevels = ['none','reminder','warning','legal_warning','legal_action']
             const escalIdx  = escalLevels.indexOf(c.escalation_level || 'none')
@@ -531,6 +534,7 @@ export default function CollectionCases() {
                       <div>
                         <h3 className="text-[15px] font-bold text-[var(--text-primary)]">
                           דירה {unitNumber} — {residentName}
+                          {currentResident && <span className="text-[11px] font-normal text-[var(--text-muted)] mr-1">(דייר נוכחי: {currentResident})</span>}
                         </h3>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                           <Badge variant={status.variant}>{status.label}</Badge>
@@ -654,8 +658,8 @@ export default function CollectionCases() {
                 {expanded && (
                   <div className="mt-4 pt-4 border-t border-[var(--border)] space-y-4">
                     <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div><span className="text-[var(--text-muted)] text-xs">טלפון:</span><p className="font-medium">{live.phone || c.resident_phone || '-'}</p></div>
-                      <div><span className="text-[var(--text-muted)] text-xs">אימייל:</span><p className="font-medium truncate">{live.email || c.resident_email || '-'}</p></div>
+                      <div><span className="text-[var(--text-muted)] text-xs">טלפון:</span><p className="font-medium">{c.resident_phone || live.phone || '-'}</p></div>
+                      <div><span className="text-[var(--text-muted)] text-xs">אימייל:</span><p className="font-medium truncate">{c.resident_email || live.email || '-'}</p></div>
                       {c.next_action_date && <div><span className="text-[var(--text-muted)] text-xs">פעולה הבאה:</span><p className="font-medium">{formatDate(c.next_action_date)}</p></div>}
                       {c.notes && <div className="col-span-2"><span className="text-[var(--text-muted)] text-xs">הערות:</span><p className="font-medium">{c.notes}</p></div>}
                     </div>

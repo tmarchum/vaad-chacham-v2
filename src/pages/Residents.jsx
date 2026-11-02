@@ -9,8 +9,8 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
-import { Plus, Star, User, Phone, Mail, Home, ChevronDown, Pencil, Trash2, Users } from 'lucide-react'
-import { toastError } from '@/lib/toast'
+import { Plus, Star, User, Phone, Mail, Home, ChevronDown, Pencil, Trash2, Users, LogOut } from 'lucide-react'
+import { toast, toastError } from '@/lib/toast'
 
 const EMPTY_FORM = {
   unitId: '', first_name: '', last_name: '', email: '', phone: '',
@@ -29,13 +29,19 @@ function Residents() {
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
   const { data: allUnits, isLoading } = useCollection('units', scope)
-  const { data: allResidents, create, update, remove } = useCollection('unitResidents')
+  const { data: allResidents, create, update, remove, refresh } = useCollection('unitResidents')
 
   const [expandedUnits, setExpandedUnits] = useState({})
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  // Move-out: sets move_out_date; the DB (migration 017) archives the
+  // resident on that date, unlinks their login, and promotes the next
+  // primary — so names everywhere switch to the remaining/new residents.
+  const [moveOutTarget, setMoveOutTarget] = useState(null)
+  const [moveOutDate, setMoveOutDate] = useState('')
+  const [showFormer, setShowFormer] = useState(false)
   const [expandedOwnerInfo, setExpandedOwnerInfo] = useState({})
   const [primaryWarnOpen, setPrimaryWarnOpen] = useState(false)
   const [pendingSubmitData, setPendingSubmitData] = useState(null)
@@ -54,12 +60,12 @@ function Residents() {
   const residentsByUnit = useMemo(() => {
     const map = {}
     allResidents.forEach((r) => {
-      if (r.archived) return // skip archived residents
+      if (r.archived && !showFormer) return // former residents hidden unless asked
       if (!map[r.unitId]) map[r.unitId] = []
       map[r.unitId].push(r)
     })
     return map
-  }, [allResidents])
+  }, [allResidents, showFormer])
 
   const toggleUnit = (unitId) => {
     setExpandedUnits((prev) => ({ ...prev, [unitId]: !prev[unitId] }))
@@ -160,6 +166,24 @@ function Residents() {
     setPrimaryWarnOpen(false)
   }
 
+  const openMoveOut = (resident) => {
+    setMoveOutTarget(resident)
+    setMoveOutDate(new Date().toISOString().slice(0, 10))
+  }
+
+  const confirmMoveOut = async () => {
+    if (!moveOutTarget || !moveOutDate) return
+    const res = await update(moveOutTarget.id, { move_out_date: moveOutDate }, { silent: true })
+    setMoveOutTarget(null)
+    if (!res) return
+    // The DB trigger may have archived this row and promoted another primary.
+    await refresh()
+    const today = new Date().toISOString().slice(0, 10)
+    toast(moveOutDate <= today
+      ? `${getResidentFullName(moveOutTarget) || 'הדייר'} סומן/ה כעזב/ה — הדירה עודכנה`
+      : `העזיבה תיכנס לתוקף ב-${formatDate(moveOutDate)} באופן אוטומטי`)
+  }
+
   const handleDelete = async () => {
     if (deleteTarget) {
       try {
@@ -190,7 +214,18 @@ function Residents() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader icon={Users} iconColor="cyan" title="דיירים" subtitle={`${allResidents.length} דיירים`} />
+      <PageHeader
+        icon={Users}
+        iconColor="cyan"
+        title="דיירים"
+        subtitle={`${allResidents.filter((r) => !r.archived).length} דיירים פעילים`}
+        actions={
+          <label className="flex items-center gap-2 text-[13px] text-[var(--text-secondary)] cursor-pointer select-none">
+            <input type="checkbox" checked={showFormer} onChange={(e) => setShowFormer(e.target.checked)} className="h-4 w-4 rounded" />
+            הצג דיירים שעזבו
+          </label>
+        }
+      />
 
       {/* Building selector */}
       {buildings.length > 1 && (
@@ -301,6 +336,13 @@ function Residents() {
                                     ראשי
                                   </span>
                                 )}
+                                {resident.archived ? (
+                                  <Badge variant="default" className="bg-slate-100 text-slate-500 ring-slate-300/40">
+                                    עזב/ה{resident.move_out_date ? ` ${formatDate(resident.move_out_date)}` : ''}
+                                  </Badge>
+                                ) : resident.move_out_date ? (
+                                  <Badge variant="warning">עוזב/ת ב-{formatDate(resident.move_out_date)}</Badge>
+                                ) : null}
                               </div>
                               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--text-muted)]">
                                 {resident.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" />{resident.phone}</span>}
@@ -349,8 +391,11 @@ function Residents() {
 
                             {/* Actions */}
                             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                              <Button size="sm" variant="ghost" onClick={() => openEdit(resident)}><Pencil className="h-3.5 w-3.5" /></Button>
-                              <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(resident)}><Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" /></Button>
+                              <Button size="sm" variant="ghost" onClick={() => openEdit(resident)} title="עריכה"><Pencil className="h-3.5 w-3.5" /></Button>
+                              {!resident.archived && (
+                                <Button size="sm" variant="ghost" onClick={() => openMoveOut(resident)} title="עזב/ה את הדירה"><LogOut className="h-3.5 w-3.5 text-amber-600" /></Button>
+                              )}
+                              <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(resident)} title="מחיקה (טעות הזנה)"><Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" /></Button>
                             </div>
                           </div>
                         )
@@ -363,6 +408,27 @@ function Residents() {
           })}
         </div>
       )}
+
+      {/* Move-out dialog */}
+      <Dialog open={!!moveOutTarget} onOpenChange={(o) => !o && setMoveOutTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>עזיבת דירה — {moveOutTarget ? getResidentFullName(moveOutTarget) : ''}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-[var(--text-secondary)]">
+            <p>
+              בתאריך העזיבה הדייר/ת יועבר/ו לארכיון (ההיסטוריה נשמרת), החיבור שלו/ה לפורטל הדירה ינותק,
+              ואם היה/ה דייר/ת ראשי/ת — דייר/ת אחר/ת בדירה יקודם/תקודם אוטומטית.
+            </p>
+            <FormField label="תאריך עזיבה" type="date" value={moveOutDate} onChange={(e) => setMoveOutDate(e.target.value)} />
+            <p className="text-xs text-[var(--text-muted)]">תאריך עתידי — העזיבה תתבצע אוטומטית באותו יום.</p>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setMoveOutTarget(null)}>ביטול</Button>
+            <Button onClick={confirmMoveOut} disabled={!moveOutDate}>אישור עזיבה</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirm */}
       <DeleteConfirm
