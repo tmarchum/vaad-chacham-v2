@@ -29,7 +29,11 @@ import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
   FileText, Calendar, Users, LayoutList, Columns3,
   ArrowRight, Send, Check, X, Sparkles, Copy, CheckCheck, RefreshCw,
+  Download, GitBranch, ClipboardList, ShieldAlert, Timer, Search,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useUnitDirectory } from '@/hooks/useUnitDirectory'
+import { isOpenIssueStatus } from '@/lib/issueStatus'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -318,6 +322,88 @@ const IssueCard = React.memo(function IssueCard({
 })
 
 // ---------------------------------------------------------------------------
+// Ledger row (Civic Blue issues table). Same next-step logic as IssueCard,
+// surfaced as one primary action so the committee can advance an issue
+// without opening it.
+// ---------------------------------------------------------------------------
+
+function nextAction(iss) {
+  const s = iss.status
+  if (s === 'reported') return { key: 'ack', label: 'אשר', icon: Check }
+  if (s === 'acknowledged') return { key: 'quote', label: 'בקש הצעה', icon: FileText }
+  if (!iss.vendor_name && ['quoted', 'approved'].includes(s)) return { key: 'vendor', label: 'קבע ספק', icon: Users }
+  if (s === 'approved') return { key: 'sched', label: 'תזמן', icon: Calendar }
+  if (['scheduled', 'in_progress'].includes(s)) return { key: 'complete', label: 'סמן כבוצע', icon: CheckCircle2 }
+  if (s === 'completed') return { key: 'close', label: 'סגור', icon: X }
+  return null
+}
+
+const IssueRow = React.memo(function IssueRow({ iss, unit, onOpen, onAction }) {
+  const priority = PRIORITY_MAP[iss.priority] || PRIORITY_MAP.medium
+  const status = bucketInfo(iss.status)
+  const urgent = iss.priority === 'urgent' || iss.priority === 'high'
+  const done = isDone(iss.status)
+  const overdue = !done && isOverdueSLA(iss)
+  const act = nextAction(iss)
+  return (
+    <tr onClick={() => onOpen(iss)} className={`cursor-pointer ${urgent && !done ? '!bg-[var(--danger-light)]/25' : ''}`}>
+      <td className="whitespace-nowrap">
+        <span className="text-[14px] font-bold text-[var(--primary)] num-tabular">#{iss.ticket_no || '—'}</span>
+      </td>
+      <td className="min-w-[200px]">
+        <p className="text-[14px] font-semibold leading-snug text-[var(--text-primary)]">{iss.title}</p>
+        <div className="flex items-center gap-1.5 mt-1">
+          {iss.category && <span className="px-1.5 py-0.5 rounded border border-[var(--primary)]/20 bg-[var(--surface-secondary)] text-[var(--primary-dark)] text-[11px]">{iss.category}</span>}
+          {iss.photo_url && <span className="text-[11px] text-[var(--text-muted)]">📷</span>}
+        </div>
+      </td>
+      <td className="whitespace-nowrap">
+        {unit ? (
+          <>
+            <span className="text-[13px] font-semibold num-tabular">דירה {unit.number}</span>
+            {unit.name && <span className="block text-[11px] text-[var(--text-muted)]">{unit.name}</span>}
+          </>
+        ) : <span className="text-[12px] text-[var(--text-muted)]">שטח משותף</span>}
+      </td>
+      <td className="whitespace-nowrap">
+        <Badge variant={urgent ? 'danger' : iss.priority === 'medium' ? 'warning' : 'neutral'}>
+          {urgent && <span className="h-1.5 w-1.5 rounded-full bg-current" />}{priority.label}
+        </Badge>
+      </td>
+      <td className="whitespace-nowrap"><Badge variant={status.variant === 'danger' ? 'info' : status.variant}>{status.label}</Badge></td>
+      <td className="whitespace-nowrap text-[12px]">
+        {iss.vendor_name ? <span className="font-medium text-[var(--text-primary)]">{iss.vendor_name}</span> : <span className="text-[var(--text-muted)]">טרם שויך</span>}
+      </td>
+      <td className="whitespace-nowrap">
+        {iss.scheduledDate ? (
+          <>
+            <span className="text-[12px] font-semibold text-[var(--primary-dark)] num-tabular">{formatDate(iss.scheduledDate)}</span>
+            <span className="block text-[11px] text-[var(--text-muted)]">ביקור מתוזמן</span>
+          </>
+        ) : done ? (
+          <span className="text-[12px] text-[var(--success)] font-medium">{iss.resolvedAt ? formatDate(iss.resolvedAt) : 'טופל'}</span>
+        ) : (
+          <>
+            <span className={`text-[12px] font-semibold ${overdue ? 'text-[var(--danger)]' : 'text-[var(--text-secondary)]'}`}>{overdue ? 'חריגת SLA' : 'בזמן'}</span>
+            {iss.reportedAt && <span className="block text-[11px] text-[var(--text-muted)]">{timeAgo(iss.reportedAt)}</span>}
+          </>
+        )}
+      </td>
+      <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        {act && (
+          <button
+            onClick={() => onAction(act.key, iss)}
+            className="h-8 px-2.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-container)] text-[var(--primary)] text-[12px] font-semibold inline-flex items-center gap-1 transition-colors"
+          >
+            <act.icon className="h-3.5 w-3.5" />{act.label}
+          </button>
+        )}
+      </td>
+    </tr>
+  )
+})
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -326,6 +412,7 @@ function Issues() {
   // Building-scoped SERVER-SIDE (vendors/supervisors stay global); unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
   const { data: allIssues, create, update, remove, isSaving, isLoading } = useRealtimeCollection('issues', scope)
+  const dir = useUnitDirectory(selectedBuilding?.id)
   const { data: allUnits } = useCollection('units', scope)
   const { data: allVendors } = useCollection('vendors')
   const { data: supervisors } = useCollection('supervisors')
@@ -333,7 +420,9 @@ function Issues() {
 
   // State
   const [search, setSearch] = useState('')
-  const [buildingFilter, setBuildingFilter] = useState('all')
+  // Data is already scoped to the sidebar's building; the per-page building
+  // pills were redundant and are gone.
+  const buildingFilter = 'all'
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const [vendorFilter, setVendorFilter] = useState('all')
@@ -533,15 +622,17 @@ function Issues() {
 
   // Summary stats
   const stats = useMemo(() => {
-    const openStatuses = ['reported', 'acknowledged', 'quoted', 'approved', 'scheduled', 'in_progress']
-    const openIssues = allIssues.filter((i) => openStatuses.includes(i.status))
+    const openIssues = allIssues.filter((i) => isOpenIssueStatus(i.status))
     const overdue = openIssues.filter(isOverdueSLA)
     const pendingQuotes = allIssues.filter((i) => {
       const quotes = quotesByIssue[i.id] || []
       return quotes.some((q) => q.status === 'pending')
     })
     const avgDays = getAvgResolutionDays(allIssues)
-    return { open: openIssues.length, overdue: overdue.length, pendingQuotes: pendingQuotes.length, avgDays }
+    const urgent = openIssues.filter((i) => i.priority === 'urgent' || i.priority === 'high').length
+    const inProgress = openIssues.filter((i) => bucketOf(i.status) === 'in_progress').length
+    const repliedQuotes = Object.values(quotesByIssue).flat().filter((q) => q.status === 'received').length
+    return { open: openIssues.length, overdue: overdue.length, pendingQuotes: pendingQuotes.length, avgDays, urgent, inProgress, repliedQuotes }
   }, [allIssues, quotesByIssue])
 
   const avgResolutionDays = useMemo(() => {
@@ -1055,149 +1146,111 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     </div>
   )
 
+  const bucketCounts = STATUS_BUCKETS.reduce((m, b) => {
+    m[b.key] = allIssues.filter((i) => bucketOf(i.status) === b.key).length
+    return m
+  }, {})
+  const exportCsv = () => {
+    const rows = [['קריאה', 'כותרת', 'קטגוריה', 'דירה', 'דייר', 'עדיפות', 'סטטוס', 'ספק', 'דווח', 'עלות']]
+    filtered.forEach((i) => {
+      const u = dir.byId[i.unitId]
+      rows.push([i.ticket_no, i.title, i.category, u?.number, u?.name, PRIORITY_MAP[i.priority]?.label, bucketInfo(i.status).label, i.vendor_name, i.reportedAt ? formatDate(i.reportedAt) : '', i.cost ?? i.estimatedCost ?? ''])
+    })
+    const csv = '\uFEFF' + rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    Object.assign(document.createElement('a'), { href: url, download: 'takalot.csv' }).click()
+    URL.revokeObjectURL(url)
+  }
+  const runAction = (key, iss) => {
+    if (key === 'ack') handleAcknowledge(iss)
+    else if (key === 'quote') handleOpenQuoteDialog(iss)
+    else if (key === 'vendor') handleOpenVendorAssign(iss)
+    else if (key === 'sched') handleOpenSchedule(iss)
+    else if (key === 'complete') handleOpenComplete(iss)
+    else if (key === 'close') handleClose(iss)
+  }
+  const selCls = 'h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 text-[12px] text-[var(--text-primary)]'
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader
-        icon={AlertTriangle}
-        iconColor="purple"
-        title="תקלות"
-        subtitle={`${filtered.length} תקלות`}
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setShowTemplates(true)}>
-              <FileText className="h-4 w-4" />
-              מתבנית
-            </Button>
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              תקלה חדשה
-            </Button>
-          </>
-        }
-      />
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תקלות וקריאות שירות</h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-[var(--surface-container)] text-[var(--primary)] text-[12px] font-semibold num-tabular">{stats.open} פעילות</span>
+          </div>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            ניהול פניות שוטפות, תיאום ספקים ואישור הצעות מחיר{selectedBuilding ? ` • ${selectedBuilding.name}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4" />ייצוא לאקסל</Button>
+          <Link to="/issue-routing" className="h-[38px] px-3.5 rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] hover:bg-[var(--surface-secondary)] text-[13px] font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
+            <GitBranch className="h-4 w-4" />ניתוב פניות
+          </Link>
+          <Button variant="outline" onClick={() => setShowTemplates(true)}><FileText className="h-4 w-4" />מתבנית</Button>
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />תקלה חדשה</Button>
+        </div>
+      </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="תקלות פתוחות" value={String(stats.open)} icon={AlertTriangle} color="red" />
-        <StatCard label="חריגת SLA" value={String(stats.overdue)} color={stats.overdue > 0 ? 'red' : 'emerald'} icon={Clock} />
-        <StatCard label="הצעות ממתינות" value={String(stats.pendingQuotes)} icon={FileText} color="amber" />
-        {avgResolutionDays !== null && (
-          <StatCard
-            label="זמן טיפול ממוצע"
-            value={`${avgResolutionDays} ימים`}
-            icon={Clock}
-            color="blue"
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          label="קריאות פתוחות" icon={ClipboardList} color="blue" value={String(stats.open)}
+          note={<span className="px-2 py-0.5 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)]">{stats.inProgress} בטיפול • {stats.open - stats.inProgress} ממתינות</span>}
+          progress={stats.open ? Math.round((stats.inProgress / stats.open) * 100) : 0}
+        />
+        <StatCard
+          label="דחופות / בטיפול חירום" icon={ShieldAlert} color={stats.urgent ? 'red' : 'emerald'} value={String(stats.urgent)}
+          note={stats.urgent ? <span className="px-2 py-0.5 rounded-full bg-[var(--danger-light)] text-[var(--danger)]">● דורש תשומת לב מיידית</span> : null}
+          sub={stats.overdue ? `${stats.overdue} בחריגת SLA` : 'אין חריגות SLA'}
+        />
+        <StatCard
+          label="ממתינות להצעת מחיר" icon={FileText} color="amber" value={String(stats.pendingQuotes)}
+          note={stats.repliedQuotes ? <span className="px-2 py-0.5 rounded-full bg-[var(--warning-light)] text-[var(--warning)]">{stats.repliedQuotes} הצעות התקבלו</span> : null}
+          sub="הצעות שנשלחו לספקים וטרם נענו"
+        />
+        <StatCard
+          label="זמן סגירה ממוצע" icon={Timer} color="emerald"
+          value={avgResolutionDays !== null ? `${avgResolutionDays} ימים` : '—'}
+          sub={avgResolutionDays !== null ? 'מדיווח ועד סגירה' : 'אין עדיין תקלות סגורות'}
+        />
+      </div>
+
+      {/* Filter card */}
+      <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <TabGroup
+            tabs={[
+              { key: 'all', label: 'הכל', count: allIssues.length },
+              ...STATUS_BUCKETS.map((b) => ({ key: b.key, label: b.label, count: bucketCounts[b.key] })),
+            ]}
+            activeTab={statusFilter}
+            onChange={setStatusFilter}
           />
-        )}
-      </div>
-
-      {/* Search */}
-      <SearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="חיפוש לפי כותרת, תיאור, ספק או קטגוריה..."
-      />
-
-      {/* Building filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={buildingFilter === 'all' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBuildingFilter('all')}
-        >
-          כל הבניינים
-        </Button>
-        {buildings.map((b) => (
-          <Button
-            key={b.id}
-            variant={buildingFilter === b.id ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setBuildingFilter(b.id)}
-          >
-            {b.name}
-          </Button>
-        ))}
-      </div>
-
-      {/* Status filter pills */}
-      <FilterPills
-        options={STATUS_FILTERS.map(f => ({ key: f.key, label: f.label }))}
-        value={statusFilter}
-        onChange={setStatusFilter}
-      />
-
-      {/* Priority filter pills */}
-      <FilterPills
-        options={PRIORITY_FILTERS.map(f => ({ key: f.key, label: f.label }))}
-        value={priorityFilter}
-        onChange={setPriorityFilter}
-      />
-
-      {/* Extra filters row */}
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="space-y-1">
-          <label className="block text-xs text-[var(--text-secondary)]">ספק</label>
-          <select
-            value={vendorFilter}
-            onChange={(e) => setVendorFilter(e.target.value)}
-            className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text-primary)]"
-          >
-            {vendorFilterOptions.map((v) => (
-              <option key={v.key} value={v.key}>{v.label}</option>
-            ))}
+          <div className="flex items-center gap-1 p-1 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)] self-start">
+            <button onClick={() => setViewMode('list')} title="טבלה" className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-[var(--surface)] text-[var(--primary)] shadow-[var(--shadow)]' : 'text-[var(--text-muted)]'}`}><LayoutList className="h-4 w-4" /></button>
+            <button onClick={() => setViewMode('kanban')} title="לוח" className={`p-1.5 rounded ${viewMode === 'kanban' ? 'bg-[var(--surface)] text-[var(--primary)] shadow-[var(--shadow)]' : 'text-[var(--text-muted)]'}`}><Columns3 className="h-4 w-4" /></button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי כותרת, תיאור, ספק או קטגוריה..." className="flex-1 min-w-[220px]" />
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className={selCls} aria-label="עדיפות">
+            {PRIORITY_FILTERS.map((p) => <option key={p.key} value={p.key}>{p.key === 'all' ? 'עדיפות: הכל' : `עדיפות: ${p.label}`}</option>)}
           </select>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-xs text-[var(--text-secondary)]">הצעות מחיר</label>
-          <select
-            value={quoteFilter}
-            onChange={(e) => setQuoteFilter(e.target.value)}
-            className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text-primary)]"
-          >
-            {QUOTE_FILTERS.map((qf) => (
-              <option key={qf.key} value={qf.key}>{qf.label}</option>
-            ))}
+          <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className={selCls} aria-label="ספק">
+            {vendorFilterOptions.map((v) => <option key={v.key} value={v.key}>{v.key === 'all' ? 'ספק: הכל' : v.label}</option>)}
           </select>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-xs text-[var(--text-secondary)]">מתאריך</label>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text-primary)]"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="block text-xs text-[var(--text-secondary)]">עד תאריך</label>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="h-8 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 text-xs text-[var(--text-primary)]"
-          />
-        </div>
-        {/* View toggle */}
-        <div className="flex gap-1 mr-auto">
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('list')}
-          >
-            <LayoutList className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant={viewMode === 'kanban' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setViewMode('kanban')}
-          >
-            <Columns3 className="h-3.5 w-3.5" />
-          </Button>
+          <select value={quoteFilter} onChange={(e) => setQuoteFilter(e.target.value)} className={selCls} aria-label="הצעות מחיר">
+            {QUOTE_FILTERS.map((q) => <option key={q.key} value={q.key}>{q.key === 'all' ? 'הצעות מחיר: הכל' : q.label}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={selCls} title="מתאריך" />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={selCls} title="עד תאריך" />
         </div>
       </div>
 
-      {/* Issue cards / Kanban */}
+      {/* Ledger / Kanban */}
       {filtered.length === 0 ? (
         <EmptyState
           icon={AlertTriangle}
@@ -1207,24 +1260,48 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           onAction={!search ? openCreate : undefined}
         />
       ) : viewMode === 'list' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((iss) => (
-            <IssueCard
-              key={iss.id}
-              iss={iss}
-              issueQuotes={quotesByIssue[iss.id] || []}
-              buildingName={buildingMap[iss.buildingId]?.name}
-              accompanier={memberNameById[iss.assigned_to]}
-              onOpen={handleOpenDetail}
-              onAcknowledge={handleAcknowledge}
-              onOpenQuoteDialog={handleOpenQuoteDialog}
-              onOpenVendorAssign={handleOpenVendorAssign}
-              onOpenSchedule={handleOpenSchedule}
-              onOpenComplete={handleOpenComplete}
-              onClose={handleClose}
-            />
-          ))}
-        </div>
+        <>
+          {/* Desktop: dense ledger */}
+          <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between bg-[var(--surface-secondary)]/50">
+              <h2 className="text-[14px] font-bold text-[var(--text-primary)]">רשימת קריאות שירות <span className="font-medium text-[var(--text-muted)]">({filtered.length} מוצגות)</span></h2>
+              <span className="text-[11px] text-[var(--text-muted)]">ממוין לפי עדיפות ודחיפות</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="ds-table">
+                <thead>
+                  <tr>
+                    <th>קריאה</th><th>תיאור וקטגוריה</th><th>דירה ודייר</th><th>עדיפות</th><th>סטטוס</th><th>ספק מוקצה</th><th>SLA / מועד</th><th>פעולה הבאה</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((iss) => (
+                    <IssueRow key={iss.id} iss={iss} unit={dir.byId[iss.unitId]} onOpen={handleOpenDetail} onAction={runAction} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {/* Mobile: cards */}
+          <div className="md:hidden grid grid-cols-1 gap-3">
+            {filtered.map((iss) => (
+              <IssueCard
+                key={iss.id}
+                iss={iss}
+                issueQuotes={quotesByIssue[iss.id] || []}
+                buildingName={null}
+                accompanier={memberNameById[iss.assigned_to]}
+                onOpen={handleOpenDetail}
+                onAcknowledge={handleAcknowledge}
+                onOpenQuoteDialog={handleOpenQuoteDialog}
+                onOpenVendorAssign={handleOpenVendorAssign}
+                onOpenSchedule={handleOpenSchedule}
+                onOpenComplete={handleOpenComplete}
+                onClose={handleClose}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         /* Kanban view */
         <div className="flex gap-4 overflow-x-auto pb-4">
@@ -1233,13 +1310,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             const columnIssues = filtered.filter((iss) => bucketOf(iss.status) === statusKey)
             return (
               <div key={statusKey} className="min-w-[280px] max-w-[320px] flex-shrink-0">
-                <div className="flex items-center gap-2 mb-3 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)]">
                   <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-                  <span className="text-[11px] font-medium text-[var(--text-muted)] bg-white px-1.5 py-0.5 rounded-full">{columnIssues.length}</span>
+                  <span className="text-[11px] font-semibold text-[var(--text-muted)] num-tabular">{columnIssues.length}</span>
                 </div>
                 <div className="space-y-3">
                   {columnIssues.length === 0 ? (
-                    <div className="text-center text-xs text-[var(--text-muted)] py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                    <div className="text-center text-xs text-[var(--text-muted)] py-8 border border-dashed border-[var(--border)] rounded-[var(--radius)]">
                       אין תקלות
                     </div>
                   ) : (
@@ -1248,7 +1325,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                         key={iss.id}
                         iss={iss}
                         issueQuotes={quotesByIssue[iss.id] || []}
-                        buildingName={buildingMap[iss.buildingId]?.name}
+                        buildingName={null}
                         accompanier={memberNameById[iss.assigned_to]}
                         onOpen={handleOpenDetail}
                         onAcknowledge={handleAcknowledge}
