@@ -223,7 +223,7 @@ export function ResidentOnboarding() {
                           {num}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-900">דירה {num}</p>
+                          <p className="text-sm font-bold text-gray-900">דירה {num}{u.owner_name ? ` — ${u.owner_name}` : ''}</p>
                           {u.floor && <p className="text-xs text-gray-400">קומה {u.floor}</p>}
                         </div>
                         {isSelected && (

@@ -15,7 +15,7 @@ import { FormField, FormSelect, FormTextarea } from '@/components/common/FormFie
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
@@ -407,7 +407,7 @@ function Issues() {
     const units = form.buildingId
       ? allUnits.filter((u) => u.buildingId === form.buildingId)
       : allUnits
-    return units.map((u) => ({
+    return [...units].sort(sortByUnitNumber).map((u) => ({
       value: u.id,
       label: `דירה ${u.unit_number || u.number} - ${u.ownerName || ''}`,
     }))

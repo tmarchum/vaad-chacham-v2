@@ -35,7 +35,7 @@ export function ResidentPreview() {
     if (!buildingId) { setUnits([]); return }
     ;(async () => {
       const { data } = await supabase
-        .from('units').select('id, number, unit_number, building_id')
+        .from('units').select('id, number, unit_number, owner_name, building_id')
         .eq('building_id', buildingId)
       const sorted = (data || []).sort(sortByUnitNumber)
       setUnits(sorted)
@@ -72,7 +72,7 @@ export function ResidentPreview() {
             onChange={(e) => setUnitId(e.target.value)}
             className="h-7 rounded-lg border border-amber-500 bg-amber-50 px-2 text-[12px]"
           >
-            {units.map((u) => <option key={u.id} value={u.id}>דירה {u.unit_number || u.number}</option>)}
+            {units.map((u) => <option key={u.id} value={u.id}>דירה {u.unit_number || u.number}{u.owner_name ? ` — ${u.owner_name}` : ''}</option>)}
           </select>
           <span className="text-[11px] opacity-80 hidden sm:inline">פעולות כאן אמיתיות!</span>
           <button

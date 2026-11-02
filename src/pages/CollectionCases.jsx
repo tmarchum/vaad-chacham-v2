@@ -202,7 +202,7 @@ export default function CollectionCases() {
   }, [allUnits, allResidents])
 
   const unitOptions = useMemo(() =>
-    allUnits.map(u => ({
+    [...allUnits].sort(sortByUnitNumber).map(u => ({
       value: u.id,
       label: `דירה ${u.unit_number || u.number}${unitInfo[u.id]?.residentName ? ` — ${unitInfo[u.id].residentName}` : ''}`,
     })), [allUnits, unitInfo])
