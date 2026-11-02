@@ -109,7 +109,6 @@ function normalizeRow(row) {
   if ('fire_suppression' in row) out.fire_suppression = row.fire_suppression
   if ('shared_roof' in row)    out.shared_roof  = row.shared_roof
   if ('next_meeting' in row)   out.nextMeeting  = row.next_meeting
-  if ('total_units' in row && 'meeting_minutes' in (row._table||{})) out.totalUnits = row.total_units
   return out
 }
 
@@ -180,6 +179,12 @@ function toDbRow(data) {
   Object.keys(out).forEach(k => {
     // Remove if it's a known app-only field OR if it has a capital letter (camelCase leftover)
     if (APP_ONLY.has(k) || /[A-Z]/.test(k) || out[k] === undefined) {
+      // A camelCase key that is NOT a known alias is almost always a new field
+      // someone forgot to add to `remap` — dropping it silently loses data, so
+      // shout about it in dev builds instead of pretending the save succeeded.
+      if (import.meta.env?.DEV && !APP_ONLY.has(k) && /[A-Z]/.test(k) && out[k] !== undefined) {
+        console.warn(`[store] toDbRow dropped unmapped camelCase field "${k}" — add it to the remap table in supabaseStore.js`)
+      }
       delete out[k]
     }
   })
@@ -243,13 +248,27 @@ function createCollection(tableName) {
       return normalizeRow(data)
     },
 
-    async update(id, itemData) {
+    // opts.silent skips the success toast — for bulk flows where one toast per
+    // row floods the screen (the caller shows a single summary instead).
+    async update(id, itemData, opts = {}) {
       const row = toDbRow(itemData)
       row.updated_at = new Date().toISOString()
       const { data, error } = await supabase.from(table).update(row).eq('id', id).select().single()
       if (error) { emitError('update', tableName, error); return null }
-      emitSuccess('עודכן בהצלחה ✓')
+      if (!opts.silent) emitSuccess('עודכן בהצלחה ✓')
       return normalizeRow(data)
+    },
+
+    // One UPDATE … WHERE id IN (…) for applying the same change to many rows —
+    // a single round-trip and a single toast instead of N of each.
+    async bulkUpdate(ids, itemData, opts = {}) {
+      if (!ids?.length) return []
+      const row = toDbRow(itemData)
+      row.updated_at = new Date().toISOString()
+      const { data, error } = await supabase.from(table).update(row).in('id', ids).select()
+      if (error) { emitError('bulkUpdate', tableName, error); return [] }
+      if (!opts.silent) emitSuccess(`עודכנו ${data?.length ?? ids.length} רשומות ✓`)
+      return (data || []).map(normalizeRow)
     },
 
     async remove(id) {

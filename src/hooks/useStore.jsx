@@ -8,6 +8,7 @@ export function useCollection(collectionName, filters = {}) {
   const [data, setData] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState(null)
 
   const refresh = useCallback(async () => {
     if (!collection) { setIsLoading(false); return }
@@ -15,9 +16,11 @@ export function useCollection(collectionName, filters = {}) {
     try {
       const items = await collection.list(filters)
       setData(items)
+      setError(null)
     } catch(e) {
       console.error('useCollection error:', e)
       setData([])
+      setError(e)
     } finally {
       setIsLoading(false)
     }
@@ -79,7 +82,22 @@ export function useCollection(collectionName, filters = {}) {
     }
   }, [collection, refresh])
 
-  return { data, isLoading, isSaving, create, update, remove, refresh, bulkCreate }
+  const bulkUpdate = useCallback(async (ids, itemData, opts) => {
+    if (!ids?.length) return []
+    setIsSaving(true)
+    try {
+      const result = await collection.bulkUpdate(ids, itemData, opts)
+      await refresh()
+      return result
+    } catch (e) {
+      console.error('bulkUpdate error:', e)
+      return []
+    } finally {
+      setIsSaving(false)
+    }
+  }, [collection, refresh])
+
+  return { data, isLoading, isSaving, error, create, update, remove, refresh, bulkCreate, bulkUpdate }
 }
 
 export function useRealtimeCollection(collectionName, filters = {}) {

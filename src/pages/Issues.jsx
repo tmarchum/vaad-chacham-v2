@@ -19,6 +19,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
+import { notifyIssueStatus } from '@/lib/notify'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
 import {
@@ -1004,6 +1005,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       resolvedAt: new Date().toISOString(),
       cost: completeCost !== '' ? Number(completeCost) : null,
     })
+    // Close the loop with the reporting resident (email + push, server-derived).
+    notifyIssueStatus(completeDialogIssue.id, 'resolved')
     setCompleteDialogIssue(null)
     setCompleteCost('')
   }

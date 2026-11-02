@@ -402,7 +402,7 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
               </div>
 
               {/* Actions (visible on hover) */}
-              <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
                 <Button
                   size="sm"
                   variant="outline"
@@ -575,7 +575,7 @@ function VendorAgentPanel({ analysis, onAddVendor }) {
                   </div>
 
                   {/* Add button (visible on hover) */}
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
                     <Button
                       size="sm"
                       onClick={() => onAddVendor(vendor)}
@@ -707,7 +707,7 @@ function BudgetAgentPanel({ analysis, onCreateAlert, onExportReport }) {
                 </div>
 
                 {/* Action (hover) */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
                   <Button
                     size="sm"
                     variant="outline"
@@ -931,7 +931,7 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
                   </div>
 
                   {/* Action (hover) */}
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
                     <Button
                       size="sm"
                       variant="outline"

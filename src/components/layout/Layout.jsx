@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { AlertsPanel } from './AlertsPanel'
-import { Menu, X, AlertCircle, CheckCircle, Bell, Search } from 'lucide-react'
+import { Menu, X, AlertCircle, CheckCircle, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 
@@ -127,16 +127,6 @@ function Layout() {
 
           {/* Spacer + actions */}
           <div className="mr-auto flex items-center gap-2">
-            {/* Search */}
-            <div className="hidden md:flex items-center gap-2 bg-[var(--surface-hover)] rounded-lg px-3 py-1.5 w-56 border border-transparent focus-within:border-[var(--primary)]/20 focus-within:bg-white transition-all">
-              <Search className="h-3.5 w-3.5 text-[var(--text-muted)]" />
-              <input
-                type="text"
-                placeholder="חיפוש..."
-                className="bg-transparent text-[13px] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none w-full"
-              />
-            </div>
-
             {/* Notifications */}
             <button
               onClick={() => setAlertsOpen(!alertsOpen)}

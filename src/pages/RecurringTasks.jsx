@@ -393,7 +393,7 @@ function RecurringTasks() {
                 )}
 
                 {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                   <Button variant="ghost" size="icon" onClick={() => setConfirmMarkDone(task)} title="סמן כבוצע">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                   </Button>

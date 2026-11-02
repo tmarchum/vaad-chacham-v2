@@ -907,7 +907,7 @@ export default function BuildingAgent() {
                       </div>
 
                       {/* Action (hover) */}
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
                         <Button
                           size="sm"
                           variant="outline"

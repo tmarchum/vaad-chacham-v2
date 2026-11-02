@@ -174,7 +174,7 @@ function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
 
       {/* Hover actions */}
       <div
-        className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >
         <Button
@@ -271,7 +271,7 @@ function DocumentListRow({ doc, onEdit, onDelete, onView }) {
 
       {/* Actions (visible on hover) */}
       <div
-        className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+        className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         <Button size="icon" variant="ghost" onClick={() => onEdit(doc)}>

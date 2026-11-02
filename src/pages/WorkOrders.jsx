@@ -244,7 +244,7 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
         </div>
 
         {/* Hover-reveal actions */}
-        <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
           {nextStatus && (
             <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => onAdvanceStatus(order, nextStatus)}>
               <ArrowRight className="h-3 w-3" />

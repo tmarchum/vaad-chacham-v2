@@ -362,7 +362,7 @@ export default function BankSettings() {
                 </div>
 
                 {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   <Button size="icon" variant="ghost" onClick={() => openEdit(account)}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>

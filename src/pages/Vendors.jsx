@@ -348,7 +348,7 @@ function VendorCard({ vendor, stats, onClick, compareMode, isSelected, onToggleC
         </div>
 
         {/* Hover-reveal action buttons */}
-        <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
           <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => onClick?.()}>
             פרטים
           </Button>

@@ -352,7 +352,7 @@ function Residents() {
                             </div>
 
                             {/* Actions */}
-                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                               <Button size="sm" variant="ghost" onClick={() => openEdit(resident)}><Pencil className="h-3.5 w-3.5" /></Button>
                               <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(resident)}><Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" /></Button>
                             </div>

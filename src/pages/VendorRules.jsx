@@ -8,13 +8,14 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
-import { Tags, Plus, Pencil, Trash2, Wand2 } from 'lucide-react'
+import { Tags, Plus, Pencil, Trash2, Wand2, Power } from 'lucide-react'
 import {
   EXPENSE_CATEGORIES,
   findExpenseCategory,
   CATEGORY_BG_COLORS,
 } from '@/lib/categories'
 import store from '@/data/supabaseStore'
+import { expensesToRetag } from '@/lib/vendorRules'
 
 const CATEGORY_OPTIONS = EXPENSE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))
 
@@ -38,20 +39,21 @@ function VendorRules() {
   const [notice, setNotice] = useState('')
 
   // Apply one rule to EXISTING bank-sourced expenses, right now, from the
-  // browser. Mirrors apply-vendor-rules.mjs: only touches rows whose vendor is
-  // empty or category is still "אחר" (never clobbers a hand-edited row).
+  // browser. Shared matching logic lives in lib/vendorRules.js; the write is a
+  // single batched UPDATE (silent — the notice banner is the feedback, not a
+  // toast per row).
   const applyRuleToExisting = async (rule) => {
     if (!selectedBuilding?.id) return 0
     const expenses = await store.expenses.list({ building_id: selectedBuilding.id, source: 'bank' })
-    const matches = expenses.filter((e) => {
-      if (!(e.description || '').includes(rule.match_text)) return false
-      const tagged = e.vendor || (e.category && e.category !== 'אחר')
-      if (tagged && !(e.vendor === rule.vendor && e.category === rule.category)) return false
-      return e.vendor !== rule.vendor || e.category !== rule.category
-    })
-    for (const e of matches) {
-      await store.expenses.update(e.id, { vendor: rule.vendor, category: rule.category })
-    }
+    // Include the rule itself — right after save() the hook state may not
+    // contain it yet, and longest-match-wins must see it to let it win.
+    const matches = expensesToRetag(rule, expenses, [rule, ...(rules || [])])
+    if (matches.length === 0) return 0
+    await store.expenses.bulkUpdate(
+      matches.map((e) => e.id),
+      { vendor: rule.vendor, category: rule.category },
+      { silent: true },
+    )
     return matches.length
   }
 
@@ -159,6 +161,13 @@ function VendorRules() {
                     </div>
                   </div>
                   <Button variant="ghost" size="icon" title="החל על תנועות קיימות" disabled={applying} onClick={() => reapply(r)}><Wand2 className="w-4 h-4" /></Button>
+                  <Button
+                    variant="ghost" size="icon"
+                    title={r.active === false ? 'הפעל כלל' : 'כבה כלל'}
+                    onClick={() => update(r.id, { active: r.active === false })}
+                  >
+                    <Power className={`w-4 h-4 ${r.active === false ? 'text-slate-400' : 'text-emerald-600'}`} />
+                  </Button>
                   <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(r)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
                 </CardContent>
@@ -199,6 +208,15 @@ function VendorRules() {
               value={form.priority}
               onChange={setField('priority')}
             />
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.active !== false && form.active !== 'false'}
+                onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              כלל פעיל (כלל כבוי לא מוחל על ייבואים)
+            </label>
             {error && <p className="text-sm text-red-500">{error}</p>}
           </div>
           <div className="flex justify-end gap-2 mt-4">

@@ -400,7 +400,7 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
                       size="sm"
                       variant="ghost"
                       onClick={() => removeVendor(v.id)}
-                      className="text-[var(--danger)] hover:text-[var(--danger)] h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-[var(--danger)] hover:text-[var(--danger)] h-7 w-7 p-0 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"
                     >
                       ✕
                     </Button>
@@ -1146,7 +1146,7 @@ export default function VendorFinder() {
                       {/* Status dot & arrow */}
                       <div className="flex items-center gap-3 shrink-0">
                         <div className={`w-2 h-2 rounded-full ${issueDot}`} />
-                        <ChevronRight className="h-5 w-5 text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronRight className="h-5 w-5 text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" />
                       </div>
                     </div>
                   )

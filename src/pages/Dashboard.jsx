@@ -6,6 +6,8 @@ import { upcomingMaintenance } from '@/lib/maintenance'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
+import { isOpenIssueStatus, issueStatusLabel } from '@/lib/issueStatus'
+import { waLink } from '@/lib/phone'
 import {
   CreditCard,
   AlertTriangle,
@@ -62,6 +64,10 @@ function Dashboard() {
   const { data: allRecurringTasks } = useCollection('recurringTasks', scope)
   const { data: allBankAccounts } = useCollection('bankAccounts', scope)
   const { data: allBuildingAssets } = useCollection('buildingAssets', scope)
+  const { data: pendingBookings } = useCollection('bookings', { ...scope, status: 'pending' })
+  // Primary-resident phones for the manual WhatsApp reminder next to each
+  // debtor (unit_residents has no building_id column, so this stays unscoped).
+  const { data: allResidents } = useCollection('unitResidents')
 
   // Proactive maintenance — upcoming/overdue services, legal inspections, certs.
   const maintenanceDue = useMemo(() => {
@@ -126,8 +132,21 @@ function Dashboard() {
     const unit = units.find((u) => u.id === p.unitId)
     return { ...p, unit }
   })
+  // Early in the month no charge rows exist yet — that is NOT "everyone paid".
+  const noChargesYet = monthPayments.length === 0 && units.length > 0
 
-  const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'in_progress')
+  // unit_id → primary resident phone, for the manual reminder link.
+  const unitPhone = useMemo(() => {
+    const map = {}
+    ;(allResidents || []).forEach((r) => {
+      const uid = r.unit_id || r.unitId
+      if (!uid || !r.phone) return
+      if (r.is_primary || !map[uid]) map[uid] = r.phone
+    })
+    return map
+  }, [allResidents])
+
+  const openIssues = issues.filter((i) => isOpenIssueStatus(i.status))
   const urgentIssues = openIssues.filter((i) => i.priority === 'high' || i.priority === 'urgent')
 
   // Expiry alerts — items needing attention
@@ -229,24 +248,6 @@ function Dashboard() {
       case 'high':
       case 'urgent': return 'danger'
       case 'medium': return 'warning'
-      default: return 'default'
-    }
-  }
-
-  const issueStatusLabel = (s) => {
-    switch (s) {
-      case 'open': return 'פתוח'
-      case 'in_progress': return 'בטיפול'
-      case 'closed': return 'סגור'
-      default: return s
-    }
-  }
-
-  const issueStatusVariant = (s) => {
-    switch (s) {
-      case 'open': return 'danger'
-      case 'in_progress': return 'warning'
-      case 'closed': return 'success'
       default: return 'default'
     }
   }
@@ -467,6 +468,11 @@ function Dashboard() {
               <div className="status-dot warning" />
               <span className="text-xs text-amber-600 font-medium">נדרש מעקב</span>
             </div>
+          ) : noChargesYet ? (
+            <div className="flex items-center gap-1.5 mt-3">
+              <div className="status-dot warning" />
+              <span className="text-xs text-[var(--text-muted)] font-medium">טרם הופקו חיובים לחודש זה</span>
+            </div>
           ) : (
             <div className="flex items-center gap-1.5 mt-3">
               <div className="status-dot success" />
@@ -549,6 +555,41 @@ function Dashboard() {
         ))}
       </div>
 
+      {/* ── Pending room bookings — waiting for committee approval ── */}
+      {(pendingBookings || []).length > 0 && (
+        <Card className="animate-fade-in-up border-violet-200">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <div className="w-1 h-5 rounded-full bg-violet-400" />
+                הזמנות חדר ממתינות לאישור
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-500 text-[10px] font-bold text-white px-1.5">
+                  {pendingBookings.length}
+                </span>
+              </CardTitle>
+              <Link to="/room-booking" className="text-xs text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium flex items-center gap-1 transition-colors">
+                לאישור
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-1.5">
+              {pendingBookings.slice(0, 5).map((b) => (
+                <Link key={b.id} to="/room-booking"
+                  className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm bg-violet-50/60 hover:bg-violet-50 transition-colors">
+                  <span className="truncate text-[var(--text-primary)]">
+                    {b.booker_name || 'דייר'}
+                    {b.booking_date ? ` — ${new Date(b.booking_date).toLocaleDateString('he-IL')}` : ''}
+                  </span>
+                  <span className="text-xs text-violet-600 font-medium shrink-0">ממתין לאישור</span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════
           ── Main content grid ──
           ═══════════════════════════════════════════════════════════ */}
@@ -574,11 +615,15 @@ function Dashboard() {
           <CardContent>
             {debtorUnits.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center mb-3">
-                  <CreditCard className="h-7 w-7 text-green-400" />
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${noChargesYet ? 'bg-slate-50' : 'bg-green-50'}`}>
+                  <CreditCard className={`h-7 w-7 ${noChargesYet ? 'text-slate-300' : 'text-green-400'}`} />
                 </div>
-                <p className="text-sm font-medium text-[var(--text-secondary)]">כל הדירות שילמו החודש</p>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">מצוין!</p>
+                <p className="text-sm font-medium text-[var(--text-secondary)]">
+                  {noChargesYet ? 'טרם הופקו חיובים לחודש זה' : 'כל הדירות שילמו החודש'}
+                </p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  {noChargesYet ? 'אפשר להפיק חיובים בעמוד הגבייה' : 'מצוין!'}
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-[var(--border-light)]">
@@ -609,6 +654,19 @@ function Dashboard() {
                       <Badge variant={statusVariant(d.status)}>
                         {statusLabel(d.status)}
                       </Badge>
+                      {/* Manual reminder — opens WhatsApp with a drafted message.
+                          Deliberately human-initiated (never the system gateway). */}
+                      {unitPhone[d.unitId] && (
+                        <a
+                          href={waLink(unitPhone[d.unitId], `שלום${d.unit?.ownerName ? ' ' + d.unit.ownerName : ''}, תזכורת ידידותית מוועד הבית: תשלום דמי הוועד לחודש ${monthLabel} (${formatCurrency(d.amount)}) טרם התקבל. תודה רבה 🙏`) || '#'}
+                          target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="שלח תזכורת בוואטסאפ"
+                          className="text-xs font-medium text-emerald-600 hover:text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-2 py-1 transition-colors"
+                        >
+                          תזכורת
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}

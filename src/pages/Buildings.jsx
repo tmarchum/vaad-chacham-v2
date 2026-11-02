@@ -340,7 +340,7 @@ function Buildings() {
                     </div>
 
                     {/* Hover-reveal actions */}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(b)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>

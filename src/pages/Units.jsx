@@ -739,7 +739,7 @@ function Units() {
                       )}
                     </div>
                     {/* Edit icon on hover */}
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => { e.stopPropagation(); openEdit(u) }}>
+                    <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0" onClick={e => { e.stopPropagation(); openEdit(u) }}>
                       <div className="w-8 h-8 rounded-lg border border-[var(--border)] flex items-center justify-center hover:bg-slate-50 cursor-pointer">
                         <Pencil className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                       </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
+import { hebrewMonthLabel } from '@/lib/constants'
 import { openGate } from '@/lib/gate'
 import { AutoGateToggle } from '@/components/common/AutoGateToggle'
 import { ResidentBooking } from './ResidentBooking'
@@ -327,14 +328,14 @@ export function ResidentPortal() {
                   </div>
                   <div className="text-left">
                     <p className="font-bold text-slate-900 text-base">{formatCurrency(currentPayment.amount || 0)}</p>
-                    <p className="text-xs text-slate-400">{currentPayment.month}</p>
+                    <p className="text-xs text-slate-400">{hebrewMonthLabel(currentPayment.month)}</p>
                   </div>
                 </div>
               )
             })() : (
               <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 text-slate-500 text-sm">
                 <Clock className="h-4 w-4" />
-                טרם הופק חיוב לחודש {currentMonth}
+                טרם הופק חיוב לחודש {hebrewMonthLabel(currentMonth)}
               </div>
             )}
 
@@ -350,23 +351,7 @@ export function ResidentPortal() {
 
           {/* ── Payment history ── */}
           {payments.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-              <p className="font-bold text-slate-800 text-sm mb-3">היסטוריית תשלומים</p>
-              <div className="space-y-2">
-                {payments.slice(0, 6).map(p => {
-                  const st = STATUS_MAP[p.status] || STATUS_MAP.pending
-                  return (
-                    <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
-                      <span className="text-sm text-slate-600">{p.month}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-slate-800">{formatCurrency(p.amount || 0)}</span>
-                        <span className={`text-xs font-medium ${st.color}`}>{st.label}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            <PaymentHistorySection payments={payments} />
           )}
 
           {/* ── Report a fault (פתיחת תקלות) ── */}
@@ -471,6 +456,53 @@ export function ResidentPortal() {
             לפנייה לועד הבית — צור קשר ישירות עם מנהל הבניין
           </p>
         </div>
+      )}
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Payment history — Hebrew month names, a total-debt line when there
+   is unpaid debt, and an expandable list (6 → all 12 loaded months).
+   ════════════════════════════════════════════════════════════════ */
+function PaymentHistorySection({ payments }) {
+  const [showAll, setShowAll] = useState(false)
+  const unpaid = payments.filter(p => p.status !== 'paid')
+  const totalDebt = unpaid.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+  const shown = showAll ? payments : payments.slice(0, 6)
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <p className="font-bold text-slate-800 text-sm mb-3">היסטוריית תשלומים</p>
+      {totalDebt > 0 && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-red-50 border border-red-100 mb-3">
+          <span className="flex items-center gap-2 text-sm font-semibold text-red-700">
+            <AlertCircle className="h-4 w-4" />
+            סה"כ חוב פתוח ({unpaid.length} {unpaid.length === 1 ? 'חודש' : 'חודשים'})
+          </span>
+          <span className="font-extrabold text-red-700">{formatCurrency(totalDebt)}</span>
+        </div>
+      )}
+      <div className="space-y-2">
+        {shown.map(p => {
+          const st = STATUS_MAP[p.status] || STATUS_MAP.pending
+          return (
+            <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
+              <span className="text-sm text-slate-600">{hebrewMonthLabel(p.month)}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-slate-800">{formatCurrency(p.amount || 0)}</span>
+                <span className={`text-xs font-medium ${st.color}`}>{st.label}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {payments.length > 6 && (
+        <button
+          onClick={() => setShowAll(s => !s)}
+          className="mt-2 w-full text-center text-xs font-semibold text-blue-600 hover:text-blue-700 py-1.5"
+        >
+          {showAll ? 'הצג פחות' : `הצג את כל ${payments.length} החודשים`}
+        </button>
       )}
     </div>
   )
@@ -807,6 +839,31 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
     onCreated()
   }
 
+  // Add a photo to an ALREADY-reported issue (e.g. the original upload failed,
+  // or the resident photographed the fault only later).
+  const [photoUploadingId, setPhotoUploadingId] = useState(null)
+  const addPhotoToIssue = async (issue, file) => {
+    if (!file) return
+    setPhotoUploadingId(issue.id)
+    try {
+      const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+      const path = `${profile.unit_id || 'u'}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('issue-photos')
+        .upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' })
+      if (upErr) throw upErr
+      const url = supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl
+      const { error: updErr } = await supabase.from('issues')
+        .update({ photo_url: url }).eq('id', issue.id).eq('unit_id', profile.unit_id)
+      if (updErr) throw updErr
+      onCreated()
+    } catch (e) {
+      console.error('add photo error', e)
+      setError('העלאת התמונה נכשלה. נסה/י שוב.')
+    } finally {
+      setPhotoUploadingId(null)
+    }
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center justify-between mb-3">
@@ -874,8 +931,11 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
         <div className="space-y-2">
           {issues.map(i => {
             const st = ISSUE_STATUS_MAP[i.status] || ISSUE_STATUS_MAP.reported
-            const ratable = ['resolved', 'closed'].includes(i.status)
+            // 'completed' is what the committee's "סמן כבוצע" writes — it must
+            // be ratable, or vendor ratings are almost never collected.
+            const ratable = ['completed', 'awaiting_payment', 'resolved', 'closed'].includes(i.status)
             const rated = i.resident_rating || 0
+            const stillOpen = !['completed', 'awaiting_payment', 'resolved', 'closed', 'rejected', 'declined'].includes(i.status)
             return (
               <div key={i.id} className="py-2 px-3 rounded-lg bg-slate-50">
                 <div className="flex items-center justify-between">
@@ -887,6 +947,16 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                   </div>
                   <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${st.bg} ${st.color}`}>{st.label}</span>
                 </div>
+                {/* Late photo attach — only while the fault is still open and has no photo */}
+                {stillOpen && !i.photo_url && (
+                  <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 cursor-pointer">
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => addPhotoToIssue(i, e.target.files?.[0] || null)} />
+                    {photoUploadingId === i.id
+                      ? <><Loader2 className="h-3 w-3 animate-spin" /> מעלה תמונה…</>
+                      : <>📷 הוסף/י תמונה לתקלה</>}
+                  </label>
+                )}
                 {ratable && (
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <span className="text-[11px] text-slate-400">{rated ? 'דירגת את הטיפול:' : 'דרג/י את הטיפול:'}</span>

@@ -689,7 +689,7 @@ function Payments() {
                     </div>
 
                     {/* Actions (visible on hover) */}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                       {!isVirtual ? (
                         <>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(p)}>

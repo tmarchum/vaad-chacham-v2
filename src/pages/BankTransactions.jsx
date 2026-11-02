@@ -717,7 +717,7 @@ export default function BankTransactions() {
                 </div>
 
                 {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
                   {tx.match_status === 'unmatched' && (
                     <>
                       <Button size="icon" variant="ghost" onClick={() => setMatchDialog(tx)} title="שייך לדירה">

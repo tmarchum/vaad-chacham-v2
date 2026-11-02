@@ -162,7 +162,7 @@ function UsersTab() {
               </div>
 
               {/* Action (hover reveal) */}
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                 <Button
                   variant="outline"
                   size="sm"
@@ -330,7 +330,7 @@ function CustomFieldsTab() {
                     </div>
 
                     {/* Delete action (hover reveal) */}
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                       <Button
                         variant="destructive"
                         size="sm"
@@ -557,7 +557,7 @@ function BuildingsCommitteesTab() {
                         <Badge variant="info">
                           {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
                         </Badge>
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
                             size="sm"
