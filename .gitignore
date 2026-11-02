@@ -38,3 +38,4 @@ supabase/.temp/
 *.keystore
 *.jks
 *.p12
+android/app/google-services.json

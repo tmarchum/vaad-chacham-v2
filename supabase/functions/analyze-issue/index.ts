@@ -47,7 +47,7 @@ async function sendRoutingNotification(
           ${issue.description ? `<p style="margin:0 0 8px;color:#475569;white-space:pre-wrap;">${esc(issue.description)}</p>` : ''}
           ${assigneeName ? `<p style="margin:0 0 6px;color:#64748b;">מלווה אחראי: ${esc(assigneeName)}</p>` : ''}
           ${rule.vendor_name ? `<p style="margin:0 0 6px;color:#64748b;">ספק מועדף: ${esc(rule.vendor_name)}</p>` : ''}
-          <p style="margin-top:14px;"><a href="https://vaad-chacham-v2.vercel.app/issues" style="color:#2563eb;">לטיפול בפנייה במערכת</a></p>
+          <p style="margin-top:14px;"><a href="https://vaadly-app.vercel.app/issues" style="color:#2563eb;">לטיפול בפנייה במערכת</a></p>
         </div>
       </div>`
 
