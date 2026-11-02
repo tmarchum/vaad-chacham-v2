@@ -2,6 +2,8 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { ResidentOnboarding } from './ResidentOnboarding'
 import { ResidentPortal } from './ResidentPortal'
+import { ResidentPreview } from './ResidentPreview'
+import { isResidentPreviewOn } from '@/lib/residentPreview'
 
 export function AuthGuard() {
   const { user, loading, needsOnboarding, isCommittee, profile } = useAuth()
@@ -24,6 +26,9 @@ export function AuthGuard() {
 
   // Resident user (not admin/committee) who has been linked to a unit → dedicated portal
   if (!isCommittee && profile?.unit_id) return <ResidentPortal />
+
+  // Admin/committee "view as resident" preview (toggled from the sidebar menu)
+  if (isCommittee && isResidentPreviewOn()) return <ResidentPreview />
 
   return <Outlet />
 }

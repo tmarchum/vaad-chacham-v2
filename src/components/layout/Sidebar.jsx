@@ -9,10 +9,11 @@ import {
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, Menu, X, ChevronDown, ChevronLeft, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
-  Coins, Tags, GitBranch,
+  Coins, Tags, GitBranch, Eye,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/common/BrandLogo'
 import { THEMES, getTheme, setTheme } from '@/lib/theme'
+import { enterResidentPreview } from '@/lib/residentPreview'
 
 // Simplified navigation (2026): the daily flow is always in reach, the rest
 // lives under one collapsed "מתקדם" section instead of five crowded groups.
@@ -278,6 +279,13 @@ function Sidebar({ open, onClose }) {
                   הכנסות פלטפורמה
                 </Link>
               )}
+              <button
+                onClick={enterResidentPreview}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-stone-500 hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)] transition-all"
+              >
+                <Eye className="h-4 w-4 text-stone-400" />
+                תצוגת דייר
+              </button>
               <button
                 onClick={handleSignOut}
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all"

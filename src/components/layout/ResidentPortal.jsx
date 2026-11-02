@@ -47,8 +47,12 @@ const ISSUE_STATUS_MAP = {
 }
 
 
-export function ResidentPortal() {
-  const { profile, user, signOut, updateProfile } = useAuth()
+// profileOverride: admin "view as resident" preview — a synthetic profile
+// (role resident + a chosen unit) replaces the signed-in profile for data
+// loading only; auth/session stay the admin's.
+export function ResidentPortal({ profileOverride = null }) {
+  const { profile: authProfile, user, signOut, updateProfile } = useAuth()
+  const profile = profileOverride || authProfile
   const [unit, setUnit]               = useState(null)
   const [building, setBuilding]       = useState(null)
   const [payments, setPayments]       = useState([])
