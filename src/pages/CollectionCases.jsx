@@ -3,7 +3,7 @@ import { useCollection, useRealtimeCollection, useBuildingContext } from '@/hook
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { formatCurrency, calcUnitFee } from '@/lib/utils'
+import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
 import { waLink } from '@/lib/phone'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
