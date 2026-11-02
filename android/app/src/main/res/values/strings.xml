@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">וועד+</string>
-    <string name="title_activity_main">וועד+</string>
+    <string name="app_name">ועדלי</string>
+    <string name="title_activity_main">ועדלי</string>
     <string name="package_name">il.co.vaadplus</string>
     <string name="custom_url_scheme">il.co.vaadplus</string>
 </resources>

@@ -169,10 +169,10 @@ export function ResidentPortal() {
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-              <span className="font-black text-sm">+ו</span>
+              <span className="font-black text-sm">ו</span>
             </div>
             <div>
-              <p className="font-extrabold text-[15px] leading-tight">וועד+</p>
+              <p className="font-extrabold text-[15px] leading-tight">ועדלי</p>
               <p className="text-indigo-200 text-[11px]">פורטל דיירים</p>
             </div>
           </div>

@@ -274,7 +274,7 @@ function Announcements() {
   <p style="color: #475569; font-size: 15px; line-height: 1.7; white-space: pre-wrap;">${announcementForm.content}</p>
   ${announcementForm.expiresAt ? `<p style="color: #94a3b8; font-size: 13px; margin-top: 16px;">בתוקף עד: ${new Date(announcementForm.expiresAt).toLocaleDateString('he-IL')}</p>` : ''}
   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-  <p style="color: #94a3b8; font-size: 12px; text-align: center;">VaadPlus — מערכת ניהול ועד בית</p>
+  <p style="color: #94a3b8; font-size: 12px; text-align: center;">Vaadly — מערכת ניהול ועד בית</p>
 </div>`
 
           let sent = 0

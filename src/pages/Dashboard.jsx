@@ -297,7 +297,7 @@ function Dashboard() {
       <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-indigo-500/25">
         <Building2 className="h-12 w-12 text-white" />
       </div>
-      <h1 className="text-2xl font-extrabold text-[var(--text-primary)] mb-2">ברוכים הבאים לוועד+</h1>
+      <h1 className="text-2xl font-extrabold text-[var(--text-primary)] mb-2">ברוכים הבאים לוועדלי</h1>
       <p className="text-[var(--text-muted)] mb-2 max-w-sm">
         טרם הוגדר בניין במערכת. הוסיפו את הבניין הראשון כדי להתחיל לנהל תשלומים, תקלות ודיירים.
       </p>

@@ -101,11 +101,9 @@ export function ResidentOnboarding() {
         <div className="px-8 pt-8 pb-4">
           <div className="flex items-start justify-between gap-3 mb-1">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/25 shrink-0">
-                <span className="text-white text-sm font-black">+ו</span>
-              </div>
+              <img src="/favicon.svg" alt="ועדלי" className="w-10 h-10 rounded-xl shadow-lg shadow-indigo-500/25 shrink-0" />
               <div className="min-w-0">
-                <h1 className="text-lg font-extrabold text-gray-900">ברוכים הבאים לוועד+</h1>
+                <h1 className="text-lg font-extrabold text-gray-900">ברוכים הבאים לוועדלי</h1>
                 <p className="text-xs text-gray-400">כניסה ראשונה — שייכו את עצמכם לדירתכם</p>
                 {user?.email && <p className="text-[11px] text-gray-400 truncate mt-0.5">מחובר כ-{user.email}</p>}
               </div>

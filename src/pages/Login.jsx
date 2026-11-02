@@ -26,11 +26,9 @@ export default function Login() {
 
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 pt-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/25 mb-1">
-            <span className="text-white text-xl font-black">+ו</span>
-          </div>
+          <img src="/favicon.svg" alt="ועדלי" className="w-14 h-14 rounded-2xl shadow-lg shadow-indigo-500/25 mb-1" />
           <h1 className="text-5xl font-black text-gray-900 tracking-tight">
-            וועד<span className="text-indigo-600">+</span>
+            ועד<span className="text-indigo-600">לי</span>
           </h1>
           <p className="text-sm text-gray-400 font-light">ניהול בתים משותפים חכם</p>
         </div>

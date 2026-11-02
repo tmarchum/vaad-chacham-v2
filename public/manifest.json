@@ -1,13 +1,13 @@
 {
-  "name": "וועד+ | ניהול בניין",
-  "short_name": "וועד+",
+  "name": "ועדלי | ניהול בניין",
+  "short_name": "ועדלי",
   "description": "מערכת ניהול ועד בית מתקדמת",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "theme_color": "#4f46e5",
   "lang": "he",
   "dir": "rtl",
   "icons": [

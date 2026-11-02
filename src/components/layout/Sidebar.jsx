@@ -12,63 +12,55 @@ import {
   Coins, Tags, GitBranch,
 } from 'lucide-react'
 
+// Simplified navigation (2026): the daily flow is always in reach, the rest
+// lives under one collapsed "מתקדם" section instead of five crowded groups.
+// Nothing was removed — only moved out of the way.
 const NAV_SECTIONS = [
+  {
+    id: 'daily',
+    label: 'יומיום',
+    items: [
+      { to: '/',              label: 'דשבורד',        icon: LayoutDashboard },
+      { to: '/issues',        label: 'תקלות',          icon: Wrench },
+      { to: '/payments',      label: 'גבייה',           icon: CreditCard },
+      { to: '/announcements', label: 'הודעות',         icon: Megaphone },
+      { to: '/room-booking',  label: 'שריון חדרים',    icon: DoorOpen },
+    ],
+  },
   {
     id: 'management',
     label: 'ניהול',
     items: [
-      { to: '/',              label: 'דשבורד',        icon: LayoutDashboard },
-      { to: '/buildings',     label: 'בניינים',        icon: Building2 },
-      { to: '/units',         label: 'דירות',          icon: Home },
-      { to: '/residents',     label: 'דיירים',         icon: Users },
-      { to: '/room-booking', label: 'שריון חדרים',    icon: DoorOpen },
+      { to: '/buildings',         label: 'בניינים',       icon: Building2 },
+      { to: '/units',             label: 'דירות',         icon: Home },
+      { to: '/residents',         label: 'דיירים',        icon: Users },
+      { to: '/vendors',           label: 'ספקים',         icon: Store },
+      { to: '/expenses',          label: 'הוצאות',        icon: Wallet },
+      { to: '/bank-transactions', label: 'תנועות בנק',   icon: ArrowLeftRight },
+      { to: '/documents',         label: 'מסמכים',        icon: FolderOpen },
+      { to: '/reports',           label: 'דוחות',         icon: BarChart2 },
     ],
   },
   {
-    id: 'finance',
-    label: 'כספים',
+    id: 'advanced',
+    label: 'מתקדם',
+    collapsedByDefault: true,
     items: [
-      { to: '/payments',          label: 'גבייה',           icon: CreditCard },
-      { to: '/collection-cases', label: 'מעקב גבייה',     icon: UserCheck },
-      { to: '/bank-transactions', label: 'תנועות בנק',     icon: ArrowLeftRight },
-      { to: '/bank-settings',     label: 'חשבונות בנק',    icon: Landmark },
-      { to: '/income',             label: 'הכנסות',          icon: ArrowDownLeft },
-      { to: '/expenses',          label: 'הוצאות',          icon: Wallet },
-      { to: '/vendor-rules',      label: 'כללי ספקים',      icon: Tags },
-      { to: '/balance',           label: 'מאזן',            icon: Scale },
-      { to: '/expense-analysis', label: 'ניתוח הוצאות AI', icon: Brain },
-      { to: '/reports',           label: 'דוחות',           icon: BarChart2 },
-    ],
-  },
-  {
-    id: 'maintenance',
-    label: 'תחזוקה',
-    items: [
-      { to: '/issues',        label: 'תקלות',          icon: Wrench },
-      { to: '/issue-routing', label: 'ניתוב פניות',    icon: GitBranch },
-      { to: '/work-orders',   label: 'הזמנות עבודה',   icon: ClipboardList },
-      { to: '/vendor-finder', label: 'מציאת ספקים',    icon: Search },
-      { to: '/vendors',       label: 'ספקים',          icon: Store },
-      { to: '/supervisors',   label: 'מפקחים',         icon: ShieldCheck },
-      { to: '/recurring-tasks', label: 'משימות חוזרות', icon: CalendarClock },
-      { to: '/building-assets', label: 'ציוד ומערכות', icon: Cog },
-    ],
-  },
-  {
-    id: 'regulation',
-    label: 'רגולציה ומסמכים',
-    items: [
-      { to: '/compliance',    label: 'רגולציה',        icon: ShieldCheck },
-      { to: '/documents',     label: 'מסמכים',         icon: FolderOpen },
-      { to: '/announcements', label: 'הודעות',         icon: Megaphone },
-    ],
-  },
-  {
-    id: 'ai',
-    label: 'AI',
-    items: [
-      { to: '/smart-agents',  label: 'סוכנים חכמים',  icon: Zap },
-      { to: '/building-agent', label: 'סוכן בריאות',  icon: Bot },
+      { to: '/collection-cases', label: 'מעקב גבייה',      icon: UserCheck },
+      { to: '/income',           label: 'הכנסות',           icon: ArrowDownLeft },
+      { to: '/balance',          label: 'מאזן',             icon: Scale },
+      { to: '/expense-analysis', label: 'ניתוח הוצאות AI',  icon: Brain },
+      { to: '/bank-settings',    label: 'חשבונות בנק',     icon: Landmark },
+      { to: '/vendor-rules',     label: 'כללי ספקים',       icon: Tags },
+      { to: '/issue-routing',    label: 'ניתוב פניות',     icon: GitBranch },
+      { to: '/work-orders',      label: 'הזמנות עבודה',    icon: ClipboardList },
+      { to: '/vendor-finder',    label: 'מציאת ספקים',     icon: Search },
+      { to: '/supervisors',      label: 'מפקחים',           icon: ShieldCheck },
+      { to: '/recurring-tasks',  label: 'משימות חוזרות',   icon: CalendarClock },
+      { to: '/building-assets',  label: 'ציוד ומערכות',    icon: Cog },
+      { to: '/compliance',       label: 'רגולציה',          icon: ShieldCheck },
+      { to: '/smart-agents',     label: 'סוכנים חכמים',    icon: Zap },
+      { to: '/building-agent',   label: 'סוכן בריאות',     icon: Bot },
     ],
   },
 ]
@@ -79,7 +71,9 @@ function Sidebar({ open, onClose }) {
   const { selectedBuilding, setSelectedBuilding, buildings } = useBuildingContext()
   const { profile, isAdmin, signOut } = useAuth()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState({})
+  const [collapsed, setCollapsed] = useState(() =>
+    Object.fromEntries(NAV_SECTIONS.filter((s) => s.collapsedByDefault).map((s) => [s.id, true])),
+  )
 
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/'
@@ -109,7 +103,7 @@ function Sidebar({ open, onClose }) {
 
       <aside className={cn(
         'fixed top-0 right-0 z-50 flex h-full w-[260px] flex-col',
-        'bg-[#0f172a] text-slate-400',
+        'bg-[var(--sidebar-bg)] text-slate-400',
         'border-l border-white/[0.06]',
         'transition-transform duration-300 ease-out',
         'lg:relative lg:translate-x-0',
@@ -119,14 +113,12 @@ function Sidebar({ open, onClose }) {
         <div className="relative px-5 pt-6 pb-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <span className="text-white text-sm font-black">+ו</span>
-              </div>
+              <img src="/favicon.svg" alt="ועדלי" className="w-9 h-9 rounded-xl shadow-lg shadow-indigo-500/20" />
               <div>
                 <h1 className="text-xl font-extrabold text-white tracking-tight leading-none">
-                  וועד<span className="text-indigo-400">+</span>
+                  ועד<span className="text-indigo-400">לי</span>
                 </h1>
-                <span className="text-[10px] text-slate-500 font-medium">VAADPLUS</span>
+                <span className="text-[10px] text-slate-500 font-medium">VAADLY</span>
               </div>
             </div>
             <button className="lg:hidden p-1.5 rounded-lg hover:bg-white/10 transition-colors" onClick={onClose}>
@@ -185,7 +177,7 @@ function Sidebar({ open, onClose }) {
                 {/* Section items */}
                 <div className={cn(
                   'space-y-0.5 overflow-hidden transition-all duration-200',
-                  isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'
+                  isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[700px] opacity-100'
                 )}>
                   {section.items.map(({ to, label, icon: Icon }) => {
                     const active = isActive(to)

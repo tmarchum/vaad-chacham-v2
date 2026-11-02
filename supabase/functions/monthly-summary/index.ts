@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       <div dir="rtl" style="font-family:Arial,sans-serif;max-width:520px;margin:auto">
         <h2 style="color:#1e40af">סיכום חודשי — ${month}</h2>
         ${sections.join("\n")}
-        <p style="color:#94a3b8;font-size:12px;margin-top:16px">הופק אוטומטית ע"י וועד+</p>
+        <p style="color:#94a3b8;font-size:12px;margin-top:16px">הופק אוטומטית ע"י ועדלי</p>
       </div>`;
 
     // ── ONE digest per admin ──
