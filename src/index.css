@@ -14,6 +14,12 @@
   --color-primary-900: #134e4a;
 }
 
+/* ════════════════════════════════════════════════════════════════
+   THEMES — the default (and <html data-theme="bright">) is "הבהירה":
+   deep teal brand on a warm paper canvas, light sidebar, Rubik type.
+   Additional themes override the same tokens under [data-theme="…"];
+   src/lib/theme.js applies the attribute and persists the choice.
+   ════════════════════════════════════════════════════════════════ */
 :root {
   /* 2026 redesign — "חמים ונקי": deep teal brand on a warm paper canvas,
      LIGHT sidebar, Rubik type, borderless cards with warm shadows. */
@@ -67,6 +73,61 @@
   --shadow-lg: 0 14px 28px -6px rgba(68, 60, 48, 0.10), 0 5px 10px -5px rgba(68, 60, 48, 0.06);
   --shadow-xl: 0 24px 40px -8px rgba(68, 60, 48, 0.14), 0 10px 16px -8px rgba(68, 60, 48, 0.07);
 }
+
+/* ── Theme: "הכהה" — midnight surfaces, same teal/emerald accents ── */
+[data-theme="dark"] {
+  --primary: #14b8a6;
+  --primary-light: #2dd4bf;
+  --primary-dark: #0d9488;
+  --primary-hover: #0d9488;
+  --primary-bg: #112a27;
+
+  --sidebar-bg: #16181d;
+  --sidebar-bg-hover: #1f2229;
+  --sidebar-text: #9ca3af;
+  --sidebar-text-muted: #6b7280;
+  --sidebar-text-active: #2dd4bf;
+  --sidebar-accent: #2dd4bf;
+  --sidebar-border: #262a32;
+
+  --surface: #1d2026;
+  --surface-secondary: #23262e;
+  --surface-hover: #2a2e37;
+
+  --text-primary: #f1f2f4;
+  --text-secondary: #c3c7cf;
+  --text-muted: #818897;
+
+  --border: #2e323b;
+  --border-light: #262a32;
+
+  --bg: #121419;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 5px 14px -3px rgba(0, 0, 0, 0.5), 0 2px 5px -2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 14px 28px -6px rgba(0, 0, 0, 0.55), 0 5px 10px -5px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 24px 40px -8px rgba(0, 0, 0, 0.6), 0 10px 16px -8px rgba(0, 0, 0, 0.45);
+}
+
+/* Dark theme: remap the common literal light utilities that pages use
+   directly (cards, chips, canvases) onto the dark token scale. Scoped and
+   curated — token-driven components need none of this. */
+[data-theme="dark"] .bg-white { background-color: var(--surface) !important; }
+[data-theme="dark"] .bg-stone-50 { background-color: var(--bg) !important; }
+[data-theme="dark"] .bg-stone-100 { background-color: var(--surface-secondary) !important; }
+[data-theme="dark"] .bg-stone-200 { background-color: var(--surface-hover) !important; }
+[data-theme="dark"] .text-stone-900, [data-theme="dark"] .text-stone-800 { color: var(--text-primary) !important; }
+[data-theme="dark"] .text-stone-700, [data-theme="dark"] .text-stone-600 { color: var(--text-secondary) !important; }
+[data-theme="dark"] .text-stone-500, [data-theme="dark"] .text-stone-400 { color: var(--text-muted) !important; }
+[data-theme="dark"] .border-stone-100, [data-theme="dark"] .border-stone-200 { border-color: var(--border) !important; }
+[data-theme="dark"] .divide-stone-50 > *, [data-theme="dark"] .divide-stone-100 > * { border-color: var(--border-light) !important; }
+[data-theme="dark"] .glass-header {
+  background: rgba(22, 24, 29, 0.82);
+  border-bottom-color: rgba(46, 50, 59, 0.9) !important;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgba(130, 136, 151, 0.3); }
+/* Light pastel chips (e.g. bg-teal-50 text-teal-700) stay as-is — they read
+   fine on dark surfaces as colored badges. */
 
 *,
 *::before,

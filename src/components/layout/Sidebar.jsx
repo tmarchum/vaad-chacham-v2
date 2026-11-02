@@ -12,6 +12,7 @@ import {
   Coins, Tags, GitBranch,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/common/BrandLogo'
+import { THEMES, getTheme, setTheme } from '@/lib/theme'
 
 // Simplified navigation (2026): the daily flow is always in reach, the rest
 // lives under one collapsed "מתקדם" section instead of five crowded groups.
@@ -72,6 +73,8 @@ function Sidebar({ open, onClose }) {
   const { selectedBuilding, setSelectedBuilding, buildings } = useBuildingContext()
   const { profile, isAdmin, signOut } = useAuth()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [theme, setThemeState] = useState(getTheme())
+  const pickTheme = (id) => { setTheme(id); setThemeState(id) }
   const [collapsed, setCollapsed] = useState(() =>
     Object.fromEntries(NAV_SECTIONS.filter((s) => s.collapsedByDefault).map((s) => [s.id, true])),
   )
@@ -234,6 +237,27 @@ function Sidebar({ open, onClose }) {
 
           {userMenuOpen && (
             <div className="px-3 pb-3 space-y-0.5 animate-fade-in-up">
+              {/* Theme picker */}
+              <div className="px-3 py-2">
+                <p className="text-[11px] font-semibold text-stone-400 mb-1.5">ערכת נושא</p>
+                <div className="flex gap-1.5">
+                  {THEMES.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => pickTheme(t.id)}
+                      title={t.description}
+                      className={
+                        'flex-1 rounded-lg px-2 py-1.5 text-[12px] font-medium border transition-all ' +
+                        (theme === t.id
+                          ? 'border-teal-500 bg-teal-600/10 text-teal-700'
+                          : 'border-[var(--border)] text-stone-500 hover:bg-[var(--sidebar-bg-hover)]')
+                      }
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {isAdmin && (
                 <Link
                   to="/admin"

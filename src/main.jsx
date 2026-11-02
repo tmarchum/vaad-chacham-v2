@@ -2,6 +2,10 @@ import { StrictMode, Component, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
+import { initTheme } from '@/lib/theme'
+
+// Apply the saved theme before anything renders (no flash of wrong theme).
+initTheme()
 
 // Error monitoring — inert until VITE_SENTRY_DSN is set (add it in Vercel env).
 if (import.meta.env.VITE_SENTRY_DSN) {
