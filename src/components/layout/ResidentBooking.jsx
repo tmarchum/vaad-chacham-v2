@@ -14,7 +14,7 @@ import {
 //  Saturday: "full Shabbat" = Friday eve + Saturday morning + Saturday eve (one slot)
 const SLOTS = {
   morning:  { label: 'בוקר',     sub: '08:00–14:00',     priceKey: 'price_morning',  icon: Sun,      color: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700' },
-  evening:  { label: 'ערב',      sub: '16:00–23:00',     priceKey: 'price_evening',  icon: Moon,     color: 'text-teal-600', badge: 'bg-teal-100 text-teal-700' },
+  evening:  { label: 'ערב',      sub: '16:00–23:00',     priceKey: 'price_evening',  icon: Moon,     color: 'text-blue-600', badge: 'bg-blue-100 text-blue-700' },
   full_day: { label: 'שבת מלאה', sub: 'שישי ערב – מוצ״ש', priceKey: 'price_full_day', icon: Sparkles, color: 'text-purple-600', badge: 'bg-purple-100 text-purple-700' },
 }
 
@@ -26,7 +26,7 @@ const BOOKING_STATUS = {
   approved:  { label: 'מאושר',        color: 'text-emerald-600', bg: 'bg-emerald-50' },
   confirmed: { label: 'מאושר',        color: 'text-emerald-600', bg: 'bg-emerald-50' },
   rejected:  { label: 'נדחה',         color: 'text-red-600',     bg: 'bg-red-50' },
-  cancelled: { label: 'בוטל',         color: 'text-stone-500',   bg: 'bg-stone-100' },
+  cancelled: { label: 'בוטל',         color: 'text-slate-500',   bg: 'bg-slate-100' },
 }
 
 function dateKey(d) {
@@ -202,21 +202,21 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
 
   if (resources.length === 0) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
         <div className="flex items-center gap-2 mb-2">
           <CalendarDays className="h-4 w-4 text-violet-500" />
-          <p className="font-bold text-stone-800 text-sm">שיריון חדר / מתקן</p>
+          <p className="font-bold text-slate-800 text-sm">שיריון חדר / מתקן</p>
         </div>
-        <p className="text-sm text-stone-400 text-center py-2">אין מתקנים זמינים לשיריון בבניין</p>
+        <p className="text-sm text-slate-400 text-center py-2">אין מתקנים זמינים לשיריון בבניין</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center gap-2 mb-3">
         <CalendarDays className="h-4 w-4 text-violet-500" />
-        <p className="font-bold text-stone-800 text-sm">שיריון חדר / מתקן</p>
+        <p className="font-bold text-slate-800 text-sm">שיריון חדר / מתקן</p>
       </div>
 
       {/* Resource selector */}
@@ -228,7 +228,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
               className={`px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-all ${
                 resource?.id === r.id
                   ? 'border-violet-400 bg-violet-50 text-violet-800'
-                  : 'border-stone-200 text-stone-500 hover:border-violet-200'
+                  : 'border-slate-200 text-slate-500 hover:border-violet-200'
               }`}
             >
               <DoorOpen className="h-3.5 w-3.5 inline-block ml-1" />{r.name}
@@ -238,7 +238,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       )}
 
       {resource?.description && (
-        <p className="text-xs text-stone-500 mb-3">{resource.description}</p>
+        <p className="text-xs text-slate-500 mb-3">{resource.description}</p>
       )}
 
       {/* Price summary */}
@@ -256,43 +256,43 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
 
       {/* Month nav */}
       <div className="flex items-center justify-between mb-2">
-        <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-stone-100"><ChevronRight className="h-4 w-4 text-stone-500" /></button>
-        <h4 className="text-sm font-bold text-stone-700">{HEBREW_MONTHS[calMonth]} {calYear}</h4>
-        <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-stone-100"><ChevronLeft className="h-4 w-4 text-stone-500" /></button>
+        <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight className="h-4 w-4 text-slate-500" /></button>
+        <h4 className="text-sm font-bold text-slate-700">{HEBREW_MONTHS[calMonth]} {calYear}</h4>
+        <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronLeft className="h-4 w-4 text-slate-500" /></button>
       </div>
 
       {/* Calendar */}
-      <div className="rounded-xl border border-stone-100 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-stone-100 bg-stone-50">
+      <div className="rounded-xl border border-slate-100 overflow-hidden">
+        <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
           {WEEKDAYS.map((d, i) => (
-            <div key={d} className={`text-center py-1.5 text-[11px] font-bold ${i === 6 ? 'text-teal-600' : 'text-stone-400'}`}>{d}</div>
+            <div key={d} className={`text-center py-1.5 text-[11px] font-bold ${i === 6 ? 'text-blue-600' : 'text-slate-400'}`}>{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
           {calendarDays.map((day, i) => {
-            if (!day) return <div key={`e${i}`} className="aspect-square border-b border-l border-stone-50 bg-stone-50/40" />
+            if (!day) return <div key={`e${i}`} className="aspect-square border-b border-l border-slate-50 bg-slate-50/40" />
             const selected = day.dk === selectedDk
             return (
               <button
                 key={day.dk}
                 onClick={() => pickDay(day)}
                 disabled={!day.canBook}
-                className={`aspect-square border-b border-l border-stone-50 flex flex-col items-center justify-center gap-0.5 transition-all relative ${
+                className={`aspect-square border-b border-l border-slate-50 flex flex-col items-center justify-center gap-0.5 transition-all relative ${
                   selected ? 'bg-violet-100 ring-2 ring-violet-400 ring-inset'
                   : day.isBlocked ? 'bg-red-50/50 cursor-not-allowed'
-                  : day.isPast || day.isTooFar ? 'bg-stone-50/40 cursor-not-allowed opacity-50'
-                  : day.canBook ? (day.isSaturday ? 'bg-teal-50/40 hover:bg-violet-50' : 'hover:bg-violet-50')
+                  : day.isPast || day.isTooFar ? 'bg-slate-50/40 cursor-not-allowed opacity-50'
+                  : day.canBook ? (day.isSaturday ? 'bg-blue-50/40 hover:bg-violet-50' : 'hover:bg-violet-50')
                   : 'bg-amber-50/30 cursor-not-allowed'
                 }`}
               >
-                <span className={`text-xs font-semibold ${day.isSaturday ? 'text-teal-600' : 'text-stone-700'}`}>{day.day}</span>
+                <span className={`text-xs font-semibold ${day.isSaturday ? 'text-blue-600' : 'text-slate-700'}`}>{day.day}</span>
                 {day.isBlocked ? (
                   <Ban className="h-2.5 w-2.5 text-red-400" />
                 ) : (
                   <div className="flex gap-0.5 h-1.5">
                     {day.offered.map(sl => {
                       const free = day.available.includes(sl)
-                      return <span key={sl} className={`w-1.5 h-1.5 rounded-full ${free ? (sl === 'morning' ? 'bg-amber-400' : sl === 'evening' ? 'bg-teal-400' : 'bg-purple-400') : 'bg-stone-200'}`} />
+                      return <span key={sl} className={`w-1.5 h-1.5 rounded-full ${free ? (sl === 'morning' ? 'bg-amber-400' : sl === 'evening' ? 'bg-blue-400' : 'bg-purple-400') : 'bg-slate-200'}`} />
                     })}
                   </div>
                 )}
@@ -303,11 +303,11 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-3 mt-2 text-[10px] text-stone-400">
+      <div className="flex flex-wrap gap-3 mt-2 text-[10px] text-slate-400">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" /> בוקר</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-400" /> ערב</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> ערב</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" /> שבת מלאה</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-stone-200" /> תפוס</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-200" /> תפוס</span>
       </div>
 
       {ok && (
@@ -318,12 +318,12 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
 
       {/* Slot picker for the selected day */}
       {selectedDay && (
-        <div className="mt-3 p-3 rounded-xl bg-stone-50 border border-stone-100 space-y-3">
+        <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-bold text-stone-800">
+            <p className="text-sm font-bold text-slate-800">
               {selectedDay.date.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
-            <button onClick={() => setSelectedDk(null)} className="text-stone-400 hover:text-stone-600"><X className="h-4 w-4" /></button>
+            <button onClick={() => setSelectedDk(null)} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
           </div>
 
           <div className={`grid gap-2 ${selectedDay.available.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -335,13 +335,13 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
                 <button
                   key={sl} onClick={() => setSlot(sl)}
                   className={`p-3 rounded-xl border-2 text-center transition-all ${
-                    active ? 'border-violet-400 bg-violet-50' : 'border-stone-200 bg-white hover:border-violet-200'
+                    active ? 'border-violet-400 bg-violet-50' : 'border-slate-200 bg-white hover:border-violet-200'
                   }`}
                 >
                   <Icon className={`h-5 w-5 mx-auto mb-1 ${active ? 'text-violet-600' : s.color}`} />
-                  <p className="text-xs font-semibold text-stone-700">{s.label}</p>
-                  <p className="text-[10px] text-stone-400">{s.sub}</p>
-                  {slotPrice(sl) > 0 && <p className="text-[11px] font-bold text-stone-700 mt-0.5">{formatCurrency(slotPrice(sl))}</p>}
+                  <p className="text-xs font-semibold text-slate-700">{s.label}</p>
+                  <p className="text-[10px] text-slate-400">{s.sub}</p>
+                  {slotPrice(sl) > 0 && <p className="text-[11px] font-bold text-slate-700 mt-0.5">{formatCurrency(slotPrice(sl))}</p>}
                 </button>
               )
             })}
@@ -350,21 +350,21 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
           <input
             type="tel" inputMode="numeric" placeholder="טלפון ליצירת קשר (10 ספרות)"
             value={phone} onChange={e => setPhone(sanitizePhone(e.target.value))}
-            className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
           />
 
           {/* Rental terms — must be accepted before submitting */}
           {resource.rental_terms && (
-            <div className="rounded-lg border border-stone-200 bg-white p-3">
-              <p className="text-[11px] font-bold text-stone-600 mb-1">תנאי השכרה</p>
-              <div className="max-h-28 overflow-y-auto text-xs text-stone-600 whitespace-pre-line leading-relaxed mb-2 pl-1">
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <p className="text-[11px] font-bold text-slate-600 mb-1">תנאי השכרה</p>
+              <div className="max-h-28 overflow-y-auto text-xs text-slate-600 whitespace-pre-line leading-relaxed mb-2 pl-1">
                 {resource.rental_terms}
               </div>
-              <label className="flex items-start gap-2 text-xs text-stone-700 cursor-pointer">
+              <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer">
                 <input
                   type="checkbox" checked={termsAccepted}
                   onChange={e => setTermsAccepted(e.target.checked)}
-                  className="mt-0.5 rounded border-stone-300 text-violet-600 focus:ring-violet-500"
+                  className="mt-0.5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
                 />
                 קראתי ואני מאשר/ת את תנאי ההשכרה
               </label>
@@ -385,24 +385,24 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       {/* My bookings */}
       {myBookings.length > 0 && (
         <div className="mt-4">
-          <p className="text-xs font-bold text-stone-500 mb-2">השיריונים שלי</p>
+          <p className="text-xs font-bold text-slate-500 mb-2">השיריונים שלי</p>
           <div className="space-y-2">
             {myBookings.map(b => {
               const st = BOOKING_STATUS[b.status] || BOOKING_STATUS.pending
               const slotLabel = SLOTS[b.slot]?.label || b.slot
               const canCancel = b.status === 'pending' || b.status === 'approved'
               return (
-                <div key={b.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50">
+                <div key={b.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-stone-800">
+                    <p className="text-sm font-semibold text-slate-800">
                       {b.booking_date ? new Date(b.booking_date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : ''} • {slotLabel}
                     </p>
-                    {Number(b.price) > 0 && <p className="text-xs text-stone-400">{formatCurrency(b.price)}</p>}
+                    {Number(b.price) > 0 && <p className="text-xs text-slate-400">{formatCurrency(b.price)}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className={`text-xs font-medium px-2 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
                     {canCancel && (
-                      <button onClick={() => cancelBooking(b)} className="text-stone-300 hover:text-red-500" title="ביטול">
+                      <button onClick={() => cancelBooking(b)} className="text-slate-300 hover:text-red-500" title="ביטול">
                         <X className="h-3.5 w-3.5" />
                       </button>
                     )}

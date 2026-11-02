@@ -5,7 +5,7 @@ import supabaseStore from '@/data/supabaseStore'
 const SEVERITY_CONFIG = {
   high: { icon: AlertTriangle, color: 'text-red-500', bg: 'bg-red-50 border-red-200', label: 'גבוה' },
   medium: { icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-50 border-amber-200', label: 'בינוני' },
-  low: { icon: Info, color: 'text-teal-500', bg: 'bg-teal-50 border-teal-200', label: 'נמוך' },
+  low: { icon: Info, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200', label: 'נמוך' },
 }
 
 const AGENT_LABELS = {

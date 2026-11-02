@@ -13,12 +13,12 @@
         android:pathData="M42,32 h16 a4,4 0 0 1 4,4 v33 h-24 v-33 a4,4 0 0 1 4,-4 z" />
 
     <!-- windows -->
-    <path android:fillColor="#0F766E" android:pathData="M42.5,38 h5 v5 h-5 z" />
-    <path android:fillColor="#0F766E" android:pathData="M52.5,38 h5 v5 h-5 z" />
-    <path android:fillColor="#0F766E" android:pathData="M42.5,47 h5 v5 h-5 z" />
-    <path android:fillColor="#0F766E" android:pathData="M52.5,47 h5 v5 h-5 z" />
+    <path android:fillColor="#2563EB" android:pathData="M42.5,38 h5 v5 h-5 z" />
+    <path android:fillColor="#2563EB" android:pathData="M52.5,38 h5 v5 h-5 z" />
+    <path android:fillColor="#2563EB" android:pathData="M42.5,47 h5 v5 h-5 z" />
+    <path android:fillColor="#2563EB" android:pathData="M52.5,47 h5 v5 h-5 z" />
     <!-- door -->
-    <path android:fillColor="#0F766E" android:pathData="M46.5,57 h7 v12 h-7 z" />
+    <path android:fillColor="#2563EB" android:pathData="M46.5,57 h7 v12 h-7 z" />
 
     <!-- check bubble -->
     <path

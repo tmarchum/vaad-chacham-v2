@@ -5,7 +5,7 @@ const variants = {
   default:
     'bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] focus-visible:ring-[var(--primary-light)] shadow-sm',
   outline:
-    'border border-[var(--border)] bg-white text-[var(--text-primary)] hover:bg-[var(--surface-hover)] hover:border-stone-300 focus-visible:ring-[var(--primary-light)]',
+    'border border-[var(--border)] bg-white text-[var(--text-primary)] hover:bg-[var(--surface-hover)] hover:border-slate-300 focus-visible:ring-[var(--primary-light)]',
   ghost:
     'bg-transparent text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus-visible:ring-[var(--primary-light)]',
   destructive:

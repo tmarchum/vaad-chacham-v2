@@ -150,7 +150,7 @@ function VendorRules() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold">{r.vendor}</span>
                       {cat && (
-                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${bg || 'bg-stone-50 text-stone-700 border-stone-200'}`}>
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${bg || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                           {cat.label}
                         </span>
                       )}
@@ -166,7 +166,7 @@ function VendorRules() {
                     title={r.active === false ? 'הפעל כלל' : 'כבה כלל'}
                     onClick={() => update(r.id, { active: r.active === false })}
                   >
-                    <Power className={`w-4 h-4 ${r.active === false ? 'text-stone-400' : 'text-emerald-600'}`} />
+                    <Power className={`w-4 h-4 ${r.active === false ? 'text-slate-400' : 'text-emerald-600'}`} />
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="w-4 h-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(r)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
@@ -213,7 +213,7 @@ function VendorRules() {
                 type="checkbox"
                 checked={form.active !== false && form.active !== 'false'}
                 onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-                className="h-4 w-4 rounded border-stone-300"
+                className="h-4 w-4 rounded border-slate-300"
               />
               כלל פעיל (כלל כבוי לא מוחל על ייבואים)
             </label>

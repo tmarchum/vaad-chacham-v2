@@ -87,10 +87,10 @@ export function ResidentPreview() {
 
       {loading ? (
         <div className="flex justify-center items-center min-h-[50vh]">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
         </div>
       ) : !previewProfile ? (
-        <p className="text-center py-16 text-stone-500 text-sm">אין דירות בבניין הזה — בחר בניין אחר</p>
+        <p className="text-center py-16 text-slate-500 text-sm">אין דירות בבניין הזה — בחר בניין אחר</p>
       ) : (
         <ResidentPortal key={unitId} profileOverride={previewProfile} />
       )}

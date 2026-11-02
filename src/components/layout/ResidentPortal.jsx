@@ -33,15 +33,15 @@ const ISSUE_STATUS_MAP = {
   new:               { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
   pending_committee: { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
   acknowledged:      { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
-  approved_for_quotes: { label: 'בטיפול', color: 'text-teal-600',  bg: 'bg-teal-50' },
-  quoted:            { label: 'בטיפול',  color: 'text-teal-600',    bg: 'bg-teal-50' },
-  approved:          { label: 'בטיפול',  color: 'text-teal-600',    bg: 'bg-teal-50' },
-  scheduled:         { label: 'בטיפול',  color: 'text-teal-600',    bg: 'bg-teal-50' },
-  in_progress:       { label: 'בטיפול',  color: 'text-teal-600',    bg: 'bg-teal-50' },
+  approved_for_quotes: { label: 'בטיפול', color: 'text-blue-600',  bg: 'bg-blue-50' },
+  quoted:            { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  approved:          { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  scheduled:         { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  in_progress:       { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
   completed:         { label: 'הושלם',   color: 'text-emerald-600', bg: 'bg-emerald-50' },
   awaiting_payment:  { label: 'הושלם',   color: 'text-emerald-600', bg: 'bg-emerald-50' },
   resolved:          { label: 'טופל',    color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  closed:            { label: 'סגור',    color: 'text-stone-500',   bg: 'bg-stone-100' },
+  closed:            { label: 'סגור',    color: 'text-slate-500',   bg: 'bg-slate-100' },
   rejected:          { label: 'נדחתה',   color: 'text-rose-600',    bg: 'bg-rose-50' },
   declined:          { label: 'נדחתה',   color: 'text-rose-600',    bg: 'bg-rose-50' },
 }
@@ -167,9 +167,9 @@ export function ResidentPortal({ profileOverride = null }) {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-stone-50" style={{ fontFamily: 'inherit' }}>
+    <div dir="rtl" className="min-h-screen bg-slate-50" style={{ fontFamily: 'inherit' }}>
       {/* ── Header ── */}
-      <header className="bg-gradient-to-l from-teal-600 to-teal-700 text-white px-4 py-4 shadow-lg">
+      <header className="bg-gradient-to-l from-blue-600 to-blue-700 text-white px-4 py-4 shadow-lg">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
@@ -177,12 +177,12 @@ export function ResidentPortal({ profileOverride = null }) {
             </div>
             <div>
               <p className="font-extrabold text-[15px] leading-tight">ועדלי</p>
-              <p className="text-teal-200 text-[11px]">פורטל דיירים</p>
+              <p className="text-blue-200 text-[11px]">פורטל דיירים</p>
             </div>
           </div>
           <button
             onClick={signOut}
-            className="flex items-center gap-1.5 text-teal-200 hover:text-white text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 text-blue-200 hover:text-white text-xs font-medium transition-colors"
           >
             <LogOut className="h-3.5 w-3.5" />
             יציאה
@@ -192,9 +192,9 @@ export function ResidentPortal({ profileOverride = null }) {
 
       {loading ? (
         <div className="flex justify-center items-center min-h-[50vh]">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
         </div>
-      ) : !contactOk ? (
+      ) : !contactOk && !profileOverride ? (
         /* Mandatory: a valid primary resident (name + 10-digit phone + email) is
            required before the resident can use the portal. */
         <RequirePrimaryResident
@@ -208,11 +208,11 @@ export function ResidentPortal({ profileOverride = null }) {
         <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
 
           {/* ── Greeting banner (same as admin dashboard) ── */}
-          <div className="bg-gradient-to-l from-teal-600 to-teal-700 text-white rounded-2xl shadow-sm px-5 py-4">
+          <div className="bg-gradient-to-l from-blue-600 to-blue-700 text-white rounded-2xl shadow-sm px-5 py-4">
             <h1 className="text-lg font-extrabold mb-1">
               {greeting}{firstName ? `, ${firstName}` : ''} 👋
             </h1>
-            <p className="text-teal-100 text-sm">
+            <p className="text-blue-100 text-sm">
               יום {dayOfWeek}, {gregDate}
               {hebrewDate && (
                 <>
@@ -241,17 +241,17 @@ export function ResidentPortal({ profileOverride = null }) {
           )}
 
           {/* ── Unit card ── */}
-          <div className="bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden">
-            <div className="bg-gradient-to-l from-teal-50 to-teal-50 px-5 py-4 border-b border-stone-100">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div className="bg-gradient-to-l from-blue-50 to-blue-50 px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-teal-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
+                <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
                   {unitNumber}
                 </div>
                 <div>
-                  <p className="font-bold text-stone-900">
+                  <p className="font-bold text-slate-900">
                     {ownerName || 'דייר'}
                   </p>
-                  <p className="text-sm text-stone-500">
+                  <p className="text-sm text-slate-500">
                     דירה {unitNumber}
                     {building?.name ? ` • ${building.name}` : ''}
                   </p>
@@ -259,8 +259,8 @@ export function ResidentPortal({ profileOverride = null }) {
               </div>
             </div>
             {building && (
-              <div className="px-5 py-3 flex items-center gap-2 text-sm text-stone-500">
-                <Building2 className="h-4 w-4 text-stone-400 shrink-0" />
+              <div className="px-5 py-3 flex items-center gap-2 text-sm text-slate-500">
+                <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
                 {[building.address, building.city].filter(Boolean).join(', ') || building.name}
               </div>
             )}
@@ -284,18 +284,18 @@ export function ResidentPortal({ profileOverride = null }) {
           )}
 
           {/* ── Monthly dues ── */}
-          <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center gap-2 mb-3">
-              <CreditCard className="h-4 w-4 text-teal-600" />
-              <p className="font-bold text-stone-800 text-sm">תשלום חודשי</p>
+              <CreditCard className="h-4 w-4 text-blue-600" />
+              <p className="font-bold text-slate-800 text-sm">תשלום חודשי</p>
             </div>
 
             {/* Expected monthly amount — always shown */}
             {expectedFee > 0 && (
               <>
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-stone-100">
-                  <span className="text-sm text-stone-500">סכום חודשי קבוע</span>
-                  <span className="font-extrabold text-stone-900 text-lg">{formatCurrency(expectedFee)}</span>
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                  <span className="text-sm text-slate-500">סכום חודשי קבוע</span>
+                  <span className="font-extrabold text-slate-900 text-lg">{formatCurrency(expectedFee)}</span>
                 </div>
                 {unit?.board_member && building?.board_member_discount > 0 && (
                   <p className="text-[11px] text-emerald-600 -mt-1 mb-3">כולל הנחת חבר ועד {building.board_member_discount}%</p>
@@ -314,13 +314,13 @@ export function ResidentPortal({ profileOverride = null }) {
                     <span className={`font-semibold text-sm ${st.color}`}>{st.label}</span>
                   </div>
                   <div className="text-left">
-                    <p className="font-bold text-stone-900 text-base">{formatCurrency(currentPayment.amount || 0)}</p>
-                    <p className="text-xs text-stone-400">{hebrewMonthLabel(currentPayment.month)}</p>
+                    <p className="font-bold text-slate-900 text-base">{formatCurrency(currentPayment.amount || 0)}</p>
+                    <p className="text-xs text-slate-400">{hebrewMonthLabel(currentPayment.month)}</p>
                   </div>
                 </div>
               )
             })() : (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-stone-50 text-stone-500 text-sm">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 text-slate-500 text-sm">
                 <Clock className="h-4 w-4" />
                 טרם הופק חיוב לחודש {hebrewMonthLabel(currentMonth)}
               </div>
@@ -329,7 +329,7 @@ export function ResidentPortal({ profileOverride = null }) {
             {/* Pay dues — opens the building's PayBox/Bit link */}
             {building?.dues_payment_url && (
               <a href={building.dues_payment_url} target="_blank" rel="noopener noreferrer"
-                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold transition-colors">
+                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
                 <CreditCard className="h-4 w-4" />
                 שלם דמי ועד
               </a>
@@ -370,31 +370,31 @@ export function ResidentPortal({ profileOverride = null }) {
 
           {/* ── Announcements ── */}
           {announcements.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Megaphone className="h-4 w-4 text-amber-500" />
-                <p className="font-bold text-stone-800 text-sm">הודעות הבניין</p>
+                <p className="font-bold text-slate-800 text-sm">הודעות הבניין</p>
               </div>
               <div className="space-y-2">
                 {announcements.map(a => {
                   const expanded = expandedAnn === a.id
                   return (
-                    <div key={a.id} className="border border-stone-100 rounded-xl overflow-hidden">
+                    <div key={a.id} className="border border-slate-100 rounded-xl overflow-hidden">
                       <button
-                        className="w-full flex items-center justify-between px-4 py-3 text-right hover:bg-stone-50 transition-colors"
+                        className="w-full flex items-center justify-between px-4 py-3 text-right hover:bg-slate-50 transition-colors"
                         onClick={() => setExpandedAnn(expanded ? null : a.id)}
                       >
-                        <span className="text-sm font-semibold text-stone-800 text-right">{a.title}</span>
+                        <span className="text-sm font-semibold text-slate-800 text-right">{a.title}</span>
                         <div className="flex items-center gap-2 shrink-0 mr-2">
-                          <span className="text-xs text-stone-400">{a.created_at ? formatDate(a.created_at) : ''}</span>
+                          <span className="text-xs text-slate-400">{a.created_at ? formatDate(a.created_at) : ''}</span>
                           {expanded
-                            ? <ChevronUp className="h-3.5 w-3.5 text-stone-400" />
-                            : <ChevronDown className="h-3.5 w-3.5 text-stone-400" />
+                            ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
+                            : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
                           }
                         </div>
                       </button>
                       {expanded && (
-                        <div className="px-4 pb-3 text-sm text-stone-600 leading-relaxed whitespace-pre-line border-t border-stone-100 pt-2">
+                        <div className="px-4 pb-3 text-sm text-slate-600 leading-relaxed whitespace-pre-line border-t border-slate-100 pt-2">
                           {a.content || a.body || ''}
                         </div>
                       )}
@@ -439,7 +439,7 @@ export function ResidentPortal({ profileOverride = null }) {
           )}
 
           {/* ── Footer ── */}
-          <p className="text-center text-xs text-stone-400 py-2">
+          <p className="text-center text-xs text-slate-400 py-2">
             לפנייה לועד הבית — צור קשר ישירות עם מנהל הבניין
           </p>
         </div>
@@ -458,8 +458,8 @@ function PaymentHistorySection({ payments }) {
   const totalDebt = unpaid.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
   const shown = showAll ? payments : payments.slice(0, 6)
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
-      <p className="font-bold text-stone-800 text-sm mb-3">היסטוריית תשלומים</p>
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <p className="font-bold text-slate-800 text-sm mb-3">היסטוריית תשלומים</p>
       {totalDebt > 0 && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-red-50 border border-red-100 mb-3">
           <span className="flex items-center gap-2 text-sm font-semibold text-red-700">
@@ -473,10 +473,10 @@ function PaymentHistorySection({ payments }) {
         {shown.map(p => {
           const st = STATUS_MAP[p.status] || STATUS_MAP.pending
           return (
-            <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-stone-50 last:border-0">
-              <span className="text-sm text-stone-600">{hebrewMonthLabel(p.month)}</span>
+            <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
+              <span className="text-sm text-slate-600">{hebrewMonthLabel(p.month)}</span>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-stone-800">{formatCurrency(p.amount || 0)}</span>
+                <span className="text-sm font-semibold text-slate-800">{formatCurrency(p.amount || 0)}</span>
                 <span className={`text-xs font-medium ${st.color}`}>{st.label}</span>
               </div>
             </div>
@@ -486,7 +486,7 @@ function PaymentHistorySection({ payments }) {
       {payments.length > 6 && (
         <button
           onClick={() => setShowAll(s => !s)}
-          className="mt-2 w-full text-center text-xs font-semibold text-teal-600 hover:text-teal-700 py-1.5"
+          className="mt-2 w-full text-center text-xs font-semibold text-blue-600 hover:text-blue-700 py-1.5"
         >
           {showAll ? 'הצג פחות' : `הצג את כל ${payments.length} החודשים`}
         </button>
@@ -509,7 +509,7 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const valid = form.first_name.trim() && isValidPhone(form.phone) && form.email.trim()
-  const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
+  const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
   const submit = async (e) => {
     e.preventDefault()
@@ -534,36 +534,36 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
         <div className="flex items-center gap-2 mb-2">
-          <UserCog className="h-5 w-5 text-teal-600" />
-          <p className="font-extrabold text-stone-900">פרטי הדייר הראשי — חובה</p>
+          <UserCog className="h-5 w-5 text-blue-600" />
+          <p className="font-extrabold text-slate-900">פרטי הדייר הראשי — חובה</p>
         </div>
-        <p className="text-sm text-stone-500 mb-4">
+        <p className="text-sm text-slate-500 mb-4">
           כדי להמשיך, יש למלא את פרטי הדייר הראשי של הדירה. כל השדות חובה.
         </p>
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-stone-500">שם פרטי *
+            <label className="text-xs text-slate-500">שם פרטי *
               <input type="text" required value={form.first_name}
                 onChange={e => setForm({ ...form, first_name: e.target.value })} className={inputCls} />
             </label>
-            <label className="text-xs text-stone-500">שם משפחה
+            <label className="text-xs text-slate-500">שם משפחה
               <input type="text" value={form.last_name}
                 onChange={e => setForm({ ...form, last_name: e.target.value })} className={inputCls} />
             </label>
           </div>
-          <label className="text-xs text-stone-500 block">נייד * (10 ספרות)
+          <label className="text-xs text-slate-500 block">נייד * (10 ספרות)
             <input type="tel" inputMode="numeric" required value={form.phone}
               onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })} className={inputCls} />
           </label>
-          <label className="text-xs text-stone-500 block">מייל *
+          <label className="text-xs text-slate-500 block">מייל *
             <input type="email" required value={form.email}
               onChange={e => setForm({ ...form, email: e.target.value })} className={inputCls} />
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button type="submit" disabled={saving || !valid}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             שמירה והמשך
           </button>
@@ -585,12 +585,12 @@ function AppDownloadBanner() {
   return (
     <a
       href={ANDROID_APK_URL}
-      className="flex items-center gap-3 bg-stone-900 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-stone-800 transition-colors"
+      className="flex items-center gap-3 bg-slate-900 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-slate-800 transition-colors"
     >
       <Download className="h-5 w-5 shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm">הורד את אפליקציית האנדרואיד</p>
-        <p className="text-stone-300 text-[11px]">עדכונים והתראות ישירות לנייד — התקנה ישירה</p>
+        <p className="text-slate-300 text-[11px]">עדכונים והתראות ישירות לנייד — התקנה ישירה</p>
       </div>
     </a>
   )
@@ -634,12 +634,12 @@ function AppUpdateBanner() {
   return (
     <a
       href={latestUrl}
-      className="flex items-center gap-3 bg-teal-600 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-teal-700 transition-colors"
+      className="flex items-center gap-3 bg-blue-600 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-blue-700 transition-colors"
     >
       <Download className="h-5 w-5 shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm">גרסה חדשה של האפליקציה זמינה</p>
-        <p className="text-teal-100 text-[11px]">הקישו להורדה והתקינו מעל הגרסה הקיימת</p>
+        <p className="text-blue-100 text-[11px]">הקישו להורדה והתקינו מעל הגרסה הקיימת</p>
       </div>
     </a>
   )
@@ -690,16 +690,16 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <UserCog className="h-4 w-4 text-teal-500" />
-          <p className="font-bold text-stone-800 text-sm">הפרטים שלי</p>
+          <UserCog className="h-4 w-4 text-blue-500" />
+          <p className="font-bold text-slate-800 text-sm">הפרטים שלי</p>
         </div>
         {!editing && (
           <button
             onClick={startEdit}
-            className="flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700"
+            className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
           >
             <Pencil className="h-3.5 w-3.5" /> עריכה
           </button>
@@ -712,21 +712,21 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
             <input
               type="text" required placeholder="שם פרטי *"
               value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
             <input
               type="text" placeholder="שם משפחה"
               value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
           <input
             type="tel" inputMode="numeric" required placeholder="טלפון * (10 ספרות)"
             value={form.phone} onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })}
-            className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           {/* Email is the login identity — read-only */}
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-stone-50 text-stone-400 text-sm">
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 text-slate-400 text-sm">
             <Mail className="h-4 w-4 shrink-0" />
             <span className="truncate">{user?.email}</span>
             <span className="text-[10px] mr-auto shrink-0">לא ניתן לשינוי</span>
@@ -735,14 +735,14 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
           <div className="flex gap-2">
             <button
               type="submit" disabled={saving || !valid}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               עדכן פרטים
             </button>
             <button
               type="button" onClick={() => setEditing(false)}
-              className="px-4 py-2.5 rounded-lg border border-stone-200 text-stone-500 text-sm font-medium hover:bg-stone-50 transition-colors"
+              className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors"
             >
               ביטול
             </button>
@@ -751,16 +751,16 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
       ) : (
         <div className="space-y-2.5">
           <div className="flex items-center gap-2.5 text-sm">
-            <UserCog className="h-4 w-4 text-stone-400 shrink-0" />
-            <span className="text-stone-700 font-medium">{ownerName || 'דייר'}</span>
+            <UserCog className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-700 font-medium">{ownerName || 'דייר'}</span>
           </div>
           <div className="flex items-center gap-2.5 text-sm">
-            <Mail className="h-4 w-4 text-stone-400 shrink-0" />
-            <span className="text-stone-600 truncate">{user?.email || '—'}</span>
+            <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600 truncate">{user?.email || '—'}</span>
           </div>
           <div className="flex items-center gap-2.5 text-sm">
-            <Phone className="h-4 w-4 text-stone-400 shrink-0" />
-            <span className="text-stone-600">{profile?.phone || 'לא הוזן טלפון'}</span>
+            <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600">{profile?.phone || 'לא הוזן טלפון'}</span>
           </div>
         </div>
       )}
@@ -851,34 +851,34 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-orange-500" />
-          <p className="font-bold text-stone-800 text-sm">תקלות ופניות</p>
+          <p className="font-bold text-slate-800 text-sm">תקלות ופניות</p>
         </div>
         <button
           onClick={onToggle}
-          className="flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700"
+          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
         >
           {open ? <><X className="h-3.5 w-3.5" /> ביטול</> : <><Plus className="h-3.5 w-3.5" /> דיווח תקלה</>}
         </button>
       </div>
 
       {open && (
-        <form onSubmit={submit} className="space-y-3 mb-4 p-3 rounded-xl bg-stone-50 border border-stone-100">
+        <form onSubmit={submit} className="space-y-3 mb-4 p-3 rounded-xl bg-slate-50 border border-slate-100">
           <input
             type="text" required placeholder="כותרת התקלה *"
             value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           <textarea
             rows={3} placeholder="תיאור התקלה — פרט/י ככל האפשר (לטובת הצעת מחיר מדויקת)"
             value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
           />
           {/* Fault photo — helps the vendor quote accurately */}
-          <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-stone-300 text-sm text-stone-500 cursor-pointer hover:bg-stone-50">
+          <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 cursor-pointer hover:bg-slate-50">
             <input type="file" accept="image/*" capture="environment" className="hidden"
               onChange={e => setPhoto(e.target.files?.[0] || null)} />
             {photo ? `📷 ${photo.name}` : '📷 צרף/י תמונה של התקלה (אופציונלי)'}
@@ -886,14 +886,14 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-stone-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="">קטגוריה</option>
               {ISSUE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
               value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-stone-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="low">דחיפות נמוכה</option>
               <option value="medium">דחיפות רגילה</option>
@@ -903,7 +903,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
             type="submit" disabled={saving || !form.title.trim()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             שליחת תקלה
@@ -912,7 +912,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
       )}
 
       {issues.length === 0 ? (
-        <p className="text-sm text-stone-400 text-center py-2">לא דווחו תקלות מהדירה שלך</p>
+        <p className="text-sm text-slate-400 text-center py-2">לא דווחו תקלות מהדירה שלך</p>
       ) : (
         <div className="space-y-2">
           {issues.map(i => {
@@ -923,11 +923,11 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
             const rated = i.resident_rating || 0
             const stillOpen = !['completed', 'awaiting_payment', 'resolved', 'closed', 'rejected', 'declined'].includes(i.status)
             return (
-              <div key={i.id} className="py-2 px-3 rounded-lg bg-stone-50">
+              <div key={i.id} className="py-2 px-3 rounded-lg bg-slate-50">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-stone-800 truncate">{i.title}</p>
-                    <p className="text-xs text-stone-400">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{i.title}</p>
+                    <p className="text-xs text-slate-400">
                       {i.category ? `${i.category} • ` : ''}{i.created_at ? formatDate(i.created_at) : ''}
                     </p>
                   </div>
@@ -935,7 +935,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                 </div>
                 {/* Late photo attach — only while the fault is still open and has no photo */}
                 {stillOpen && !i.photo_url && (
-                  <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-teal-600 hover:text-teal-700 cursor-pointer">
+                  <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 cursor-pointer">
                     <input type="file" accept="image/*" capture="environment" className="hidden"
                       onChange={e => addPhotoToIssue(i, e.target.files?.[0] || null)} />
                     {photoUploadingId === i.id
@@ -945,10 +945,10 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                 )}
                 {ratable && (
                   <div className="mt-1.5 flex items-center gap-1.5">
-                    <span className="text-[11px] text-stone-400">{rated ? 'דירגת את הטיפול:' : 'דרג/י את הטיפול:'}</span>
+                    <span className="text-[11px] text-slate-400">{rated ? 'דירגת את הטיפול:' : 'דרג/י את הטיפול:'}</span>
                     {[1, 2, 3, 4, 5].map(n => (
                       <button key={n} type="button" disabled={!!rated} onClick={() => rateIssue(i.id, n)}
-                        className={`text-base leading-none ${n <= rated ? 'text-amber-400' : 'text-stone-300'} ${!rated ? 'hover:text-amber-400' : ''}`}>★</button>
+                        className={`text-base leading-none ${n <= rated ? 'text-amber-400' : 'text-slate-300'} ${!rated ? 'hover:text-amber-400' : ''}`}>★</button>
                     ))}
                   </div>
                 )}
@@ -973,13 +973,13 @@ function ListEditor({ label, items, onChange, placeholder, max, phone }) {
   }
   return (
     <div>
-      <p className="text-xs text-stone-500 mb-1">{label}{phone ? ' (10 ספרות)' : (max ? ` (עד ${max})` : '')}</p>
+      <p className="text-xs text-slate-500 mb-1">{label}{phone ? ' (10 ספרות)' : (max ? ` (עד ${max})` : '')}</p>
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-1.5">
           {items.map((it, i) => (
-            <span key={i} className="inline-flex items-center gap-1 bg-stone-100 border border-stone-200 rounded-md px-2 py-0.5 text-sm text-stone-700">
+            <span key={i} className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5 text-sm text-slate-700">
               {it}
-              <button type="button" onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="text-stone-400 hover:text-red-500">
+              <button type="button" onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500">
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -987,7 +987,7 @@ function ListEditor({ label, items, onChange, placeholder, max, phone }) {
         </div>
       )}
       {atMax ? (
-        <p className="text-[11px] text-stone-400">הגעת למקסימום שהוגדר לבניין ({max})</p>
+        <p className="text-[11px] text-slate-400">הגעת למקסימום שהוגדר לבניין ({max})</p>
       ) : (
       <div className="flex gap-2">
         <input
@@ -995,10 +995,10 @@ function ListEditor({ label, items, onChange, placeholder, max, phone }) {
           inputMode={phone ? 'numeric' : undefined}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
           placeholder={phone ? '0501234567' : placeholder}
-          className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
         <button type="button" onClick={add} disabled={!valid}
-          className="px-3 py-2 rounded-lg border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40">הוסף</button>
+          className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 disabled:opacity-40">הוסף</button>
       </div>
       )}
     </div>
@@ -1071,17 +1071,17 @@ function OwnerDetails({ unit, onSaved }) {
   }
 
   const ownerName = owner ? `${owner.first_name || ''} ${owner.last_name || ''}`.trim() : ''
-  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
+  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
   return (
-    <div className="mt-4 pt-4 border-t border-stone-100">
+    <div className="mt-4 pt-4 border-t border-slate-100">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <UserCog className="h-4 w-4 text-amber-500" />
-          <p className="font-bold text-stone-800 text-sm">פרטי בעלים</p>
+          <p className="font-bold text-slate-800 text-sm">פרטי בעלים</p>
         </div>
         {!editing && (
-          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700">
+          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
             <Pencil className="h-3.5 w-3.5" /> {hasOwner ? 'עריכה' : 'הוספה'}
           </button>
         )}
@@ -1090,28 +1090,28 @@ function OwnerDetails({ unit, onSaved }) {
       {editing ? (
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-stone-500">שם פרטי *
+            <label className="text-xs text-slate-500">שם פרטי *
               <input type="text" required value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} className={inputCls} />
             </label>
-            <label className="text-xs text-stone-500">שם משפחה *
+            <label className="text-xs text-slate-500">שם משפחה *
               <input type="text" required value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} className={inputCls} />
             </label>
           </div>
-          <label className="text-xs text-stone-500 block">נייד * (10 ספרות)
+          <label className="text-xs text-slate-500 block">נייד * (10 ספרות)
             <input type="tel" inputMode="numeric" required value={form.phone} onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })} className={inputCls} />
           </label>
-          <label className="text-xs text-stone-500 block">מייל
+          <label className="text-xs text-slate-500 block">מייל
             <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className={inputCls} />
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={saving || !ownerValid}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               עדכן פרטים
             </button>
             <button type="button" onClick={() => setEditing(false)}
-              className="px-4 py-2.5 rounded-lg border border-stone-200 text-stone-500 text-sm font-medium hover:bg-stone-50 transition-colors">
+              className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors">
               ביטול
             </button>
           </div>
@@ -1119,20 +1119,20 @@ function OwnerDetails({ unit, onSaved }) {
       ) : hasOwner ? (
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 text-sm">
-            <UserCog className="h-4 w-4 text-stone-400 shrink-0" />
-            <span className="text-stone-700 font-medium">{ownerName || '—'}</span>
+            <UserCog className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-700 font-medium">{ownerName || '—'}</span>
           </div>
           <div className="flex items-center gap-2.5 text-sm">
-            <Phone className="h-4 w-4 text-stone-400 shrink-0" />
-            <span className="text-stone-600">{owner.phone || '—'}</span>
+            <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600">{owner.phone || '—'}</span>
           </div>
           <div className="flex items-center gap-2.5 text-sm">
-            <Mail className="h-4 w-4 text-stone-400 shrink-0" />
-            <span className="text-stone-600 truncate">{owner.email || '—'}</span>
+            <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="text-slate-600 truncate">{owner.email || '—'}</span>
           </div>
         </div>
       ) : (
-        <p className="text-sm text-stone-400 py-1">לא הוזנו פרטי בעלים</p>
+        <p className="text-sm text-slate-400 py-1">לא הוזנו פרטי בעלים</p>
       )}
     </div>
   )
@@ -1189,17 +1189,17 @@ function UnitDetailsSection({ unit, building, onSaved }) {
   const maxGatePhones = building?.max_gate_phones || 2
   const parkingLots = Array.isArray(building?.parking_lots) ? building.parking_lots : []
 
-  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
+  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Home className="h-4 w-4 text-teal-600" />
-          <p className="font-bold text-stone-800 text-sm">פרטי הדירה</p>
+          <Home className="h-4 w-4 text-blue-600" />
+          <p className="font-bold text-slate-800 text-sm">פרטי הדירה</p>
         </div>
         {!editing && (
-          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700">
+          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
             <Pencil className="h-3.5 w-3.5" /> עריכה
           </button>
         )}
@@ -1208,13 +1208,13 @@ function UnitDetailsSection({ unit, building, onSaved }) {
       {editing ? (
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-stone-500">מספר דירה
-              <div className="mt-1 w-full px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-sm text-stone-500 flex items-center justify-between">
+            <label className="text-xs text-slate-500">מספר דירה
+              <div className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-500 flex items-center justify-between">
                 <span>{unit.unit_number || unit.number || '—'}</span>
-                <span className="text-[10px] text-stone-400">לא ניתן לשינוי</span>
+                <span className="text-[10px] text-slate-400">לא ניתן לשינוי</span>
               </div>
             </label>
-            <label className="text-xs text-stone-500">סוג
+            <label className="text-xs text-slate-500">סוג
               <select value={form.unit_type} onChange={e => set('unit_type', e.target.value)} className={`${inputCls} bg-white`}>
                 <option value="owned">בבעלות</option>
                 <option value="rented">שכירות</option>
@@ -1222,13 +1222,13 @@ function UnitDetailsSection({ unit, building, onSaved }) {
             </label>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <label className="text-xs text-stone-500">קומה
+            <label className="text-xs text-slate-500">קומה
               <input type="number" value={form.floor} onChange={e => set('floor', e.target.value)} className={inputCls} />
             </label>
-            <label className="text-xs text-stone-500">חדרים
+            <label className="text-xs text-slate-500">חדרים
               <input type="number" step="0.5" value={form.rooms} onChange={e => set('rooms', e.target.value)} className={inputCls} />
             </label>
-            <label className="text-xs text-stone-500">שטח (מ״ר)
+            <label className="text-xs text-slate-500">שטח (מ״ר)
               <input type="number" value={form.area} onChange={e => set('area', e.target.value)} className={inputCls} />
             </label>
           </div>
@@ -1237,7 +1237,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           <ListEditor label="מפתחות / תגים" items={form.key_numbers} onChange={v => set('key_numbers', v)} placeholder="למשל: A1" />
           <ListEditor label="טלפון לפתיחת שער חניה" items={form.parking_gate_phones} onChange={v => set('parking_gate_phones', v)} max={maxGatePhones} phone />
           {parkingLots.length > 0 && (
-            <label className="text-xs text-stone-500 block">חניון
+            <label className="text-xs text-slate-500 block">חניון
               <select value={form.parking_lot} onChange={e => set('parking_lot', e.target.value)} className={`${inputCls} bg-white`}>
                 <option value="">ללא / לא נבחר</option>
                 {parkingLots.map(l => <option key={l} value={l}>{l}</option>)}
@@ -1245,18 +1245,18 @@ function UnitDetailsSection({ unit, building, onSaved }) {
             </label>
           )}
           {/* "חבר ועד" is set by the vaad only — residents see it read-only below */}
-          <label className="text-xs text-stone-500 block">הערות
+          <label className="text-xs text-slate-500 block">הערות
             <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} className={`${inputCls} resize-none`} />
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               עדכן פרטים
             </button>
             <button type="button" onClick={() => setEditing(false)}
-              className="px-4 py-2.5 rounded-lg border border-stone-200 text-stone-500 text-sm font-medium hover:bg-stone-50 transition-colors">
+              className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors">
               ביטול
             </button>
           </div>
@@ -1293,16 +1293,16 @@ function UnitDetailsSection({ unit, building, onSaved }) {
    Residents — grouped by unit type (owned vs rented)
    ════════════════════════════════════════════════════════════════ */
 const EMPTY_PERSON = { first_name: '', last_name: '', phone: '', email: '' }
-const personFieldCls = 'px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400'
+const personFieldCls = 'px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
 // Module-level so a parent re-render doesn't remount it (nested definitions
 // recreate the component type every render and drop its DOM state).
 function Row({ icon: Icon, label, value }) {
   return (
     <div className="flex items-start gap-2.5 text-sm py-1">
-      <Icon className="h-4 w-4 text-stone-400 shrink-0 mt-0.5" />
-      <span className="text-stone-400 w-24 shrink-0">{label}</span>
-      <span className="text-stone-700 font-medium">{value || '—'}</span>
+      <Icon className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+      <span className="text-slate-400 w-24 shrink-0">{label}</span>
+      <span className="text-slate-700 font-medium">{value || '—'}</span>
     </div>
   )
 }
@@ -1399,22 +1399,22 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-stone-100 p-5">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-teal-500" />
-          <p className="font-bold text-stone-800 text-sm">{title}</p>
+          <Icon className="h-4 w-4 text-blue-500" />
+          <p className="font-bold text-slate-800 text-sm">{title}</p>
         </div>
         <button onClick={() => { setAdding(a => !a); setError(null) }}
-          className="flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700">
+          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
           {adding ? <><X className="h-3.5 w-3.5" /> ביטול</> : <><Plus className="h-3.5 w-3.5" /> {addLabel}</>}
         </button>
       </div>
-      {subtitle && <p className="text-xs text-stone-400 mb-3">{subtitle}</p>}
+      {subtitle && <p className="text-xs text-slate-400 mb-3">{subtitle}</p>}
       {!subtitle && <div className="mb-3" />}
 
       {adding && (
-        <form onSubmit={add} className="space-y-3 mb-4 p-3 rounded-xl bg-stone-50 border border-stone-100">
+        <form onSubmit={add} className="space-y-3 mb-4 p-3 rounded-xl bg-slate-50 border border-slate-100">
           {newIsPrimary && (
             <p className="text-xs text-amber-600 flex items-center gap-1">
               <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
@@ -1424,7 +1424,7 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
           <PersonFields value={form} onChange={setForm} />
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button type="submit" disabled={saving || !addValid}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             הוספה
           </button>
@@ -1439,7 +1439,7 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
       )}
 
       {residents.length === 0 ? (
-        <p className="text-sm text-stone-400 text-center py-2">יש להוסיף לפחות דייר אחד (ייקבע כראשי)</p>
+        <p className="text-sm text-slate-400 text-center py-2">יש להוסיף לפחות דייר אחד (ייקבע כראשי)</p>
       ) : (
         <div className="space-y-2">
           {residents.map(r => {
@@ -1448,17 +1448,17 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
 
             if (editingId === r.id) {
               return (
-                <form key={r.id} onSubmit={saveEdit} className="space-y-3 p-3 rounded-xl bg-stone-50 border border-teal-200">
+                <form key={r.id} onSubmit={saveEdit} className="space-y-3 p-3 rounded-xl bg-slate-50 border border-blue-200">
                   <PersonFields value={editForm} onChange={setEditForm} />
                   {error && <p className="text-xs text-red-500">{error}</p>}
                   <div className="flex gap-2">
                     <button type="submit" disabled={saving || !editValid}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
                       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       עדכן פרטים
                     </button>
                     <button type="button" onClick={() => setEditingId(null)}
-                      className="px-4 py-2.5 rounded-lg border border-stone-200 text-stone-500 text-sm font-medium hover:bg-stone-50 transition-colors">
+                      className="px-4 py-2.5 rounded-lg border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition-colors">
                       ביטול
                     </button>
                   </div>
@@ -1467,29 +1467,29 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
             }
 
             return (
-              <div key={r.id} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-stone-50">
-                <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-sm font-bold shrink-0">
+              <div key={r.id} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-slate-50">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">
                   {initial}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-stone-800 truncate">
+                  <p className="text-sm font-semibold text-slate-800 truncate">
                     {name}
-                    {r.is_primary && <span className="text-[10px] text-teal-600 font-medium mr-1.5">• ראשי</span>}
+                    {r.is_primary && <span className="text-[10px] text-blue-600 font-medium mr-1.5">• ראשי</span>}
                   </p>
                   {(r.phone || r.email) && (
-                    <p className="text-xs text-stone-400 truncate">{[r.phone, r.email].filter(Boolean).join(' • ')}</p>
+                    <p className="text-xs text-slate-400 truncate">{[r.phone, r.email].filter(Boolean).join(' • ')}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => makePrimary(r)} title={r.is_primary ? 'דייר ראשי' : 'הגדר כדייר ראשי'}
-                    className={`p-1.5 ${r.is_primary ? 'text-amber-500' : 'text-stone-300 hover:text-amber-500'}`}>
+                    className={`p-1.5 ${r.is_primary ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'}`}>
                     <Star className={`h-3.5 w-3.5 ${r.is_primary ? 'fill-amber-400' : ''}`} />
                   </button>
-                  <button onClick={() => startEdit(r)} className="p-1.5 text-stone-400 hover:text-teal-600" title="עריכה">
+                  <button onClick={() => startEdit(r)} className="p-1.5 text-slate-400 hover:text-blue-600" title="עריכה">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   {!r.is_primary && (
-                    <button onClick={() => remove(r)} className="p-1.5 text-stone-400 hover:text-red-500" title="הסרה">
+                    <button onClick={() => remove(r)} className="p-1.5 text-slate-400 hover:text-red-500" title="הסרה">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}

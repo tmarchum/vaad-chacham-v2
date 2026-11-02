@@ -186,7 +186,7 @@ const PRIORITY_ACCENT = {
   urgent: 'bg-red-500',
   high: 'bg-orange-500',
   medium: 'bg-amber-400',
-  low: 'bg-stone-300',
+  low: 'bg-slate-300',
 }
 
 const IssueCard = React.memo(function IssueCard({
@@ -270,15 +270,15 @@ const IssueCard = React.memo(function IssueCard({
 
   return (
     <div
-      className="rounded-xl border border-[var(--border)] bg-white p-4 hover:shadow-md hover:border-stone-300 transition-all group relative overflow-hidden cursor-pointer"
+      className="rounded-xl border border-[var(--border)] bg-white p-4 hover:shadow-md hover:border-slate-300 transition-all group relative overflow-hidden cursor-pointer"
       onClick={() => onOpen(iss)}
     >
-      <div className={`absolute top-0 left-0 right-0 h-1 ${PRIORITY_ACCENT[iss.priority] || 'bg-stone-300'}`} />
+      <div className={`absolute top-0 left-0 right-0 h-1 ${PRIORITY_ACCENT[iss.priority] || 'bg-slate-300'}`} />
       <div className="pt-1">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Badge variant={priority.variant}>{priority.label}</Badge>
-            {iss.category && <span className="text-[11px] px-2 py-0.5 rounded-md bg-stone-100 text-stone-600">{iss.category}</span>}
+            {iss.category && <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">{iss.category}</span>}
           </div>
           <Badge variant={status.variant}>{status.label}</Badge>
         </div>
@@ -1213,13 +1213,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             const columnIssues = filtered.filter((iss) => bucketOf(iss.status) === statusKey)
             return (
               <div key={statusKey} className="min-w-[280px] max-w-[320px] flex-shrink-0">
-                <div className="flex items-center gap-2 mb-3 px-2 py-2 rounded-lg bg-stone-50 border border-stone-200">
+                <div className="flex items-center gap-2 mb-3 px-2 py-2 rounded-lg bg-slate-50 border border-slate-200">
                   <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                   <span className="text-[11px] font-medium text-[var(--text-muted)] bg-white px-1.5 py-0.5 rounded-full">{columnIssues.length}</span>
                 </div>
                 <div className="space-y-3">
                   {columnIssues.length === 0 ? (
-                    <div className="text-center text-xs text-[var(--text-muted)] py-8 border border-dashed border-stone-200 rounded-xl bg-stone-50/50">
+                    <div className="text-center text-xs text-[var(--text-muted)] py-8 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
                       אין תקלות
                     </div>
                   ) : (
@@ -2143,17 +2143,17 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               </a>
             )}
             {suggestedVendors.length > 0 && (
-              <div className="rounded-lg border border-teal-100 bg-teal-50/50 p-3">
-                <p className="text-xs font-semibold text-teal-700 mb-2">ספקים מומלצים לתקלה זו</p>
+              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
+                <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לתקלה זו</p>
                 <div className="space-y-1.5">
                   {suggestedVendors.map(({ vendor, reasons, warnings }) => (
                     <button
                       key={vendor.id} type="button"
                       onClick={() => setField('vendor_name')(vendor.name)}
-                      className={`w-full text-right flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${form.vendor_name === vendor.name ? 'bg-teal-600 text-white' : 'bg-white hover:bg-teal-100 text-stone-700 border border-stone-200'}`}
+                      className={`w-full text-right flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${form.vendor_name === vendor.name ? 'bg-blue-600 text-white' : 'bg-white hover:bg-blue-100 text-slate-700 border border-slate-200'}`}
                     >
                       <span className="font-medium truncate">{vendor.name}</span>
-                      <span className={`text-[10px] truncate ${form.vendor_name === vendor.name ? 'text-teal-100' : 'text-stone-400'}`}>
+                      <span className={`text-[10px] truncate ${form.vendor_name === vendor.name ? 'text-blue-100' : 'text-slate-400'}`}>
                         {reasons.join(' · ')}{warnings.length ? ` · ⚠ ${warnings.join(', ')}` : ''}
                       </span>
                     </button>

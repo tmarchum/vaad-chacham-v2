@@ -611,7 +611,7 @@ export default function BuildingAgent() {
       {/* Hero Health Card */}
       {healthScore && (
         <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1.5 w-full bg-gradient-to-r from-purple-500 to-teal-500" />
+          <div className="h-1.5 w-full bg-gradient-to-r from-purple-500 to-blue-500" />
           <div className="p-6">
             <div className="flex flex-col md:flex-row items-center gap-8">
               {/* Circle */}
@@ -776,7 +776,7 @@ export default function BuildingAgent() {
                   label: 'תקינה',
                   score: healthScore.complianceScore,
                   icon: <Shield className="h-5 w-5" />,
-                  gradient: 'from-teal-500 to-teal-600',
+                  gradient: 'from-blue-500 to-blue-600',
                   finding:
                     healthScore.complianceScore < 80
                       ? 'ישנם מסמכי תקינות שפג תוקפם'
@@ -826,7 +826,7 @@ export default function BuildingAgent() {
                 const color = scoreColorVar(item.score)
                 const dotColor = item.score >= 80 ? 'bg-emerald-500' : item.score >= 60 ? 'bg-amber-500' : 'bg-red-500'
                 return (
-                  <div key={item.label} className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all">
+                  <div key={item.label} className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all">
                     {/* Score circle */}
                     <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
                       {item.icon}
@@ -840,7 +840,7 @@ export default function BuildingAgent() {
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <div className="h-1.5 flex-1 max-w-[200px] rounded-full bg-stone-100 overflow-hidden">
+                        <div className="h-1.5 flex-1 max-w-[200px] rounded-full bg-slate-100 overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{ width: `${item.score}%`, backgroundColor: color }}
@@ -877,12 +877,12 @@ export default function BuildingAgent() {
                 </Card>
               ) : (
                 recommendations.map((rec) => {
-                  const recGradient = rec.urgency === 'high' ? 'from-red-500 to-red-600' : rec.urgency === 'medium' ? 'from-amber-500 to-amber-600' : 'from-teal-500 to-teal-600'
-                  const urgDot = rec.urgency === 'high' ? 'bg-red-500 animate-pulse' : rec.urgency === 'medium' ? 'bg-amber-500' : 'bg-teal-400'
+                  const recGradient = rec.urgency === 'high' ? 'from-red-500 to-red-600' : rec.urgency === 'medium' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'
+                  const urgDot = rec.urgency === 'high' ? 'bg-red-500 animate-pulse' : rec.urgency === 'medium' ? 'bg-amber-500' : 'bg-blue-400'
                   return (
                     <div
                       key={rec.id}
-                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all"
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
                     >
                       {/* Type icon */}
                       <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${recGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
@@ -933,7 +933,7 @@ export default function BuildingAgent() {
               {/* Stats row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" />, gradient: 'from-teal-500 to-teal-600' },
+                  { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" />, gradient: 'from-blue-500 to-blue-600' },
                   { label: 'פתוחות', value: issueAnalysis.open, icon: <AlertTriangle className="h-4 w-4" />, gradient: 'from-red-500 to-red-600', color: 'var(--danger)' },
                   { label: 'סגורות', value: issueAnalysis.resolved, icon: <CheckCircle className="h-4 w-4" />, gradient: 'from-emerald-500 to-emerald-600', color: 'var(--success,#22c55e)' },
                   { label: 'ימי טיפול ממוצע', value: issueAnalysis.avgResolutionDays || '—', icon: <RefreshCw className="h-4 w-4" />, gradient: 'from-purple-500 to-purple-600' },
@@ -1072,11 +1072,11 @@ export default function BuildingAgent() {
                   ) : (
                     <div className="space-y-2">
                       {vendorIntel.topVendors.map((v, idx) => {
-                        const medalGradient = idx === 0 ? 'from-amber-400 to-amber-500' : idx === 1 ? 'from-stone-400 to-stone-500' : 'from-orange-400 to-orange-500'
+                        const medalGradient = idx === 0 ? 'from-amber-400 to-amber-500' : idx === 1 ? 'from-slate-400 to-slate-500' : 'from-orange-400 to-orange-500'
                         return (
                           <div
                             key={v.id}
-                            className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all"
+                            className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
                           >
                             {/* Rank circle */}
                             <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${medalGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
@@ -1111,7 +1111,7 @@ export default function BuildingAgent() {
               {/* Issue matching */}
               {vendorIntel.matchedIssues.length > 0 && (
                 <div className="relative rounded-xl border bg-white overflow-hidden">
-                  <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-teal-600" />
+                  <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
                   <div className="p-4">
                     <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">התאמת תקלות לספקים</h3>
                     <div className="space-y-2">
@@ -1120,7 +1120,7 @@ export default function BuildingAgent() {
                           key={issue.id}
                           className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-white hover:shadow-sm transition-all"
                         >
-                          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${vendor ? 'from-emerald-500 to-emerald-600' : 'from-stone-400 to-stone-500'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+                          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${vendor ? 'from-emerald-500 to-emerald-600' : 'from-slate-400 to-slate-500'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
                             <Wrench className="h-4 w-4" />
                           </div>
                           <span className="flex-1 text-sm text-[var(--text-primary)] truncate">
@@ -1136,7 +1136,7 @@ export default function BuildingAgent() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <div className="w-2 h-2 rounded-full bg-stone-400" />
+                              <div className="w-2 h-2 rounded-full bg-slate-400" />
                               <span className="text-xs text-[var(--text-secondary)]">אין ספק מתאים</span>
                             </div>
                           )}
@@ -1187,10 +1187,10 @@ export default function BuildingAgent() {
             <div className="space-y-4">
               {/* Prediction banner */}
               <div className="relative rounded-xl border bg-white overflow-hidden">
-                <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 to-purple-500" />
+                <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 to-purple-500" />
                 <div className="p-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-purple-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white shrink-0 shadow-sm">
                       <Brain className="h-6 w-6" />
                     </div>
                     <div>

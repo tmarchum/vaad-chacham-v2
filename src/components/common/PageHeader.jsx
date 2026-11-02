@@ -14,14 +14,14 @@ import { cn } from '@/lib/utils'
  */
 
 const ICON_COLORS = {
-  blue:    'from-teal-500 to-teal-700 shadow-teal-500/20',
+  blue:    'from-blue-500 to-blue-700 shadow-blue-500/20',
   amber:   'from-amber-500 to-amber-700 shadow-amber-500/20',
   purple:  'from-purple-500 to-purple-700 shadow-purple-500/20',
   emerald: 'from-emerald-500 to-emerald-700 shadow-emerald-500/20',
   red:     'from-red-500 to-red-700 shadow-red-500/20',
   cyan:    'from-cyan-500 to-cyan-700 shadow-cyan-500/20',
-  slate:   'from-stone-500 to-stone-700 shadow-stone-500/20',
-  indigo:  'from-teal-500 to-teal-700 shadow-teal-500/20',
+  slate:   'from-slate-500 to-slate-700 shadow-slate-500/20',
+  indigo:  'from-blue-500 to-blue-700 shadow-blue-500/20',
 }
 
 function PageHeader({ icon: Icon, iconColor = 'blue', title, subtitle, actions, children, className }) {

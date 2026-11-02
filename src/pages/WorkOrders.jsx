@@ -113,8 +113,8 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
 
   // Status-based gradient for the circle
   const statusGradients = {
-    pending:     'from-stone-400 to-stone-500',
-    approved:    'from-teal-500 to-teal-600',
+    pending:     'from-slate-400 to-slate-500',
+    approved:    'from-blue-500 to-blue-600',
     scheduled:   'from-amber-400 to-amber-500',
     in_progress: 'from-purple-500 to-purple-600',
     completed:   'from-emerald-500 to-emerald-600',
@@ -124,8 +124,8 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
 
   // Status dot colors
   const statusDotColors = {
-    pending:     'bg-stone-400',
-    approved:    'bg-teal-500',
+    pending:     'bg-slate-400',
+    approved:    'bg-blue-500',
     scheduled:   'bg-amber-500',
     in_progress: 'bg-purple-500',
     completed:   'bg-emerald-500',
@@ -135,8 +135,8 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
 
   // Status text colors
   const statusTextColors = {
-    pending:     'text-stone-600',
-    approved:    'text-teal-700',
+    pending:     'text-slate-600',
+    approved:    'text-blue-700',
     scheduled:   'text-amber-700',
     in_progress: 'text-purple-700',
     completed:   'text-emerald-700',
@@ -146,8 +146,8 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
 
   // Priority accent bar colors
   const priorityBarColors = {
-    low:    'bg-stone-300',
-    medium: 'bg-teal-400',
+    low:    'bg-slate-300',
+    medium: 'bg-blue-400',
     high:   'bg-amber-500',
     urgent: 'bg-red-500',
   };
@@ -160,7 +160,7 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
   const titleInitial = (order.title || '?').charAt(0);
 
   return (
-    <div className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer overflow-hidden"
+    <div className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
       onClick={() => onEdit(order)}
     >
       {/* Priority accent bar at top */}
@@ -232,7 +232,7 @@ function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvan
 
         {/* Progress bar + rating row */}
         <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-1 rounded-full bg-stone-100 overflow-hidden">
+          <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
             <div className={`h-full rounded-full ${dotColor}`} style={{ width: progressPct + '%' }} />
           </div>
           {order.rating && (

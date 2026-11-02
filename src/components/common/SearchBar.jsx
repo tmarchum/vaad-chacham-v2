@@ -52,7 +52,7 @@ function SearchBar({ value, onChange, placeholder = 'חיפוש...', className }
           'transition-all duration-200',
           focused
             ? 'border-[var(--primary)] shadow-[0_0_0_3px_rgba(59,130,246,0.08)]'
-            : 'border-[var(--border)] hover:border-stone-300'
+            : 'border-[var(--border)] hover:border-slate-300'
         )}
       />
       {internal && (

@@ -482,7 +482,7 @@ export default function CollectionCases() {
             <p className="text-[var(--text-muted)]">
               {statusFilter === 'open' ? 'אין תיקי גבייה פתוחים 🎉' : 'אין תיקים'}
             </p>
-            <button onClick={openCreate} className="mt-3 text-sm text-teal-600 underline hover:text-teal-800">
+            <button onClick={openCreate} className="mt-3 text-sm text-blue-600 underline hover:text-blue-800">
               פתח תיק חדש
             </button>
           </CardContent>
@@ -614,7 +614,7 @@ export default function CollectionCases() {
                   {c.status !== 'closed' && (
                     <button
                       onClick={(e) => openPayment(e, c)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 transition-all"
                     >
                       <DollarSign className="h-3.5 w-3.5" />
                       תשלום
@@ -787,7 +787,7 @@ export default function CollectionCases() {
             <DialogTitle>תיעוד תשלום</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <div className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-3 text-sm text-teal-800">
+            <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
               חוב נוכחי: <strong>{formatCurrency(payDialog?.total_debt || 0)}</strong>
             </div>
             <FormField

@@ -3,16 +3,17 @@
 const KEY = 'vc_theme'
 
 export const THEMES = [
-  { id: 'bright', label: 'הבהירה', description: 'נייר חם, טורקיז-אמרלד' },
-  { id: 'dark', label: 'הכהה', description: 'משטחים כהים, אותו מותג' },
+  { id: 'classic', label: 'הכחולה', description: 'כחול מלכותי, חד ומדויק' },
+  { id: 'bright', label: 'הבהירה', description: 'נייר חם ומעוגל' },
+  { id: 'dark', label: 'הכהה', description: 'משטחים כהים' },
 ]
 
 export function getTheme() {
   try {
     const t = localStorage.getItem(KEY)
-    return THEMES.some((x) => x.id === t) ? t : 'bright'
+    return THEMES.some((x) => x.id === t) ? t : 'classic'
   } catch {
-    return 'bright'
+    return 'classic'
   }
 }
 

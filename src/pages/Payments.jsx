@@ -588,7 +588,7 @@ function Payments() {
                   partial: 'from-amber-400 to-amber-500',
                   pending: 'from-amber-400 to-amber-500',
                   overdue: 'from-red-500 to-red-600',
-                  unpaid: 'from-stone-400 to-stone-500',
+                  unpaid: 'from-slate-400 to-slate-500',
                 }
                 const circleGradient = gradientMap[p.status] || gradientMap.pending
 
@@ -618,14 +618,14 @@ function Payments() {
                   partial: 'bg-amber-500',
                   pending: 'bg-amber-400',
                   overdue: 'bg-red-500',
-                  unpaid: 'bg-stone-300',
+                  unpaid: 'bg-slate-300',
                 }
                 const barColor = barColorMap[p.status] || barColorMap.pending
 
                 return (
                   <div
                     key={p.id}
-                    className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all ${
+                    className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all ${
                       isVirtual ? 'opacity-60 border-dashed border-[var(--border)]' : 'border-[var(--border)] cursor-pointer'
                     }`}
                     onClick={() => !isVirtual && setDetailPayment(p)}
@@ -656,7 +656,7 @@ function Payments() {
                         {isVirtual ? formatCurrency(0) : formatCurrency(paid)}
                       </div>
                       <div className="text-[11px] text-[var(--text-muted)]">מתוך {formatCurrency(fee)}</div>
-                      <div className="h-1 w-full rounded-full bg-stone-100 mt-1 overflow-hidden">
+                      <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
                         <div
                           className={`h-full rounded-full ${barColor}`}
                           style={{ width: (isVirtual ? 0 : pctPaid) + '%' }}

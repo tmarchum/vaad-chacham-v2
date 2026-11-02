@@ -300,8 +300,8 @@ function Expenses() {
           {filtered.map((exp) => {
             const cat = resolveCategory(exp.category)
             const gradient = cat
-              ? (CATEGORY_GRADIENTS[cat.color] || 'from-stone-500 to-stone-600')
-              : 'from-stone-400 to-stone-500'
+              ? (CATEGORY_GRADIENTS[cat.color] || 'from-slate-500 to-slate-600')
+              : 'from-slate-400 to-slate-500'
             const categoryIcon = cat?.icon || '📋'
             const categoryLabel = cat?.label || exp.category || ''
             const categoryBg = cat ? (CATEGORY_BG_COLORS[cat.color] || '') : ''
@@ -309,7 +309,7 @@ function Expenses() {
             return (
               <div
                 key={exp.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
                 onClick={() => setDetailExpense(exp)}
               >
                 {/* Category gradient circle */}
@@ -347,7 +347,7 @@ function Expenses() {
 
                 {/* Category chip */}
                 {categoryLabel && (
-                  <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-md border ${categoryBg || 'bg-stone-50 text-stone-700 border-stone-200'}`}>
+                  <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-md border ${categoryBg || 'bg-slate-50 text-slate-700 border-slate-200'}`}>
                     {categoryLabel}
                   </span>
                 )}

@@ -19,7 +19,7 @@ import {
 // ── Slot definitions ─────────────────────────────────────────────
 const SLOT_GRADIENTS = {
   amber:  'from-amber-500 to-amber-600',
-  indigo: 'from-teal-500 to-teal-600',
+  indigo: 'from-blue-500 to-blue-600',
   purple: 'from-purple-500 to-purple-600',
 }
 
@@ -37,7 +37,7 @@ const STATUS_CONFIG = {
   pending:   { label: 'ממתין לאישור', dot: 'bg-amber-500',   text: 'text-amber-700',   bg: 'bg-amber-50 border-amber-200 text-amber-700' },
   approved:  { label: 'מאושר',       dot: 'bg-emerald-500',  text: 'text-emerald-700',  bg: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
   rejected:  { label: 'נדחה',        dot: 'bg-red-500',      text: 'text-red-600',      bg: 'bg-red-50 border-red-200 text-red-600' },
-  cancelled: { label: 'בוטל',        dot: 'bg-stone-400',    text: 'text-stone-600',    bg: 'bg-stone-50 border-stone-200 text-stone-600' },
+  cancelled: { label: 'בוטל',        dot: 'bg-slate-400',    text: 'text-slate-600',    bg: 'bg-slate-50 border-slate-200 text-slate-600' },
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -644,7 +644,7 @@ export default function RoomBooking() {
               { label: 'ממתינים לאישור', value: stats.pending, icon: Clock, gradient: 'from-amber-500 to-amber-600', color: 'text-amber-600' },
               { label: 'מאושרים', value: stats.approved, icon: CheckCircle2, gradient: 'from-emerald-500 to-emerald-600', color: 'text-emerald-600' },
               { label: 'שריונים החודש', value: stats.monthCount, icon: CalendarDays, gradient: 'from-violet-500 to-violet-600', color: 'text-violet-600' },
-              { label: 'הכנסות החודש', value: formatCurrency(stats.revenue), icon: CreditCard, gradient: 'from-teal-500 to-teal-600', color: 'text-teal-600' },
+              { label: 'הכנסות החודש', value: formatCurrency(stats.revenue), icon: CreditCard, gradient: 'from-blue-500 to-blue-600', color: 'text-blue-600' },
             ].map((s, i) => (
               <Card key={i} className="border-0 shadow-sm">
                 <CardContent className="p-4">
@@ -673,12 +673,12 @@ export default function RoomBooking() {
           <div className="bg-white rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden">
             <div className="grid grid-cols-7 border-b border-[var(--border)]">
               {WEEKDAYS.map((d, i) => (
-                <div key={d} className={`text-center py-2.5 text-xs font-bold ${i === 6 ? 'text-teal-600 bg-teal-50/50' : 'text-[var(--text-secondary)]'}`}>{d}</div>
+                <div key={d} className={`text-center py-2.5 text-xs font-bold ${i === 6 ? 'text-blue-600 bg-blue-50/50' : 'text-[var(--text-secondary)]'}`}>{d}</div>
               ))}
             </div>
             <div className="grid grid-cols-7">
               {calendarDays.map((day, i) => {
-                if (!day) return <div key={`e${i}`} className="min-h-[90px] border-b border-l border-[var(--border)] bg-stone-50/50" />
+                if (!day) return <div key={`e${i}`} className="min-h-[90px] border-b border-l border-[var(--border)] bg-slate-50/50" />
                 const isToday = isSameDay(day.date, new Date())
                 const canBook = !day.isPast && !day.isBlocked && !day.isTooFar && !day.hasFullDay
                 const holidayName = day.holidays[0]?.hebrew
@@ -689,29 +689,29 @@ export default function RoomBooking() {
                     key={day.dk} onClick={() => canBook && handleOpenBooking(day)}
                     className={`min-h-[90px] border-b border-l border-[var(--border)] p-1.5 transition-all relative ${
                       day.isBlocked ? 'bg-red-50/60 cursor-not-allowed'
-                      : day.isPast || day.isTooFar ? 'bg-stone-50/50 cursor-not-allowed opacity-60'
-                      : day.isShabbatOrChag ? 'bg-teal-50/40 cursor-pointer hover:bg-teal-50'
+                      : day.isPast || day.isTooFar ? 'bg-slate-50/50 cursor-not-allowed opacity-60'
+                      : day.isShabbatOrChag ? 'bg-blue-50/40 cursor-pointer hover:bg-blue-50'
                       : canBook ? 'bg-white cursor-pointer hover:bg-violet-50/40' : 'bg-amber-50/30'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className={`text-sm font-bold leading-none ${
                         isToday ? 'bg-violet-600 text-white w-7 h-7 rounded-full flex items-center justify-center'
-                        : day.isSaturday ? 'text-teal-600' : 'text-[var(--text-primary)]'
+                        : day.isSaturday ? 'text-blue-600' : 'text-[var(--text-primary)]'
                       }`}>{day.day}</span>
                       {day.isBlocked && <Ban className="h-3.5 w-3.5 text-red-400" />}
                     </div>
                     {holidayName && (
-                      <p className={`text-[9px] leading-tight truncate mb-1 ${day.isYomTov ? 'text-teal-700 font-bold' : 'text-teal-500'}`}>
+                      <p className={`text-[9px] leading-tight truncate mb-1 ${day.isYomTov ? 'text-blue-700 font-bold' : 'text-blue-500'}`}>
                         {day.isYomTov && <Star className="h-2.5 w-2.5 inline ml-0.5" />}{holidayName}
                       </p>
                     )}
-                    {day.isSaturday && !holidayName && <p className="text-[9px] text-teal-500 mb-1">שבת</p>}
+                    {day.isSaturday && !holidayName && <p className="text-[9px] text-blue-500 mb-1">שבת</p>}
 
                     <div className="flex flex-wrap gap-0.5 mt-auto">
                       {day.hasFullDay && <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">יממה 24שע</span>}
                       {!day.hasFullDay && day.hasMorning && <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">08-14</span>}
-                      {!day.hasFullDay && day.hasEvening && <span className="text-[8px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 font-medium">16-23</span>}
+                      {!day.hasFullDay && day.hasEvening && <span className="text-[8px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">16-23</span>}
                       {pendingBookings.length > 0 && <span className="text-[8px] px-1 py-0.5 rounded bg-amber-50 text-amber-600">
                         <Clock className="h-2.5 w-2.5 inline" />
                       </span>}
@@ -726,9 +726,9 @@ export default function RoomBooking() {
           <div className="flex flex-wrap gap-4 text-xs text-[var(--text-secondary)]">
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-[var(--border)]" /> פנוי</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100" /> בוקר 08:00-14:00</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-teal-100" /> ערב 16:00-23:00</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-100" /> ערב 16:00-23:00</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-100" /> יממה 24 שעות</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-teal-50 border border-teal-200" /> שבת / חג</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-50 border border-blue-200" /> שבת / חג</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-50 border border-red-200" /> חסום</span>
             <span className="flex items-center gap-1.5"><Clock className="h-3 w-3 text-amber-500" /> ממתין לאישור</span>
           </div>
@@ -783,7 +783,7 @@ export default function RoomBooking() {
             if (historyList.length === 0) return null
             return (
               <div className="space-y-2">
-                <h3 className="text-sm font-bold text-stone-500 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-500 flex items-center gap-2">
                   <List className="h-4 w-4" /> היסטוריה ({historyList.length})
                 </h3>
                 {historyList.map(bk => (
@@ -887,7 +887,7 @@ export default function RoomBooking() {
                         key={key} disabled={!available}
                         onClick={() => setBookingForm(f => ({ ...f, slot: key }))}
                         className={`p-3 rounded-xl border-2 text-center transition-all ${
-                          !available ? 'border-stone-200 bg-stone-50 text-stone-400 cursor-not-allowed'
+                          !available ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
                           : isSelected ? 'border-violet-400 bg-violet-50 text-violet-800 shadow-sm'
                           : 'border-[var(--border)] hover:border-violet-200'
                         }`}
@@ -895,7 +895,7 @@ export default function RoomBooking() {
                         <SlotIcon className={`h-5 w-5 mx-auto mb-1 ${isSelected ? 'text-violet-600' : ''}`} />
                         <p className="text-xs font-medium">{slot.short}</p>
                         <p className="text-[10px] mt-0.5">{formatCurrency(getSlotPrice(key))}</p>
-                        {isFullDayRestricted && <p className="text-[9px] text-teal-400">שבת/חג בלבד</p>}
+                        {isFullDayRestricted && <p className="text-[9px] text-blue-400">שבת/חג בלבד</p>}
                         {!available && !isFullDayRestricted && <p className="text-[9px] text-red-400">תפוס</p>}
                       </button>
                     )
@@ -950,7 +950,7 @@ export default function RoomBooking() {
                   </div>
                 </>
               ) : bookingForm.unitId && (
-                <div className="p-3 rounded-xl bg-stone-50 border border-[var(--border)] text-sm">
+                <div className="p-3 rounded-xl bg-slate-50 border border-[var(--border)] text-sm">
                   <p className="font-medium">{bookingForm.bookerName}</p>
                   <div className="flex gap-4 text-xs text-[var(--text-muted)] mt-1">
                     {bookingForm.bookerPhone && <span>{bookingForm.bookerPhone}</span>}
@@ -961,8 +961,8 @@ export default function RoomBooking() {
 
               {/* Custom questions */}
               {(selectedResource?.custom_questions || []).length > 0 && (
-                <div className="space-y-3 p-3 rounded-xl bg-teal-50/50 border border-teal-100">
-                  <p className="text-xs font-bold text-teal-700 flex items-center gap-1"><HelpCircle className="h-3.5 w-3.5" />שאלות נוספות</p>
+                <div className="space-y-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                  <p className="text-xs font-bold text-blue-700 flex items-center gap-1"><HelpCircle className="h-3.5 w-3.5" />שאלות נוספות</p>
                   {(selectedResource.custom_questions || []).map(q => (
                     <div key={q.id}>
                       {q.type === 'boolean' ? (
@@ -988,7 +988,7 @@ export default function RoomBooking() {
 
               {/* Rental terms agreement */}
               {selectedResource?.rental_terms && (
-                <div className="space-y-2 p-3 rounded-xl bg-stone-50 border border-[var(--border)]">
+                <div className="space-y-2 p-3 rounded-xl bg-slate-50 border border-[var(--border)]">
                   <p className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-1"><FileText className="h-3.5 w-3.5" />תנאי השכרה</p>
                   <div className="text-xs text-[var(--text-muted)] whitespace-pre-wrap max-h-32 overflow-y-auto leading-relaxed">
                     {selectedResource.rental_terms}
@@ -1076,15 +1076,15 @@ export default function RoomBooking() {
             />
 
             {/* Custom questions */}
-            <div className="space-y-3 p-3 rounded-xl bg-teal-50/50 border border-teal-100">
-              <p className="text-sm font-bold text-teal-700 flex items-center gap-1">
+            <div className="space-y-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+              <p className="text-sm font-bold text-blue-700 flex items-center gap-1">
                 <HelpCircle className="h-4 w-4" />שאלות בטופס השריון
               </p>
               {(resourceForm.custom_questions || []).map((q, idx) => (
-                <div key={q.id} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-teal-100">
-                  <span className="text-xs text-teal-600 font-bold w-5">{idx + 1}.</span>
+                <div key={q.id} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-blue-100">
+                  <span className="text-xs text-blue-600 font-bold w-5">{idx + 1}.</span>
                   <span className="flex-1 text-sm">{q.text}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-50 text-teal-600">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
                     {q.type === 'text' ? 'טקסט' : q.type === 'number' ? 'מספר' : 'כן/לא'}
                   </span>
                   <button onClick={() => removeQuestion(q.id)} className="text-red-400 hover:text-red-600"><XIcon className="h-3.5 w-3.5" /></button>
@@ -1189,7 +1189,7 @@ function BookingCard({ bk, resource, residentMap, onApprove, onReject, onCancel,
       bk.status === 'cancelled' || bk.status === 'rejected' ? 'opacity-60' : ''
     }`}>
       <div className="flex items-center gap-4">
-        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${SLOT_GRADIENTS[slotInfo.color] || 'from-stone-500 to-stone-600'} flex items-center justify-center text-white shadow-sm shrink-0`}>
+        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${SLOT_GRADIENTS[slotInfo.color] || 'from-slate-500 to-slate-600'} flex items-center justify-center text-white shadow-sm shrink-0`}>
           <SlotIcon className="h-5 w-5" />
         </div>
 
@@ -1222,7 +1222,7 @@ function BookingCard({ bk, resource, residentMap, onApprove, onReject, onCancel,
       {questions.length > 0 && Object.keys(answers).length > 0 && (
         <div className="flex flex-wrap gap-2 pr-15">
           {questions.map(q => answers[q.id] != null && answers[q.id] !== '' ? (
-            <span key={q.id} className="text-[11px] px-2 py-0.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-100">
+            <span key={q.id} className="text-[11px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
               {q.text}: <strong>{typeof answers[q.id] === 'boolean' ? (answers[q.id] ? 'כן' : 'לא') : answers[q.id]}</strong>
             </span>
           ) : null)}

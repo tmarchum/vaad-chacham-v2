@@ -87,7 +87,7 @@ export default function Supervisors() {
             const wa = waLink(s.phone, `שלום ${s.name}, מדובר בוועד הבית.`)
             return (
               <Card key={s.id} className={`border ${s.is_active === false ? 'opacity-60' : ''}`}>
-                <div className="h-1 bg-gradient-to-r from-teal-500 to-emerald-600" />
+                <div className="h-1 bg-gradient-to-r from-blue-500 to-emerald-600" />
                 <CardContent className="pt-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">

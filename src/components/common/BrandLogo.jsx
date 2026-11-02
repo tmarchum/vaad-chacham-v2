@@ -5,13 +5,13 @@ export function BrandLogo({ className = 'w-10 h-10' }) {
     <svg viewBox="0 0 64 64" className={className} role="img" aria-label="ועדלי">
       <defs>
         <linearGradient id="vaadly-g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#14b8a6" />
-          <stop offset="1" stopColor="#115e59" />
+          <stop offset="0" stopColor="#3b82f6" />
+          <stop offset="1" stopColor="#1e40af" />
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="14" fill="url(#vaadly-g)" />
       <rect x="17" y="15" width="24" height="35" rx="3" fill="#ffffff" />
-      <g fill="#0f766e">
+      <g fill="#2563eb">
         <rect x="21.5" y="20" width="5" height="5" rx="1" />
         <rect x="31.5" y="20" width="5" height="5" rx="1" />
         <rect x="21.5" y="29" width="5" height="5" rx="1" />
