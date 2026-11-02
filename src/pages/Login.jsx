@@ -23,7 +23,7 @@ export default function Login() {
 
       <div className="relative bg-white rounded-2xl shadow-2xl shadow-black/20 p-10 w-full max-w-[380px] text-center space-y-8">
         {/* Accent gradient line */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-blue-600 via-blue-500 to-emerald-600 rounded-t-2xl" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-blue-700 via-blue-500 to-blue-400 rounded-t-2xl" />
 
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 pt-2">
