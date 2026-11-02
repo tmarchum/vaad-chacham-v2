@@ -99,10 +99,10 @@ function DocStatCard({ label, value, icon: Icon, gradient }) {
 const DOC_TYPE_GRADIENTS = {
   insurance:  'from-sky-500 to-sky-600',
   protocol:   'from-violet-500 to-violet-600',
-  bylaws:     'from-indigo-500 to-indigo-600',
+  bylaws:     'from-teal-500 to-teal-600',
   inspection: 'from-amber-500 to-amber-600',
-  contract:   'from-indigo-500 to-indigo-600',
-  other:      'from-slate-500 to-slate-600',
+  contract:   'from-teal-500 to-teal-600',
+  other:      'from-stone-500 to-stone-600',
 }
 
 function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
@@ -124,7 +124,7 @@ function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
 
   return (
     <div
-      className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer overflow-hidden"
+      className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer overflow-hidden"
       onClick={() => onView(doc)}
     >
       {/* Gradient top accent */}
@@ -143,7 +143,7 @@ function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
 
         {/* Category badge */}
         {doc.category && (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-stone-100 text-stone-700">
             {doc.category}
           </span>
         )}
@@ -222,7 +222,7 @@ function DocumentListRow({ doc, onEdit, onDelete, onView }) {
 
   return (
     <div
-      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer"
+      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer"
       onClick={() => onView(doc)}
     >
       {/* Gradient type circle */}
@@ -237,7 +237,7 @@ function DocumentListRow({ doc, onEdit, onDelete, onView }) {
             {doc.title}
           </span>
           {doc.category && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 shrink-0">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-stone-100 text-stone-600 shrink-0">
               {doc.category}
             </span>
           )}
@@ -515,10 +515,10 @@ export default function Documents() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <DocStatCard label="סה״כ מסמכים" value={summary.total} icon={FolderOpen} gradient="from-indigo-500 to-indigo-600" />
+        <DocStatCard label="סה״כ מסמכים" value={summary.total} icon={FolderOpen} gradient="from-teal-500 to-teal-600" />
         <DocStatCard label="פגים בעוד 30 יום" value={summary.expiringSoon} icon={AlertTriangle} gradient="from-amber-400 to-amber-500" />
         <DocStatCard label="פג תוקף" value={summary.expired} icon={AlertTriangle} gradient="from-red-500 to-red-600" />
-        <DocStatCard label="קטגוריות" value={summary.categories} icon={LayoutGrid} gradient="from-indigo-500 to-indigo-600" />
+        <DocStatCard label="קטגוריות" value={summary.categories} icon={LayoutGrid} gradient="from-teal-500 to-teal-600" />
       </div>
 
       {/* Search + view toggle */}

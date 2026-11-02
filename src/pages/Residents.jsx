@@ -235,7 +235,7 @@ function Residents() {
                   onClick={() => toggleUnit(unit.id)}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm shadow-sm shrink-0">
                       {getUnitNumber(unit)}
                     </div>
                     <div>

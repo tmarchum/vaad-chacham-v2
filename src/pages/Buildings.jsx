@@ -318,16 +318,16 @@ function Buildings() {
             return (
               <div
                 key={b.id}
-                className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer overflow-hidden"
+                className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer overflow-hidden"
                 onClick={() => setDetailBuilding(b)}
               >
                 {/* Top gradient accent bar */}
-                <div className="h-1 w-full bg-gradient-to-l from-indigo-500 to-indigo-600" />
+                <div className="h-1 w-full bg-gradient-to-l from-teal-500 to-teal-600" />
 
                 <div className="p-5">
                   <div className="flex items-start gap-4 mb-4">
                     {/* Building gradient circle */}
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-sm">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-sm">
                       {initial}
                     </div>
 
@@ -351,12 +351,12 @@ function Buildings() {
                   {/* Stats row */}
                   <div className="flex flex-wrap gap-3 text-xs">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                      <div className="w-2 h-2 rounded-full bg-teal-500" />
                       <span className="text-[var(--text-secondary)]">{unitCount} דירות</span>
                     </div>
                     {b.floors && (
                       <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-slate-400" />
+                        <div className="w-2 h-2 rounded-full bg-stone-400" />
                         <span className="text-[var(--text-secondary)]">{b.floors} קומות</span>
                       </div>
                     )}

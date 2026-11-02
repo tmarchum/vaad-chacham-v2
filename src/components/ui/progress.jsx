@@ -12,7 +12,7 @@ const Progress = forwardRef(({ value = 0, color, className, ...props }, ref) => 
       aria-valuemin={0}
       aria-valuemax={100}
       className={cn(
-        'h-2 w-full overflow-hidden rounded-full bg-slate-100',
+        'h-2 w-full overflow-hidden rounded-full bg-stone-100',
         className
       )}
       {...props}

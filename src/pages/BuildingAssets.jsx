@@ -383,13 +383,13 @@ function BuildingAssets() {
 
             // Gradient colors based on category
             const categoryGradientMap = {
-              'מעלית': 'from-indigo-500 to-indigo-600',
+              'מעלית': 'from-teal-500 to-teal-600',
               'אינסטלציה': 'from-cyan-500 to-cyan-600',
               'חשמל': 'from-amber-400 to-amber-500',
               'בטיחות': 'from-red-500 to-red-600',
               'מיזוג': 'from-sky-400 to-sky-500',
               'גנרטור': 'from-emerald-500 to-emerald-600',
-              'אחר': 'from-slate-400 to-slate-500',
+              'אחר': 'from-stone-400 to-stone-500',
             }
             const circleGradient = categoryGradientMap[item.category] || categoryGradientMap['אחר']
 
@@ -398,7 +398,7 @@ function BuildingAssets() {
               ok: 'bg-emerald-500',
               soon: 'bg-amber-500',
               overdue: 'bg-red-500',
-              unknown: 'bg-slate-400',
+              unknown: 'bg-stone-400',
             }
             const dotColor = dotColorMap[serviceStatus.key] || dotColorMap.unknown
 
@@ -406,14 +406,14 @@ function BuildingAssets() {
               ok: 'text-emerald-700',
               soon: 'text-amber-700',
               overdue: 'text-red-700',
-              unknown: 'text-slate-500',
+              unknown: 'text-stone-500',
             }
             const statusTextColor = textColorMap[serviceStatus.key] || textColorMap.unknown
 
             return (
               <div
                 key={item.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)]"
+                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer border-[var(--border)]"
                 onClick={() => setDetailItem(item)}
               >
                 {/* Category circle */}

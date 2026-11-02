@@ -693,13 +693,13 @@ function Units() {
             const owners = unitType === 'rented'
               ? unitResidents.filter(r => (r.resident_type || r.residentType) === 'owner')
               : []
-            const unitGradient = unitType === 'rented' ? 'from-cyan-500 to-cyan-600' : 'from-indigo-500 to-indigo-600'
+            const unitGradient = unitType === 'rented' ? 'from-cyan-500 to-cyan-600' : 'from-teal-500 to-teal-600'
             const unitNumber = u.number || u.unit_number
 
             return (
               <Card
                 key={u.id}
-                className="group cursor-pointer overflow-hidden border border-[var(--border)] hover:shadow-lg hover:border-indigo-200 transition-all bg-white"
+                className="group cursor-pointer overflow-hidden border border-[var(--border)] hover:shadow-lg hover:border-teal-200 transition-all bg-white"
                 onClick={() => setDetailUnit(u)}
               >
                 {/* Gradient accent bar */}
@@ -738,7 +738,7 @@ function Units() {
                     </div>
                     {/* Edit icon on hover */}
                     <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0" onClick={e => { e.stopPropagation(); openEdit(u) }}>
-                      <div className="w-8 h-8 rounded-lg border border-[var(--border)] flex items-center justify-center hover:bg-slate-50 cursor-pointer">
+                      <div className="w-8 h-8 rounded-lg border border-[var(--border)] flex items-center justify-center hover:bg-stone-50 cursor-pointer">
                         <Pencil className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                       </div>
                     </div>
@@ -755,17 +755,17 @@ function Units() {
                       <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">טרם אושרו</span>
                     )}
                     {u.floor != null && (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium">
                         קומה {u.floor}
                       </span>
                     )}
                     {u.rooms != null && (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium">
                         {u.rooms} חד׳
                       </span>
                     )}
                     {u.area > 0 && (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium">
                         {u.area} מ"ר
                       </span>
                     )}
@@ -932,19 +932,19 @@ function Units() {
                     {archived
                       .sort((a, b) => (b.move_out_date || '').localeCompare(a.move_out_date || ''))
                       .map(r => (
-                      <div key={r.id} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-sm">
+                      <div key={r.id} className="p-2.5 rounded-lg bg-stone-50 border border-stone-200 text-sm">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-slate-700">{fullName(r)}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">
+                          <span className="font-medium text-stone-700">{fullName(r)}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200 text-stone-600">
                             {(r.resident_type || r.residentType) === 'tenant' ? 'שוכר' : 'בעלים'}
                           </span>
                         </div>
-                        <div className="flex gap-3 mt-1 text-xs text-slate-500">
+                        <div className="flex gap-3 mt-1 text-xs text-stone-500">
                           {r.move_in_date && <span>כניסה: {new Date(r.move_in_date).toLocaleDateString('he-IL')}</span>}
                           {r.move_out_date && <span>יציאה: {new Date(r.move_out_date).toLocaleDateString('he-IL')}</span>}
                         </div>
-                        {r.phone && <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</div>}
-                        {r.email && <div className="text-xs text-slate-500">{r.email}</div>}
+                        {r.phone && <div className="text-xs text-stone-500 mt-0.5 flex items-center gap-1"><Phone className="h-3 w-3" />{r.phone}</div>}
+                        {r.email && <div className="text-xs text-stone-500">{r.email}</div>}
                       </div>
                     ))}
                   </div>
@@ -1010,7 +1010,7 @@ function Units() {
                 {/* Move-out date */}
                 <div>
                   <label className="block text-sm font-medium mb-1.5 flex items-center gap-1.5">
-                    <CalendarDays className="h-4 w-4 text-slate-500" />
+                    <CalendarDays className="h-4 w-4 text-stone-500" />
                     תאריך יציאה
                   </label>
                   <input
@@ -1031,13 +1031,13 @@ function Units() {
                         'flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer',
                         archiveSelection[r.id]
                           ? 'bg-amber-50 border-amber-200'
-                          : 'bg-white border-[var(--border)] hover:border-slate-300'
+                          : 'bg-white border-[var(--border)] hover:border-stone-300'
                       )}>
                         <input
                           type="checkbox"
                           checked={!!archiveSelection[r.id]}
                           onChange={e => setArchiveSelection(prev => ({ ...prev, [r.id]: e.target.checked }))}
-                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                          className="rounded border-stone-300 text-amber-600 focus:ring-amber-500"
                         />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
@@ -1053,7 +1053,7 @@ function Units() {
                               </span>
                             )}
                           </div>
-                          {r.phone && <span className="text-xs text-slate-500">{r.phone}</span>}
+                          {r.phone && <span className="text-xs text-stone-500">{r.phone}</span>}
                         </div>
                       </label>
                     )

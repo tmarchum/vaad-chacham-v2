@@ -145,7 +145,7 @@ const STATUS_VARIANTS = { open: 'default', in_progress: 'warning', completed: 's
 function StepProgress({ currentStep }) {
   return (
     <div className="relative rounded-xl border bg-white overflow-hidden mb-6">
-      <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-indigo-500" />
+      <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-teal-500" />
       <div className="flex items-center justify-between p-4 overflow-x-auto">
         {WORKFLOW_STAGES.map((stage, idx) => {
           const done = idx < currentStep
@@ -160,8 +160,8 @@ function StepProgress({ currentStep }) {
                     done
                       ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
                       : active
-                        ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white'
-                        : 'bg-slate-100 text-[var(--text-secondary)]',
+                        ? 'bg-gradient-to-br from-teal-500 to-teal-600 text-white'
+                        : 'bg-stone-100 text-[var(--text-secondary)]',
                   ].join(' ')}
                 >
                   {done ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
@@ -169,7 +169,7 @@ function StepProgress({ currentStep }) {
                 <span
                   className={[
                     'text-[10px] text-center max-w-[56px] leading-tight',
-                    active ? 'text-indigo-600 font-semibold' : done ? 'text-emerald-600 font-medium' : 'text-[var(--text-secondary)]',
+                    active ? 'text-teal-600 font-semibold' : done ? 'text-emerald-600 font-medium' : 'text-[var(--text-secondary)]',
                   ].join(' ')}
                 >
                   {stage.label}
@@ -179,7 +179,7 @@ function StepProgress({ currentStep }) {
                 <div
                   className={[
                     'h-0.5 w-6 sm:w-10 mx-1 mb-5 shrink-0 rounded-full',
-                    done ? 'bg-emerald-500' : 'bg-slate-200',
+                    done ? 'bg-emerald-500' : 'bg-stone-200',
                   ].join(' ')}
                 />
               )}
@@ -240,10 +240,10 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
     <div className="space-y-4">
       {/* Issue summary */}
       <div className="relative rounded-xl border bg-white overflow-hidden">
-        <div className={`h-1.5 w-full bg-gradient-to-r ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-indigo-500 to-indigo-600'}`} />
+        <div className={`h-1.5 w-full bg-gradient-to-r ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-teal-500 to-teal-600'}`} />
         <div className="p-4">
           <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-indigo-500 to-indigo-600'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
+            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-teal-500 to-teal-600'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
               <Wrench className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
@@ -266,7 +266,7 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
 
       {/* Directory links */}
       <div className="relative rounded-xl border bg-white overflow-hidden">
-        <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-indigo-500" />
+        <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-teal-500" />
         <div className="p-4">
           <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">חפש ספקים בספריות ישראליות</p>
           <div className="flex flex-wrap gap-2">
@@ -373,16 +373,16 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
       {/* Selected vendors list */}
       {pendingVendors.length > 0 && (
         <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-indigo-500" />
+          <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-teal-500" />
           <div className="p-4">
             <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">ספקים שנבחרו ({pendingVendors.length})</p>
             <div className="space-y-2">
               {pendingVendors.map((v, idx) => {
-                const vGradients = ['from-cyan-500 to-cyan-600', 'from-indigo-500 to-indigo-600', 'from-indigo-500 to-indigo-600', 'from-purple-500 to-purple-600', 'from-teal-500 to-teal-600']
+                const vGradients = ['from-cyan-500 to-cyan-600', 'from-teal-500 to-teal-600', 'from-teal-500 to-teal-600', 'from-purple-500 to-purple-600', 'from-teal-500 to-teal-600']
                 const vGradient = vGradients[idx % vGradients.length]
                 const initials = v.name.split(' ').map(w => w[0]).slice(0, 2).join('')
                 return (
-                  <div key={v.id} className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-white hover:shadow-sm hover:border-indigo-200 transition-all">
+                  <div key={v.id} className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-white hover:shadow-sm hover:border-teal-200 transition-all">
                     <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${vGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
                       {initials}
                     </div>
@@ -618,7 +618,7 @@ function StepQuotes({ issue, pendingVendors, quotesCollection, localQuotes, setL
                   <label
                     key={q.id}
                     className={`flex items-center gap-3 cursor-pointer rounded-xl border p-3 transition-all hover:shadow-sm ${
-                      isSelected ? 'border-indigo-300 bg-indigo-50/50 shadow-sm' : 'border-[var(--border)] bg-white hover:border-indigo-200'
+                      isSelected ? 'border-teal-300 bg-teal-50/50 shadow-sm' : 'border-[var(--border)] bg-white hover:border-teal-200'
                     }`}
                   >
                     <input
@@ -629,7 +629,7 @@ function StepQuotes({ issue, pendingVendors, quotesCollection, localQuotes, setL
                       onChange={() => setSelectedQuoteId(q.id)}
                       className="accent-[var(--primary)]"
                     />
-                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${isCheapest ? 'from-emerald-500 to-emerald-600' : 'from-indigo-500 to-indigo-600'} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
+                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${isCheapest ? 'from-emerald-500 to-emerald-600' : 'from-teal-500 to-teal-600'} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
                       {isCheapest ? <Award className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -639,7 +639,7 @@ function StepQuotes({ issue, pendingVendors, quotesCollection, localQuotes, setL
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className={`w-2 h-2 rounded-full ${isCheapest ? 'bg-emerald-500' : 'bg-indigo-400'}`} />
+                      <div className={`w-2 h-2 rounded-full ${isCheapest ? 'bg-emerald-500' : 'bg-teal-400'}`} />
                       <span className="text-[15px] font-bold text-[var(--primary)]">{formatCurrency(q.amount)}</span>
                     </div>
                   </label>
@@ -1108,13 +1108,13 @@ export default function VendorFinder() {
                 />
               ) : (
                 openIssues.map((issue) => {
-                  const issueGradient = issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : issue.priority === 'medium' ? 'from-indigo-500 to-indigo-600' : 'from-slate-400 to-slate-500'
-                  const issueDot = issue.priority === 'urgent' ? 'bg-red-500 animate-pulse' : issue.priority === 'high' ? 'bg-amber-500' : issue.priority === 'medium' ? 'bg-indigo-400' : 'bg-slate-400'
+                  const issueGradient = issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : issue.priority === 'medium' ? 'from-teal-500 to-teal-600' : 'from-stone-400 to-stone-500'
+                  const issueDot = issue.priority === 'urgent' ? 'bg-red-500 animate-pulse' : issue.priority === 'high' ? 'bg-amber-500' : issue.priority === 'medium' ? 'bg-teal-400' : 'bg-stone-400'
                   const catInitials = issue.category ? issue.category.substring(0, 2) : ''
                   return (
                     <div
                       key={issue.id}
-                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer"
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer"
                       onClick={() => selectIssue(issue)}
                     >
                       {/* Category circle */}

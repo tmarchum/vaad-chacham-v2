@@ -9,12 +9,12 @@ export default function NotFound() {
       className="flex min-h-[70vh] flex-col items-center justify-center text-center px-6 py-20"
     >
       {/* Large 404 */}
-      <div className="select-none text-[120px] font-black leading-none text-slate-100">
+      <div className="select-none text-[120px] font-black leading-none text-stone-100">
         404
       </div>
 
       {/* Icon */}
-      <div className="mt-2 mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-lg">
+      <div className="mt-2 mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 shadow-lg">
         <Home className="h-8 w-8 text-white" />
       </div>
 

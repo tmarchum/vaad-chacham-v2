@@ -123,12 +123,12 @@ const STAT_GRADIENTS = {
   '#22c55e': 'from-emerald-500 to-emerald-600',
   '#ef4444': 'from-red-500 to-red-600',
   '#f59e0b': 'from-amber-500 to-amber-600',
-  '#6366f1': 'from-indigo-500 to-indigo-600',
+  '#6366f1': 'from-teal-500 to-teal-600',
   '#06b6d4': 'from-cyan-500 to-cyan-600',
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'var(--primary)', className = '' }) {
-  const gradient = STAT_GRADIENTS[color] || 'from-indigo-500 to-indigo-600'
+  const gradient = STAT_GRADIENTS[color] || 'from-teal-500 to-teal-600'
   return (
     <Card className={cn('overflow-hidden border border-[var(--border)] hover:shadow-md transition-all', className)}>
       <div className={`h-1 bg-gradient-to-r ${gradient}`} />
@@ -156,7 +156,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'var(--primary)', cla
 
 function HorizontalBar({ label, amount, pct, color = 'var(--primary)' }) {
   return (
-    <div className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-slate-50/50 transition-colors">
+    <div className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-stone-50/50 transition-colors">
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
@@ -408,10 +408,10 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
 
       {/* Monthly breakdown */}
       <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-indigo-500 to-indigo-500" />
+        <div className="h-1 bg-gradient-to-r from-teal-500 to-teal-500" />
         <CardContent className="p-4">
           <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-500 flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-teal-500 flex items-center justify-center shadow-sm">
               <BarChart2 size={16} className="text-white" />
             </div>
             פירוט חודשי (6 חודשים אחרונים)
@@ -435,7 +435,7 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
             {monthlyRows.map((row) => (
               <div
                 key={row.key}
-                className="group grid gap-2 border-b py-2.5 text-sm hover:bg-slate-50/50 transition-colors rounded-lg px-1"
+                className="group grid gap-2 border-b py-2.5 text-sm hover:bg-stone-50/50 transition-colors rounded-lg px-1"
                 style={{
                   borderColor: 'var(--border)',
                   gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
@@ -563,7 +563,7 @@ function ResidentsTab({ units, payments, buildingId }) {
             <div
               key={unit.id}
               className={cn(
-                'group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all',
+                'group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all',
                 hasDebt ? 'border-red-200/60' : 'border-[var(--border)]'
               )}
             >
@@ -615,7 +615,7 @@ function ResidentsTab({ units, payments, buildingId }) {
       {/* Summary card */}
       {searched.length > 0 && (
         <Card className="overflow-hidden border-2 border-[var(--border)]">
-          <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
+          <div className="h-1 bg-gradient-to-r from-teal-500 to-purple-500" />
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-[var(--text-primary)]">סה"כ</span>
@@ -762,17 +762,17 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
       {/* Top categories */}
       {byCategory.length > 0 && (
         <Card className="overflow-hidden border border-[var(--border)]">
-          <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
+          <div className="h-1 bg-gradient-to-r from-teal-500 to-purple-500" />
           <CardContent className="p-4">
             <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-purple-500 flex items-center justify-center shadow-sm">
                 <Wrench size={16} className="text-white" />
               </div>
               תקלות לפי קטגוריה
             </h3>
             <div className="space-y-1">
               {byCategory.map(({ cat, count, pct }, i) => (
-                <div key={cat} className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-slate-50/50 transition-colors">
+                <div key={cat} className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-stone-50/50 transition-colors">
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }} />
@@ -814,7 +814,7 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
               {top5.map((issue, idx) => (
                 <div
                   key={issue.id}
-                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all border-[var(--border)]"
+                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all border-[var(--border)]"
                 >
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
                     {idx + 1}
@@ -855,7 +855,7 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
               {byVendor.map(({ name, count, cost }) => (
                 <div
                   key={name}
-                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all border-[var(--border)]"
+                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all border-[var(--border)]"
                 >
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
                     {name.charAt(0)}
@@ -988,10 +988,10 @@ function BudgetTab({ units, expenses, buildingId }) {
 
       {/* Reserve fund */}
       <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
+        <div className="h-1 bg-gradient-to-r from-purple-500 to-teal-500" />
         <CardContent className="p-4">
           <h3 className="mb-3 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-teal-500 flex items-center justify-center shadow-sm">
               <PiggyBank size={16} className="text-white" />
             </div>
             קרן רזרבה מומלצת (10% מהכנסות שנתיות)
@@ -1022,10 +1022,10 @@ function BudgetTab({ units, expenses, buildingId }) {
 
       {/* Monthly projection table */}
       <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-indigo-500 to-cyan-500" />
+        <div className="h-1 bg-gradient-to-r from-teal-500 to-cyan-500" />
         <CardContent className="p-4">
           <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center shadow-sm">
               <TrendingUp size={16} className="text-white" />
             </div>
             תחזית חודשית שנתית

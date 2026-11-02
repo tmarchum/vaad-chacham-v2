@@ -14,12 +14,12 @@ import { cn } from '@/lib/utils'
  */
 
 const ACCENT_COLORS = {
-  blue:    { bar: 'bg-indigo-500',    icon: 'bg-indigo-50 text-indigo-600',    value: 'text-indigo-700' },
+  blue:    { bar: 'bg-teal-500',    icon: 'bg-teal-50 text-teal-600',    value: 'text-teal-700' },
   emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600', value: 'text-emerald-700' },
   red:     { bar: 'bg-red-500',     icon: 'bg-red-50 text-red-600',      value: 'text-red-700' },
   amber:   { bar: 'bg-amber-500',   icon: 'bg-amber-50 text-amber-600',  value: 'text-amber-700' },
   purple:  { bar: 'bg-purple-500',  icon: 'bg-purple-50 text-purple-600', value: 'text-purple-700' },
-  slate:   { bar: 'bg-slate-400',   icon: 'bg-slate-100 text-slate-600', value: 'text-[var(--text-primary)]' },
+  slate:   { bar: 'bg-stone-400',   icon: 'bg-stone-100 text-stone-600', value: 'text-[var(--text-primary)]' },
   cyan:    { bar: 'bg-cyan-500',    icon: 'bg-cyan-50 text-cyan-600',    value: 'text-cyan-700' },
 }
 

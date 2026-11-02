@@ -26,7 +26,7 @@ class ErrorBoundary extends Component {
             {'\n'}
             {this.state.error.stack}
           </pre>
-          <button onClick={() => window.location.reload()} style={{ marginTop: 20, padding: '10px 24px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 20, padding: '10px 24px', background: '#14b8a6', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
             נסה שוב
           </button>
         </div>

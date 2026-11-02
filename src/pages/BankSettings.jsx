@@ -205,15 +205,15 @@ export default function BankSettings() {
       {/* Initial Pull / Nightly Status */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Initial Pull Card */}
-        <div className={`rounded-xl border bg-white overflow-hidden ${!scrapeSettings?.initial_pull_done ? 'ring-2 ring-indigo-500/30' : 'border-[var(--border)]'}`}>
+        <div className={`rounded-xl border bg-white overflow-hidden ${!scrapeSettings?.initial_pull_done ? 'ring-2 ring-teal-500/30' : 'border-[var(--border)]'}`}>
           {/* Gradient header */}
-          <div className="bg-gradient-to-l from-indigo-500 to-indigo-600 px-5 py-3 flex items-center gap-3">
+          <div className="bg-gradient-to-l from-teal-500 to-teal-600 px-5 py-3 flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
               <Calendar className="h-5 w-5 text-white" />
             </div>
             <div>
               <h3 className="font-semibold text-white">משיכה ראשונית</h3>
-              <p className="text-xs text-indigo-100">משיכת תנועות חד-פעמית מתאריך שנבחר</p>
+              <p className="text-xs text-teal-100">משיכת תנועות חד-פעמית מתאריך שנבחר</p>
             </div>
           </div>
           <div className="p-5">
@@ -257,16 +257,16 @@ export default function BankSettings() {
         {/* Nightly Process Card */}
         <div className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
           {/* Gradient header */}
-          <div className="bg-gradient-to-l from-indigo-500 to-indigo-600 px-5 py-3 flex items-center gap-3">
+          <div className="bg-gradient-to-l from-teal-500 to-teal-600 px-5 py-3 flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
               <Moon className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1">
               <h3 className="font-semibold text-white">תהליך לילי</h3>
-              <p className="text-xs text-indigo-100">משיכת תנועות אוטומטית כל לילה</p>
+              <p className="text-xs text-teal-100">משיכת תנועות אוטומטית כל לילה</p>
             </div>
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20">
-              <div className={`w-2 h-2 rounded-full ${scrapeSettings?.is_enabled ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+              <div className={`w-2 h-2 rounded-full ${scrapeSettings?.is_enabled ? 'bg-emerald-400' : 'bg-stone-300'}`} />
               <span className="text-xs font-medium text-white">
                 {scrapeSettings?.is_enabled ? 'פעיל' : 'מושבת'}
               </span>
@@ -317,22 +317,22 @@ export default function BankSettings() {
             // Assign gradient colors to different bank types for variety
             const bankGradients = {
               hapoalim: 'from-red-500 to-red-600',
-              leumi: 'from-indigo-500 to-indigo-600',
+              leumi: 'from-teal-500 to-teal-600',
               discount: 'from-emerald-500 to-emerald-600',
               mizrahi: 'from-purple-500 to-purple-600',
               beinleumi: 'from-amber-500 to-amber-600',
               mercantile: 'from-cyan-500 to-cyan-600',
-              otsarHahayal: 'from-indigo-500 to-indigo-600',
+              otsarHahayal: 'from-teal-500 to-teal-600',
             }
-            const gradient = bankGradients[account.bank_type] || 'from-slate-500 to-slate-600'
-            const dotColor = account.is_active ? 'bg-emerald-500' : 'bg-slate-400'
+            const gradient = bankGradients[account.bank_type] || 'from-stone-500 to-stone-600'
+            const dotColor = account.is_active ? 'bg-emerald-500' : 'bg-stone-400'
             const statusText = account.is_active ? 'פעיל' : 'מושבת'
-            const statusTextColor = account.is_active ? 'text-emerald-700' : 'text-slate-600'
+            const statusTextColor = account.is_active ? 'text-emerald-700' : 'text-stone-600'
 
             return (
               <div
                 key={account.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all"
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all"
               >
                 {/* Bank gradient circle */}
                 <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>

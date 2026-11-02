@@ -29,7 +29,7 @@ import {
 import { HEBREW_MONTHS } from '@/lib/constants'
 
 /* ── Circular progress ring ─────────────────────────────────────────── */
-function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#6366f1' }) {
+function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#14b8a6' }) {
   const r = (size - strokeWidth) / 2
   const circ = 2 * Math.PI * r
   const offset = circ - (Math.min(value, 100) / 100) * circ
@@ -37,7 +37,7 @@ function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#6366f1' }
     <svg width={size} height={size} className="shrink-0 -rotate-90">
       <circle cx={size / 2} cy={size / 2} r={r} fill="none"
         stroke="currentColor" strokeWidth={strokeWidth}
-        className="text-slate-100" />
+        className="text-stone-100" />
       <circle cx={size / 2} cy={size / 2} r={r} fill="none"
         stroke={color} strokeWidth={strokeWidth}
         strokeDasharray={circ} strokeDashoffset={offset}
@@ -294,7 +294,7 @@ function Dashboard() {
   // First-time onboarding: no buildings yet
   if (!buildingsLoading && buildings.length === 0) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-fade-in-up">
-      <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-indigo-500/25">
+      <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center mb-6 shadow-xl shadow-teal-500/25">
         <Building2 className="h-12 w-12 text-white" />
       </div>
       <h1 className="text-2xl font-extrabold text-[var(--text-primary)] mb-2">ברוכים הבאים לוועדלי</h1>
@@ -303,14 +303,14 @@ function Dashboard() {
       </p>
       <Link
         to="/buildings"
-        className="mt-6 inline-flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl px-6 py-3 transition-all shadow-lg shadow-indigo-500/20 hover:shadow-xl hover:-translate-y-0.5"
+        className="mt-6 inline-flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl px-6 py-3 transition-all shadow-lg shadow-teal-500/20 hover:shadow-xl hover:-translate-y-0.5"
       >
         <Building2 className="h-5 w-5" />
         הוסף בניין ראשון
       </Link>
       <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-xl text-right">
         {[
-          { icon: CreditCard, label: 'גבייה חודשית', desc: 'ניהול תשלומים ומעקב חייבים', color: 'text-indigo-600 bg-indigo-50' },
+          { icon: CreditCard, label: 'גבייה חודשית', desc: 'ניהול תשלומים ומעקב חייבים', color: 'text-teal-600 bg-teal-50' },
           { icon: Wrench,     label: 'תקלות ועבודות', desc: 'פתיחת קריאות וניהול ספקים', color: 'text-purple-600 bg-purple-50' },
           { icon: Megaphone,  label: 'הודעות לדיירים', desc: 'שליחת הודעות במייל ו-WhatsApp', color: 'text-amber-600 bg-amber-50' },
         ].map(({ icon: Icon, label, desc, color }) => (
@@ -374,7 +374,7 @@ function Dashboard() {
       {/* ═══════════════════════════════════════════════════════════════
           ── Welcome banner ──
           ═══════════════════════════════════════════════════════════ */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-indigo-600 via-indigo-700 to-indigo-800 p-6 lg:p-8 text-white shadow-xl shadow-indigo-600/10 animate-fade-in-up">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-teal-600 via-teal-700 to-emerald-800 p-6 lg:p-8 text-white shadow-xl shadow-teal-600/10 animate-fade-in-up">
         {/* Background decoration */}
         <div className="absolute top-0 left-0 w-72 h-72 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-48 h-48 bg-white/5 rounded-full translate-x-1/4 translate-y-1/4" />
@@ -384,7 +384,7 @@ function Dashboard() {
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold mb-1">
               {greeting}{firstName ? `, ${firstName}` : ''} 👋
             </h1>
-            <p className="text-indigo-100 text-sm lg:text-base">
+            <p className="text-teal-100 text-sm lg:text-base">
               {selectedBuilding ? (
                 <>
                   <Building2 className="inline h-4 w-4 ml-1 -mt-0.5" />
@@ -406,17 +406,17 @@ function Dashboard() {
           <div className="flex items-center gap-5">
             <div className="text-center">
               <div className="text-2xl font-black">{units.length}</div>
-              <div className="text-[11px] text-indigo-200">דירות</div>
+              <div className="text-[11px] text-teal-200">דירות</div>
             </div>
             <div className="w-px h-8 bg-white/20" />
             <div className="text-center">
               <div className="text-2xl font-black">{collectionPct}%</div>
-              <div className="text-[11px] text-indigo-200">גבייה</div>
+              <div className="text-[11px] text-teal-200">גבייה</div>
             </div>
             <div className="w-px h-8 bg-white/20" />
             <div className="text-center">
               <div className="text-2xl font-black">{openIssues.length}</div>
-              <div className="text-[11px] text-indigo-200">תקלות</div>
+              <div className="text-[11px] text-teal-200">תקלות</div>
             </div>
           </div>
         </div>
@@ -439,13 +439,13 @@ function Dashboard() {
                 מתוך {formatCurrency(expected)}
               </p>
             </div>
-            <CircleProgress value={collectionPct} color="#6366f1" />
+            <CircleProgress value={collectionPct} color="#14b8a6" />
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-1.5 rounded-full bg-indigo-100 overflow-hidden">
-              <div className="h-full rounded-full bg-indigo-500 transition-all duration-700" style={{ width: `${Math.min(collectionPct, 100)}%` }} />
+            <div className="flex-1 h-1.5 rounded-full bg-teal-100 overflow-hidden">
+              <div className="h-full rounded-full bg-teal-500 transition-all duration-700" style={{ width: `${Math.min(collectionPct, 100)}%` }} />
             </div>
-            <span className="text-xs font-bold text-indigo-600 min-w-[36px] text-left">{collectionPct}%</span>
+            <span className="text-xs font-bold text-teal-600 min-w-[36px] text-left">{collectionPct}%</span>
           </div>
         </div>
 
@@ -520,7 +520,7 @@ function Dashboard() {
               <Wallet className="h-6 w-6 text-emerald-500" />
             </div>
           </div>
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-100">
             <span className="text-xs text-[var(--text-muted)]">יתרה</span>
             <span className={`text-sm font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
               {balance >= 0 ? (
@@ -539,7 +539,7 @@ function Dashboard() {
           ═══════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-in-up">
         {[
-          { to: '/payments',     icon: CreditCard,  label: 'גבייה',        color: 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100' },
+          { to: '/payments',     icon: CreditCard,  label: 'גבייה',        color: 'text-teal-600 bg-teal-50 hover:bg-teal-100' },
           { to: '/issues',       icon: Wrench,      label: 'תקלה חדשה',    color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
           { to: '/expenses',     icon: Wallet,      label: 'הוצאות',       color: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' },
           { to: '/announcements', icon: Megaphone,  label: 'הודעות',       color: 'text-amber-600 bg-amber-50 hover:bg-amber-100' },
@@ -615,8 +615,8 @@ function Dashboard() {
           <CardContent>
             {debtorUnits.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${noChargesYet ? 'bg-slate-50' : 'bg-green-50'}`}>
-                  <CreditCard className={`h-7 w-7 ${noChargesYet ? 'text-slate-300' : 'text-green-400'}`} />
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${noChargesYet ? 'bg-stone-50' : 'bg-green-50'}`}>
+                  <CreditCard className={`h-7 w-7 ${noChargesYet ? 'text-stone-300' : 'text-green-400'}`} />
                 </div>
                 <p className="text-sm font-medium text-[var(--text-secondary)]">
                   {noChargesYet ? 'טרם הופקו חיובים לחודש זה' : 'כל הדירות שילמו החודש'}
@@ -633,7 +633,7 @@ function Dashboard() {
                     className="flex items-center justify-between py-3 first:pt-0 last:pb-0 group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
+                      <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center text-xs font-bold text-stone-500">
                         {d.unit?.number || '?'}
                       </div>
                       <div>
@@ -764,14 +764,14 @@ function Dashboard() {
               </span>
             </div>
           </div>
-          <div className="relative h-3 rounded-full bg-slate-100 overflow-hidden">
+          <div className="relative h-3 rounded-full bg-stone-100 overflow-hidden">
             <div
-              className="absolute inset-y-0 right-0 rounded-full bg-gradient-to-l from-indigo-500 to-indigo-600 transition-all duration-700 ease-out"
+              className="absolute inset-y-0 right-0 rounded-full bg-gradient-to-l from-teal-500 to-teal-600 transition-all duration-700 ease-out"
               style={{ width: `${Math.min(collectionPct, 100)}%` }}
             />
           </div>
           <div className="flex justify-between mt-2">
-            <span className="text-xs font-bold text-indigo-600">{collectionPct}%</span>
+            <span className="text-xs font-bold text-teal-600">{collectionPct}%</span>
             <span className="text-[11px] text-[var(--text-muted)]">
               {paidPayments.length} מתוך {monthPayments.length || units.length} דירות
             </span>
@@ -801,7 +801,7 @@ function Dashboard() {
             <div className="space-y-2">
               {expiryAlerts.map(alert => (
                 <Link key={alert.id} to={alert.link}
-                  className={`flex items-center gap-3 p-3 rounded-xl transition-colors hover:bg-slate-50 ${alert.urgent ? 'bg-red-50 border border-red-100' : 'bg-amber-50 border border-amber-100'}`}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-colors hover:bg-stone-50 ${alert.urgent ? 'bg-red-50 border border-red-100' : 'bg-amber-50 border border-amber-100'}`}
                 >
                   <Clock className={`h-4 w-4 shrink-0 ${alert.urgent ? 'text-red-500' : 'text-amber-500'}`} />
                   <div className="flex-1 min-w-0">
@@ -830,7 +830,7 @@ function Dashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center">
                   <Zap className="h-4 w-4 text-white" />
                 </div>
                 התראות סוכנים חכמים
@@ -856,7 +856,7 @@ function Dashboard() {
                   ? <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                   : alert.severity === 'medium'
                   ? <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                  : <Info className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                  : <Info className="h-4 w-4 text-teal-500 shrink-0 mt-0.5" />
                 const sevClass = alert.severity === 'high' ? 'severity-high'
                   : alert.severity === 'medium' ? 'severity-medium' : 'severity-low'
                 return (
@@ -871,7 +871,7 @@ function Dashboard() {
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">{alert.description}</p>
                       )}
                       {alert.recommendation && (
-                        <p className="text-xs text-indigo-600 mt-1.5 font-medium">💡 {alert.recommendation}</p>
+                        <p className="text-xs text-teal-600 mt-1.5 font-medium">💡 {alert.recommendation}</p>
                       )}
                     </div>
                     <Badge variant="default" className="shrink-0 text-[10px]">

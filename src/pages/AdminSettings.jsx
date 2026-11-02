@@ -113,8 +113,8 @@ function UsersTab() {
 
   const ROLE_GRADIENTS = {
     admin: 'from-red-500 to-rose-600',
-    committee: 'from-indigo-500 to-indigo-600',
-    resident: 'from-slate-400 to-slate-500',
+    committee: 'from-teal-500 to-teal-600',
+    resident: 'from-stone-400 to-stone-500',
   }
 
   return (
@@ -133,7 +133,7 @@ function UsersTab() {
           return (
             <div
               key={user.id}
-              className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all border-[var(--border)]"
+              className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all border-[var(--border)]"
             >
               {/* Avatar circle */}
               <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
@@ -276,10 +276,10 @@ function CustomFieldsTab() {
     <div className="space-y-6">
       {/* Existing fields */}
       <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500" />
+        <div className="h-1 bg-gradient-to-r from-teal-500 to-purple-500" />
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-purple-500 flex items-center justify-center shadow-sm">
               <Database size={16} className="text-white" />
             </div>
             שדות קיימים
@@ -294,7 +294,7 @@ function CustomFieldsTab() {
             <div className="space-y-2">
               {fields.map((field) => {
                 const TYPE_GRADIENTS = {
-                  text: 'from-indigo-500 to-indigo-600',
+                  text: 'from-teal-500 to-teal-600',
                   number: 'from-emerald-500 to-emerald-600',
                   boolean: 'from-amber-500 to-amber-600',
                   date: 'from-purple-500 to-purple-600',
@@ -305,7 +305,7 @@ function CustomFieldsTab() {
                 return (
                   <div
                     key={field.id}
-                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all border-[var(--border)]"
+                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all border-[var(--border)]"
                   >
                     {/* Type icon circle */}
                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
@@ -498,11 +498,11 @@ function BuildingsCommitteesTab() {
       {buildings.map((building, bIdx) => {
         const members = membersForBuilding(building.id)
         const BUILDING_GRADIENTS = [
-          'from-indigo-500 to-indigo-600',
+          'from-teal-500 to-teal-600',
           'from-emerald-500 to-teal-600',
           'from-purple-500 to-violet-600',
           'from-amber-500 to-orange-600',
-          'from-cyan-500 to-indigo-600',
+          'from-cyan-500 to-teal-600',
         ]
         const buildingGradient = BUILDING_GRADIENTS[bIdx % BUILDING_GRADIENTS.length]
 
@@ -536,15 +536,15 @@ function BuildingsCommitteesTab() {
                       : '?'
                     const MEMBER_ROLE_GRADIENTS = {
                       committee_chair: 'from-amber-500 to-orange-600',
-                      committee: 'from-indigo-500 to-indigo-600',
+                      committee: 'from-teal-500 to-teal-600',
                       manager: 'from-emerald-500 to-teal-600',
                     }
-                    const memberGradient = MEMBER_ROLE_GRADIENTS[m.role] || 'from-slate-400 to-slate-500'
+                    const memberGradient = MEMBER_ROLE_GRADIENTS[m.role] || 'from-stone-400 to-stone-500'
 
                     return (
                       <div
                         key={m.id}
-                        className="group flex items-center gap-3 p-3 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all border-[var(--border)]"
+                        className="group flex items-center gap-3 p-3 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all border-[var(--border)]"
                       >
                         <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${memberGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
                           {initials}

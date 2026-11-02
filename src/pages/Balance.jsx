@@ -138,7 +138,7 @@ export default function Balance() {
 
           // Month gradient based on balance
           const monthGradient = !hasData
-            ? 'from-slate-300 to-slate-400'
+            ? 'from-stone-300 to-stone-400'
             : m.balance >= 0
               ? 'from-emerald-500 to-emerald-600'
               : 'from-red-500 to-red-600'
@@ -147,7 +147,7 @@ export default function Balance() {
             <div
               key={m.month}
               className={`group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white transition-all ${
-                hasData ? 'hover:shadow-md hover:border-indigo-200' : 'opacity-50'
+                hasData ? 'hover:shadow-md hover:border-teal-200' : 'opacity-50'
               }`}
             >
               {/* Month gradient circle */}
@@ -170,7 +170,7 @@ export default function Balance() {
                   {m.income > 0 ? formatCurrency(m.income) : '-'}
                 </span>
                 {hasData && (
-                  <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                  <div className="h-1 w-full rounded-full bg-stone-100 mt-1 overflow-hidden">
                     <div className="h-full rounded-full bg-emerald-500" style={{ width: incomePct + '%' }} />
                   </div>
                 )}
@@ -191,7 +191,7 @@ export default function Balance() {
                   </div>
                 )}
                 {hasData && (
-                  <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                  <div className="h-1 w-full rounded-full bg-stone-100 mt-1 overflow-hidden">
                     <div className="h-full rounded-full bg-red-500" style={{ width: expensesPct + '%' }} />
                   </div>
                 )}
@@ -200,7 +200,7 @@ export default function Balance() {
               {/* Balance with dot */}
               <div className="flex items-center gap-2 min-w-[100px] shrink-0">
                 <div className={`w-2 h-2 rounded-full shrink-0 ${
-                  !hasData ? 'bg-slate-300' : m.balance >= 0 ? 'bg-emerald-500' : 'bg-red-500'
+                  !hasData ? 'bg-stone-300' : m.balance >= 0 ? 'bg-emerald-500' : 'bg-red-500'
                 }`} />
                 <span className={`text-[13px] font-bold ${
                   !hasData ? 'text-[var(--text-muted)]' : m.balance >= 0 ? 'text-emerald-700' : 'text-red-700'
@@ -214,7 +214,7 @@ export default function Balance() {
 
         {/* Totals card */}
         <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-[var(--border)] bg-[var(--surface-hover)]">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
             {selectedYear.slice(2)}
           </div>
           <div className="min-w-[70px]">

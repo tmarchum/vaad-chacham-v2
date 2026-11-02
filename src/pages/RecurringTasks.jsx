@@ -299,7 +299,7 @@ function RecurringTasks() {
 
             // Gradient colors based on frequency
             const gradientMap = {
-              monthly: 'from-indigo-500 to-indigo-600',
+              monthly: 'from-teal-500 to-teal-600',
               quarterly: 'from-purple-500 to-purple-600',
               annually: 'from-amber-400 to-amber-500',
             }
@@ -318,7 +318,7 @@ function RecurringTasks() {
             return (
               <div
                 key={task.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)]"
+                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer border-[var(--border)]"
                 onClick={() => setDetailTask(task)}
               >
                 {/* Frequency circle */}

@@ -16,7 +16,7 @@ import {
 const SEVERITY_STYLES = {
   high: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800',
   medium: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-  low: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+  low: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800',
 }
 
 const HEALTH_STYLES = {
@@ -232,9 +232,9 @@ export default function ExpenseAnalysis() {
               </h2>
               <div className="space-y-2">
                 {result.alerts.map((alert, i) => {
-                  const alertGradient = alert.severity === 'high' ? 'from-red-500 to-red-600' : alert.severity === 'medium' ? 'from-amber-500 to-amber-600' : 'from-indigo-500 to-indigo-600'
-                  const alertDot = alert.severity === 'high' ? 'bg-red-500 animate-pulse' : alert.severity === 'medium' ? 'bg-amber-500' : 'bg-indigo-400'
-                  const alertBorder = alert.severity === 'high' ? 'border-red-200' : alert.severity === 'medium' ? 'border-amber-200' : 'border-indigo-200'
+                  const alertGradient = alert.severity === 'high' ? 'from-red-500 to-red-600' : alert.severity === 'medium' ? 'from-amber-500 to-amber-600' : 'from-teal-500 to-teal-600'
+                  const alertDot = alert.severity === 'high' ? 'bg-red-500 animate-pulse' : alert.severity === 'medium' ? 'bg-amber-500' : 'bg-teal-400'
+                  const alertBorder = alert.severity === 'high' ? 'border-red-200' : alert.severity === 'medium' ? 'border-amber-200' : 'border-teal-200'
                   return (
                     <div key={i} className={`flex items-start gap-4 p-4 rounded-xl border bg-white hover:shadow-md transition-all ${alertBorder}`}>
                       {/* Severity circle */}
@@ -272,18 +272,18 @@ export default function ExpenseAnalysis() {
               <div className="space-y-2">
                 {result.category_analysis.map((cat, i) => {
                   const catGradients = [
-                    'from-indigo-500 to-indigo-600', 'from-purple-500 to-purple-600', 'from-emerald-500 to-emerald-600',
+                    'from-teal-500 to-teal-600', 'from-purple-500 to-purple-600', 'from-emerald-500 to-emerald-600',
                     'from-amber-500 to-amber-600', 'from-cyan-500 to-cyan-600', 'from-pink-500 to-pink-600',
-                    'from-indigo-500 to-indigo-600', 'from-teal-500 to-teal-600',
+                    'from-teal-500 to-teal-600', 'from-teal-500 to-teal-600',
                   ]
                   const catGradient = catGradients[i % catGradients.length]
-                  const trendDot = cat.trend === 'up' ? 'bg-red-500' : cat.trend === 'down' ? 'bg-emerald-500' : 'bg-indigo-400'
+                  const trendDot = cat.trend === 'up' ? 'bg-red-500' : cat.trend === 'down' ? 'bg-emerald-500' : 'bg-teal-400'
                   const maxTotal = Math.max(...result.category_analysis.map(c => c.total), 1)
                   const barPct = Math.round((cat.total / maxTotal) * 100)
                   return (
                     <div
                       key={i}
-                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all"
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all"
                     >
                       {/* Category circle */}
                       <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${catGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
@@ -298,7 +298,7 @@ export default function ExpenseAnalysis() {
                           {cat.trend === 'down' && <Badge variant="success" className="gap-1 text-[10px]"><TrendingDown className="h-3 w-3" />יורד</Badge>}
                           {cat.trend === 'stable' && <Badge variant="default" className="text-[10px]">יציב</Badge>}
                         </div>
-                        <div className="h-1.5 w-full max-w-[200px] rounded-full bg-slate-100 mt-1 overflow-hidden">
+                        <div className="h-1.5 w-full max-w-[200px] rounded-full bg-stone-100 mt-1 overflow-hidden">
                           <div
                             className={`h-full rounded-full bg-gradient-to-r ${catGradient} transition-all duration-500`}
                             style={{ width: `${barPct}%` }}
@@ -337,7 +337,7 @@ export default function ExpenseAnalysis() {
                   return (
                     <div
                       key={i}
-                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all"
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-teal-200 transition-all"
                     >
                       {/* Month circle */}
                       <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${balanceGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
@@ -400,16 +400,16 @@ export default function ExpenseAnalysis() {
           {result.recommendations?.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Zap className="h-5 w-5 text-indigo-500" />
+                <Zap className="h-5 w-5 text-teal-500" />
                 המלצות
               </h2>
               <div className="space-y-2">
                 {result.recommendations.map((rec, i) => (
-                  <div key={i} className="relative rounded-xl border border-[var(--border)] bg-white overflow-hidden hover:shadow-md hover:border-indigo-200 transition-all">
-                    <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-indigo-500" />
+                  <div key={i} className="relative rounded-xl border border-[var(--border)] bg-white overflow-hidden hover:shadow-md hover:border-teal-200 transition-all">
+                    <div className="h-1 w-full bg-gradient-to-r from-teal-500 to-teal-500" />
                     <div className="p-4">
                       <div className="flex items-start gap-4">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-teal-500 flex items-center justify-center text-white shrink-0 shadow-sm">
                           <Zap className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">

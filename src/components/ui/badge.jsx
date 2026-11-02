@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils'
 
 const variantStyles = {
   default:
-    'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-600/10',
+    'bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-600/10',
   success:
     'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/10',
   warning:

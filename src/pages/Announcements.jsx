@@ -266,7 +266,7 @@ function Announcements() {
           const subject = `[${buildingName}] ${typeLabel}: ${announcementForm.title}`
           const html = `
 <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb; border-radius: 8px;">
-  <div style="background: linear-gradient(135deg, #6366f1, #6366f1); padding: 24px; border-radius: 8px 8px 0 0; text-align: center; margin: -20px -20px 20px -20px;">
+  <div style="background: linear-gradient(135deg, #14b8a6, #14b8a6); padding: 24px; border-radius: 8px 8px 0 0; text-align: center; margin: -20px -20px 20px -20px;">
     <h1 style="color: white; margin: 0; font-size: 22px;">${buildingName}</h1>
     <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px;">${typeLabel}</p>
   </div>
@@ -503,7 +503,7 @@ function Announcements() {
 
                 // Gradient colors based on type
                 const gradientMap = {
-                  general: 'from-indigo-500 to-indigo-600',
+                  general: 'from-teal-500 to-teal-600',
                   maintenance: 'from-amber-400 to-amber-500',
                   urgent: 'from-red-500 to-red-600',
                   meeting: 'from-emerald-500 to-emerald-600',
@@ -518,7 +518,7 @@ function Announcements() {
                 return (
                   <div
                     key={ann.id}
-                    className="group rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)] p-4"
+                    className="group rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer border-[var(--border)] p-4"
                     onClick={() => toggleExpandedAnnouncement(ann.id)}
                   >
                     <div className="flex items-center gap-4">
@@ -608,16 +608,16 @@ function Announcements() {
 
                 // Gradient colors based on meeting type
                 const gradientMap = {
-                  annual: 'from-indigo-500 to-indigo-600',
+                  annual: 'from-teal-500 to-teal-600',
                   committee: 'from-purple-500 to-purple-600',
                   emergency: 'from-red-500 to-red-600',
                 }
                 const circleGradient = gradientMap[min.type] || gradientMap.committee
 
                 // Quorum status dot
-                const dotColor = totalUnits > 0 ? (hasQuorum ? 'bg-emerald-500' : 'bg-red-500') : 'bg-slate-400'
+                const dotColor = totalUnits > 0 ? (hasQuorum ? 'bg-emerald-500' : 'bg-red-500') : 'bg-stone-400'
                 const quorumLabel = totalUnits > 0 ? (hasQuorum ? 'יש מניין' : 'אין מניין') : ''
-                const quorumTextColor = totalUnits > 0 ? (hasQuorum ? 'text-emerald-700' : 'text-red-700') : 'text-slate-500'
+                const quorumTextColor = totalUnits > 0 ? (hasQuorum ? 'text-emerald-700' : 'text-red-700') : 'text-stone-500'
 
                 // Progress bar color
                 const barColor = hasQuorum ? 'bg-emerald-500' : 'bg-red-400'
@@ -625,7 +625,7 @@ function Announcements() {
                 return (
                   <div
                     key={min.id}
-                    className="group rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)] p-4"
+                    className="group rounded-xl border bg-white hover:shadow-md hover:border-teal-200 transition-all cursor-pointer border-[var(--border)] p-4"
                     onClick={() => toggleExpandedMinutes(min.id)}
                   >
                     <div className="flex items-center gap-4">
@@ -653,7 +653,7 @@ function Announcements() {
                           <div className="text-[13px] font-semibold text-[var(--text-primary)]">
                             {attendees}/{totalUnits} דיירים
                           </div>
-                          <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
+                          <div className="h-1 w-full rounded-full bg-stone-100 mt-1 overflow-hidden">
                             <div
                               className={`h-full rounded-full ${barColor}`}
                               style={{ width: quorumPct + '%' }}

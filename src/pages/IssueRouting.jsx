@@ -171,7 +171,7 @@ function IssueRouting() {
                   title={r.active === false ? 'הפעל כלל' : 'כבה כלל'}
                   onClick={() => update(r.id, { active: r.active === false })}
                 >
-                  <Power className={`w-4 h-4 ${r.active === false ? 'text-slate-400' : 'text-emerald-600'}`} />
+                  <Power className={`w-4 h-4 ${r.active === false ? 'text-stone-400' : 'text-emerald-600'}`} />
                 </Button>
                 <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="w-4 h-4" /></Button>
                 <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(r)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
@@ -218,7 +218,7 @@ function IssueRouting() {
                 type="checkbox"
                 checked={!!form.auto_acknowledge}
                 onChange={(e) => setForm((f) => ({ ...f, auto_acknowledge: e.target.checked }))}
-                className="h-4 w-4 rounded border-slate-300"
+                className="h-4 w-4 rounded border-stone-300"
               />
               אישור אוטומטי — הפנייה תעבור ישירות לסטטוס «התקבלה»
             </label>
@@ -227,7 +227,7 @@ function IssueRouting() {
                 type="checkbox"
                 checked={form.active !== false}
                 onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-                className="h-4 w-4 rounded border-slate-300"
+                className="h-4 w-4 rounded border-stone-300"
               />
               כלל פעיל
             </label>

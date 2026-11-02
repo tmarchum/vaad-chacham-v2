@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { BrandLogo } from '@/components/common/BrandLogo'
 
 export default function Login() {
   const { user, loading, signInWithGoogle } = useAuth()
@@ -15,20 +16,20 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] relative overflow-hidden" dir="rtl">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-indigo-500/5 rounded-full blur-2xl -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-teal-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-teal-600/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-teal-500/5 rounded-full blur-2xl -translate-x-1/2 -translate-y-1/2" />
       </div>
 
       <div className="relative bg-white rounded-2xl shadow-2xl shadow-black/20 p-10 w-full max-w-[380px] text-center space-y-8">
         {/* Accent gradient line */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-indigo-600 via-indigo-500 to-indigo-600 rounded-t-2xl" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-l from-teal-600 via-teal-500 to-emerald-600 rounded-t-2xl" />
 
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 pt-2">
-          <img src="/favicon.svg" alt="ועדלי" className="w-14 h-14 rounded-2xl shadow-lg shadow-indigo-500/25 mb-1" />
+          <BrandLogo className="w-14 h-14 rounded-2xl shadow-lg shadow-teal-500/25 mb-1" />
           <h1 className="text-5xl font-black text-gray-900 tracking-tight">
-            ועד<span className="text-indigo-600">לי</span>
+            ועד<span className="text-teal-600">לי</span>
           </h1>
           <p className="text-sm text-gray-400 font-light">ניהול בתים משותפים חכם</p>
         </div>
@@ -49,7 +50,7 @@ export default function Login() {
               }
             }}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 border-2 border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:border-indigo-400 hover:bg-indigo-50 hover:shadow-md transition-all duration-200 disabled:opacity-50 cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 border-2 border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:border-teal-400 hover:bg-teal-50 hover:shadow-md transition-all duration-200 disabled:opacity-50 cursor-pointer"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">

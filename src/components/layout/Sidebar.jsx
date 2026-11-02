@@ -11,6 +11,7 @@ import {
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
   Coins, Tags, GitBranch,
 } from 'lucide-react'
+import { BrandLogo } from '@/components/common/BrandLogo'
 
 // Simplified navigation (2026): the daily flow is always in reach, the rest
 // lives under one collapsed "מתקדם" section instead of five crowded groups.
@@ -103,8 +104,8 @@ function Sidebar({ open, onClose }) {
 
       <aside className={cn(
         'fixed top-0 right-0 z-50 flex h-full w-[260px] flex-col',
-        'bg-[var(--sidebar-bg)] text-slate-400',
-        'border-l border-white/[0.06]',
+        'bg-[var(--sidebar-bg)] text-[var(--sidebar-text)]',
+        'border-l border-[var(--sidebar-border)] shadow-[1px_0_0_rgba(0,0,0,0.02)]',
         'transition-transform duration-300 ease-out',
         'lg:relative lg:translate-x-0',
         open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
@@ -113,38 +114,38 @@ function Sidebar({ open, onClose }) {
         <div className="relative px-5 pt-6 pb-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img src="/favicon.svg" alt="ועדלי" className="w-9 h-9 rounded-xl shadow-lg shadow-indigo-500/20" />
+              <BrandLogo className="w-9 h-9 rounded-xl shadow-lg shadow-teal-500/20" />
               <div>
-                <h1 className="text-xl font-extrabold text-white tracking-tight leading-none">
-                  ועד<span className="text-indigo-400">לי</span>
+                <h1 className="text-xl font-extrabold text-[var(--text-primary)] tracking-tight leading-none">
+                  ועד<span className="text-teal-600">לי</span>
                 </h1>
-                <span className="text-[10px] text-slate-500 font-medium">VAADLY</span>
+                <span className="text-[10px] text-stone-400 font-medium tracking-[0.2em]">VAADLY</span>
               </div>
             </div>
-            <button className="lg:hidden p-1.5 rounded-lg hover:bg-white/10 transition-colors" onClick={onClose}>
-              <X className="h-4 w-4 text-slate-400" />
+            <button className="lg:hidden p-1.5 rounded-lg hover:bg-stone-100 transition-colors" onClick={onClose}>
+              <X className="h-4 w-4 text-stone-500" />
             </button>
           </div>
           {/* Gradient divider */}
-          <div className="absolute bottom-0 left-4 right-4 h-px bg-gradient-to-l from-transparent via-slate-700 to-transparent" />
+          <div className="absolute bottom-0 left-4 right-4 h-px bg-gradient-to-l from-transparent via-stone-200 to-transparent" />
         </div>
 
         {/* ── Building selector ── */}
         <div className="px-4 py-3">
           <div className="relative">
-            <Building2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
+            <Building2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-teal-600 pointer-events-none" />
             <select
               value={selectedBuilding?.id || ''}
               onChange={(e) => setSelectedBuilding(e.target.value)}
               className={cn(
-                'w-full h-9 rounded-lg bg-white/[0.06] border border-white/[0.08]',
-                'pr-8 pl-3 text-[13px] text-slate-300',
-                'focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30',
+                'w-full h-9 rounded-xl bg-[var(--surface-secondary)] border border-[var(--border)]',
+                'pr-8 pl-3 text-[13px] text-[var(--text-secondary)] font-medium',
+                'focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500/40',
                 'appearance-none cursor-pointer transition-all'
               )}
             >
               {buildings.map((b) => (
-                <option key={b.id} value={b.id} className="text-slate-900 bg-white">
+                <option key={b.id} value={b.id} className="text-stone-900 bg-white">
                   {b.name}
                 </option>
               ))}
@@ -165,11 +166,11 @@ function Sidebar({ open, onClose }) {
                   onClick={() => toggleSection(section.id)}
                   className="w-full flex items-center justify-between px-3 py-1.5 group cursor-pointer"
                 >
-                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600 group-hover:text-slate-400 transition-colors">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-stone-400 group-hover:text-stone-600 transition-colors">
                     {section.label}
                   </span>
                   <ChevronDown className={cn(
-                    'h-3 w-3 text-slate-600 transition-transform duration-200',
+                    'h-3 w-3 text-stone-400 transition-transform duration-200',
                     isCollapsed && '-rotate-90'
                   )} />
                 </button>
@@ -189,17 +190,17 @@ function Sidebar({ open, onClose }) {
                         className={cn(
                           'sidebar-link flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150',
                           active
-                            ? 'active bg-indigo-500/15 text-white'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+                            ? 'active bg-teal-600/10 text-teal-800 font-semibold'
+                            : 'text-[var(--sidebar-text)] hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)]'
                         )}
                       >
                         <Icon className={cn(
                           'h-[18px] w-[18px] shrink-0 transition-colors',
-                          active ? 'text-indigo-400' : 'text-slate-500'
+                          active ? 'text-teal-600' : 'text-stone-400'
                         )} />
                         <span>{label}</span>
                         {active && (
-                          <ChevronLeft className="h-3 w-3 mr-auto text-indigo-400/60" />
+                          <ChevronLeft className="h-3 w-3 mr-auto text-teal-600/60" />
                         )}
                       </Link>
                     )
@@ -212,21 +213,21 @@ function Sidebar({ open, onClose }) {
 
         {/* ── User section ── */}
         <div className="relative">
-          <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-l from-transparent via-slate-700 to-transparent" />
+          <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-l from-transparent via-stone-200 to-transparent" />
 
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="w-full flex items-center gap-3 px-4 py-4 hover:bg-white/[0.03] transition-colors text-right"
+            className="w-full flex items-center gap-3 px-4 py-4 hover:bg-[var(--sidebar-bg-hover)] transition-colors text-right"
           >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-lg shadow-indigo-500/10">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-lg shadow-teal-500/10">
               {(profile?.first_name?.[0] || profile?.email?.[0] || '?').toUpperCase()}
             </div>
             <div className="flex-1 min-w-0 text-right">
-              <p className="text-[13px] font-semibold text-slate-200 truncate">{fullName}</p>
-              <p className="text-[11px] text-slate-500">{roleLabel}</p>
+              <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{fullName}</p>
+              <p className="text-[11px] text-stone-400">{roleLabel}</p>
             </div>
             <ChevronDown className={cn(
-              'h-3.5 w-3.5 text-slate-600 transition-transform duration-200',
+              'h-3.5 w-3.5 text-stone-400 transition-transform duration-200',
               userMenuOpen && 'rotate-180'
             )} />
           </button>
@@ -237,9 +238,9 @@ function Sidebar({ open, onClose }) {
                 <Link
                   to="/admin"
                   onClick={() => { setUserMenuOpen(false); onClose() }}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.05] transition-all"
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-stone-500 hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)] transition-all"
                 >
-                  <Settings className="h-4 w-4 text-slate-500" />
+                  <Settings className="h-4 w-4 text-stone-400" />
                   הגדרות מערכת
                 </Link>
               )}
@@ -247,9 +248,9 @@ function Sidebar({ open, onClose }) {
                 <Link
                   to="/billing"
                   onClick={() => { setUserMenuOpen(false); onClose() }}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.05] transition-all"
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-stone-500 hover:text-[var(--text-primary)] hover:bg-[var(--sidebar-bg-hover)] transition-all"
                 >
-                  <Coins className="h-4 w-4 text-slate-500" />
+                  <Coins className="h-4 w-4 text-stone-400" />
                   הכנסות פלטפורמה
                 </Link>
               )}
