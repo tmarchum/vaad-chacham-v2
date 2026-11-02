@@ -20,6 +20,7 @@ import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { notifyIssueStatus } from '@/lib/notify'
+import { ISSUE_CATEGORIES } from '@/lib/constants'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
 import {
@@ -79,13 +80,7 @@ const PRIORITY_MAP = {
 // SLA hours per priority
 const SLA_HOURS = { urgent: 24, high: 48, medium: 7 * 24, low: 14 * 24 }
 
-const CATEGORIES = [
-  'אינסטלציה', 'חשמל', 'מעלית', 'ניקיון', 'בטיחות',
-  'חניה', 'רעש', 'מבנה', 'גינון', 'דלתות וחלונות',
-  'מסגרות', 'איטום', 'מיזוג אוויר', 'אחר',
-]
-
-const CATEGORY_OPTIONS = CATEGORIES.map((c) => ({ value: c, label: c }))
+const CATEGORY_OPTIONS = ISSUE_CATEGORIES.map((c) => ({ value: c, label: c }))
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: 'נמוכה' },

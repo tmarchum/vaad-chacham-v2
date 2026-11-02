@@ -9,7 +9,7 @@ import {
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, Menu, X, ChevronDown, ChevronLeft, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
-  Coins, Tags,
+  Coins, Tags, GitBranch,
 } from 'lucide-react'
 
 const NAV_SECTIONS = [
@@ -45,6 +45,7 @@ const NAV_SECTIONS = [
     label: 'תחזוקה',
     items: [
       { to: '/issues',        label: 'תקלות',          icon: Wrench },
+      { to: '/issue-routing', label: 'ניתוב פניות',    icon: GitBranch },
       { to: '/work-orders',   label: 'הזמנות עבודה',   icon: ClipboardList },
       { to: '/vendor-finder', label: 'מציאת ספקים',    icon: Search },
       { to: '/vendors',       label: 'ספקים',          icon: Store },

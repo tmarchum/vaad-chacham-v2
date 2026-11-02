@@ -6,13 +6,74 @@
 // ("מזגן" ⊃ "גן", "שמשה" ⊃ "שמש"); the agent disambiguates by context.
 
 import Anthropic from 'npm:@anthropic-ai/sdk'
-import { corsHeaders, json, serviceClient, identifyCaller, isPrivileged } from '../_shared/mod.ts'
+import { corsHeaders, json, serviceClient, identifyCaller, isPrivileged, timingSafeEqual } from '../_shared/mod.ts'
+
+// Routing notification — when the building has an issue_routing_rules row for
+// this category with a notify_email, alert that address about the new report.
+// Assignment itself (מלווה/ספק/סטטוס) already happened in the DB BEFORE-INSERT
+// trigger (apply_issue_routing); this is only the outbound "נכנסה פנייה
+// בקטגוריה שלך" email. Independent of AI availability, never throws.
+async function sendRoutingNotification(
+  svc: ReturnType<typeof serviceClient>,
+  issue: Record<string, unknown>,
+): Promise<void> {
+  try {
+    if (!issue.building_id || !issue.category) return
+    const { data: rule } = await svc.from('issue_routing_rules')
+      .select('notify_email, assigned_to, vendor_name')
+      .eq('building_id', issue.building_id)
+      .eq('category', issue.category)
+      .eq('active', true)
+      .maybeSingle()
+    if (!rule?.notify_email) return
+
+    // assigned_to stores a unit_resident id — show the person's name.
+    let assigneeName = ''
+    if (rule.assigned_to) {
+      const { data: m } = await svc.from('unit_residents')
+        .select('first_name, last_name').eq('id', rule.assigned_to).maybeSingle()
+      assigneeName = m ? `${m.first_name || ''} ${m.last_name || ''}`.trim() : ''
+    }
+
+    const esc = (s: unknown) => String(s ?? '').replace(/[<>&"]/g, (c) =>
+      ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string))
+    const html = `
+      <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        <div style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;padding:18px;border-radius:12px 12px 0 0;">
+          <h2 style="margin:0;">פנייה חדשה — ${esc(issue.category)}</h2>
+        </div>
+        <div style="background:#f8fafc;padding:18px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
+          <p style="margin:0 0 8px;"><b>${esc(issue.title)}</b></p>
+          ${issue.description ? `<p style="margin:0 0 8px;color:#475569;white-space:pre-wrap;">${esc(issue.description)}</p>` : ''}
+          ${assigneeName ? `<p style="margin:0 0 6px;color:#64748b;">מלווה אחראי: ${esc(assigneeName)}</p>` : ''}
+          ${rule.vendor_name ? `<p style="margin:0 0 6px;color:#64748b;">ספק מועדף: ${esc(rule.vendor_name)}</p>` : ''}
+          <p style="margin-top:14px;"><a href="https://vaad-chacham-v2.vercel.app/issues" style="color:#2563eb;">לטיפול בפנייה במערכת</a></p>
+        </div>
+      </div>`
+
+    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      },
+      body: JSON.stringify({
+        to: rule.notify_email,
+        subject: `פנייה חדשה (${issue.category}) — ${issue.title}`,
+        html,
+        buildingId: issue.building_id,
+        unitId: issue.unit_id || null,
+        channel: 'issue_routing',
+      }),
+    })
+  } catch (e) {
+    console.warn('routing notification failed:', e instanceof Error ? e.message : e)
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
-    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-    if (!apiKey) return json({ error: 'no_api_key' }, 500)
     const svc = serviceClient()
 
     // AUTH (fail closed): either the internal secret presented by the DB
@@ -25,7 +86,7 @@ Deno.serve(async (req: Request) => {
     if (providedSecret) {
       const { data: sec } = await svc.from('messaging_secrets')
         .select('api_token').eq('provider', 'edge-internal').maybeSingle()
-      authorized = !!sec?.api_token && providedSecret === sec.api_token
+      authorized = !!sec?.api_token && timingSafeEqual(providedSecret, sec.api_token)
     }
     if (!authorized) {
       const caller = await identifyCaller(req, svc)
@@ -33,12 +94,20 @@ Deno.serve(async (req: Request) => {
     }
     if (!authorized) return json({ error: 'unauthorized' }, 401)
 
-    const { issueId } = await req.json()
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') return json({ error: 'invalid_json' }, 400)
+    const { issueId } = body as { issueId?: string }
     if (!issueId) return json({ error: 'issueId_required' }, 400)
 
     const { data: issue } = await svc.from('issues')
-      .select('id, title, description, category').eq('id', issueId).maybeSingle()
+      .select('id, building_id, unit_id, title, description, category').eq('id', issueId).maybeSingle()
     if (!issue) return json({ error: 'issue_not_found' }, 404)
+
+    // Category routing email — runs even when AI analysis is unavailable.
+    await sendRoutingNotification(svc, issue)
+
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!apiKey) return json({ ok: true, routed: true, error: 'no_api_key' })
 
     // Categories that actually have active vendors — the agent must pick one.
     const { data: vrows } = await svc.from('vendors')

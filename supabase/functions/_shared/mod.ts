@@ -56,3 +56,19 @@ export async function identifyCaller(req: Request, svc: SupabaseClient): Promise
 
 export const isPrivileged = (c: Caller) =>
   c?.kind === 'service' || (c?.kind === 'user' && ['admin', 'committee'].includes(c.role))
+
+// Constant-time secret comparison — a plain !== leaks the match length through
+// timing. Use for every shared-secret / webhook-token check.
+export function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder()
+  const ab = enc.encode(a)
+  const bb = enc.encode(b)
+  // Compare same-length buffers; fold the length difference into the result
+  // instead of returning early.
+  let diff = ab.length ^ bb.length
+  const n = Math.max(ab.length, bb.length)
+  for (let i = 0; i < n; i++) {
+    diff |= (ab[i] ?? 0) ^ (bb[i] ?? 0)
+  }
+  return diff === 0
+}

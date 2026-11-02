@@ -19,6 +19,7 @@ export const TABLE_MAP = {
   settingsAudit: 'settings_audit',
   expenses: 'expenses',
   vendorRules: 'vendor_rules',
+  issueRoutingRules: 'issue_routing_rules',
   issues: 'issues',
   vendors: 'vendors',
   supervisors: 'supervisors',

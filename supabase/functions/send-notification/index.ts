@@ -13,6 +13,7 @@
 // a lookup error, or a null/disabled value all block.
 
 import { corsHeaders, json, serviceClient, identifyCaller, isPrivileged } from '../_shared/mod.ts'
+import { sendPushToUser, sendPushToUsers } from '../_shared/push.ts'
 
 const GMAIL_USER = Deno.env.get('GMAIL_USER') || ''
 const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD') || ''
@@ -148,6 +149,82 @@ function bookingHtml(resource: Record<string, unknown>, booking: Record<string, 
     </div>`
 }
 
+// ── Issue-status template (committee → reporting resident) ───────
+// Recipient + content derived entirely server-side from the issue row.
+
+const esc = (s: unknown) => String(s ?? '').replace(/[<>&"]/g, (c) =>
+  ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string))
+
+function issueStatusHtml(issue: Record<string, unknown>, kind: string, buildingName: string): string {
+  const done = kind !== 'closed'
+  const headline = done ? 'התקלה שדיווחת טופלה ✓' : 'התקלה שדיווחת נסגרה'
+  return `
+    <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <div style="background:linear-gradient(135deg,#059669,#047857);color:#fff;padding:18px;border-radius:12px 12px 0 0;">
+        <h2 style="margin:0;">${headline}</h2>
+      </div>
+      <div style="background:#f8fafc;padding:18px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
+        <p style="margin:0 0 10px;"><b>${esc(issue.title)}</b></p>
+        ${issue.category ? `<p style="margin:0 0 6px;color:#64748b;">קטגוריה: ${esc(issue.category)}</p>` : ''}
+        ${issue.vendor_name ? `<p style="margin:0 0 6px;color:#64748b;">טופל ע"י: ${esc(issue.vendor_name)}</p>` : ''}
+        ${buildingName ? `<p style="margin:0 0 6px;color:#64748b;">${esc(buildingName)}</p>` : ''}
+        <p style="margin-top:14px;color:#475569;">
+          ${done
+            ? 'נשמח אם תדרגו את הטיפול בפורטל הדיירים — הדירוג עוזר לנו לבחור ספקים טובים.'
+            : 'לפרטים נוספים ניתן לפנות לוועד הבית.'}
+        </p>
+      </div>
+    </div>`
+}
+
+// Build the issue_status recipients: the reporting resident's email (from the
+// unit's primary resident) + a push to the reporting user. Returns null if the
+// issue doesn't exist.
+async function buildIssueStatusNotification(
+  svc: ReturnType<typeof serviceClient>,
+  issueId: string,
+  kind: string,
+) {
+  const { data: issue } = await svc
+    .from('issues')
+    .select('id, building_id, unit_id, title, category, vendor_name, reported_by, status')
+    .eq('id', issueId)
+    .maybeSingle()
+  if (!issue) return null
+
+  let buildingName = ''
+  if (issue.building_id) {
+    const { data: b } = await svc.from('buildings').select('name').eq('id', issue.building_id).maybeSingle()
+    buildingName = b?.name || ''
+  }
+
+  // Email: the unit's primary resident (falls back to any resident with email).
+  let email = ''
+  if (issue.unit_id) {
+    const { data: residents } = await svc
+      .from('unit_residents')
+      .select('email, is_primary')
+      .eq('unit_id', issue.unit_id)
+      .eq('archived', false)
+    const primary = residents?.find((r) => r.is_primary && r.email) || residents?.find((r) => r.email)
+    email = primary?.email || ''
+  }
+
+  const done = kind !== 'closed'
+  return {
+    issue,
+    buildingName,
+    email,
+    subject: done ? `התקלה שדיווחת טופלה — ${issue.title}` : `עדכון על התקלה — ${issue.title}`,
+    html: issueStatusHtml(issue, kind, buildingName),
+    push: {
+      title: done ? 'התקלה שלך טופלה ✓' : 'עדכון על התקלה שלך',
+      body: String(issue.title || ''),
+      data: { type: 'issue_status', issueId: String(issue.id) },
+    },
+  }
+}
+
 // ── Edge Function ────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -161,6 +238,76 @@ Deno.serve(async (req) => {
 
     const caller = await identifyCaller(req, supabase)
     if (!caller) return json({ error: 'unauthorized' }, 401)
+
+    // ── Template: issue_status — committee/admin closes the loop with the
+    // reporting resident. Email + push, both derived server-side. ──
+    if (body.template === 'issue_status' && body.issueId) {
+      if (!isPrivileged(caller)) return json({ error: 'forbidden' }, 403)
+      const n = await buildIssueStatusNotification(supabase, String(body.issueId), String(body.kind || 'resolved'))
+      if (!n) return json({ error: 'issue_not_found' }, 404)
+
+      const pushOut = await sendPushToUser(supabase, n.issue.reported_by as string | null, n.push)
+
+      let emailOk = false, emailErr = ''
+      if (n.email && GMAIL_USER && GMAIL_APP_PASSWORD) {
+        try {
+          await sendGmail(n.email, n.subject, n.html)
+          emailOk = true
+        } catch (err) {
+          emailErr = err instanceof Error ? err.message : String(err)
+        }
+      } else {
+        emailErr = n.email ? 'no_gmail_credentials' : 'no_resident_email'
+      }
+
+      try {
+        await supabase.from('notification_log').insert({
+          building_id: n.issue.building_id,
+          unit_id: n.issue.unit_id,
+          channel: 'issue_status',
+          recipient: n.email || '(push-only)',
+          subject: n.subject,
+          body: n.html,
+          status: (emailOk || pushOut.sent > 0) ? 'sent' : 'failed',
+          error_message: emailOk ? null : (emailErr || null),
+        })
+      } catch { /* */ }
+
+      const delivered = emailOk || pushOut.sent > 0
+      // No email on file + no registered device → nothing to deliver, but that
+      // is not a send FAILURE the committee needs a toast about.
+      const skipped = !delivered && !n.email && pushOut.failed === 0
+      return json({
+        success: delivered || skipped,
+        skipped: skipped || undefined,
+        email: emailOk,
+        push: pushOut,
+        error: delivered || skipped ? undefined : emailErr || 'push_failed',
+      })
+    }
+
+    // ── Template: announcement_push — push broadcast to all residents of the
+    // announcement's building (push-only; no emails). ──
+    if (body.template === 'announcement_push' && body.announcementId) {
+      if (!isPrivileged(caller)) return json({ error: 'forbidden' }, 403)
+      const { data: ann } = await supabase
+        .from('announcements')
+        .select('id, building_id, title, content')
+        .eq('id', body.announcementId)
+        .maybeSingle()
+      if (!ann) return json({ error: 'announcement_not_found' }, 404)
+
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('building_id', ann.building_id)
+      const out = await sendPushToUsers(supabase, (profs || []).map((p) => p.id), {
+        title: 'הודעה חדשה מוועד הבית 📢',
+        body: String(ann.title || '').slice(0, 200),
+        data: { type: 'announcement', announcementId: String(ann.id) },
+      })
+      return json({ success: true, push: out })
+    }
 
     let to = '', subject = '', html = ''
     let buildingId = body.buildingId || null

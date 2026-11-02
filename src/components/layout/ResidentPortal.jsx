@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
-import { hebrewMonthLabel } from '@/lib/constants'
+import { hebrewMonthLabel, ISSUE_CATEGORIES } from '@/lib/constants'
 import { openGate } from '@/lib/gate'
 import { AutoGateToggle } from '@/components/common/AutoGateToggle'
 import { ResidentBooking } from './ResidentBooking'
@@ -48,10 +48,6 @@ const ISSUE_STATUS_MAP = {
   declined:          { label: 'נדחתה',   color: 'text-rose-600',    bg: 'bg-rose-50' },
 }
 
-const ISSUE_CATEGORIES = [
-  'חשמל', 'אינסטלציה', 'מעלית', 'נקיון', 'גינון',
-  'תאורה', 'בטיחות', 'חניה', 'אחר',
-]
 
 export function ResidentPortal() {
   const { profile, user, signOut, updateProfile } = useAuth()
@@ -593,7 +589,8 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
 function AppDownloadBanner() {
   const inNativeApp = !!window.Capacitor?.isNativePlatform?.()
   const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
-  if (inNativeApp || !isAndroid) return null
+  if (inNativeApp) return <AppUpdateBanner />
+  if (!isAndroid) return null
   return (
     <a
       href={ANDROID_APK_URL}
@@ -603,6 +600,55 @@ function AppDownloadBanner() {
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm">הורד את אפליקציית האנדרואיד</p>
         <p className="text-slate-300 text-[11px]">לפתיחת שער מהירה ועדכונים — התקנה ישירה</p>
+      </div>
+    </a>
+  )
+}
+
+/* ── In-app update banner (native app only) ──
+   The APK bundles its web assets, so a resident on an old install never gets
+   web fixes until they reinstall. The Android workflow stamps the release body
+   with "build:<run_number>" and the app with VITE_BUILD="<run_number>-<sha>";
+   when the published build is newer, offer the download. Checks at most once
+   per 6 hours, never blocks, and stays hidden on any error. */
+function AppUpdateBanner() {
+  const [latestUrl, setLatestUrl] = useState(null)
+  useEffect(() => {
+    const ownBuild = parseInt(String(import.meta.env.VITE_BUILD || '').split('-')[0], 10)
+    if (!Number.isFinite(ownBuild)) return
+    try {
+      const last = Number(localStorage.getItem('vc_update_check') || 0)
+      if (Date.now() - last < 6 * 3600_000) {
+        if (localStorage.getItem('vc_update_available') === '1') setLatestUrl(ANDROID_APK_URL)
+        return
+      }
+    } catch { /* storage unavailable — just check */ }
+    ;(async () => {
+      try {
+        const res = await fetch('https://api.github.com/repos/tmarchum/vaad-chacham-v2/releases/tags/android-latest')
+        if (!res.ok) return
+        const rel = await res.json()
+        const m = /build:(\d+)/.exec(rel?.body || '')
+        const latest = m ? parseInt(m[1], 10) : NaN
+        const newer = Number.isFinite(latest) && latest > ownBuild
+        try {
+          localStorage.setItem('vc_update_check', String(Date.now()))
+          localStorage.setItem('vc_update_available', newer ? '1' : '0')
+        } catch { /* */ }
+        if (newer) setLatestUrl(ANDROID_APK_URL)
+      } catch { /* offline / rate-limited — stay quiet */ }
+    })()
+  }, [])
+  if (!latestUrl) return null
+  return (
+    <a
+      href={latestUrl}
+      className="flex items-center gap-3 bg-blue-600 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-blue-700 transition-colors"
+    >
+      <Download className="h-5 w-5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="font-bold text-sm">גרסה חדשה של האפליקציה זמינה</p>
+        <p className="text-blue-100 text-[11px]">הקישו להורדה והתקינו מעל הגרסה הקיימת</p>
       </div>
     </a>
   )

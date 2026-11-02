@@ -10,6 +10,7 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
+import { notifyAnnouncement } from '@/lib/notify'
 import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus, Megaphone, FileText, AlertTriangle, Calendar,
@@ -234,12 +235,18 @@ function Announcements() {
       ...announcementForm,
       publishedAt: announcementForm.publishedAt || new Date().toISOString(),
     }
+    let createdId = null
     if (editingAnnouncementId) {
       await updateAnnouncement(editingAnnouncementId, data)
     } else {
-      await createAnnouncement(data)
+      const created = await createAnnouncement(data)
+      createdId = created?.id || null
     }
     setAnnouncementFormOpen(false)
+
+    // Push notification to the building's residents (works even for residents
+    // without an email; no-op until FCM is configured).
+    if (isNew && createdId) notifyAnnouncement(createdId)
 
     // ── Send email notifications to residents on new publish ─────────────
     if (isNew && sendNotifyEmail && announcementForm.buildingId) {
