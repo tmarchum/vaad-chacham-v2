@@ -90,18 +90,18 @@ export function ResidentOnboarding() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] relative overflow-hidden" dir="rtl">
       {/* Background glow */}
-      <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative bg-white rounded-2xl shadow-2xl shadow-black/20 w-full max-w-lg mx-4 overflow-hidden">
         {/* Top accent */}
-        <div className="h-1 bg-gradient-to-l from-blue-600 via-blue-500 to-indigo-600" />
+        <div className="h-1 bg-gradient-to-l from-indigo-600 via-indigo-500 to-indigo-600" />
 
         {/* Header */}
         <div className="px-8 pt-8 pb-4">
           <div className="flex items-start justify-between gap-3 mb-1">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/25 shrink-0">
                 <span className="text-white text-sm font-black">+ו</span>
               </div>
               <div className="min-w-0">
@@ -126,12 +126,12 @@ export function ResidentOnboarding() {
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                   s < step ? 'bg-green-500 text-white' :
-                  s === step ? 'bg-blue-600 text-white' :
+                  s === step ? 'bg-indigo-600 text-white' :
                   'bg-gray-100 text-gray-400'
                 }`}>
                   {s < step ? <CheckCircle2 className="h-4 w-4" /> : s}
                 </div>
-                <span className={`text-xs font-medium ${s === step ? 'text-blue-600' : 'text-gray-400'}`}>
+                <span className={`text-xs font-medium ${s === step ? 'text-indigo-600' : 'text-gray-400'}`}>
                   {s === 1 ? 'בחר בניין' : 'בחר דירה'}
                 </span>
                 {s < 2 && <div className="w-6 h-px bg-gray-200 mx-1" />}
@@ -149,7 +149,7 @@ export function ResidentOnboarding() {
               <p className="text-sm text-gray-500 mb-4">באיזה בניין אתם גרים?</p>
               {loadingBuildings ? (
                 <div className="flex justify-center py-10">
-                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                  <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
                 </div>
               ) : buildings.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 text-sm">
@@ -161,10 +161,10 @@ export function ResidentOnboarding() {
                     <button
                       key={b.id}
                       onClick={() => handlePickBuilding(b)}
-                      className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-100 hover:border-blue-400 hover:bg-blue-50 transition-all text-right group"
+                      className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 transition-all text-right group"
                     >
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 group-hover:from-blue-100 group-hover:to-blue-200 flex items-center justify-center shrink-0 transition-all">
-                        <Building2 className="h-5 w-5 text-blue-600" />
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 group-hover:from-indigo-100 group-hover:to-indigo-200 flex items-center justify-center shrink-0 transition-all">
+                        <Building2 className="h-5 w-5 text-indigo-600" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-gray-900">{b.name}</p>
@@ -187,7 +187,7 @@ export function ResidentOnboarding() {
           {step === 2 && (
             <div className="mt-4">
               <div className="flex items-center gap-2 mb-4">
-                <button onClick={handleBack} className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium">
+                <button onClick={handleBack} className="text-xs text-indigo-600 hover:underline flex items-center gap-1 font-medium">
                   <ChevronLeft className="h-3.5 w-3.5" />
                   {selectedBuilding?.name}
                 </button>
@@ -197,7 +197,7 @@ export function ResidentOnboarding() {
 
               {loadingUnits ? (
                 <div className="flex justify-center py-10">
-                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                  <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
                 </div>
               ) : units.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 text-sm">
@@ -214,12 +214,12 @@ export function ResidentOnboarding() {
                         onClick={() => setSelectedUnit(u)}
                         className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-right ${
                           isSelected
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-100 hover:border-blue-300 hover:bg-blue-50/50'
+                            ? 'border-indigo-500 bg-indigo-50'
+                            : 'border-gray-100 hover:border-indigo-300 hover:bg-indigo-50/50'
                         }`}
                       >
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-extrabold transition-all ${
-                          isSelected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'
+                          isSelected ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-500'
                         }`}>
                           {num}
                         </div>
@@ -228,7 +228,7 @@ export function ResidentOnboarding() {
                           {u.floor && <p className="text-xs text-gray-400">קומה {u.floor}</p>}
                         </div>
                         {isSelected && (
-                          <CheckCircle2 className="h-5 w-5 text-blue-500 shrink-0" />
+                          <CheckCircle2 className="h-5 w-5 text-indigo-500 shrink-0" />
                         )}
                       </button>
                     )
@@ -242,7 +242,7 @@ export function ResidentOnboarding() {
                 <button
                   onClick={handleConfirm}
                   disabled={!selectedUnit || saving}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20 hover:-translate-y-0.5 hover:shadow-xl"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20 hover:-translate-y-0.5 hover:shadow-xl"
                 >
                   {saving ? (
                     <><Loader2 className="h-4 w-4 animate-spin" /> שומר...</>

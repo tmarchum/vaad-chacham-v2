@@ -2148,17 +2148,17 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               </a>
             )}
             {suggestedVendors.length > 0 && (
-              <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
-                <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לתקלה זו</p>
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3">
+                <p className="text-xs font-semibold text-indigo-700 mb-2">ספקים מומלצים לתקלה זו</p>
                 <div className="space-y-1.5">
                   {suggestedVendors.map(({ vendor, reasons, warnings }) => (
                     <button
                       key={vendor.id} type="button"
                       onClick={() => setField('vendor_name')(vendor.name)}
-                      className={`w-full text-right flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${form.vendor_name === vendor.name ? 'bg-blue-600 text-white' : 'bg-white hover:bg-blue-100 text-slate-700 border border-slate-200'}`}
+                      className={`w-full text-right flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${form.vendor_name === vendor.name ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-indigo-100 text-slate-700 border border-slate-200'}`}
                     >
                       <span className="font-medium truncate">{vendor.name}</span>
-                      <span className={`text-[10px] truncate ${form.vendor_name === vendor.name ? 'text-blue-100' : 'text-slate-400'}`}>
+                      <span className={`text-[10px] truncate ${form.vendor_name === vendor.name ? 'text-indigo-100' : 'text-slate-400'}`}>
                         {reasons.join(' · ')}{warnings.length ? ` · ⚠ ${warnings.join(', ')}` : ''}
                       </span>
                     </button>

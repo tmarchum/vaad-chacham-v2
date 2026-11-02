@@ -29,7 +29,7 @@ import {
 import { HEBREW_MONTHS } from '@/lib/constants'
 
 /* ── Circular progress ring ─────────────────────────────────────────── */
-function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#3b82f6' }) {
+function CircleProgress({ value, size = 56, strokeWidth = 5, color = '#6366f1' }) {
   const r = (size - strokeWidth) / 2
   const circ = 2 * Math.PI * r
   const offset = circ - (Math.min(value, 100) / 100) * circ
@@ -294,7 +294,7 @@ function Dashboard() {
   // First-time onboarding: no buildings yet
   if (!buildingsLoading && buildings.length === 0) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-fade-in-up">
-      <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-blue-500/25">
+      <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-indigo-500/25">
         <Building2 className="h-12 w-12 text-white" />
       </div>
       <h1 className="text-2xl font-extrabold text-[var(--text-primary)] mb-2">ברוכים הבאים לוועד+</h1>
@@ -303,14 +303,14 @@ function Dashboard() {
       </p>
       <Link
         to="/buildings"
-        className="mt-6 inline-flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl px-6 py-3 transition-all shadow-lg shadow-blue-500/20 hover:shadow-xl hover:-translate-y-0.5"
+        className="mt-6 inline-flex items-center gap-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white font-semibold rounded-xl px-6 py-3 transition-all shadow-lg shadow-indigo-500/20 hover:shadow-xl hover:-translate-y-0.5"
       >
         <Building2 className="h-5 w-5" />
         הוסף בניין ראשון
       </Link>
       <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-xl text-right">
         {[
-          { icon: CreditCard, label: 'גבייה חודשית', desc: 'ניהול תשלומים ומעקב חייבים', color: 'text-blue-600 bg-blue-50' },
+          { icon: CreditCard, label: 'גבייה חודשית', desc: 'ניהול תשלומים ומעקב חייבים', color: 'text-indigo-600 bg-indigo-50' },
           { icon: Wrench,     label: 'תקלות ועבודות', desc: 'פתיחת קריאות וניהול ספקים', color: 'text-purple-600 bg-purple-50' },
           { icon: Megaphone,  label: 'הודעות לדיירים', desc: 'שליחת הודעות במייל ו-WhatsApp', color: 'text-amber-600 bg-amber-50' },
         ].map(({ icon: Icon, label, desc, color }) => (
@@ -374,7 +374,7 @@ function Dashboard() {
       {/* ═══════════════════════════════════════════════════════════════
           ── Welcome banner ──
           ═══════════════════════════════════════════════════════════ */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-blue-600 via-blue-700 to-indigo-800 p-6 lg:p-8 text-white shadow-xl shadow-blue-600/10 animate-fade-in-up">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-indigo-600 via-indigo-700 to-indigo-800 p-6 lg:p-8 text-white shadow-xl shadow-indigo-600/10 animate-fade-in-up">
         {/* Background decoration */}
         <div className="absolute top-0 left-0 w-72 h-72 bg-white/5 rounded-full -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-48 h-48 bg-white/5 rounded-full translate-x-1/4 translate-y-1/4" />
@@ -384,7 +384,7 @@ function Dashboard() {
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold mb-1">
               {greeting}{firstName ? `, ${firstName}` : ''} 👋
             </h1>
-            <p className="text-blue-100 text-sm lg:text-base">
+            <p className="text-indigo-100 text-sm lg:text-base">
               {selectedBuilding ? (
                 <>
                   <Building2 className="inline h-4 w-4 ml-1 -mt-0.5" />
@@ -406,17 +406,17 @@ function Dashboard() {
           <div className="flex items-center gap-5">
             <div className="text-center">
               <div className="text-2xl font-black">{units.length}</div>
-              <div className="text-[11px] text-blue-200">דירות</div>
+              <div className="text-[11px] text-indigo-200">דירות</div>
             </div>
             <div className="w-px h-8 bg-white/20" />
             <div className="text-center">
               <div className="text-2xl font-black">{collectionPct}%</div>
-              <div className="text-[11px] text-blue-200">גבייה</div>
+              <div className="text-[11px] text-indigo-200">גבייה</div>
             </div>
             <div className="w-px h-8 bg-white/20" />
             <div className="text-center">
               <div className="text-2xl font-black">{openIssues.length}</div>
-              <div className="text-[11px] text-blue-200">תקלות</div>
+              <div className="text-[11px] text-indigo-200">תקלות</div>
             </div>
           </div>
         </div>
@@ -439,13 +439,13 @@ function Dashboard() {
                 מתוך {formatCurrency(expected)}
               </p>
             </div>
-            <CircleProgress value={collectionPct} color="#3b82f6" />
+            <CircleProgress value={collectionPct} color="#6366f1" />
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-1.5 rounded-full bg-blue-100 overflow-hidden">
-              <div className="h-full rounded-full bg-blue-500 transition-all duration-700" style={{ width: `${Math.min(collectionPct, 100)}%` }} />
+            <div className="flex-1 h-1.5 rounded-full bg-indigo-100 overflow-hidden">
+              <div className="h-full rounded-full bg-indigo-500 transition-all duration-700" style={{ width: `${Math.min(collectionPct, 100)}%` }} />
             </div>
-            <span className="text-xs font-bold text-blue-600 min-w-[36px] text-left">{collectionPct}%</span>
+            <span className="text-xs font-bold text-indigo-600 min-w-[36px] text-left">{collectionPct}%</span>
           </div>
         </div>
 
@@ -539,7 +539,7 @@ function Dashboard() {
           ═══════════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-in-up">
         {[
-          { to: '/payments',     icon: CreditCard,  label: 'גבייה',        color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
+          { to: '/payments',     icon: CreditCard,  label: 'גבייה',        color: 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100' },
           { to: '/issues',       icon: Wrench,      label: 'תקלה חדשה',    color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
           { to: '/expenses',     icon: Wallet,      label: 'הוצאות',       color: 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' },
           { to: '/announcements', icon: Megaphone,  label: 'הודעות',       color: 'text-amber-600 bg-amber-50 hover:bg-amber-100' },
@@ -766,12 +766,12 @@ function Dashboard() {
           </div>
           <div className="relative h-3 rounded-full bg-slate-100 overflow-hidden">
             <div
-              className="absolute inset-y-0 right-0 rounded-full bg-gradient-to-l from-blue-500 to-blue-600 transition-all duration-700 ease-out"
+              className="absolute inset-y-0 right-0 rounded-full bg-gradient-to-l from-indigo-500 to-indigo-600 transition-all duration-700 ease-out"
               style={{ width: `${Math.min(collectionPct, 100)}%` }}
             />
           </div>
           <div className="flex justify-between mt-2">
-            <span className="text-xs font-bold text-blue-600">{collectionPct}%</span>
+            <span className="text-xs font-bold text-indigo-600">{collectionPct}%</span>
             <span className="text-[11px] text-[var(--text-muted)]">
               {paidPayments.length} מתוך {monthPayments.length || units.length} דירות
             </span>
@@ -830,7 +830,7 @@ function Dashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center">
                   <Zap className="h-4 w-4 text-white" />
                 </div>
                 התראות סוכנים חכמים
@@ -856,7 +856,7 @@ function Dashboard() {
                   ? <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                   : alert.severity === 'medium'
                   ? <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                  : <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                  : <Info className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
                 const sevClass = alert.severity === 'high' ? 'severity-high'
                   : alert.severity === 'medium' ? 'severity-medium' : 'severity-low'
                 return (
@@ -871,7 +871,7 @@ function Dashboard() {
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5 leading-relaxed">{alert.description}</p>
                       )}
                       {alert.recommendation && (
-                        <p className="text-xs text-blue-600 mt-1.5 font-medium">💡 {alert.recommendation}</p>
+                        <p className="text-xs text-indigo-600 mt-1.5 font-medium">💡 {alert.recommendation}</p>
                       )}
                     </div>
                     <Badge variant="default" className="shrink-0 text-[10px]">

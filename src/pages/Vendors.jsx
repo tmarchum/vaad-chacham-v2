@@ -190,7 +190,7 @@ function VendorCard({ vendor, stats, onClick, compareMode, isSelected, onToggleC
 
   // Category-based gradient for visual variety
   const CATEGORY_GRADIENTS = {
-    'אינסטלציה': 'from-blue-500 to-blue-600',
+    'אינסטלציה': 'from-indigo-500 to-indigo-600',
     'חשמל': 'from-amber-500 to-amber-600',
     'ניקיון': 'from-emerald-500 to-emerald-600',
     'בנייה ושיפוצים': 'from-orange-500 to-orange-600',
@@ -208,7 +208,7 @@ function VendorCard({ vendor, stats, onClick, compareMode, isSelected, onToggleC
   return (
     <Card
       className={cn(
-        'group cursor-pointer relative overflow-hidden border hover:shadow-lg hover:border-blue-200 transition-all bg-white',
+        'group cursor-pointer relative overflow-hidden border hover:shadow-lg hover:border-indigo-200 transition-all bg-white',
         isSelected ? 'border-[var(--primary)] ring-2 ring-[var(--primary-light)]/30' : 'border-[var(--border)]',
         vendor.is_blacklisted && 'opacity-60'
       )}
@@ -280,7 +280,7 @@ function VendorCard({ vendor, stats, onClick, compareMode, isSelected, onToggleC
           <div className="flex flex-wrap gap-1 mb-2">
             {vendor.specialties.split(',').slice(0, 3).map((s, i) => {
               const pillColors = [
-                'bg-blue-50 text-blue-700 border-blue-200',
+                'bg-indigo-50 text-indigo-700 border-indigo-200',
                 'bg-purple-50 text-purple-700 border-purple-200',
                 'bg-emerald-50 text-emerald-700 border-emerald-200',
               ]

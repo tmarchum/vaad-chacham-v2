@@ -265,7 +265,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       <div className="rounded-xl border border-slate-100 overflow-hidden">
         <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
           {WEEKDAYS.map((d, i) => (
-            <div key={d} className={`text-center py-1.5 text-[11px] font-bold ${i === 6 ? 'text-blue-600' : 'text-slate-400'}`}>{d}</div>
+            <div key={d} className={`text-center py-1.5 text-[11px] font-bold ${i === 6 ? 'text-indigo-600' : 'text-slate-400'}`}>{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7">
@@ -281,11 +281,11 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
                   selected ? 'bg-violet-100 ring-2 ring-violet-400 ring-inset'
                   : day.isBlocked ? 'bg-red-50/50 cursor-not-allowed'
                   : day.isPast || day.isTooFar ? 'bg-slate-50/40 cursor-not-allowed opacity-50'
-                  : day.canBook ? (day.isSaturday ? 'bg-blue-50/40 hover:bg-violet-50' : 'hover:bg-violet-50')
+                  : day.canBook ? (day.isSaturday ? 'bg-indigo-50/40 hover:bg-violet-50' : 'hover:bg-violet-50')
                   : 'bg-amber-50/30 cursor-not-allowed'
                 }`}
               >
-                <span className={`text-xs font-semibold ${day.isSaturday ? 'text-blue-600' : 'text-slate-700'}`}>{day.day}</span>
+                <span className={`text-xs font-semibold ${day.isSaturday ? 'text-indigo-600' : 'text-slate-700'}`}>{day.day}</span>
                 {day.isBlocked ? (
                   <Ban className="h-2.5 w-2.5 text-red-400" />
                 ) : (

@@ -35,7 +35,7 @@ export type Caller =
 export async function identifyCaller(req: Request, svc: SupabaseClient): Promise<Caller> {
   const bearer = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim()
   if (!bearer) return null
-  if (bearer === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) return { kind: 'service' }
+  if (timingSafeEqual(bearer, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '')) return { kind: 'service' }
 
   const { data: userData } = await svc.auth.getUser(bearer)
   const uid = userData?.user?.id

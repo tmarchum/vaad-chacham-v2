@@ -383,7 +383,7 @@ function BuildingAssets() {
 
             // Gradient colors based on category
             const categoryGradientMap = {
-              'מעלית': 'from-blue-500 to-blue-600',
+              'מעלית': 'from-indigo-500 to-indigo-600',
               'אינסטלציה': 'from-cyan-500 to-cyan-600',
               'חשמל': 'from-amber-400 to-amber-500',
               'בטיחות': 'from-red-500 to-red-600',
@@ -413,7 +413,7 @@ function BuildingAssets() {
             return (
               <div
                 key={item.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
+                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)]"
                 onClick={() => setDetailItem(item)}
               >
                 {/* Category circle */}

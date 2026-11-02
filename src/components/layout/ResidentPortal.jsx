@@ -3,15 +3,13 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { hebrewMonthLabel, ISSUE_CATEGORIES } from '@/lib/constants'
-import { openGate } from '@/lib/gate'
-import { AutoGateToggle } from '@/components/common/AutoGateToggle'
 import { ResidentBooking } from './ResidentBooking'
 import {
   Home, CreditCard, Megaphone, LogOut, Building2,
   CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp,
   Wrench, CalendarDays, Users, Plus, X, Send, Loader2,
   UserCog, Mail, Phone, Pencil, Trash2, Ruler, Car, KeyRound,
-  Layers, Hash, StickyNote, Check, Star, DoorOpen, Download, MapPin,
+  Layers, Hash, StickyNote, Check, Star, Download, MapPin,
 } from 'lucide-react'
 
 // Stable public download URL — the Android workflow publishes the APK here.
@@ -35,11 +33,11 @@ const ISSUE_STATUS_MAP = {
   new:               { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
   pending_committee: { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
   acknowledged:      { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
-  approved_for_quotes: { label: 'בטיפול', color: 'text-blue-600',  bg: 'bg-blue-50' },
-  quoted:            { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
-  approved:          { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
-  scheduled:         { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
-  in_progress:       { label: 'בטיפול',  color: 'text-blue-600',    bg: 'bg-blue-50' },
+  approved_for_quotes: { label: 'בטיפול', color: 'text-indigo-600',  bg: 'bg-indigo-50' },
+  quoted:            { label: 'בטיפול',  color: 'text-indigo-600',    bg: 'bg-indigo-50' },
+  approved:          { label: 'בטיפול',  color: 'text-indigo-600',    bg: 'bg-indigo-50' },
+  scheduled:         { label: 'בטיפול',  color: 'text-indigo-600',    bg: 'bg-indigo-50' },
+  in_progress:       { label: 'בטיפול',  color: 'text-indigo-600',    bg: 'bg-indigo-50' },
   completed:         { label: 'הושלם',   color: 'text-emerald-600', bg: 'bg-emerald-50' },
   awaiting_payment:  { label: 'הושלם',   color: 'text-emerald-600', bg: 'bg-emerald-50' },
   resolved:          { label: 'טופל',    color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -167,7 +165,7 @@ export function ResidentPortal() {
   return (
     <div dir="rtl" className="min-h-screen bg-slate-50" style={{ fontFamily: 'inherit' }}>
       {/* ── Header ── */}
-      <header className="bg-gradient-to-l from-blue-600 to-indigo-700 text-white px-4 py-4 shadow-lg">
+      <header className="bg-gradient-to-l from-indigo-600 to-indigo-700 text-white px-4 py-4 shadow-lg">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
@@ -175,12 +173,12 @@ export function ResidentPortal() {
             </div>
             <div>
               <p className="font-extrabold text-[15px] leading-tight">וועד+</p>
-              <p className="text-blue-200 text-[11px]">פורטל דיירים</p>
+              <p className="text-indigo-200 text-[11px]">פורטל דיירים</p>
             </div>
           </div>
           <button
             onClick={signOut}
-            className="flex items-center gap-1.5 text-blue-200 hover:text-white text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 text-indigo-200 hover:text-white text-xs font-medium transition-colors"
           >
             <LogOut className="h-3.5 w-3.5" />
             יציאה
@@ -190,7 +188,7 @@ export function ResidentPortal() {
 
       {loading ? (
         <div className="flex justify-center items-center min-h-[50vh]">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
         </div>
       ) : !contactOk ? (
         /* Mandatory: a valid primary resident (name + 10-digit phone + email) is
@@ -206,11 +204,11 @@ export function ResidentPortal() {
         <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
 
           {/* ── Greeting banner (same as admin dashboard) ── */}
-          <div className="bg-gradient-to-l from-blue-600 to-indigo-700 text-white rounded-2xl shadow-sm px-5 py-4">
+          <div className="bg-gradient-to-l from-indigo-600 to-indigo-700 text-white rounded-2xl shadow-sm px-5 py-4">
             <h1 className="text-lg font-extrabold mb-1">
               {greeting}{firstName ? `, ${firstName}` : ''} 👋
             </h1>
-            <p className="text-blue-100 text-sm">
+            <p className="text-indigo-100 text-sm">
               יום {dayOfWeek}, {gregDate}
               {hebrewDate && (
                 <>
@@ -223,17 +221,6 @@ export function ResidentPortal() {
 
           {/* ── Download the Android app (web visitors on Android only) ── */}
           <AppDownloadBanner />
-
-          {/* ── Open gate — calls the gate controller from the resident's own
-               (already-authorized) number. Native Android app → direct call, no
-               dialer; web/iOS → opens the dialer. Shown only if the building has
-               a gate number configured. ── */}
-          {building?.gate_phone && <GateOpenButton number={building.gate_phone} />}
-
-          {/* ── Location-based auto open (Android app only) ── */}
-          {building?.gate_phone && building?.geo_lat != null && building?.geo_lng != null && (
-            <AutoGateToggle building={building} />
-          )}
 
           {/* ── Details-confirmation: status at top, the confirm action is at the BOTTOM
                (after the resident has scrolled through all their details) ── */}
@@ -251,9 +238,9 @@ export function ResidentPortal() {
 
           {/* ── Unit card ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="bg-gradient-to-l from-blue-50 to-indigo-50 px-5 py-4 border-b border-slate-100">
+            <div className="bg-gradient-to-l from-indigo-50 to-indigo-50 px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
+                <div className="w-11 h-11 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
                   {unitNumber}
                 </div>
                 <div>
@@ -295,7 +282,7 @@ export function ResidentPortal() {
           {/* ── Monthly dues ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
             <div className="flex items-center gap-2 mb-3">
-              <CreditCard className="h-4 w-4 text-blue-600" />
+              <CreditCard className="h-4 w-4 text-indigo-600" />
               <p className="font-bold text-slate-800 text-sm">תשלום חודשי</p>
             </div>
 
@@ -338,7 +325,7 @@ export function ResidentPortal() {
             {/* Pay dues — opens the building's PayBox/Bit link */}
             {building?.dues_payment_url && (
               <a href={building.dues_payment_url} target="_blank" rel="noopener noreferrer"
-                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
+                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold transition-colors">
                 <CreditCard className="h-4 w-4" />
                 שלם דמי ועד
               </a>
@@ -495,7 +482,7 @@ function PaymentHistorySection({ payments }) {
       {payments.length > 6 && (
         <button
           onClick={() => setShowAll(s => !s)}
-          className="mt-2 w-full text-center text-xs font-semibold text-blue-600 hover:text-blue-700 py-1.5"
+          className="mt-2 w-full text-center text-xs font-semibold text-indigo-600 hover:text-indigo-700 py-1.5"
         >
           {showAll ? 'הצג פחות' : `הצג את כל ${payments.length} החודשים`}
         </button>
@@ -518,7 +505,7 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const valid = form.first_name.trim() && isValidPhone(form.phone) && form.email.trim()
-  const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+  const inputCls = 'w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
 
   const submit = async (e) => {
     e.preventDefault()
@@ -545,7 +532,7 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
     <div className="max-w-xl mx-auto px-4 py-6">
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
         <div className="flex items-center gap-2 mb-2">
-          <UserCog className="h-5 w-5 text-blue-600" />
+          <UserCog className="h-5 w-5 text-indigo-600" />
           <p className="font-extrabold text-slate-900">פרטי הדייר הראשי — חובה</p>
         </div>
         <p className="text-sm text-slate-500 mb-4">
@@ -572,7 +559,7 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
           </label>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button type="submit" disabled={saving || !valid}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             שמירה והמשך
           </button>
@@ -599,7 +586,7 @@ function AppDownloadBanner() {
       <Download className="h-5 w-5 shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm">הורד את אפליקציית האנדרואיד</p>
-        <p className="text-slate-300 text-[11px]">לפתיחת שער מהירה ועדכונים — התקנה ישירה</p>
+        <p className="text-slate-300 text-[11px]">עדכונים והתראות ישירות לנייד — התקנה ישירה</p>
       </div>
     </a>
   )
@@ -643,68 +630,17 @@ function AppUpdateBanner() {
   return (
     <a
       href={latestUrl}
-      className="flex items-center gap-3 bg-blue-600 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-blue-700 transition-colors"
+      className="flex items-center gap-3 bg-indigo-600 text-white rounded-2xl shadow-sm px-5 py-3.5 hover:bg-indigo-700 transition-colors"
     >
       <Download className="h-5 w-5 shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm">גרסה חדשה של האפליקציה זמינה</p>
-        <p className="text-blue-100 text-[11px]">הקישו להורדה והתקינו מעל הגרסה הקיימת</p>
+        <p className="text-indigo-100 text-[11px]">הקישו להורדה והתקינו מעל הגרסה הקיימת</p>
       </div>
     </a>
   )
 }
 
-/* ════════════════════════════════════════════════════════════════
-   Open gate button — dials the gate controller. In the native Android
-   app the call is placed directly (no dialer); on web/iOS it falls back
-   to the dialer. Works because the resident's own number is already on
-   the gate's authorized list.
-   ════════════════════════════════════════════════════════════════ */
-function GateOpenButton({ number }) {
-  const [busy, setBusy] = useState(false)
-  const [hint, setHint] = useState(null)
-  const [diag, setDiag] = useState(null)
-
-  const open = async () => {
-    setBusy(true); setHint(null); setDiag(null)
-    try {
-      const res = await openGate(number)
-      // res.mode: 'direct' → call placed, no dialer; 'dialer' → fell back.
-      if (res.mode === 'dialer') {
-        setHint('נפתח החייגן — לחצו "התקשר" כדי לפתוח את השער')
-        // On the native app a dialer fallback means something went wrong —
-        // surface diagnostics so we can pinpoint it.
-        if (res.native) setDiag(res)
-      }
-    } catch (e) {
-      console.error('open gate error', e)
-      setHint('שגיאה בפתיחת השער. נסו שוב.')
-    }
-    setBusy(false)
-  }
-
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
-      <button
-        onClick={open} disabled={busy}
-        className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl bg-gradient-to-l from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-base font-extrabold shadow-sm disabled:opacity-50 transition-colors"
-      >
-        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <DoorOpen className="h-5 w-5" />}
-        פתח שער
-      </button>
-      {hint && <p className="text-[11px] text-slate-500 text-center mt-2">{hint}</p>}
-      {diag && (
-        <p dir="ltr" className="text-[10px] text-slate-400 text-center mt-1 font-mono break-all">
-          plugin:{String(diag.pluginFound)} · err:{diag.error || 'none'} · build:{import.meta.env.VITE_BUILD || 'dev'}
-        </p>
-      )}
-    </div>
-  )
-}
-
-/* ════════════════════════════════════════════════════════════════
-   Location-based auto gate-open toggle (Android app only).
-   ════════════════════════════════════════════════════════════════ */
 /* ════════════════════════════════════════════════════════════════
    My profile
    ════════════════════════════════════════════════════════════════ */
@@ -759,7 +695,7 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
         {!editing && (
           <button
             onClick={startEdit}
-            className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+            className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
           >
             <Pencil className="h-3.5 w-3.5" /> עריכה
           </button>
@@ -772,18 +708,18 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
             <input
               type="text" required placeholder="שם פרטי *"
               value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
             <input
               type="text" placeholder="שם משפחה"
               value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
           <input
             type="tel" inputMode="numeric" required placeholder="טלפון * (10 ספרות)"
             value={form.phone} onChange={e => setForm({ ...form, phone: sanitizePhone(e.target.value) })}
-            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
           {/* Email is the login identity — read-only */}
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-slate-50 text-slate-400 text-sm">
@@ -795,7 +731,7 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
           <div className="flex gap-2">
             <button
               type="submit" disabled={saving || !valid}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               עדכן פרטים
@@ -919,7 +855,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
         </div>
         <button
           onClick={onToggle}
-          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+          className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
         >
           {open ? <><X className="h-3.5 w-3.5" /> ביטול</> : <><Plus className="h-3.5 w-3.5" /> דיווח תקלה</>}
         </button>
@@ -930,12 +866,12 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
           <input
             type="text" required placeholder="כותרת התקלה *"
             value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
           <textarea
             rows={3} placeholder="תיאור התקלה — פרט/י ככל האפשר (לטובת הצעת מחיר מדויקת)"
             value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+            className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
           />
           {/* Fault photo — helps the vendor quote accurately */}
           <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 cursor-pointer hover:bg-slate-50">
@@ -946,14 +882,14 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <option value="">קטגוריה</option>
               {ISSUE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
               value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <option value="low">דחיפות נמוכה</option>
               <option value="medium">דחיפות רגילה</option>
@@ -963,7 +899,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
             type="submit" disabled={saving || !form.title.trim()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             שליחת תקלה
@@ -995,7 +931,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                 </div>
                 {/* Late photo attach — only while the fault is still open and has no photo */}
                 {stillOpen && !i.photo_url && (
-                  <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 cursor-pointer">
+                  <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-indigo-600 hover:text-indigo-700 cursor-pointer">
                     <input type="file" accept="image/*" capture="environment" className="hidden"
                       onChange={e => addPhotoToIssue(i, e.target.files?.[0] || null)} />
                     {photoUploadingId === i.id
@@ -1055,7 +991,7 @@ function ListEditor({ label, items, onChange, placeholder, max, phone }) {
           inputMode={phone ? 'numeric' : undefined}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
           placeholder={phone ? '0501234567' : placeholder}
-          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
         />
         <button type="button" onClick={add} disabled={!valid}
           className="px-3 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 disabled:opacity-40">הוסף</button>
@@ -1131,7 +1067,7 @@ function OwnerDetails({ unit, onSaved }) {
   }
 
   const ownerName = owner ? `${owner.first_name || ''} ${owner.last_name || ''}`.trim() : ''
-  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
 
   return (
     <div className="mt-4 pt-4 border-t border-slate-100">
@@ -1141,7 +1077,7 @@ function OwnerDetails({ unit, onSaved }) {
           <p className="font-bold text-slate-800 text-sm">פרטי בעלים</p>
         </div>
         {!editing && (
-          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700">
             <Pencil className="h-3.5 w-3.5" /> {hasOwner ? 'עריכה' : 'הוספה'}
           </button>
         )}
@@ -1166,7 +1102,7 @@ function OwnerDetails({ unit, onSaved }) {
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={saving || !ownerValid}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               עדכן פרטים
             </button>
@@ -1256,17 +1192,17 @@ function UnitDetailsSection({ unit, building, onSaved }) {
       <span className="text-slate-700 font-medium">{value || '—'}</span>
     </div>
   )
-  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+  const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Home className="h-4 w-4 text-blue-600" />
+          <Home className="h-4 w-4 text-indigo-600" />
           <p className="font-bold text-slate-800 text-sm">פרטי הדירה</p>
         </div>
         {!editing && (
-          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+          <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700">
             <Pencil className="h-3.5 w-3.5" /> עריכה
           </button>
         )}
@@ -1318,7 +1254,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2">
             <button type="submit" disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               עדכן פרטים
             </button>
@@ -1360,7 +1296,7 @@ function UnitDetailsSection({ unit, building, onSaved }) {
    Residents — grouped by unit type (owned vs rented)
    ════════════════════════════════════════════════════════════════ */
 const EMPTY_PERSON = { first_name: '', last_name: '', phone: '', email: '' }
-const personFieldCls = 'px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
+const personFieldCls = 'px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400'
 
 // Module-level so it doesn't remount on each keystroke (would steal focus)
 function PersonFields({ value, onChange }) {
@@ -1461,7 +1397,7 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
           <p className="font-bold text-slate-800 text-sm">{title}</p>
         </div>
         <button onClick={() => { setAdding(a => !a); setError(null) }}
-          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+          className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700">
           {adding ? <><X className="h-3.5 w-3.5" /> ביטול</> : <><Plus className="h-3.5 w-3.5" /> {addLabel}</>}
         </button>
       </div>
@@ -1479,7 +1415,7 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
           <PersonFields value={form} onChange={setForm} />
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button type="submit" disabled={saving || !addValid}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             הוספה
           </button>
@@ -1540,7 +1476,7 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
                     className={`p-1.5 ${r.is_primary ? 'text-amber-500' : 'text-slate-300 hover:text-amber-500'}`}>
                     <Star className={`h-3.5 w-3.5 ${r.is_primary ? 'fill-amber-400' : ''}`} />
                   </button>
-                  <button onClick={() => startEdit(r)} className="p-1.5 text-slate-400 hover:text-blue-600" title="עריכה">
+                  <button onClick={() => startEdit(r)} className="p-1.5 text-slate-400 hover:text-indigo-600" title="עריכה">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   {!r.is_primary && (

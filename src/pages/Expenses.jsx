@@ -309,7 +309,7 @@ function Expenses() {
             return (
               <div
                 key={exp.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer"
                 onClick={() => setDetailExpense(exp)}
               >
                 {/* Category gradient circle */}

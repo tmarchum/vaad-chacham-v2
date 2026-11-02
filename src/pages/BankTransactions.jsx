@@ -569,14 +569,14 @@ export default function BankTransactions() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-sm">
                 <CheckCircle2 className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="text-xs text-[var(--text-secondary)]">משויכות</p>
-                <p className="text-lg font-bold text-blue-600">{summary.matched} / {summary.total}</p>
+                <p className="text-lg font-bold text-indigo-600">{summary.matched} / {summary.total}</p>
                 <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-500" style={{ width: summary.total > 0 ? `${Math.round((summary.matched / summary.total) * 100)}%` : '0%' }} />
+                  <div className="h-full rounded-full bg-indigo-500" style={{ width: summary.total > 0 ? `${Math.round((summary.matched / summary.total) * 100)}%` : '0%' }} />
                 </div>
               </div>
             </div>
@@ -621,7 +621,7 @@ export default function BankTransactions() {
             // Status dot colors
             const dotColorMap = {
               matched: 'bg-emerald-500',
-              suggested: 'bg-blue-500',
+              suggested: 'bg-indigo-500',
               unmatched: 'bg-amber-500',
               ignored: 'bg-slate-400',
               excluded: 'bg-red-400',
@@ -631,7 +631,7 @@ export default function BankTransactions() {
             // Status text colors
             const statusTextColorMap = {
               matched: 'text-emerald-700',
-              suggested: 'text-blue-700',
+              suggested: 'text-indigo-700',
               unmatched: 'text-amber-700',
               ignored: 'text-slate-600',
               excluded: 'text-red-600',
@@ -641,7 +641,7 @@ export default function BankTransactions() {
             return (
               <div
                 key={tx.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer"
               >
                 {/* Type circle */}
                 <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>

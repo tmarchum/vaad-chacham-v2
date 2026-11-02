@@ -14,7 +14,7 @@ export default function NotFound() {
       </div>
 
       {/* Icon */}
-      <div className="mt-2 mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+      <div className="mt-2 mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-lg">
         <Home className="h-8 w-8 text-white" />
       </div>
 

@@ -264,7 +264,7 @@ function Compliance() {
             return (
               <div
                 key={item.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
+                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)]"
                 onClick={() => setDetailItem(item)}
               >
                 {/* Status circle */}

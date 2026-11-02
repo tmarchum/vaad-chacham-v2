@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
  */
 
 const ACCENT_COLORS = {
-  blue:    { bar: 'bg-blue-500',    icon: 'bg-blue-50 text-blue-600',    value: 'text-blue-700' },
+  blue:    { bar: 'bg-indigo-500',    icon: 'bg-indigo-50 text-indigo-600',    value: 'text-indigo-700' },
   emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600', value: 'text-emerald-700' },
   red:     { bar: 'bg-red-500',     icon: 'bg-red-50 text-red-600',      value: 'text-red-700' },
   amber:   { bar: 'bg-amber-500',   icon: 'bg-amber-50 text-amber-600',  value: 'text-amber-700' },

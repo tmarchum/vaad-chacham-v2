@@ -11,9 +11,7 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { Input } from '@/components/ui/input'
 import { formatCurrency, cn, sanitizePhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
-import { Building2, Plus, Pencil, Trash2, X, DoorOpen } from 'lucide-react'
-import { openGate } from '@/lib/gate'
-import { AutoGateToggle } from '@/components/common/AutoGateToggle'
+import { Building2, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 const ELEVATOR_OPTIONS = [0,1,2,3,4,5].map(n => ({ value: String(n), label: String(n) }))
 
@@ -98,7 +96,7 @@ const EMPTY_FORM = {
   name: '', alias: '', street: '', house_number: '', city: '',
   total_units: '', floors: '', year_built: '',
   parking: '', storage: '', elevators: '0',
-  max_gate_phones: '', parking_lots: [], gate_phone: '', dues_payment_url: '',
+  max_gate_phones: '', parking_lots: [], dues_payment_url: '',
   generator: false, water_pump: false, fire_suppression: false,
   intercom: false, shared_roof: false, gym: false, pool: false,
   residents_room: false, management_company: false,
@@ -174,7 +172,7 @@ function Buildings() {
       elevators: String(b.elevators ?? 0),
       max_gate_phones: b.max_gate_phones ?? '',
       parking_lots: Array.isArray(b.parking_lots) ? b.parking_lots : [],
-      gate_phone: b.gate_phone ?? '',
+
       dues_payment_url: b.dues_payment_url ?? '',
       generator: !!b.generator,
       water_pump: !!b.water_pump,
@@ -217,7 +215,7 @@ function Buildings() {
       elevators: Number(form.elevators),
       max_gate_phones: form.max_gate_phones ? Number(form.max_gate_phones) : 2,
       parking_lots: (form.parking_lots || []).map(s => (s || '').trim()).filter(Boolean),
-      gate_phone: sanitizePhone(form.gate_phone || ''),
+
       dues_payment_url: (form.dues_payment_url || '').trim(),
       generator: !!form.generator,
       water_pump: !!form.water_pump,
@@ -320,16 +318,16 @@ function Buildings() {
             return (
               <div
                 key={b.id}
-                className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
+                className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer overflow-hidden"
                 onClick={() => setDetailBuilding(b)}
               >
                 {/* Top gradient accent bar */}
-                <div className="h-1 w-full bg-gradient-to-l from-blue-500 to-indigo-600" />
+                <div className="h-1 w-full bg-gradient-to-l from-indigo-500 to-indigo-600" />
 
                 <div className="p-5">
                   <div className="flex items-start gap-4 mb-4">
                     {/* Building gradient circle */}
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-sm">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-sm">
                       {initial}
                     </div>
 
@@ -353,7 +351,7 @@ function Buildings() {
                   {/* Stats row */}
                   <div className="flex flex-wrap gap-3 text-xs">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      <div className="w-2 h-2 rounded-full bg-indigo-500" />
                       <span className="text-[var(--text-secondary)]">{unitCount} דירות</span>
                     </div>
                     {b.floors && (
@@ -395,25 +393,6 @@ function Buildings() {
             <DetailRow label="שנת בנייה" value={detailBuilding.year_built} />
             <DetailRow label="חניות" value={detailBuilding.parking} />
             <DetailRow label="מחסנים" value={detailBuilding.storage} />
-            <DetailRow label="טלפון לפתיחת השער" value={detailBuilding.gate_phone} />
-            {detailBuilding.gate_phone && (
-              <div className="py-1">
-                <Button type="button" size="sm" onClick={() => openGate(detailBuilding.gate_phone)}
-                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-                  <DoorOpen className="h-4 w-4" />
-                  פתח שער (בדיקה)
-                </Button>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                  במחשב — פותח חייגן/לא זמין; בנייד שמספרו מורשה בשער — פותח את השער.
-                </p>
-              </div>
-            )}
-            {/* GPS auto-open settings — renders only inside the Android app.
-                Admins never see the resident portal, so this is their access
-                point to the auto-gate feature. */}
-            <div className="py-1">
-              <AutoGateToggle building={detailBuilding} />
-            </div>
             <DetailRow label="מקס׳ טלפוני שער חניה" value={detailBuilding.max_gate_phones} />
             <DetailRow label="חניונים" value={Array.isArray(detailBuilding.parking_lots) && detailBuilding.parking_lots.length ? detailBuilding.parking_lots.join(', ') : null} />
             <DetailRow label="מעליות" value={detailBuilding.elevators} />
@@ -497,16 +476,6 @@ function Buildings() {
             {/* Parking */}
             <div>
               <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">חניה</h4>
-              <FormField
-                label="מספר טלפון לפתיחת השער (היעד שמחייגים אליו)"
-                type="tel"
-                value={form.gate_phone}
-                onChange={e => setField('gate_phone')(sanitizePhone(e.target.value))}
-                placeholder="למשל: 0501234567"
-              />
-              <p className="text-xs text-[var(--text-muted)] -mt-2 mb-3">
-                המספר של בקר השער. כפתור "פתח שער" בפורטל הדייר יחייג אליו.
-              </p>
               <FormField
                 label="קישור לתשלום דמי ועד (PayBox / ביט)"
                 value={form.dues_payment_url}

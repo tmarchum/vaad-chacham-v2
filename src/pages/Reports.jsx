@@ -128,7 +128,7 @@ const STAT_GRADIENTS = {
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = 'var(--primary)', className = '' }) {
-  const gradient = STAT_GRADIENTS[color] || 'from-blue-500 to-blue-600'
+  const gradient = STAT_GRADIENTS[color] || 'from-indigo-500 to-indigo-600'
   return (
     <Card className={cn('overflow-hidden border border-[var(--border)] hover:shadow-md transition-all', className)}>
       <div className={`h-1 bg-gradient-to-r ${gradient}`} />
@@ -409,10 +409,10 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
 
       {/* Monthly breakdown */}
       <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
+        <div className="h-1 bg-gradient-to-r from-indigo-500 to-indigo-500" />
         <CardContent className="p-4">
           <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-indigo-500 flex items-center justify-center shadow-sm">
               <BarChart2 size={16} className="text-white" />
             </div>
             פירוט חודשי (6 חודשים אחרונים)
@@ -564,7 +564,7 @@ function ResidentsTab({ units, payments, buildingId }) {
             <div
               key={unit.id}
               className={cn(
-                'group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all',
+                'group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all',
                 hasDebt ? 'border-red-200/60' : 'border-[var(--border)]'
               )}
             >
@@ -815,7 +815,7 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
               {top5.map((issue, idx) => (
                 <div
                   key={issue.id}
-                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
+                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all border-[var(--border)]"
                 >
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
                     {idx + 1}
@@ -856,7 +856,7 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
               {byVendor.map(({ name, count, cost }) => (
                 <div
                   key={name}
-                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
+                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all border-[var(--border)]"
                 >
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-teal-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
                     {name.charAt(0)}
@@ -1023,10 +1023,10 @@ function BudgetTab({ units, expenses, buildingId }) {
 
       {/* Monthly projection table */}
       <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
+        <div className="h-1 bg-gradient-to-r from-indigo-500 to-cyan-500" />
         <CardContent className="p-4">
           <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-sm">
               <TrendingUp size={16} className="text-white" />
             </div>
             תחזית חודשית שנתית

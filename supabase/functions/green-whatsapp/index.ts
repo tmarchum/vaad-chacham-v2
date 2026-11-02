@@ -17,18 +17,8 @@
 // collection messages must NOT be wired to auto-send through here — keep that
 // human-initiated and toggle-gated (see the collection-email incident).
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  })
+import type { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
 
 // Match a vendor by the last 9 digits of an Israeli number (05x / 9725x / +972
 // all normalize to the same tail). Used both to identify inbound senders and
@@ -47,10 +37,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const svc = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    )
+    const svc = serviceClient()
 
     const body = await req.json().catch(() => ({}))
 
@@ -62,10 +49,21 @@ Deno.serve(async (req: Request) => {
       const { data: sec } = await svc.from('messaging_secrets')
         .select('webhook_token').eq('provider', 'greenapi').maybeSingle()
       // Fail closed: no token configured → reject all webhooks.
-      if (!sec?.webhook_token || provided !== sec.webhook_token) {
+      if (!sec?.webhook_token || !timingSafeEqual(provided, sec.webhook_token)) {
         return json({ error: 'unauthorized' }, 401)
       }
       if (body.typeWebhook !== 'incomingMessageReceived') return json({ ok: true, ignored: body.typeWebhook })
+
+      // Dedup: GreenAPI retries webhooks it thinks failed, and two concurrent
+      // deliveries of the same idMessage must not double-process a vendor
+      // reply (double status flip + double ack). The PK insert is the lock —
+      // the second insert loses and bails out.
+      const msgId = String(body.idMessage || '')
+      if (msgId) {
+        const { error: dupErr } = await svc.from('processed_webhooks')
+          .insert({ provider: 'greenapi', external_id: msgId })
+        if (dupErr) return json({ ok: true, ignored: 'duplicate' })
+      }
 
       const chat = String(body?.senderData?.chatId || '')
       const text = String(

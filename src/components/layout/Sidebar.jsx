@@ -119,12 +119,12 @@ function Sidebar({ open, onClose }) {
         <div className="relative px-5 pt-6 pb-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/20">
                 <span className="text-white text-sm font-black">+ו</span>
               </div>
               <div>
                 <h1 className="text-xl font-extrabold text-white tracking-tight leading-none">
-                  וועד<span className="text-blue-400">+</span>
+                  וועד<span className="text-indigo-400">+</span>
                 </h1>
                 <span className="text-[10px] text-slate-500 font-medium">VAADPLUS</span>
               </div>
@@ -147,7 +147,7 @@ function Sidebar({ open, onClose }) {
               className={cn(
                 'w-full h-9 rounded-lg bg-white/[0.06] border border-white/[0.08]',
                 'pr-8 pl-3 text-[13px] text-slate-300',
-                'focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/30',
+                'focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/30',
                 'appearance-none cursor-pointer transition-all'
               )}
             >
@@ -197,17 +197,17 @@ function Sidebar({ open, onClose }) {
                         className={cn(
                           'sidebar-link flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150',
                           active
-                            ? 'active bg-blue-500/15 text-white'
+                            ? 'active bg-indigo-500/15 text-white'
                             : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
                         )}
                       >
                         <Icon className={cn(
                           'h-[18px] w-[18px] shrink-0 transition-colors',
-                          active ? 'text-blue-400' : 'text-slate-500'
+                          active ? 'text-indigo-400' : 'text-slate-500'
                         )} />
                         <span>{label}</span>
                         {active && (
-                          <ChevronLeft className="h-3 w-3 mr-auto text-blue-400/60" />
+                          <ChevronLeft className="h-3 w-3 mr-auto text-indigo-400/60" />
                         )}
                       </Link>
                     )
@@ -226,7 +226,7 @@ function Sidebar({ open, onClose }) {
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="w-full flex items-center gap-3 px-4 py-4 hover:bg-white/[0.03] transition-colors text-right"
           >
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-lg shadow-blue-500/10">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-lg shadow-indigo-500/10">
               {(profile?.first_name?.[0] || profile?.email?.[0] || '?').toUpperCase()}
             </div>
             <div className="flex-1 min-w-0 text-right">

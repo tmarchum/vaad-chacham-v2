@@ -17,7 +17,7 @@ function TabGroup({ tabs = [], activeTab, onChange, className, ...props }) {
             'px-4 py-2.5 text-[13px] font-semibold transition-all duration-150 cursor-pointer',
             '-mb-px border-b-2 rounded-t-lg',
             activeTab === tab.key
-              ? 'border-[var(--primary)] text-[var(--primary)] bg-blue-50/50'
+              ? 'border-[var(--primary)] text-[var(--primary)] bg-indigo-50/50'
               : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]'
           )}
         >

@@ -645,7 +645,7 @@ export default function RoomBooking() {
               { label: 'ממתינים לאישור', value: stats.pending, icon: Clock, gradient: 'from-amber-500 to-amber-600', color: 'text-amber-600' },
               { label: 'מאושרים', value: stats.approved, icon: CheckCircle2, gradient: 'from-emerald-500 to-emerald-600', color: 'text-emerald-600' },
               { label: 'שריונים החודש', value: stats.monthCount, icon: CalendarDays, gradient: 'from-violet-500 to-violet-600', color: 'text-violet-600' },
-              { label: 'הכנסות החודש', value: formatCurrency(stats.revenue), icon: CreditCard, gradient: 'from-blue-500 to-blue-600', color: 'text-blue-600' },
+              { label: 'הכנסות החודש', value: formatCurrency(stats.revenue), icon: CreditCard, gradient: 'from-indigo-500 to-indigo-600', color: 'text-indigo-600' },
             ].map((s, i) => (
               <Card key={i} className="border-0 shadow-sm">
                 <CardContent className="p-4">
@@ -674,7 +674,7 @@ export default function RoomBooking() {
           <div className="bg-white rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden">
             <div className="grid grid-cols-7 border-b border-[var(--border)]">
               {WEEKDAYS.map((d, i) => (
-                <div key={d} className={`text-center py-2.5 text-xs font-bold ${i === 6 ? 'text-blue-600 bg-blue-50/50' : 'text-[var(--text-secondary)]'}`}>{d}</div>
+                <div key={d} className={`text-center py-2.5 text-xs font-bold ${i === 6 ? 'text-indigo-600 bg-indigo-50/50' : 'text-[var(--text-secondary)]'}`}>{d}</div>
               ))}
             </div>
             <div className="grid grid-cols-7">
@@ -692,23 +692,23 @@ export default function RoomBooking() {
                     className={`min-h-[90px] border-b border-l border-[var(--border)] p-1.5 transition-all relative ${
                       day.isBlocked ? 'bg-red-50/60 cursor-not-allowed'
                       : day.isPast || day.isTooFar ? 'bg-slate-50/50 cursor-not-allowed opacity-60'
-                      : day.isShabbatOrChag ? 'bg-blue-50/40 cursor-pointer hover:bg-blue-50'
+                      : day.isShabbatOrChag ? 'bg-indigo-50/40 cursor-pointer hover:bg-indigo-50'
                       : canBook ? 'bg-white cursor-pointer hover:bg-violet-50/40' : 'bg-amber-50/30'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className={`text-sm font-bold leading-none ${
                         isToday ? 'bg-violet-600 text-white w-7 h-7 rounded-full flex items-center justify-center'
-                        : day.isSaturday ? 'text-blue-600' : 'text-[var(--text-primary)]'
+                        : day.isSaturday ? 'text-indigo-600' : 'text-[var(--text-primary)]'
                       }`}>{day.day}</span>
                       {day.isBlocked && <Ban className="h-3.5 w-3.5 text-red-400" />}
                     </div>
                     {holidayName && (
-                      <p className={`text-[9px] leading-tight truncate mb-1 ${day.isYomTov ? 'text-blue-700 font-bold' : 'text-blue-500'}`}>
+                      <p className={`text-[9px] leading-tight truncate mb-1 ${day.isYomTov ? 'text-indigo-700 font-bold' : 'text-indigo-500'}`}>
                         {day.isYomTov && <Star className="h-2.5 w-2.5 inline ml-0.5" />}{holidayName}
                       </p>
                     )}
-                    {day.isSaturday && !holidayName && <p className="text-[9px] text-blue-500 mb-1">שבת</p>}
+                    {day.isSaturday && !holidayName && <p className="text-[9px] text-indigo-500 mb-1">שבת</p>}
 
                     <div className="flex flex-wrap gap-0.5 mt-auto">
                       {day.hasFullDay && <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">יממה 24שע</span>}
@@ -730,7 +730,7 @@ export default function RoomBooking() {
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100" /> בוקר 08:00-14:00</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-100" /> ערב 16:00-23:00</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-100" /> יממה 24 שעות</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-50 border border-blue-200" /> שבת / חג</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-50 border border-indigo-200" /> שבת / חג</span>
             <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-50 border border-red-200" /> חסום</span>
             <span className="flex items-center gap-1.5"><Clock className="h-3 w-3 text-amber-500" /> ממתין לאישור</span>
           </div>
@@ -897,7 +897,7 @@ export default function RoomBooking() {
                         <SlotIcon className={`h-5 w-5 mx-auto mb-1 ${isSelected ? 'text-violet-600' : ''}`} />
                         <p className="text-xs font-medium">{slot.short}</p>
                         <p className="text-[10px] mt-0.5">{formatCurrency(getSlotPrice(key))}</p>
-                        {isFullDayRestricted && <p className="text-[9px] text-blue-400">שבת/חג בלבד</p>}
+                        {isFullDayRestricted && <p className="text-[9px] text-indigo-400">שבת/חג בלבד</p>}
                         {!available && !isFullDayRestricted && <p className="text-[9px] text-red-400">תפוס</p>}
                       </button>
                     )
@@ -963,8 +963,8 @@ export default function RoomBooking() {
 
               {/* Custom questions */}
               {(selectedResource?.custom_questions || []).length > 0 && (
-                <div className="space-y-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
-                  <p className="text-xs font-bold text-blue-700 flex items-center gap-1"><HelpCircle className="h-3.5 w-3.5" />שאלות נוספות</p>
+                <div className="space-y-3 p-3 rounded-xl bg-indigo-50/50 border border-indigo-100">
+                  <p className="text-xs font-bold text-indigo-700 flex items-center gap-1"><HelpCircle className="h-3.5 w-3.5" />שאלות נוספות</p>
                   {(selectedResource.custom_questions || []).map(q => (
                     <div key={q.id}>
                       {q.type === 'boolean' ? (
@@ -1078,15 +1078,15 @@ export default function RoomBooking() {
             />
 
             {/* Custom questions */}
-            <div className="space-y-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
-              <p className="text-sm font-bold text-blue-700 flex items-center gap-1">
+            <div className="space-y-3 p-3 rounded-xl bg-indigo-50/50 border border-indigo-100">
+              <p className="text-sm font-bold text-indigo-700 flex items-center gap-1">
                 <HelpCircle className="h-4 w-4" />שאלות בטופס השריון
               </p>
               {(resourceForm.custom_questions || []).map((q, idx) => (
-                <div key={q.id} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-blue-100">
-                  <span className="text-xs text-blue-600 font-bold w-5">{idx + 1}.</span>
+                <div key={q.id} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-indigo-100">
+                  <span className="text-xs text-indigo-600 font-bold w-5">{idx + 1}.</span>
                   <span className="flex-1 text-sm">{q.text}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">
                     {q.type === 'text' ? 'טקסט' : q.type === 'number' ? 'מספר' : 'כן/לא'}
                   </span>
                   <button onClick={() => removeQuestion(q.id)} className="text-red-400 hover:text-red-600"><XIcon className="h-3.5 w-3.5" /></button>
@@ -1224,7 +1224,7 @@ function BookingCard({ bk, resource, residentMap, onApprove, onReject, onCancel,
       {questions.length > 0 && Object.keys(answers).length > 0 && (
         <div className="flex flex-wrap gap-2 pr-15">
           {questions.map(q => answers[q.id] != null && answers[q.id] !== '' ? (
-            <span key={q.id} className="text-[11px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
+            <span key={q.id} className="text-[11px] px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
               {q.text}: <strong>{typeof answers[q.id] === 'boolean' ? (answers[q.id] ? 'כן' : 'לא') : answers[q.id]}</strong>
             </span>
           ) : null)}

@@ -776,7 +776,7 @@ export default function BuildingAgent() {
                   label: 'תקינה',
                   score: healthScore.complianceScore,
                   icon: <Shield className="h-5 w-5" />,
-                  gradient: 'from-blue-500 to-blue-600',
+                  gradient: 'from-indigo-500 to-indigo-600',
                   finding:
                     healthScore.complianceScore < 80
                       ? 'ישנם מסמכי תקינות שפג תוקפם'
@@ -826,7 +826,7 @@ export default function BuildingAgent() {
                 const color = scoreColorVar(item.score)
                 const dotColor = item.score >= 80 ? 'bg-emerald-500' : item.score >= 60 ? 'bg-amber-500' : 'bg-red-500'
                 return (
-                  <div key={item.label} className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all">
+                  <div key={item.label} className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all">
                     {/* Score circle */}
                     <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
                       {item.icon}
@@ -877,12 +877,12 @@ export default function BuildingAgent() {
                 </Card>
               ) : (
                 recommendations.map((rec) => {
-                  const recGradient = rec.urgency === 'high' ? 'from-red-500 to-red-600' : rec.urgency === 'medium' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'
-                  const urgDot = rec.urgency === 'high' ? 'bg-red-500 animate-pulse' : rec.urgency === 'medium' ? 'bg-amber-500' : 'bg-blue-400'
+                  const recGradient = rec.urgency === 'high' ? 'from-red-500 to-red-600' : rec.urgency === 'medium' ? 'from-amber-500 to-amber-600' : 'from-indigo-500 to-indigo-600'
+                  const urgDot = rec.urgency === 'high' ? 'bg-red-500 animate-pulse' : rec.urgency === 'medium' ? 'bg-amber-500' : 'bg-indigo-400'
                   return (
                     <div
                       key={rec.id}
-                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all"
                     >
                       {/* Type icon */}
                       <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${recGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
@@ -933,7 +933,7 @@ export default function BuildingAgent() {
               {/* Stats row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" />, gradient: 'from-blue-500 to-blue-600' },
+                  { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" />, gradient: 'from-indigo-500 to-indigo-600' },
                   { label: 'פתוחות', value: issueAnalysis.open, icon: <AlertTriangle className="h-4 w-4" />, gradient: 'from-red-500 to-red-600', color: 'var(--danger)' },
                   { label: 'סגורות', value: issueAnalysis.resolved, icon: <CheckCircle className="h-4 w-4" />, gradient: 'from-emerald-500 to-emerald-600', color: 'var(--success,#22c55e)' },
                   { label: 'ימי טיפול ממוצע', value: issueAnalysis.avgResolutionDays || '—', icon: <RefreshCw className="h-4 w-4" />, gradient: 'from-purple-500 to-purple-600' },
@@ -1076,7 +1076,7 @@ export default function BuildingAgent() {
                         return (
                           <div
                             key={v.id}
-                            className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                            className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all"
                           >
                             {/* Rank circle */}
                             <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${medalGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
@@ -1111,7 +1111,7 @@ export default function BuildingAgent() {
               {/* Issue matching */}
               {vendorIntel.matchedIssues.length > 0 && (
                 <div className="relative rounded-xl border bg-white overflow-hidden">
-                  <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
+                  <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-indigo-600" />
                   <div className="p-4">
                     <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">התאמת תקלות לספקים</h3>
                     <div className="space-y-2">

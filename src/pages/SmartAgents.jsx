@@ -196,7 +196,7 @@ function AiInsightsPanel({ agentType, ai, onAsk }) {
                     <li key={i} className="flex gap-2 text-sm text-[var(--text-primary)]">
                       <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${
                         item.severity === 'high' || item.urgency === 'high' ? 'text-red-500' :
-                        item.severity === 'medium' || item.urgency === 'medium' ? 'text-amber-500' : 'text-blue-500'
+                        item.severity === 'medium' || item.urgency === 'medium' ? 'text-amber-500' : 'text-indigo-500'
                       }`} />
                       <span>{typeof item === 'string' ? item : (item.description || item.title || item.reason || JSON.stringify(item))}</span>
                     </li>
@@ -298,7 +298,7 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
+          <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-indigo-600" />
           <div className="p-4">
             <p className="text-xs text-[var(--text-secondary)] mb-1">אחוז גבייה חודש נוכחי</p>
             <p className="text-2xl font-bold mb-2" style={{ color: rateColor }}>{collectionRate}%</p>
@@ -494,12 +494,12 @@ function VendorAgentPanel({ analysis, onAddVendor }) {
       )}
 
       {issueCategoriesWithoutVendor.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-indigo-200 bg-indigo-50">
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="h-5 w-5 text-indigo-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-semibold text-blue-700 text-sm mb-1">קטגוריות תקלות ללא ספק מוקצה</p>
+                <p className="font-semibold text-indigo-700 text-sm mb-1">קטגוריות תקלות ללא ספק מוקצה</p>
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {issueCategoriesWithoutVendor.map(cat => (
                     <Badge key={cat} variant="info">{cat}</Badge>
@@ -527,7 +527,7 @@ function VendorAgentPanel({ analysis, onAddVendor }) {
           <div className="space-y-2">
             {suggestions.map((vendor, idx) => {
               const vendorGradients = [
-                'from-blue-500 to-blue-600',
+                'from-indigo-500 to-indigo-600',
                 'from-emerald-500 to-emerald-600',
                 'from-purple-500 to-purple-600',
                 'from-amber-500 to-amber-600',
@@ -543,7 +543,7 @@ function VendorAgentPanel({ analysis, onAddVendor }) {
               return (
                 <div
                   key={idx}
-                  className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
+                  className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all"
                 >
                   {/* Vendor initial circle */}
                   <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${vendorGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
@@ -905,7 +905,7 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
               return (
                 <div
                   key={idx}
-                  className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md transition-all ${priorityBorderClass(req.priority)} hover:border-blue-200`}
+                  className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md transition-all ${priorityBorderClass(req.priority)} hover:border-indigo-200`}
                 >
                   {/* Category icon circle */}
                   <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${priorityGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
@@ -1347,9 +1347,9 @@ export default function SmartAgents() {
       icon: CreditCard,
       description: 'מזהה חייבים, מחשב חובות ומייצר הודעות תזכורת',
       color: 'blue',
-      bgClass: 'bg-blue-50',
-      borderClass: 'border-blue-200',
-      iconClass: 'text-blue-600',
+      bgClass: 'bg-indigo-50',
+      borderClass: 'border-indigo-200',
+      iconClass: 'text-indigo-600',
     },
     {
       id: 'vendor',
@@ -1421,7 +1421,7 @@ export default function SmartAgents() {
         {AGENTS.map(agent => {
           const isActive = activeAgent === agent.id
           const gradientMap = {
-            blue: 'from-blue-500 to-blue-600',
+            blue: 'from-indigo-500 to-indigo-600',
             emerald: 'from-emerald-500 to-emerald-600',
             purple: 'from-purple-500 to-purple-600',
             amber: 'from-amber-500 to-amber-600',
@@ -1433,7 +1433,7 @@ export default function SmartAgents() {
               className={`group relative rounded-xl border-2 bg-white overflow-hidden cursor-pointer transition-all hover:shadow-md ${
                 isActive
                   ? `${agent.borderClass} shadow-md`
-                  : 'border-[var(--border)] hover:border-blue-200'
+                  : 'border-[var(--border)] hover:border-indigo-200'
               }`}
               onClick={() => setActiveAgent(isActive ? null : agent.id)}
             >

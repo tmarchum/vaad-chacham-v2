@@ -147,7 +147,7 @@ export default function Balance() {
             <div
               key={m.month}
               className={`group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white transition-all ${
-                hasData ? 'hover:shadow-md hover:border-blue-200' : 'opacity-50'
+                hasData ? 'hover:shadow-md hover:border-indigo-200' : 'opacity-50'
               }`}
             >
               {/* Month gradient circle */}
@@ -214,7 +214,7 @@ export default function Balance() {
 
         {/* Totals card */}
         <div className="flex items-center gap-4 p-4 rounded-xl border-2 border-[var(--border)] bg-[var(--surface-hover)]">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
             {selectedYear.slice(2)}
           </div>
           <div className="min-w-[70px]">

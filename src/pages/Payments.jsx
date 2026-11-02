@@ -643,7 +643,7 @@ function Payments() {
                 return (
                   <div
                     key={p.id}
-                    className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all ${
+                    className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all ${
                       isVirtual ? 'opacity-60 border-dashed border-[var(--border)]' : 'border-[var(--border)] cursor-pointer'
                     }`}
                     onClick={() => !isVirtual && setDetailPayment(p)}

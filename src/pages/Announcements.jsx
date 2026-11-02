@@ -265,7 +265,7 @@ function Announcements() {
           const subject = `[${buildingName}] ${typeLabel}: ${announcementForm.title}`
           const html = `
 <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb; border-radius: 8px;">
-  <div style="background: linear-gradient(135deg, #3b82f6, #6366f1); padding: 24px; border-radius: 8px 8px 0 0; text-align: center; margin: -20px -20px 20px -20px;">
+  <div style="background: linear-gradient(135deg, #6366f1, #6366f1); padding: 24px; border-radius: 8px 8px 0 0; text-align: center; margin: -20px -20px 20px -20px;">
     <h1 style="color: white; margin: 0; font-size: 22px;">${buildingName}</h1>
     <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px;">${typeLabel}</p>
   </div>
@@ -505,7 +505,7 @@ function Announcements() {
 
                 // Gradient colors based on type
                 const gradientMap = {
-                  general: 'from-blue-500 to-blue-600',
+                  general: 'from-indigo-500 to-indigo-600',
                   maintenance: 'from-amber-400 to-amber-500',
                   urgent: 'from-red-500 to-red-600',
                   meeting: 'from-emerald-500 to-emerald-600',
@@ -520,7 +520,7 @@ function Announcements() {
                 return (
                   <div
                     key={ann.id}
-                    className="group rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)] p-4"
+                    className="group rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)] p-4"
                     onClick={() => toggleExpandedAnnouncement(ann.id)}
                   >
                     <div className="flex items-center gap-4">
@@ -610,7 +610,7 @@ function Announcements() {
 
                 // Gradient colors based on meeting type
                 const gradientMap = {
-                  annual: 'from-blue-500 to-blue-600',
+                  annual: 'from-indigo-500 to-indigo-600',
                   committee: 'from-purple-500 to-purple-600',
                   emergency: 'from-red-500 to-red-600',
                 }
@@ -627,7 +627,7 @@ function Announcements() {
                 return (
                   <div
                     key={min.id}
-                    className="group rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)] p-4"
+                    className="group rounded-xl border bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer border-[var(--border)] p-4"
                     onClick={() => toggleExpandedMinutes(min.id)}
                   >
                     <div className="flex items-center gap-4">

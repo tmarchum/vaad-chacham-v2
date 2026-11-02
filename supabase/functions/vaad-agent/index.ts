@@ -301,7 +301,9 @@ Deno.serve(async (req: Request) => {
     const caller = await identifyCaller(req, serviceClient())
     if (!isPrivileged(caller)) return json({ error: 'unauthorized' }, 401)
 
-    const { agentType, buildingName, contextData } = await req.json()
+    const parsedBody = await req.json().catch(() => null)
+    if (!parsedBody || typeof parsedBody !== 'object') return json({ error: 'invalid_json' }, 400)
+    const { agentType, buildingName, contextData } = parsedBody
 
     // ---------------------------------------------------------------------------
     // Special handler: vendor_search — finds real vendors via Claude's web search

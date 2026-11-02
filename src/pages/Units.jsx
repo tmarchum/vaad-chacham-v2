@@ -701,7 +701,7 @@ function Units() {
             return (
               <Card
                 key={u.id}
-                className="group cursor-pointer overflow-hidden border border-[var(--border)] hover:shadow-lg hover:border-blue-200 transition-all bg-white"
+                className="group cursor-pointer overflow-hidden border border-[var(--border)] hover:shadow-lg hover:border-indigo-200 transition-all bg-white"
                 onClick={() => setDetailUnit(u)}
               >
                 {/* Gradient accent bar */}

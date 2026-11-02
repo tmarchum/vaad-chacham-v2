@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
  */
 
 const ICON_COLORS = {
-  blue:    'from-blue-500 to-blue-700 shadow-blue-500/20',
+  blue:    'from-indigo-500 to-indigo-700 shadow-indigo-500/20',
   amber:   'from-amber-500 to-amber-700 shadow-amber-500/20',
   purple:  'from-purple-500 to-purple-700 shadow-purple-500/20',
   emerald: 'from-emerald-500 to-emerald-700 shadow-emerald-500/20',

@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders, timingSafeEqual } from '../_shared/mod.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
@@ -364,12 +365,6 @@ async function handleToolCall(name: string, args: Record<string, unknown>): Prom
 
 // ─── MCP Protocol Handler (Streamable HTTP) ───────────────────────────────────
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-}
-
 function jsonRpcResponse(id: unknown, result: unknown) {
   return { jsonrpc: '2.0', id, result }
 }
@@ -390,7 +385,7 @@ Deno.serve(async (req: Request) => {
   // Fail closed: if MCP_SECRET is unset, deny everything.
   const provided = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
     || (req.headers.get('x-mcp-secret') || '').trim()
-  if (!MCP_SECRET || provided !== MCP_SECRET) {
+  if (!MCP_SECRET || !timingSafeEqual(provided, MCP_SECRET)) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

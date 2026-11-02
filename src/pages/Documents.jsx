@@ -100,7 +100,7 @@ const DOC_TYPE_GRADIENTS = {
   protocol:   'from-violet-500 to-violet-600',
   bylaws:     'from-indigo-500 to-indigo-600',
   inspection: 'from-amber-500 to-amber-600',
-  contract:   'from-blue-500 to-blue-600',
+  contract:   'from-indigo-500 to-indigo-600',
   other:      'from-slate-500 to-slate-600',
 }
 
@@ -123,7 +123,7 @@ function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
 
   return (
     <div
-      className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
+      className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer overflow-hidden"
       onClick={() => onView(doc)}
     >
       {/* Gradient top accent */}
@@ -221,7 +221,7 @@ function DocumentListRow({ doc, onEdit, onDelete, onView }) {
 
   return (
     <div
-      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer"
       onClick={() => onView(doc)}
     >
       {/* Gradient type circle */}
@@ -514,7 +514,7 @@ export default function Documents() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <DocStatCard label="סה״כ מסמכים" value={summary.total} icon={FolderOpen} gradient="from-blue-500 to-blue-600" />
+        <DocStatCard label="סה״כ מסמכים" value={summary.total} icon={FolderOpen} gradient="from-indigo-500 to-indigo-600" />
         <DocStatCard label="פגים בעוד 30 יום" value={summary.expiringSoon} icon={AlertTriangle} gradient="from-amber-400 to-amber-500" />
         <DocStatCard label="פג תוקף" value={summary.expired} icon={AlertTriangle} gradient="from-red-500 to-red-600" />
         <DocStatCard label="קטגוריות" value={summary.categories} icon={LayoutGrid} gradient="from-indigo-500 to-indigo-600" />
