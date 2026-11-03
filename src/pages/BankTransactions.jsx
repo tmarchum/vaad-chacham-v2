@@ -1,27 +1,35 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Select } from '@/components/ui/select'
+import { TabGroup } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/common/EmptyState'
-import { FormSelect } from '@/components/common/FormField'
+import { StatCard } from '@/components/common/StatCard'
+import { SearchBar } from '@/components/common/SearchBar'
 import { formatCurrency, calcUnitFee, sortByUnitNumber } from '@/lib/utils'
-import { PageHeader } from '@/components/common/PageHeader'
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, EXPENSE_GROUPS, INCOME_GROUPS, findExpenseCategory, findIncomeCategory, CATEGORY_BG_COLORS, CATEGORY_GRADIENTS } from '@/lib/categories'
+import { useUnitDirectory } from '@/hooks/useUnitDirectory'
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, EXPENSE_GROUPS, INCOME_GROUPS, findExpenseCategory, findIncomeCategory } from '@/lib/categories'
 import {
-  ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Landmark, Link2, X as XIcon,
-  CheckCircle2, AlertCircle, Check, Tag,
+  ArrowDownLeft, ArrowUpRight, Landmark, Link2, X as XIcon,
+  CheckCircle2, AlertCircle, Check, Tag, Ban, Undo2, Users, ChevronLeft,
 } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 import { toast } from '@/lib/toast'
 
 const MATCH_STATUS = {
   unmatched:  { label: 'לא משויך', variant: 'warning', icon: AlertCircle },
-  suggested:  { label: 'הצעה',     variant: 'outline',  icon: AlertCircle },
+  suggested:  { label: 'הצעה',     variant: 'info',    icon: AlertCircle },
   matched:    { label: 'משויך',     variant: 'success', icon: CheckCircle2 },
-  ignored:    { label: 'התעלם',     variant: 'secondary', icon: XIcon },
-  excluded:   { label: 'לא רלוונטי', variant: 'destructive', icon: XIcon },
+  ignored:    { label: 'התעלם',     variant: 'neutral', icon: XIcon },
+  excluded:   { label: 'לא רלוונטי', variant: 'danger', icon: XIcon },
+}
+
+const PAY_STATUS = {
+  paid:    { label: 'שולם', variant: 'success' },
+  partial: { label: 'חלקי', variant: 'warning' },
+  unpaid:  { label: 'לא שולם', variant: 'danger' },
 }
 
 const STATUS_FILTERS = [
@@ -45,7 +53,7 @@ export default function BankTransactions() {
   const scope = { building_id: selectedBuilding?.id }
   const { data: allTx, update: updateTx, refresh, isLoading } = useCollection('bankTransactions', scope)
   const { data: allUnits } = useCollection('units', scope)
-  const { data: allResidents } = useCollection('residents')
+  const directory = useUnitDirectory(selectedBuilding?.id)
   const { data: allPayments, create: createPayment, update: updatePayment, refresh: refreshPayments } = useCollection('payments', scope)
 
   const now = new Date()
@@ -56,6 +64,7 @@ export default function BankTransactions() {
   const [matchDialog, setMatchDialog] = useState(null) // transaction to match
   const [paymentSummaryOpen, setPaymentSummaryOpen] = useState(false)
   const [categoryDialog, setCategoryDialog] = useState(null) // transaction to categorize
+  const [search, setSearch] = useState('')
 
   const monthKey = `${selectedYear}-${selectedMonth}`
 
@@ -65,16 +74,12 @@ export default function BankTransactions() {
     [allUnits, selectedBuilding]
   )
 
-  // Residents map: unit_id -> resident name
+  // Residents map: unit_id -> primary resident name (from the shared unit directory)
   const residentMap = useMemo(() => {
     const map = {}
-    allResidents.forEach(r => {
-      if (r.is_primary || r.isPrimary || !map[r.unit_id]) {
-        map[r.unit_id] = `${r.firstName || r.first_name || ''} ${r.lastName || r.last_name || ''}`.trim()
-      }
-    })
+    directory.units.forEach(u => { if (u.name) map[u.id] = u.name })
     return map
-  }, [allResidents])
+  }, [directory.units])
 
   // Transactions for this building and month
   const transactions = useMemo(() => {
@@ -97,8 +102,15 @@ export default function BankTransactions() {
     } else if (typeFilter === 'debit') {
       result = result.filter(tx => Number(tx.debit) > 0)
     }
+    if (search) {
+      const q = search.toLowerCase()
+      result = result.filter(tx =>
+        tx.description?.toLowerCase().includes(q) ||
+        tx.notes?.toLowerCase().includes(q)
+      )
+    }
     return result
-  }, [transactions, statusFilter, typeFilter])
+  }, [transactions, statusFilter, typeFilter, search])
 
   // Summary (exclude 'excluded' and 'suggested' from totals)
   const summary = useMemo(() => {
@@ -436,16 +448,18 @@ export default function BankTransactions() {
   }
 
   const yearOptions = useMemo(() => {
-    const currentYear = now.getFullYear()
+    const currentYear = new Date().getFullYear()
     return Array.from({ length: 5 }, (_, i) => {
       const y = String(currentYear - 2 + i)
       return { value: y, label: y }
     })
   }, [])
 
+  const monthLabel = HEBREW_MONTHS.find(m => m.value === selectedMonth)?.label || ''
+
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={ArrowLeftRight} iconColor="indigo" title="תנועות בנק" />
+    <div className="space-y-6">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תנועות בנק</h1>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -459,300 +473,311 @@ export default function BankTransactions() {
     return <EmptyState icon={Landmark} title="בחר בניין" description="יש לבחור בניין כדי לצפות בתנועות" />
   }
 
+  // ── View model (derived from already-loaded data) ──
+  const matchedPct = summary.total > 0 ? Math.round((summary.matched / summary.total) * 100) : 0
+  const creditCount = transactions.filter(tx => Number(tx.credit) > 0).length
+  const debitCount = transactions.filter(tx => Number(tx.debit) > 0).length
+  const uncategorizedCount = transactions.filter(tx => !tx.category && tx.match_status !== 'excluded').length
+  const countBy = (key) => key === 'all' ? transactions.length : transactions.filter(tx => tx.match_status === key).length
+  const payCounts = {
+    paid: paymentTracking.filter(p => p.status === 'paid').length,
+    partial: paymentTracking.filter(p => p.status === 'partial').length,
+    unpaid: paymentTracking.filter(p => p.status === 'unpaid').length,
+  }
+  const paidPct = paymentTracking.length > 0 ? Math.round((payCounts.paid / paymentTracking.length) * 100) : 0
+  const openUnits = paymentTracking.filter(p => p.status !== 'paid')
+
+  const renderCategory = (tx, isCredit) => {
+    if (tx.category) {
+      const cat = isCredit ? findIncomeCategory(tx.category) : findExpenseCategory(tx.category)
+      return (
+        <button
+          onClick={() => setCategoryDialog(tx)}
+          className="px-2 py-0.5 rounded-full border border-[var(--primary)]/15 bg-[var(--surface-container)] text-[var(--primary-dark)] text-[11px] font-semibold hover:opacity-80 transition-opacity whitespace-nowrap"
+        >
+          {cat?.icon} {cat?.label || tx.category}
+        </button>
+      )
+    }
+    return (
+      <button
+        onClick={() => setCategoryDialog(tx)}
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-[var(--outline-variant)] text-[11px] text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors whitespace-nowrap"
+      >
+        <Tag className="h-3 w-3" />
+        קטגוריה
+      </button>
+    )
+  }
+
+  const iconBtn = 'p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors'
+  const renderActions = (tx) => (
+    <div className="flex gap-0.5 justify-end">
+      {tx.match_status === 'unmatched' && (
+        <>
+          <button className={iconBtn} onClick={() => setMatchDialog(tx)} title="שייך לדירה"><Link2 className="h-3.5 w-3.5" /></button>
+          <button className={iconBtn} onClick={() => handleIgnore(tx)} title="התעלם"><XIcon className="h-3.5 w-3.5" /></button>
+          <button className={`${iconBtn} hover:!text-[var(--danger)] hover:!bg-[var(--danger-light)]`} onClick={() => handleExclude(tx)} title="לא רלוונטי"><Ban className="h-3.5 w-3.5" /></button>
+        </>
+      )}
+      {tx.match_status === 'suggested' && (
+        <>
+          <button className={`${iconBtn} !text-[var(--success)] hover:!bg-[var(--success-light)]`} onClick={() => handleApproveSuggestion(tx)} title="אשר הצעה"><Check className="h-3.5 w-3.5" /></button>
+          <button className={iconBtn} onClick={() => handleRejectSuggestion(tx)} title="דחה הצעה"><XIcon className="h-3.5 w-3.5" /></button>
+          <button className={iconBtn} onClick={() => setMatchDialog(tx)} title="שייך לדירה אחרת"><Link2 className="h-3.5 w-3.5" /></button>
+        </>
+      )}
+      {tx.match_status === 'matched' && (
+        <button className={iconBtn} onClick={() => handleUnmatch(tx)} title="בטל שיוך"><XIcon className="h-3.5 w-3.5" /></button>
+      )}
+      {(tx.match_status === 'ignored' || tx.match_status === 'excluded') && (
+        <button className={iconBtn} onClick={() => handleUnmatch(tx)} title="החזר"><Undo2 className="h-3.5 w-3.5" /></button>
+      )}
+    </div>
+  )
+
+  const rowModel = (tx) => {
+    const isCredit = Number(tx.credit) > 0
+    const amount = isCredit ? tx.credit : tx.debit
+    const status = MATCH_STATUS[tx.match_status] || MATCH_STATUS.unmatched
+    const matchedUnit = tx.unit_id ? units.find(u => u.id === tx.unit_id) : null
+    const matchedResident = matchedUnit ? residentMap[matchedUnit.id] : null
+    return { isCredit, amount, status, matchedUnit, matchedResident }
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={ArrowLeftRight}
-        iconColor="indigo"
-        title="תנועות בנק"
-        subtitle="צפייה בתנועות, שיוך לדירות ומעקב תשלומים"
-        actions={
-          <div className="flex gap-2">
-            {summary.suggested > 0 && (
-              <Button onClick={handleApproveAllSuggestions} className="gap-2">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תנועות בנק — {monthLabel} {selectedYear}</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">תנועות מקובץ הבנק החודשי — שיוך זיכויים לדירות, סיווג ומעקב תשלומים • {selectedBuilding.name}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} options={HEBREW_MONTHS} className="w-28" aria-label="חודש" />
+          <Select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} options={yearOptions} className="w-24" aria-label="שנה" />
+          <Button variant="outline" onClick={() => setPaymentSummaryOpen(true)}>
+            <Users className="h-4 w-4" />
+            סיכום תשלומים
+          </Button>
+          {summary.suggested > 0 ? (
+            <>
+              <Button variant="outline" onClick={handleAutoMatch}>
+                <Link2 className="h-4 w-4" />
+                שיוך חכם
+              </Button>
+              <Button onClick={handleApproveAllSuggestions}>
                 <CheckCircle2 className="h-4 w-4" />
                 אשר את כל ההצעות ({summary.suggested})
               </Button>
-            )}
-            <Button variant="outline" onClick={handleAutoMatch} className="gap-2">
+            </>
+          ) : (
+            <Button onClick={handleAutoMatch}>
               <Link2 className="h-4 w-4" />
               שיוך חכם
             </Button>
-            <Button variant="outline" onClick={() => setPaymentSummaryOpen(true)} className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              סיכום תשלומים
-            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* KPI row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="סה״כ זיכויים" icon={ArrowDownLeft} color="emerald"
+          value={formatCurrency(summary.totalCredit)}
+          sub={`${creditCount} תנועות זכות החודש`} />
+        <StatCard label="סה״כ חיובים" icon={ArrowUpRight} color="red"
+          value={formatCurrency(summary.totalDebit)}
+          sub={`${debitCount} תנועות חובה החודש`} />
+        <StatCard label="תנועות משויכות" icon={CheckCircle2} color="blue"
+          value={`${summary.matched} / ${summary.total}`}
+          note={summary.total > 0 ? `${matchedPct}%` : null}
+          sub={uncategorizedCount ? `${uncategorizedCount} ללא קטגוריה` : 'כל התנועות מסווגות'}
+          progress={matchedPct} />
+        <StatCard label="ממתינות לטיפול" icon={AlertCircle} color={summary.unmatched || summary.suggested ? 'amber' : 'emerald'}
+          value={String(summary.unmatched)}
+          note={summary.suggested ? `+${summary.suggested} הצעות` : null}
+          sub={summary.unmatched ? 'תנועות שלא שויכו לדירה' : 'אין תנועות פתוחות ✓'}
+          footer={summary.unmatched || summary.suggested ? (
+            <button onClick={() => setStatusFilter(summary.suggested ? 'suggested' : 'unmatched')} className="text-[var(--primary)] font-semibold hover:underline">
+              {summary.suggested ? 'לבדיקת ההצעות ←' : 'לשיוך עכשיו ←'}
+            </button>
+          ) : null} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Ledger */}
+        <div className="xl:col-span-8 space-y-4 min-w-0">
+          <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+            <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי תיאור התנועה..." />
+            <div className="flex flex-wrap items-center gap-2">
+              <TabGroup
+                tabs={STATUS_FILTERS.map(f => ({ ...f, count: countBy(f.key) }))}
+                activeTab={statusFilter}
+                onChange={setStatusFilter}
+              />
+              <TabGroup tabs={TYPE_FILTERS} activeTab={typeFilter} onChange={setTypeFilter} />
+            </div>
           </div>
-        }
-      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <FormSelect
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          options={HEBREW_MONTHS}
-          className="w-32"
-        />
-        <FormSelect
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          options={yearOptions}
-          className="w-24"
-        />
-        <div className="flex gap-1 mr-auto flex-wrap">
-          {STATUS_FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setStatusFilter(f.key)}
-              className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-                statusFilter === f.key
-                  ? 'bg-[var(--primary)] text-white'
-                  : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-          <span className="mx-1 border-r border-[var(--border)]" />
-          {TYPE_FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setTypeFilter(f.key)}
-              className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
-                typeFilter === f.key
-                  ? 'bg-[var(--primary)] text-white'
-                  : 'bg-[var(--surface-hover)] text-[var(--text-secondary)] hover:bg-[var(--border)]'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+          {filteredTx.length === 0 ? (
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+              <EmptyState
+                icon={Landmark}
+                title="אין תנועות"
+                description={search ? 'לא נמצאו תוצאות לחיפוש' : `לא נמצאו תנועות ל${monthLabel} ${selectedYear}`}
+              />
+            </div>
+          ) : (
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="ds-table">
+                  <thead>
+                    <tr><th>תאריך</th><th>תיאור</th><th>דירה</th><th>קטגוריה</th><th className="!text-left">סכום</th><th>סטטוס</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {filteredTx.map(tx => {
+                      const { isCredit, amount, status, matchedUnit, matchedResident } = rowModel(tx)
+                      return (
+                        <tr key={tx.id} className={tx.match_status === 'unmatched' && isCredit ? '!bg-[var(--warning-light)]/40' : ''}>
+                          <td className="whitespace-nowrap">
+                            <span className="text-[12px] font-semibold num-tabular">{new Date(tx.transaction_date).toLocaleDateString('he-IL')}</span>
+                            {tx.transaction_time && <span className="block text-[11px] text-[var(--text-muted)] num-tabular">{tx.transaction_time}</span>}
+                          </td>
+                          <td className="min-w-[200px]">
+                            <span className="flex items-center gap-2">
+                              <span className={`p-1 rounded-[var(--radius)] shrink-0 ${isCredit ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--danger-light)] text-[var(--danger)]'}`}>
+                                {isCredit ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block text-[13px] font-semibold truncate max-w-[280px]">{tx.description}</span>
+                                {tx.source && <span className="block text-[11px] text-[var(--text-muted)]">{tx.source}</span>}
+                              </span>
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap text-[12px]">
+                            {matchedUnit ? (
+                              <span>
+                                <span className="font-semibold num-tabular">דירה {matchedUnit.number}</span>
+                                {matchedResident && <span className="block text-[11px] text-[var(--text-muted)]">{matchedResident}</span>}
+                              </span>
+                            ) : <span className="text-[var(--text-muted)]">—</span>}
+                          </td>
+                          <td className="whitespace-nowrap">{renderCategory(tx, isCredit)}</td>
+                          <td className="whitespace-nowrap !text-left">
+                            <span className={`text-[14px] font-bold num-tabular ${isCredit ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+                              {isCredit ? '+' : '-'}{formatCurrency(amount)}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap"><Badge variant={status.variant}>{status.label}</Badge></td>
+                          <td className="whitespace-nowrap">{renderActions(tx)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-[var(--border-light)]">
+                {filteredTx.map(tx => {
+                  const { isCredit, amount, status, matchedUnit, matchedResident } = rowModel(tx)
+                  return (
+                    <div key={tx.id} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-[var(--text-primary)] line-clamp-2">{tx.description}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] num-tabular mt-0.5">
+                            {new Date(tx.transaction_date).toLocaleDateString('he-IL')}{tx.transaction_time ? ` • ${tx.transaction_time}` : ''}
+                          </p>
+                        </div>
+                        <span className={`text-[14px] font-bold num-tabular shrink-0 ${isCredit ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+                          {isCredit ? '+' : '-'}{formatCurrency(amount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant={status.variant}>{status.label}</Badge>
+                        {matchedUnit && (
+                          <span className="text-[11px] text-[var(--text-secondary)] num-tabular">דירה {matchedUnit.number}{matchedResident ? ` — ${matchedResident}` : ''}</span>
+                        )}
+                        {renderCategory(tx, isCredit)}
+                        <div className="mr-auto">{renderActions(tx)}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                <span>מציג {filteredTx.length} מתוך {transactions.length} תנועות</span>
+                <span className="num-tabular">
+                  זכות <strong className="text-[var(--success)]">{formatCurrency(filteredTx.reduce((s, tx) => s + (Number(tx.credit) || 0), 0))}</strong>
+                  {' • '}חובה <strong className="text-[var(--danger)]">{formatCurrency(filteredTx.reduce((s, tx) => s + (Number(tx.debit) || 0), 0))}</strong>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Payment tracking side panel */}
+        <aside className="xl:col-span-4 xl:sticky xl:top-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+          <div className="px-4 py-3.5 border-b border-[var(--border)] flex items-center gap-3">
+            <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)]"><Users className="h-4 w-4" /></span>
+            <div className="min-w-0">
+              <h2 className="text-[16px] leading-6 font-bold text-[var(--text-primary)]">מעקב תשלומי דירות</h2>
+              <p className="text-[11px] text-[var(--text-muted)]">{monthLabel} {selectedYear} • לפי תנועות משויכות</p>
+            </div>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[
+                { key: 'paid', tone: 'bg-[var(--success-light)] text-[var(--success)]' },
+                { key: 'partial', tone: 'bg-[var(--warning-light)] text-[var(--warning)]' },
+                { key: 'unpaid', tone: 'bg-[var(--danger-light)] text-[var(--danger)]' },
+              ].map(({ key, tone }) => (
+                <div key={key} className={`rounded-[var(--radius)] p-2 ${tone}`}>
+                  <p className="text-[11px] font-medium">{PAY_STATUS[key].label}</p>
+                  <p className="text-[20px] font-bold num-tabular">{payCounts[key]}</p>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] mb-1">
+                <span>שיעור גבייה</span>
+                <span className="num-tabular font-semibold">{paidPct}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[var(--surface-container)] overflow-hidden">
+                <div className="h-full rounded-full bg-[var(--success)] transition-all duration-700" style={{ width: `${paidPct}%` }} />
+              </div>
+            </div>
+            {openUnits.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)] py-2">{paymentTracking.length ? 'כל הדירות שילמו ✓' : 'אין דירות בבניין'}</p>
+            ) : (
+              <div className="space-y-1 max-h-72 overflow-y-auto">
+                {openUnits.slice(0, 8).map(({ unit, resident, fee, totalPaid, status }) => (
+                  <div key={unit.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[var(--border-light)] last:border-0">
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold num-tabular">דירה {unit.number}</p>
+                      <p className="text-[11px] text-[var(--text-muted)] truncate">{resident}</p>
+                    </div>
+                    <div className="text-left shrink-0">
+                      <p className="text-[12px] font-bold num-tabular">{formatCurrency(totalPaid)} / {formatCurrency(fee)}</p>
+                      <Badge variant={PAY_STATUS[status].variant}>{PAY_STATUS[status].label}</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setPaymentSummaryOpen(true)}
+              className="w-full flex items-center justify-between p-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-secondary)] text-[12px]"
+            >
+              <span className="font-semibold text-[var(--text-primary)]">סיכום תשלומים מלא</span>
+              <ChevronLeft className="h-4 w-4 text-[var(--primary)]" />
+            </button>
+          </div>
+        </aside>
       </div>
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm">
-                <ArrowDownLeft className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-[var(--text-secondary)]">סה"כ זכות</p>
-                <p className="text-lg font-bold text-emerald-600">{formatCurrency(summary.totalCredit)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm">
-                <ArrowUpRight className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-[var(--text-secondary)]">סה"כ חובה</p>
-                <p className="text-lg font-bold text-red-600">{formatCurrency(summary.totalDebit)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
-                <CheckCircle2 className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-[var(--text-secondary)]">משויכות</p>
-                <p className="text-lg font-bold text-blue-600">{summary.matched} / {summary.total}</p>
-                <div className="h-1 w-full rounded-full bg-slate-100 mt-1 overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-500" style={{ width: summary.total > 0 ? `${Math.round((summary.matched / summary.total) * 100)}%` : '0%' }} />
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center shadow-sm">
-                <AlertCircle className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-xs text-[var(--text-secondary)]">ממתינות לשיוך</p>
-                <p className="text-lg font-bold text-amber-600">{summary.unmatched}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Transactions list */}
-      {filteredTx.length === 0 ? (
-        <EmptyState
-          icon={Landmark}
-          title="אין תנועות"
-          description={`לא נמצאו תנועות ל${HEBREW_MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear}`}
-        />
-      ) : (
-        <div className="space-y-2">
-          {filteredTx.map(tx => {
-            const isCredit = Number(tx.credit) > 0
-            const amount = isCredit ? tx.credit : tx.debit
-            const status = MATCH_STATUS[tx.match_status] || MATCH_STATUS.unmatched
-            const matchedUnit = tx.unit_id ? units.find(u => u.id === tx.unit_id) : null
-            const matchedResident = matchedUnit ? residentMap[matchedUnit.id] : null
-
-            // Gradient colors based on type
-            const circleGradient = isCredit
-              ? 'from-emerald-500 to-emerald-600'
-              : 'from-red-500 to-red-600'
-
-            // Status dot colors
-            const dotColorMap = {
-              matched: 'bg-emerald-500',
-              suggested: 'bg-blue-500',
-              unmatched: 'bg-amber-500',
-              ignored: 'bg-slate-400',
-              excluded: 'bg-red-400',
-            }
-            const dotColor = dotColorMap[tx.match_status] || dotColorMap.unmatched
-
-            // Status text colors
-            const statusTextColorMap = {
-              matched: 'text-emerald-700',
-              suggested: 'text-blue-700',
-              unmatched: 'text-amber-700',
-              ignored: 'text-slate-600',
-              excluded: 'text-red-600',
-            }
-            const statusTextColor = statusTextColorMap[tx.match_status] || statusTextColorMap.unmatched
-
-            return (
-              <div
-                key={tx.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
-              >
-                {/* Type circle */}
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                  {isCredit
-                    ? <ArrowDownLeft className="h-5 w-5" />
-                    : <ArrowUpRight className="h-5 w-5" />
-                  }
-                </div>
-
-                {/* Details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                      {tx.description}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                    <span>{new Date(tx.transaction_date).toLocaleDateString('he-IL')}</span>
-                    {tx.transaction_time && <span>{tx.transaction_time}</span>}
-                    {tx.source && <span>{tx.source}</span>}
-                  </div>
-                </div>
-
-                {/* Match info */}
-                {matchedUnit && (
-                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
-                    <span className="text-xs font-medium text-emerald-700">
-                      דירה {matchedUnit.number}
-                    </span>
-                    {matchedResident && (
-                      <span className="text-xs text-emerald-600">- {matchedResident}</span>
-                    )}
-                  </div>
-                )}
-
-                {/* Category chip */}
-                <div className="hidden sm:block shrink-0" onClick={e => e.stopPropagation()}>
-                  {tx.category ? (() => {
-                    const cat = isCredit ? findIncomeCategory(tx.category) : findExpenseCategory(tx.category)
-                    const catBg = cat ? (CATEGORY_BG_COLORS[cat.color] || '') : ''
-                    return (
-                      <button
-                        onClick={() => setCategoryDialog(tx)}
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded-md border cursor-pointer hover:opacity-80 transition-opacity ${catBg || 'bg-slate-50 text-slate-700 border-slate-200'}`}
-                      >
-                        {cat?.icon} {cat?.label || tx.category}
-                      </button>
-                    )
-                  })() : (
-                    <button
-                      onClick={() => setCategoryDialog(tx)}
-                      className="text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded-md border border-dashed border-[var(--border)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors cursor-pointer flex items-center gap-1"
-                    >
-                      <Tag className="h-3 w-3" />
-                      קטגוריה
-                    </button>
-                  )}
-                </div>
-
-                {/* Amount */}
-                <div className="text-left min-w-[90px]">
-                  <p className={`text-[15px] font-bold ${
-                    isCredit ? 'text-emerald-600' : 'text-red-600'
-                  }`}>
-                    {isCredit ? '+' : '-'}{formatCurrency(amount)}
-                  </p>
-                </div>
-
-                {/* Status */}
-                <div className="flex items-center gap-2 min-w-[80px]">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{status.label}</span>
-                </div>
-
-                {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
-                  {tx.match_status === 'unmatched' && (
-                    <>
-                      <Button size="icon" variant="ghost" onClick={() => setMatchDialog(tx)} title="שייך לדירה">
-                        <Link2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleIgnore(tx)} title="התעלם">
-                        <XIcon className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleExclude(tx)} title="לא רלוונטי">
-                        <XIcon className="h-3.5 w-3.5 text-[var(--danger)]" />
-                      </Button>
-                    </>
-                  )}
-                  {tx.match_status === 'suggested' && (
-                    <>
-                      <Button size="icon" variant="ghost" onClick={() => handleApproveSuggestion(tx)} title="אשר הצעה">
-                        <Check className="h-3.5 w-3.5 text-emerald-600" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => handleRejectSuggestion(tx)} title="דחה הצעה">
-                        <XIcon className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setMatchDialog(tx)} title="שייך לדירה אחרת">
-                        <Link2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </>
-                  )}
-                  {tx.match_status === 'matched' && (
-                    <Button size="icon" variant="ghost" onClick={() => handleUnmatch(tx)} title="בטל שיוך">
-                      <XIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {(tx.match_status === 'ignored' || tx.match_status === 'excluded') && (
-                    <Button size="icon" variant="ghost" onClick={() => handleUnmatch(tx)} title="החזר">
-                      <Link2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
 
       {/* Match Dialog */}
       <Dialog open={!!matchDialog} onOpenChange={() => setMatchDialog(null)}>
@@ -762,9 +787,9 @@ export default function BankTransactions() {
           </DialogHeader>
           {matchDialog && (
             <div className="space-y-3 mt-2">
-              <div className="p-3 rounded-lg bg-[var(--surface-hover)] text-sm">
+              <div className="p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-sm">
                 <p className="font-medium">{matchDialog.description}</p>
-                <p className="text-green-600 font-bold mt-1">
+                <p className="text-[var(--success)] font-bold mt-1 num-tabular">
                   {formatCurrency(matchDialog.credit || matchDialog.debit)}
                 </p>
               </div>
@@ -783,22 +808,22 @@ export default function BankTransactions() {
                     <button
                       key={unit.id}
                       onClick={() => handleMatch(unit.id)}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-lg hover:bg-[var(--surface-hover)] transition-colors text-sm ${
+                      className={`w-full flex items-center justify-between p-2.5 rounded-[var(--radius)] hover:bg-[var(--surface-secondary)] transition-colors text-sm text-right ${
                         isPaid ? 'opacity-40' : ''
                       }`}
                     >
                       <span>
                         דירה {unit.number} — {residentMap[unit.id] || 'ללא דייר'}
                         {alreadyPaid > 0 && !isPaid && (
-                          <span className="text-xs text-amber-500 mr-1">
+                          <span className="text-xs text-[var(--warning)] mr-1 num-tabular">
                             (שולם {formatCurrency(alreadyPaid)}, חסר {formatCurrency(remaining)})
                           </span>
                         )}
                         {isPaid && (
-                          <span className="text-xs text-green-500 mr-1">(שולם מלא)</span>
+                          <span className="text-xs text-[var(--success)] mr-1">(שולם מלא)</span>
                         )}
                       </span>
-                      <span className="text-xs text-[var(--text-secondary)]">
+                      <span className="text-xs text-[var(--text-secondary)] num-tabular shrink-0">
                         {formatCurrency(fee)}/חודש
                       </span>
                     </button>
@@ -822,9 +847,9 @@ export default function BankTransactions() {
             const groups = isCredit ? INCOME_GROUPS : EXPENSE_GROUPS
             return (
               <div className="space-y-3 mt-2">
-                <div className="p-3 rounded-lg bg-[var(--surface-hover)] text-sm">
+                <div className="p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-sm">
                   <p className="font-medium truncate">{categoryDialog.description}</p>
-                  <p className={`font-bold mt-1 ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <p className={`font-bold mt-1 num-tabular ${isCredit ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
                     {isCredit ? '+' : '-'}{formatCurrency(categoryDialog.credit || categoryDialog.debit)}
                   </p>
                 </div>
@@ -832,7 +857,7 @@ export default function BankTransactions() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                    className="w-full text-[var(--danger)] border-[var(--danger)]/30 hover:bg-[var(--danger-light)]"
                     onClick={() => handleSetCategory(categoryDialog.id, null)}
                   >
                     <XIcon className="h-3.5 w-3.5" />
@@ -849,15 +874,14 @@ export default function BankTransactions() {
                         <div className="space-y-0.5">
                           {groupCats.map(cat => {
                             const isActive = categoryDialog.category === cat.value
-                            const bgClass = CATEGORY_BG_COLORS[cat.color] || ''
                             return (
                               <button
                                 key={cat.value}
                                 onClick={() => handleSetCategory(categoryDialog.id, cat.value)}
-                                className={`w-full flex items-center gap-2.5 p-2 rounded-lg transition-colors text-sm text-right ${
+                                className={`w-full flex items-center gap-2.5 p-2 rounded-[var(--radius)] transition-colors text-sm text-right ${
                                   isActive
-                                    ? `${bgClass} font-medium`
-                                    : 'hover:bg-[var(--surface-hover)]'
+                                    ? 'bg-[var(--surface-container)] text-[var(--primary-dark)] font-medium'
+                                    : 'hover:bg-[var(--surface-secondary)]'
                                 }`}
                               >
                                 <span className="text-base">{cat.icon}</span>
@@ -882,53 +906,45 @@ export default function BankTransactions() {
         <DialogContent className="w-full max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              סיכום תשלומים — {HEBREW_MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+              סיכום תשלומים — {monthLabel} {selectedYear}
             </DialogTitle>
           </DialogHeader>
           <div className="mt-2">
-            {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <div className="text-center p-2 rounded-lg bg-green-50 dark:bg-green-900/20">
+              <div className="text-center p-2 rounded-[var(--radius)] bg-[var(--success-light)]">
                 <p className="text-xs text-[var(--text-secondary)]">שילמו</p>
-                <p className="text-lg font-bold text-green-600">
-                  {paymentTracking.filter(p => p.status === 'paid').length}
-                </p>
+                <p className="text-lg font-bold text-[var(--success)] num-tabular">{payCounts.paid}</p>
               </div>
-              <div className="text-center p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+              <div className="text-center p-2 rounded-[var(--radius)] bg-[var(--warning-light)]">
                 <p className="text-xs text-[var(--text-secondary)]">חלקי</p>
-                <p className="text-lg font-bold text-amber-600">
-                  {paymentTracking.filter(p => p.status === 'partial').length}
-                </p>
+                <p className="text-lg font-bold text-[var(--warning)] num-tabular">{payCounts.partial}</p>
               </div>
-              <div className="text-center p-2 rounded-lg bg-red-50 dark:bg-red-900/20">
+              <div className="text-center p-2 rounded-[var(--radius)] bg-[var(--danger-light)]">
                 <p className="text-xs text-[var(--text-secondary)]">לא שילמו</p>
-                <p className="text-lg font-bold text-red-600">
-                  {paymentTracking.filter(p => p.status === 'unpaid').length}
-                </p>
+                <p className="text-lg font-bold text-[var(--danger)] num-tabular">{payCounts.unpaid}</p>
               </div>
             </div>
 
-            {/* Unit list */}
             <div className="max-h-80 overflow-y-auto space-y-1">
               {paymentTracking.map(({ unit, resident, fee, totalPaid, status }) => (
                 <div
                   key={unit.id}
-                  className="flex items-center justify-between p-3 rounded-lg hover:bg-[var(--surface-hover)] transition-colors"
+                  className="flex items-center justify-between p-3 rounded-[var(--radius)] hover:bg-[var(--surface-secondary)] transition-colors"
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full ${
-                      status === 'paid' ? 'bg-green-500' :
-                      status === 'partial' ? 'bg-amber-500' : 'bg-red-500'
+                      status === 'paid' ? 'bg-[var(--success)]' :
+                      status === 'partial' ? 'bg-[var(--warning)]' : 'bg-[var(--danger)]'
                     }`} />
                     <div>
-                      <p className="text-sm font-medium">דירה {unit.number}</p>
+                      <p className="text-sm font-medium num-tabular">דירה {unit.number}</p>
                       <p className="text-xs text-[var(--text-secondary)]">{resident}</p>
                     </div>
                   </div>
                   <div className="text-left">
-                    <p className={`text-sm font-bold ${
-                      status === 'paid' ? 'text-green-600' :
-                      status === 'partial' ? 'text-amber-600' : 'text-red-600'
+                    <p className={`text-sm font-bold num-tabular ${
+                      status === 'paid' ? 'text-[var(--success)]' :
+                      status === 'partial' ? 'text-[var(--warning)]' : 'text-[var(--danger)]'
                     }`}>
                       {formatCurrency(totalPaid)} / {formatCurrency(fee)}
                     </p>

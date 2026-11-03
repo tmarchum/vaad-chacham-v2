@@ -1,17 +1,20 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
 import { FormField, FormSelect } from '@/components/common/FormField'
-import { PageHeader } from '@/components/common/PageHeader'
 import { toast, toastError } from '@/lib/toast'
 import {
   Landmark, Plus, Pencil, Trash2, Eye, EyeOff,
   Play, Settings2, Clock, Calendar, Moon, CheckCircle2, AlertCircle,
+  FileSpreadsheet, ArrowLeftRight, CalendarCheck,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const BANKS = {
   // בנקים
@@ -70,6 +73,18 @@ export default function BankSettings() {
     [allTx, selectedBuilding]
   )
 
+  // Latest imported transaction + number of distinct months covered (from already-loaded rows)
+  const feedStats = useMemo(() => {
+    const rows = allTx.filter(t => t.building_id === selectedBuilding?.id)
+    let latest = null
+    const months = new Set()
+    rows.forEach(t => {
+      if (t.transaction_date && (!latest || t.transaction_date > latest)) latest = t.transaction_date
+      if (t.month) months.add(t.month)
+    })
+    return { latest, months: months.size }
+  }, [allTx, selectedBuilding])
+
   // Settings form state
   const [settingsForm, setSettingsForm] = useState({
     is_enabled: false,
@@ -79,8 +94,10 @@ export default function BankSettings() {
     initial_pull_done: false,
   })
 
+  // Mirror the stored settings into the editable form once they load.
   useEffect(() => {
     if (scrapeSettings) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSettingsForm({
         is_enabled: scrapeSettings.is_enabled ?? false,
         frequency: scrapeSettings.frequency || 'daily',
@@ -166,8 +183,8 @@ export default function BankSettings() {
   const bankFields = BANKS[form.bank_type]?.fields || []
 
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={Landmark} iconColor="slate" title="חשבונות בנק" />
+    <div className="space-y-6">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">חשבונות בנק</h1>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -181,199 +198,212 @@ export default function BankSettings() {
     return <EmptyState icon={Landmark} title="בחר בניין" description="יש לבחור בניין כדי לנהל חשבונות בנק" />
   }
 
+  const activeAccounts = buildingAccounts.filter(a => a.is_active).length
+  const iconBtn = 'p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors'
+  const accountActions = (account) => (
+    <div className="flex gap-0.5 justify-end">
+      <button className={iconBtn} onClick={() => openEdit(account)} title="עריכה"><Pencil className="h-3.5 w-3.5" /></button>
+      <button className={`${iconBtn} hover:!text-[var(--danger)] hover:!bg-[var(--danger-light)]`} onClick={() => setDeleteTarget(account)} title="מחיקה"><Trash2 className="h-3.5 w-3.5" /></button>
+    </div>
+  )
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Landmark}
-        iconColor="slate"
-        title="חשבונות בנק"
-        subtitle="ניהול חשבונות בנק ותזמון משיכת תנועות"
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setSettingsOpen(true)} className="gap-2">
-              <Settings2 className="h-4 w-4" />
-              הגדרות
-            </Button>
-            <Button onClick={openNew} className="gap-2">
-              <Plus className="h-4 w-4" />
-              הוסף חשבון
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Initial Pull / Nightly Status */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Initial Pull Card */}
-        <div className={`rounded-xl border bg-white overflow-hidden ${!scrapeSettings?.initial_pull_done ? 'ring-2 ring-blue-500/30' : 'border-[var(--border)]'}`}>
-          {/* Gradient header */}
-          <div className="bg-gradient-to-l from-blue-500 to-blue-600 px-5 py-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
-              <Calendar className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-white">משיכה ראשונית</h3>
-              <p className="text-xs text-blue-100">משיכת תנועות חד-פעמית מתאריך שנבחר</p>
-            </div>
-          </div>
-          <div className="p-5">
-            {scrapeSettings?.initial_pull_done ? (
-              <div className="flex items-center gap-2 text-sm">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                <span className="text-emerald-700 font-medium">הושלמה{scrapeSettings.initial_pull_date ? ` (מ-${scrapeSettings.initial_pull_date})` : ''}</span>
-                <span className="text-[var(--text-secondary)] mr-auto">{txCount} תנועות נקלטו</span>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <FormField
-                  label="תאריך התחלה"
-                  type="date"
-                  value={settingsForm.initial_pull_date}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, initial_pull_date: e.target.value })}
-                />
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={handleInitialPull} className="gap-1">
-                    <Play className="h-3 w-3" />
-                    הגדר משיכה ראשונית
-                  </Button>
-                  {txCount > 0 && (
-                    <Button size="sm" variant="outline" onClick={handleMarkInitialDone} className="gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      סמן כהושלם ({txCount} תנועות)
-                    </Button>
-                  )}
-                </div>
-                {scrapeSettings?.last_run_status === 'pending_initial' && (
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                    ממתין להרצה — הסקרייפר ימשוך מ-{scrapeSettings.initial_pull_date}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">חשבונות בנק</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">ניהול חשבונות הבנק של הבניין ומקור קליטת התנועות • {selectedBuilding.name}</p>
         </div>
-
-        {/* Nightly Process Card */}
-        <div className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
-          {/* Gradient header */}
-          <div className="bg-gradient-to-l from-blue-500 to-blue-600 px-5 py-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
-              <Moon className="h-5 w-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-white">תהליך לילי</h3>
-              <p className="text-xs text-blue-100">משיכת תנועות אוטומטית כל לילה</p>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20">
-              <div className={`w-2 h-2 rounded-full ${scrapeSettings?.is_enabled ? 'bg-emerald-400' : 'bg-slate-300'}`} />
-              <span className="text-xs font-medium text-white">
-                {scrapeSettings?.is_enabled ? 'פעיל' : 'מושבת'}
-              </span>
-            </div>
-          </div>
-          <div className="p-5">
-            <div className="space-y-2.5 text-sm">
-              {scrapeSettings?.last_run_at && (
-                <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                  <Clock className="h-3.5 w-3.5 shrink-0" />
-                  <span>הרצה אחרונה: {new Date(scrapeSettings.last_run_at).toLocaleString('he-IL')}</span>
-                </div>
-              )}
-              {scrapeSettings?.last_run_status && !['pending_initial', 'initial_complete'].includes(scrapeSettings.last_run_status) && (
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${scrapeSettings.last_run_status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                  <span className={`text-sm font-medium ${scrapeSettings.last_run_status === 'success' ? 'text-emerald-700' : 'text-red-600'}`}>
-                    {scrapeSettings.last_run_status === 'success' ? 'הצליח' : scrapeSettings.last_run_status}
-                  </span>
-                </div>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1 mt-2"
-                onClick={() => setSettingsOpen(true)}
-              >
-                <Settings2 className="h-3 w-3" />
-                {scrapeSettings?.is_enabled ? 'שנה הגדרות' : 'הפעל תהליך לילי'}
-              </Button>
-            </div>
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link to="/bank-transactions" className="h-[38px] px-3.5 rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] hover:bg-[var(--surface-secondary)] text-[13px] font-semibold inline-flex items-center gap-1.5">
+            <ArrowLeftRight className="h-4 w-4" />תנועות בנק
+          </Link>
+          <Button variant="outline" onClick={() => setSettingsOpen(true)}>
+            <Settings2 className="h-4 w-4" />
+            הגדרות משיכה
+          </Button>
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" />
+            הוסף חשבון
+          </Button>
         </div>
       </div>
 
-      {/* Account cards */}
-      {buildingAccounts.length === 0 ? (
-        <EmptyState
-          icon={Landmark}
-          title="אין חשבונות בנק"
-          description="הוסף חשבון בנק כדי למשוך תנועות ולעקוב אחרי תשלומים"
-          action={<Button onClick={openNew} className="gap-2"><Plus className="h-4 w-4" />הוסף חשבון</Button>}
-        />
-      ) : (
-        <div className="space-y-2">
-          {buildingAccounts.map((account) => {
-            const bankInfo = BANKS[account.bank_type]
-            // Assign gradient colors to different bank types for variety
-            const bankGradients = {
-              hapoalim: 'from-red-500 to-red-600',
-              leumi: 'from-blue-500 to-blue-600',
-              discount: 'from-emerald-500 to-emerald-600',
-              mizrahi: 'from-purple-500 to-purple-600',
-              beinleumi: 'from-amber-500 to-amber-600',
-              mercantile: 'from-cyan-500 to-cyan-600',
-              otsarHahayal: 'from-blue-500 to-blue-600',
-            }
-            const gradient = bankGradients[account.bank_type] || 'from-slate-500 to-slate-600'
-            const dotColor = account.is_active ? 'bg-emerald-500' : 'bg-slate-400'
-            const statusText = account.is_active ? 'פעיל' : 'מושבת'
-            const statusTextColor = account.is_active ? 'text-emerald-700' : 'text-slate-600'
+      {/* KPI row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="חשבונות מוגדרים" icon={Landmark} color="blue"
+          value={String(buildingAccounts.length)}
+          sub={buildingAccounts.length ? `${activeAccounts} פעילים` : 'טרם הוגדר חשבון'} />
+        <StatCard label="תנועות שנקלטו" icon={ArrowLeftRight} color="emerald"
+          value={String(txCount)}
+          sub={feedStats.months ? `על פני ${feedStats.months} חודשים` : 'טרם נקלטו תנועות'} />
+        <StatCard label="תנועה אחרונה בקובץ" icon={CalendarCheck} color="slate"
+          value={feedStats.latest ? new Date(feedStats.latest).toLocaleDateString('he-IL') : '—'}
+          sub="תאריך התנועה המאוחרת ביותר שנקלטה" />
+        <StatCard label="מקור הנתונים" icon={FileSpreadsheet} color="purple"
+          value="ייבוא חודשי"
+          valueClassName="!text-[20px] sm:!text-[22px]"
+          sub="קובץ תנועות מהבנק (XLS) דרך תיקיית Drive" />
+      </div>
 
-            return (
-              <div
-                key={account.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
-              >
-                {/* Bank gradient circle */}
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                  <Landmark className="h-5 w-5" />
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Accounts */}
+        <div className="xl:col-span-8 space-y-6 min-w-0">
+          <SectionCard icon={Landmark} title="חשבונות הבניין" subtitle="פרטי ההתחברות נשמרים מוצפנים ואינם מוצגים לאחר השמירה"
+            actions={<Button size="sm" variant="outline" onClick={openNew}><Plus className="h-3.5 w-3.5" />חשבון חדש</Button>}
+            bodyClassName="p-0"
+            footer={buildingAccounts.length ? `${buildingAccounts.length} חשבונות` : null}>
+            {buildingAccounts.length === 0 ? (
+              <EmptyState
+                icon={Landmark}
+                title="אין חשבונות בנק"
+                description="הוסף את חשבון הבנק של הבניין כדי לשייך אליו את התנועות"
+                actionLabel="הוסף חשבון"
+                onAction={openNew}
+              />
+            ) : (
+              <>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr><th>בנק</th><th>תיאור</th><th>עדכון אחרון</th><th>סטטוס</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {buildingAccounts.map(account => (
+                        <tr key={account.id}>
+                          <td className="whitespace-nowrap">
+                            <span className="flex items-center gap-2">
+                              <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)]"><Landmark className="h-4 w-4" /></span>
+                              <span className="text-[13px] font-semibold">{BANKS[account.bank_type]?.name || account.bank_type}</span>
+                            </span>
+                          </td>
+                          <td className="text-[12px]">{account.label || <span className="text-[var(--text-muted)]">—</span>}</td>
+                          <td className="whitespace-nowrap text-[12px] num-tabular">{account.last_scraped_at ? new Date(account.last_scraped_at).toLocaleDateString('he-IL') : <span className="text-[var(--text-muted)]">—</span>}</td>
+                          <td className="whitespace-nowrap">{account.is_active ? <Badge variant="success">פעיל</Badge> : <Badge variant="neutral">מושבת</Badge>}</td>
+                          <td className="whitespace-nowrap">{accountActions(account)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+                <div className="md:hidden divide-y divide-[var(--border-light)]">
+                  {buildingAccounts.map(account => (
+                    <div key={account.id} className="p-4 flex items-center gap-3">
+                      <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Landmark className="h-4 w-4" /></span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold truncate">{BANKS[account.bank_type]?.name || account.bank_type}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] truncate">
+                          {account.label}{account.label && account.last_scraped_at ? ' • ' : ''}
+                          {account.last_scraped_at && <span className="num-tabular">עדכון: {new Date(account.last_scraped_at).toLocaleDateString('he-IL')}</span>}
+                        </p>
+                      </div>
+                      {account.is_active ? <Badge variant="success">פעיל</Badge> : <Badge variant="neutral">מושבת</Badge>}
+                      {accountActions(account)}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </SectionCard>
 
-                {/* Main info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                      {bankInfo?.name || account.bank_type}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-                    {account.label && <span>{account.label}</span>}
-                    {account.last_scraped_at && (
-                      <span>משיכה אחרונה: {new Date(account.last_scraped_at).toLocaleDateString('he-IL')}</span>
+          {/* Legacy direct-pull settings (kept for existing data; the live feed is the monthly import) */}
+          <div className="grid gap-6 md:grid-cols-2">
+            <SectionCard icon={Calendar} title="משיכה ראשונית" subtitle="הגדרת תאריך התחלה למשיכה ישירה מהבנק"
+              tone={!scrapeSettings?.initial_pull_done ? 'primary' : undefined}
+              bodyClassName="p-4">
+              {scrapeSettings?.initial_pull_done ? (
+                <div className="flex items-center gap-2 text-[13px] flex-wrap">
+                  <Badge variant="success"><CheckCircle2 className="h-3 w-3" />הושלמה</Badge>
+                  {scrapeSettings.initial_pull_date && <span className="text-[var(--text-secondary)] num-tabular">מ-{scrapeSettings.initial_pull_date}</span>}
+                  <span className="text-[var(--text-secondary)] mr-auto num-tabular">{txCount} תנועות נקלטו</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <FormField
+                    label="תאריך התחלה"
+                    type="date"
+                    value={settingsForm.initial_pull_date}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, initial_pull_date: e.target.value })}
+                  />
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" onClick={handleInitialPull}>
+                      <Play className="h-3 w-3" />
+                      הגדר משיכה ראשונית
+                    </Button>
+                    {txCount > 0 && (
+                      <Button size="sm" variant="outline" onClick={handleMarkInitialDone}>
+                        <CheckCircle2 className="h-3 w-3" />
+                        סמן כהושלם ({txCount} תנועות)
+                      </Button>
                     )}
                   </div>
+                  {scrapeSettings?.last_run_status === 'pending_initial' && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-[var(--radius)] bg-[var(--warning-light)] text-xs text-[var(--warning)]">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      ממתין להרצה — הסקרייפר ימשוך מ-{scrapeSettings.initial_pull_date}
+                    </div>
+                  )}
                 </div>
+              )}
+            </SectionCard>
 
-                {/* Status */}
-                <div className="flex items-center gap-2 min-w-[60px]">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusText}</span>
-                </div>
-
-                {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(account)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(account)}>
-                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                  </Button>
-                </div>
+            <SectionCard icon={Moon} title="תהליך לילי" subtitle="משיכה ישירה תקופתית מהבנק"
+              actions={scrapeSettings?.is_enabled ? <Badge variant="success">פעיל</Badge> : <Badge variant="neutral">מושבת</Badge>}
+              bodyClassName="p-4">
+              <div className="space-y-2.5 text-[13px]">
+                {scrapeSettings?.last_run_at && (
+                  <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                    <Clock className="h-3.5 w-3.5 shrink-0" />
+                    <span className="num-tabular">הרצה אחרונה: {new Date(scrapeSettings.last_run_at).toLocaleString('he-IL')}</span>
+                  </div>
+                )}
+                {scrapeSettings?.last_run_status && !['pending_initial', 'initial_complete'].includes(scrapeSettings.last_run_status) && (
+                  <div>
+                    {scrapeSettings.last_run_status === 'success'
+                      ? <Badge variant="success">הצליח</Badge>
+                      : <Badge variant="danger">{scrapeSettings.last_run_status}</Badge>}
+                  </div>
+                )}
+                {!scrapeSettings?.last_run_at && !scrapeSettings?.last_run_status && (
+                  <p className="text-[12px] text-[var(--text-muted)]">לא בוצעו הרצות.</p>
+                )}
+                <Button size="sm" variant="outline" className="mt-1" onClick={() => setSettingsOpen(true)}>
+                  <Settings2 className="h-3 w-3" />
+                  {scrapeSettings?.is_enabled ? 'שנה הגדרות' : 'הגדרות תהליך לילי'}
+                </Button>
               </div>
-            )
-          })}
+            </SectionCard>
+          </div>
         </div>
-      )}
+
+        {/* Feed source side panel */}
+        <aside className="xl:col-span-4 xl:sticky xl:top-20 space-y-6">
+          <SectionCard icon={FileSpreadsheet} title="איך נקלטות התנועות" subtitle="ייבוא חודשי מקובץ הבנק" bodyClassName="p-4 space-y-3 text-[12px] text-[var(--text-secondary)]">
+            <ol className="space-y-2.5">
+              {[
+                'מורידים מאתר הבנק את קובץ התנועות החודשי (XLS).',
+                'שומרים את הקובץ בתיקיית ה-Drive של הבניין.',
+                'התנועות נקלטות למערכת ומשויכות לחודש המתאים.',
+                'במסך תנועות בנק משייכים זיכויים לדירות ומסווגים חיובים.',
+              ].map((step, i) => (
+                <li key={i} className="flex items-start gap-2.5">
+                  <span className="h-5 w-5 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)] text-[11px] font-bold flex items-center justify-center shrink-0 num-tabular">{i + 1}</span>
+                  <span className="leading-5">{step}</span>
+                </li>
+              ))}
+            </ol>
+            <div className="flex items-start gap-2 p-2.5 rounded-[var(--radius)] bg-[var(--warning-light)] text-[var(--warning)]">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>משיכה ישירה מאתר הבנק אינה פעילה כרגע — מקור הנתונים הוא הקובץ החודשי. הגדרות המשיכה הישירה נשמרו לצורך תיעוד בלבד.</span>
+            </div>
+            <Link to="/bank-transactions" className="flex items-center justify-between p-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-secondary)]">
+              <span className="font-semibold text-[var(--text-primary)]">לשיוך ולסיווג התנועות</span>
+              <ArrowLeftRight className="h-4 w-4 text-[var(--primary)]" />
+            </Link>
+          </SectionCard>
+        </aside>
+      </div>
 
       {/* Add/Edit Account Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -385,7 +415,7 @@ export default function BankSettings() {
             <FormSelect label="בנק" value={form.bank_type} onChange={(e) => setForm({ ...form, bank_type: e.target.value, credentials: {} })} options={BANK_OPTIONS} placeholder="בחר בנק..." />
             <FormField label="תיאור (אופציונלי)" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="למשל: חשבון ועד ראשי" />
             {bankFields.length > 0 && (
-              <div className="border-t pt-4 space-y-3">
+              <div className="border-t border-[var(--border)] pt-4 space-y-3">
                 <p className="text-sm font-medium text-[var(--text-secondary)]">פרטי התחברות</p>
                 {editingId && (
                   <p className="text-xs text-[var(--text-muted)] -mt-1">
@@ -424,7 +454,11 @@ export default function BankSettings() {
             <DialogTitle>הגדרות תהליך לילי</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-[var(--surface-hover)] transition-colors">
+            <div className="flex items-start gap-2 p-2.5 rounded-[var(--radius)] bg-[var(--warning-light)] text-xs text-[var(--warning)]">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>משיכה ישירה מהבנק אינה פעילה כרגע; התנועות נקלטות מהקובץ החודשי.</span>
+            </div>
+            <label className="flex items-center gap-3 cursor-pointer p-3 rounded-[var(--radius)] hover:bg-[var(--surface-secondary)] transition-colors">
               <input type="checkbox" checked={settingsForm.is_enabled} onChange={(e) => setSettingsForm({ ...settingsForm, is_enabled: e.target.checked })} className="rounded w-5 h-5" />
               <div>
                 <p className="text-sm font-medium">הפעל משיכת תנועות לילית</p>
