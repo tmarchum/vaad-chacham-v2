@@ -4,12 +4,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { hebrewMonthLabel, ISSUE_CATEGORIES } from '@/lib/constants'
 import { ResidentBooking } from './ResidentBooking'
+import { BrandLogo } from '@/components/common/BrandLogo'
 import {
   Home, CreditCard, Megaphone, LogOut, Building2,
   CheckCircle2, AlertCircle, Clock, ChevronDown, ChevronUp,
   Wrench, CalendarDays, Users, Plus, X, Send, Loader2,
   UserCog, Mail, Phone, Pencil, Trash2, Ruler, Car, KeyRound,
   Layers, Hash, StickyNote, Check, Star, Download, MapPin,
+  ReceiptText, History, ChevronLeft, ShieldCheck, DoorOpen,
 } from 'lucide-react'
 
 // Stable public download URL — the Android workflow publishes the APK here.
@@ -166,33 +168,45 @@ export function ResidentPortal({ profileOverride = null }) {
     if (!error && data && data.length) await loadUnitScoped()
   }
 
+  // ── Civic Blue mobile home: derived values ──
+  const floorLabel = unit?.floor != null && unit.floor !== '' ? `קומה ${unit.floor}` : ''
+  const openDebt = payments
+    .filter((p) => p.status !== 'paid')
+    .reduce((sum, p) => sum + (p.status === 'partial'
+      ? Math.max(0, expectedFee - (Number(p.amount) || 0))
+      : (Number(p.amount) || expectedFee)), 0)
+  const duesState = !currentPayment
+    ? { label: 'טרם הופק חיוב', cls: 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] border-[var(--border)]' }
+    : currentPayment.status === 'paid'
+    ? { label: 'שולם ✓', cls: 'bg-[var(--success-light)] text-[var(--success)] border-[var(--success)]/25' }
+    : { label: '● דורש הסדרה', cls: 'bg-[var(--danger-light)] text-[var(--danger)] border-[var(--danger)]/25' }
+  const newAnnouncements = announcements.filter((a) => a.created_at && (Date.now() - new Date(a.created_at)) < 7 * 86400000).length
+  const goTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const card = 'bg-[var(--surface)] rounded-[var(--radius-lg)] border border-[var(--border)] shadow-[var(--shadow)]'
+
   return (
-    <div dir="rtl" className="min-h-screen bg-slate-50" style={{ fontFamily: 'inherit' }}>
-      {/* ── Header ── */}
-      <header className="bg-gradient-to-l from-blue-600 to-blue-700 text-white px-4 py-4 shadow-lg">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
-              <span className="font-black text-sm">ו</span>
-            </div>
-            <div>
-              <p className="font-extrabold text-[15px] leading-tight">ועדלי</p>
-              <p className="text-blue-200 text-[11px]">פורטל דיירים</p>
+    <div dir="rtl" className="min-h-screen bg-[var(--bg)]" style={{ fontFamily: 'inherit' }}>
+      {/* ── App bar ── */}
+      <header className="sticky top-0 z-30 bg-[var(--surface)] border-b border-[var(--border)] px-4 py-3">
+        <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <BrandLogo className="w-10 h-10 rounded-[var(--radius-lg)] shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[17px] leading-tight font-bold text-[var(--primary)] truncate">
+                ועדלי{building?.name ? <span className="text-[var(--text-primary)]"> | {building.name}</span> : null}
+              </p>
+              <p className="text-[12px] text-[var(--text-secondary)] truncate">{[floorLabel, unitNumber !== '—' ? `דירה ${unitNumber}` : ''].filter(Boolean).join(', ')}</p>
             </div>
           </div>
-          <button
-            onClick={signOut}
-            className="flex items-center gap-1.5 text-blue-200 hover:text-white text-xs font-medium transition-colors"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            יציאה
+          <button onClick={signOut} title="יציאה" className="p-2 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]">
+            <LogOut className="h-5 w-5" />
           </button>
         </div>
       </header>
 
       {loading ? (
         <div className="flex justify-center items-center min-h-[50vh]">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[var(--primary)] border-t-transparent" />
         </div>
       ) : !contactOk && !profileOverride ? (
         /* Mandatory: a valid primary resident (name + 10-digit phone + email) is
@@ -205,175 +219,158 @@ export function ResidentPortal({ profileOverride = null }) {
           onDone={loadUnitScoped}
         />
       ) : (
-        <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
+        <div className="max-w-xl mx-auto px-4 py-5 space-y-5">
 
-          {/* ── Greeting banner (same as admin dashboard) ── */}
-          <div className="bg-gradient-to-l from-blue-600 to-blue-700 text-white rounded-2xl shadow-sm px-5 py-4">
-            <h1 className="text-lg font-extrabold mb-1">
-              {greeting}{firstName ? `, ${firstName}` : ''} 👋
-            </h1>
-            <p className="text-blue-100 text-sm">
-              יום {dayOfWeek}, {gregDate}
-              {hebrewDate && (
-                <>
-                  <span className="mx-2 opacity-40">|</span>
-                  <span className="font-medium">{hebrewDate}</span>
-                </>
-              )}
-            </p>
+          {/* ── Greeting ── */}
+          <div className={`${card} p-5 space-y-4`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-[24px] leading-8 font-bold text-[var(--text-primary)]">{greeting}{firstName ? `, ${firstName}` : ''} 👋</h1>
+                <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-[var(--radius)] bg-[var(--surface-container)] border border-[var(--primary)]/15 text-[12px] font-semibold text-[var(--primary-dark)]">
+                  <MapPin className="h-3.5 w-3.5" />
+                  {[building?.name, unitNumber !== '—' ? `דירה ${unitNumber}` : '', floorLabel].filter(Boolean).join(' • ')}
+                </span>
+              </div>
+              <button onClick={() => goTo('portal-profile')} className="shrink-0 h-9 px-3 rounded-[var(--radius)] border border-[var(--outline-variant)] text-[12px] font-semibold text-[var(--primary)] hover:bg-[var(--surface-secondary)] flex items-center gap-1">
+                החשבון שלי <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)]">יום {dayOfWeek}, {gregDate}{hebrewDate ? ` | ${hebrewDate}` : ''}</p>
+            {confirmedAt ? (
+              <div className="flex items-center gap-3 p-3 rounded-[var(--radius)] border border-[var(--success)]/25 bg-[var(--success-light)]/50">
+                <ShieldCheck className="h-6 w-6 text-[var(--success)] shrink-0" strokeWidth={1.75} />
+                <div>
+                  <p className="text-[13px] font-semibold text-[var(--success)]">הפרטים שלך מעודכנים</p>
+                  <p className="text-[11px] text-[var(--text-secondary)]">אושרו ב-{formatDate(confirmedAt)}</p>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => goTo('portal-confirm')} className="w-full text-right flex items-center gap-3 p-3 rounded-[var(--radius)] border border-amber-300 bg-[var(--warning-light)]">
+                <AlertCircle className="h-6 w-6 text-[var(--warning)] shrink-0" strokeWidth={1.75} />
+                <div>
+                  <p className="text-[13px] font-semibold text-[var(--warning)]">נא לעבור על הפרטים ולאשר</p>
+                  <p className="text-[11px] text-[var(--text-secondary)]">כולל טלפוני שער החניה — האישור בתחתית העמוד</p>
+                </div>
+              </button>
+            )}
           </div>
 
           {/* ── Download the Android app (web visitors on Android only) ── */}
           <AppDownloadBanner />
 
-          {/* ── Details-confirmation: status at top, the confirm action is at the BOTTOM
-               (after the resident has scrolled through all their details) ── */}
-          {confirmedAt ? (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-3 flex items-center gap-2 text-sm text-emerald-700">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>הפרטים אושרו ב-{formatDate(confirmedAt)}</span>
-            </div>
-          ) : (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 flex items-center gap-2 text-sm text-amber-800">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>עברו על כל הפרטים בעמוד — כולל טלפוני שער החניה — והאישור בתחתית.</span>
-            </div>
-          )}
-
-          {/* ── Unit card ── */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="bg-gradient-to-l from-blue-50 to-blue-50 px-5 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm">
-                  {unitNumber}
+          {/* ── Dues ── */}
+          <div className={`${card} overflow-hidden`}>
+            <div className="p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="p-2 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)]"><ReceiptText className="h-5 w-5" strokeWidth={1.75} /></span>
+                  <div>
+                    <h2 className="text-[18px] leading-6 font-bold text-[var(--text-primary)]">דמי ועד בית לחודש {hebrewMonthLabel(currentMonth)}</h2>
+                    {expectedFee > 0 && <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">סכום חודשי: <strong className="text-[var(--text-primary)] num-tabular">{formatCurrency(expectedFee)}</strong>{unit?.board_member && building?.board_member_discount > 0 ? ` (כולל הנחת חבר ועד ${building.board_member_discount}%)` : ''}</p>}
+                  </div>
                 </div>
+                <span className={`shrink-0 px-2.5 py-1 rounded-full border text-[11px] font-semibold ${duesState.cls}`}>{duesState.label}</span>
+              </div>
+              <div className="p-4 rounded-[var(--radius)] bg-[var(--bg)] border border-[var(--border)] flex items-end justify-between gap-3">
                 <div>
-                  <p className="font-bold text-slate-900">
-                    {ownerName || 'דייר'}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    דירה {unitNumber}
-                    {building?.name ? ` • ${building.name}` : ''}
-                  </p>
+                  <p className="text-[12px] text-[var(--text-secondary)]">{openDebt > 0 ? 'יתרת חוב לתשלום:' : 'אין חוב פתוח'}</p>
+                  <p className={`text-[30px] leading-9 font-bold num-tabular ${openDebt > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--success)]'}`}>{formatCurrency(openDebt)}</p>
                 </div>
+                {unitNumber !== '—' && <span className="px-2.5 py-1 rounded border border-[var(--border)] bg-[var(--surface)] text-[12px] font-semibold text-[var(--text-secondary)]">דירה {unitNumber}</span>}
               </div>
+              {building?.dues_payment_url && openDebt > 0 && (
+                <a href={building.dues_payment_url} target="_blank" rel="noopener noreferrer"
+                  className="w-full h-12 flex items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-[15px] font-bold transition-colors">
+                  <CreditCard className="h-5 w-5" />
+                  שלם דמי ועד ({formatCurrency(openDebt)})
+                </a>
+              )}
             </div>
-            {building && (
-              <div className="px-5 py-3 flex items-center gap-2 text-sm text-slate-500">
-                <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
-                {[building.address, building.city].filter(Boolean).join(', ') || building.name}
-              </div>
-            )}
+            <div className="px-5 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[12px]">
+              <button onClick={() => goTo('portal-history')} className="flex items-center gap-1.5 font-semibold text-[var(--primary)]"><History className="h-4 w-4" />היסטוריית תשלומים</button>
+              <span className="text-[var(--text-muted)]">{payments.length ? `${payments.filter((p) => p.status === 'paid').length} חודשים שולמו` : ''}</span>
+            </div>
           </div>
 
-          {/* ── My profile (הפרטים שלי) ── */}
-          <ProfileSection
-            profile={profile}
-            user={user}
-            ownerName={ownerName}
-            updateProfile={updateProfile}
-          />
-
-          {/* ── Unit details (פרטי הדירה) — includes owner block for rented units ── */}
-          {unit && (
-            <UnitDetailsSection
-              unit={unit}
-              building={building}
-              onSaved={loadUnitScoped}
-            />
-          )}
-
-          {/* ── Monthly dues ── */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <CreditCard className="h-4 w-4 text-blue-600" />
-              <p className="font-bold text-slate-800 text-sm">תשלום חודשי</p>
+          {/* ── Quick actions ── */}
+          <div>
+            <h2 className="text-[17px] font-bold text-[var(--text-primary)] mb-3">פעולות מהירות</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { icon: Wrench, label: 'דיווח על תקלה', sub: 'פתיחת קריאת שירות', tone: 'bg-amber-50 text-amber-600 border-amber-200', onClick: () => { setOpenForm('issue'); setTimeout(() => goTo('portal-issues'), 50) } },
+                { icon: DoorOpen, label: 'שיריון חדר דיירים', sub: 'אירועים ומפגשים', tone: 'bg-[var(--surface-variant)] text-[var(--primary-dark)] border-[var(--primary)]/20', onClick: () => goTo('portal-booking') },
+                { icon: Megaphone, label: 'הודעות הבניין', sub: 'לוח מודעות דיגיטלי', tone: 'bg-[var(--surface-secondary)] text-[var(--primary)] border-[var(--primary)]/20', badge: newAnnouncements ? `${newAnnouncements} חדש` : null, onClick: () => goTo('portal-announcements') },
+                { icon: UserCog, label: 'הפרטים שלי', sub: 'פרופיל, דירה ודיירים', tone: 'bg-[var(--success-light)] text-[var(--success)] border-[var(--success)]/20', onClick: () => goTo('portal-profile') },
+              ].map((a) => (
+                <button key={a.label} onClick={a.onClick} className={`${card} relative p-4 text-right hover:border-[var(--primary)]/40 active:scale-[0.98] transition-all`}>
+                  {a.badge && <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full bg-[var(--primary-dark)] text-white text-[10px] font-bold">{a.badge}</span>}
+                  <span className={`inline-flex p-2 rounded-[var(--radius)] border mb-3 ${a.tone}`}><a.icon className="h-5 w-5" strokeWidth={1.75} /></span>
+                  <p className="text-[15px] font-bold text-[var(--text-primary)]">{a.label}</p>
+                  <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">{a.sub}</p>
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Expected monthly amount — always shown */}
-            {expectedFee > 0 && (
-              <>
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
-                  <span className="text-sm text-slate-500">סכום חודשי קבוע</span>
-                  <span className="font-extrabold text-slate-900 text-lg">{formatCurrency(expectedFee)}</span>
-                </div>
-                {unit?.board_member && building?.board_member_discount > 0 && (
-                  <p className="text-[11px] text-emerald-600 -mt-1 mb-3">כולל הנחת חבר ועד {building.board_member_discount}%</p>
-                )}
-              </>
-            )}
+          {/* ── My issues ── */}
+          <div id="portal-issues" className="scroll-mt-20">
+            <ReportIssueSection
+              issues={issues}
+              open={openForm === 'issue'}
+              onToggle={() => setOpenForm(openForm === 'issue' ? null : 'issue')}
+              onCreated={async () => { setOpenForm(null); await loadUnitScoped() }}
+              profile={profile}
+              user={user}
+            />
+          </div>
 
-            {/* Current month payment status */}
-            {currentPayment ? (() => {
-              const st = STATUS_MAP[currentPayment.status] || STATUS_MAP.pending
-              const Icon = st.icon
-              return (
-                <div className={`flex items-center justify-between p-3 rounded-xl ${st.bg}`}>
-                  <div className="flex items-center gap-2">
-                    <Icon className={`h-4.5 w-4.5 ${st.color}`} />
-                    <span className={`font-semibold text-sm ${st.color}`}>{st.label}</span>
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-slate-900 text-base">{formatCurrency(currentPayment.amount || 0)}</p>
-                    <p className="text-xs text-slate-400">{hebrewMonthLabel(currentPayment.month)}</p>
-                  </div>
-                </div>
-              )
-            })() : (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 text-slate-500 text-sm">
-                <Clock className="h-4 w-4" />
-                טרם הופק חיוב לחודש {hebrewMonthLabel(currentMonth)}
-              </div>
-            )}
-
-            {/* Pay dues — opens the building's PayBox/Bit link */}
-            {building?.dues_payment_url && (
-              <a href={building.dues_payment_url} target="_blank" rel="noopener noreferrer"
-                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-colors">
-                <CreditCard className="h-4 w-4" />
-                שלם דמי ועד
-              </a>
-            )}
+          {/* ── Book a room ── */}
+          <div id="portal-booking" className="scroll-mt-20">
+            <ResidentBooking
+              resources={resources}
+              profile={profile}
+              user={user}
+              ownerName={ownerName}
+              onCreated={() => loadBuildingScoped(building?.id || profile?.building_id)}
+            />
           </div>
 
           {/* ── Payment history ── */}
           {payments.length > 0 && (
-            <PaymentHistorySection payments={payments} />
+            <div id="portal-history" className="scroll-mt-20">
+              <PaymentHistorySection payments={payments} />
+            </div>
           )}
 
-          {/* ── Report a fault (פתיחת תקלות) ── */}
-          <ReportIssueSection
-            issues={issues}
-            open={openForm === 'issue'}
-            onToggle={() => setOpenForm(openForm === 'issue' ? null : 'issue')}
-            onCreated={async () => { setOpenForm(null); await loadUnitScoped() }}
-            profile={profile}
-            user={user}
-          />
-
-          {/* ── Book a room (שיריון חדר) — calendar, like the general system ── */}
-          <ResidentBooking
-            resources={resources}
-            profile={profile}
-            user={user}
-            ownerName={ownerName}
-            onCreated={() => loadBuildingScoped(building?.id || profile?.building_id)}
-          />
-
-          {/* ── Residents — grouped by unit type (owned/rented) ── */}
-          <ResidentsSection
-            unit={unit}
-            residents={residents}
-            profile={profile}
-            onChanged={loadUnitScoped}
-          />
+          {/* ── Profile / unit / residents ── */}
+          <div id="portal-profile" className="scroll-mt-20 space-y-5">
+            <ProfileSection
+              profile={profile}
+              user={user}
+              ownerName={ownerName}
+              updateProfile={updateProfile}
+            />
+            {unit && (
+              <UnitDetailsSection
+                unit={unit}
+                building={building}
+                onSaved={loadUnitScoped}
+              />
+            )}
+            <ResidentsSection
+              unit={unit}
+              residents={residents}
+              profile={profile}
+              onChanged={loadUnitScoped}
+            />
+          </div>
 
           {/* ── Announcements ── */}
           {announcements.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+            <div id="portal-announcements" className="scroll-mt-20 bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Megaphone className="h-4 w-4 text-amber-500" />
-                <p className="font-bold text-slate-800 text-sm">הודעות הבניין</p>
+                <p className="font-bold text-[var(--text-primary)] text-[15px]">הודעות הבניין</p>
               </div>
               <div className="space-y-2">
                 {announcements.map(a => {
@@ -407,7 +404,7 @@ export function ResidentPortal({ profileOverride = null }) {
 
           {/* ── Details-confirmation action — at the BOTTOM, after reviewing everything ── */}
           {!confirmedAt && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 space-y-3">
+            <div id="portal-confirm" className="scroll-mt-20 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 space-y-3">
               <p className="text-sm font-bold text-amber-800">סיום — אישור הפרטים</p>
               <p className="text-xs text-amber-700">
                 לאחר שעברת על כל הפרטים למעלה (שם, טלפון, דיירי הדירה, ובמיוחד <b>טלפוני שער החניה</b>) — אשר/י שהכל מעודכן.
@@ -458,8 +455,8 @@ function PaymentHistorySection({ payments }) {
   const totalDebt = unpaid.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
   const shown = showAll ? payments : payments.slice(0, 6)
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
-      <p className="font-bold text-slate-800 text-sm mb-3">היסטוריית תשלומים</p>
+    <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
+      <p className="font-bold text-[var(--text-primary)] text-[15px] mb-3">היסטוריית תשלומים</p>
       {totalDebt > 0 && (
         <div className="flex items-center justify-between p-3 rounded-xl bg-red-50 border border-red-100 mb-3">
           <span className="flex items-center gap-2 text-sm font-semibold text-red-700">
@@ -534,7 +531,7 @@ function RequirePrimaryResident({ existing, profile, user, unitType, onDone }) {
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
         <div className="flex items-center gap-2 mb-2">
           <UserCog className="h-5 w-5 text-blue-600" />
           <p className="font-extrabold text-slate-900">פרטי הדייר הראשי — חובה</p>
@@ -690,11 +687,11 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+    <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <UserCog className="h-4 w-4 text-blue-500" />
-          <p className="font-bold text-slate-800 text-sm">הפרטים שלי</p>
+          <p className="font-bold text-[var(--text-primary)] text-[15px]">הפרטים שלי</p>
         </div>
         {!editing && (
           <button
@@ -851,11 +848,11 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+    <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-orange-500" />
-          <p className="font-bold text-slate-800 text-sm">תקלות ופניות</p>
+          <p className="font-bold text-[var(--text-primary)] text-[15px]">תקלות ופניות</p>
         </div>
         <button
           onClick={onToggle}
@@ -1078,7 +1075,7 @@ function OwnerDetails({ unit, onSaved }) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <UserCog className="h-4 w-4 text-amber-500" />
-          <p className="font-bold text-slate-800 text-sm">פרטי בעלים</p>
+          <p className="font-bold text-[var(--text-primary)] text-[15px]">פרטי בעלים</p>
         </div>
         {!editing && (
           <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
@@ -1192,11 +1189,11 @@ function UnitDetailsSection({ unit, building, onSaved }) {
   const inputCls = 'mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400'
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+    <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Home className="h-4 w-4 text-blue-600" />
-          <p className="font-bold text-slate-800 text-sm">פרטי הדירה</p>
+          <p className="font-bold text-[var(--text-primary)] text-[15px]">פרטי הדירה</p>
         </div>
         {!editing && (
           <button onClick={startEdit} className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
@@ -1399,11 +1396,11 @@ function ResidentGroup({ title, subtitle, icon: Icon, residents, defaultType, pr
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+    <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-blue-500" />
-          <p className="font-bold text-slate-800 text-sm">{title}</p>
+          <p className="font-bold text-[var(--text-primary)] text-[15px]">{title}</p>
         </div>
         <button onClick={() => { setAdding(a => !a); setError(null) }}
           className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">

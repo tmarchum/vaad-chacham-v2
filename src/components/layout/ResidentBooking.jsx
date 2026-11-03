@@ -202,7 +202,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
 
   if (resources.length === 0) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+      <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
         <div className="flex items-center gap-2 mb-2">
           <CalendarDays className="h-4 w-4 text-violet-500" />
           <p className="font-bold text-slate-800 text-sm">שיריון חדר / מתקן</p>
@@ -213,7 +213,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
+    <div className="bg-[var(--surface)] rounded-[var(--radius-lg)] shadow-[var(--shadow)] border border-[var(--border)] p-5">
       <div className="flex items-center gap-2 mb-3">
         <CalendarDays className="h-4 w-4 text-violet-500" />
         <p className="font-bold text-slate-800 text-sm">שיריון חדר / מתקן</p>
