@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ועדלי | Vaadly - הודעות לדיירים ופרוטוקולים</title>
+<!-- Google Fonts: Rubik -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300..900;1,300..900&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "secondary-container": "#dae2fd",
+            "on-error-container": "#93000a",
+            "inverse-primary": "#b4c5ff",
+            "outline": "#737686",
+            "on-background": "#0b1c30",
+            "primary": "#004ac6",
+            "on-tertiary-fixed-variant": "#005137",
+            "on-primary-container": "#eeefff",
+            "on-error": "#ffffff",
+            "surface-container-high": "#dce9ff",
+            "on-primary-fixed": "#00174b",
+            "tertiary-fixed": "#85f8c4",
+            "on-tertiary-container": "#bdffdc",
+            "secondary-fixed": "#dae2fd",
+            "background": "#f8f9ff",
+            "error-container": "#ffdad6",
+            "outline-variant": "#c3c6d7",
+            "surface": "#f8f9ff",
+            "on-secondary-fixed": "#131b2e",
+            "on-tertiary-fixed": "#002114",
+            "error": "#ba1a1a",
+            "primary-fixed-dim": "#b4c5ff",
+            "on-tertiary": "#ffffff",
+            "on-secondary-container": "#5c647a",
+            "tertiary-container": "#007d57",
+            "on-primary-fixed-variant": "#003ea8",
+            "tertiary": "#006243",
+            "surface-variant": "#d3e4fe",
+            "surface-dim": "#cbdbf5",
+            "inverse-on-surface": "#eaf1ff",
+            "primary-fixed": "#dbe1ff",
+            "on-surface": "#0b1c30",
+            "surface-container-low": "#eff4ff",
+            "secondary": "#565e74",
+            "surface-bright": "#f8f9ff",
+            "inverse-surface": "#213145",
+            "surface-container": "#e5eeff",
+            "tertiary-fixed-dim": "#68dba9",
+            "on-primary": "#ffffff",
+            "secondary-fixed-dim": "#bec6e0",
+            "primary-container": "#2563eb",
+            "surface-container-highest": "#d3e4fe",
+            "on-secondary-fixed-variant": "#3f465c",
+            "surface-container-lowest": "#ffffff",
+            "on-surface-variant": "#434655",
+            "surface-tint": "#0053db",
+            "on-secondary": "#ffffff"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "spacing": {
+            "space-lg": "1.25rem",
+            "space-md": "0.75rem",
+            "margin": "1rem",
+            "space-xs": "0.25rem",
+            "margin-desktop": "2rem",
+            "gutter-desktop": "1.5rem",
+            "gutter": "1rem",
+            "space-xl": "2rem",
+            "space-sm": "0.5rem"
+          },
+          "fontFamily": {
+            "headline-lg": ["Rubik"],
+            "numeric-table": ["Rubik"],
+            "body-md": ["Rubik"],
+            "label-sm": ["Rubik"],
+            "headline-sm": ["Rubik"],
+            "headline-md": ["Rubik"],
+            "label-md": ["Rubik"],
+            "body-lg": ["Rubik"],
+            "headline-xl-mobile": ["Rubik"],
+            "label-lg": ["Rubik"],
+            "body-sm": ["Rubik"],
+            "headline-xl": ["Rubik"]
+          },
+          "fontSize": {
+            "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+            "numeric-table": ["13px", { "lineHeight": "18px", "fontWeight": "500" }],
+            "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+            "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.02em", "fontWeight": "500" }],
+            "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+            "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+            "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+            "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+            "headline-xl-mobile": ["26px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+            "label-lg": ["14px", { "lineHeight": "20px", "fontWeight": "500" }],
+            "body-sm": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+            "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      font-family: 'Rubik', sans-serif;
+      background-color: #f8fafc;
+      color: #0b1c30;
+      overflow-x: hidden;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      display: inline-block;
+      vertical-align: middle;
+      line-height: 1;
+    }
+    .material-symbols-outlined.fill-icon {
+      font-variation-settings: 'FILL' 1;
+    }
+    /* Custom scrollbar for dense data panels */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-on-surface antialiased selection:bg-primary selection:text-white">
+<!-- ========================================================================= -->
+<!-- SIDEBAR (RTL: fixed top-0 right-0 w-64 h-screen border-l border-slate-200) -->
+<!-- ========================================================================= -->
+<aside class="fixed top-0 right-0 h-screen w-64 z-40 bg-surface-container-lowest border-l border-outline-variant flex flex-col justify-between p-4 select-none">
+<!-- Top Block: Brand, Property info & Quick Action -->
+<div class="flex flex-col gap-4">
+<!-- Brand & Building Identity Card -->
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-lg bg-primary-container flex items-center justify-center text-white shadow-sm">
+<span class="material-symbols-outlined fill-icon text-[22px]">apartment</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="text-headline-md font-headline-md font-bold text-primary tracking-tight">ועדלי</span>
+<span class="px-1.5 py-0.2 bg-blue-100 text-primary text-[10px] font-bold rounded">PRO</span>
+</div>
+<p class="text-body-sm font-body-sm text-secondary truncate max-w-[140px]" title="רוטשילד 42, תל אביב">רוטשילד 42, תל אביב</p>
+</div>
+</div>
+<span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-label-sm font-label-sm rounded-full border border-emerald-200" title="28 דירות רשומות">
+          28 דירות
+        </span>
+</div>
+<!-- Quick CTA Button -->
+<button class="w-full h-[38px] bg-primary-container hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 font-label-lg text-label-lg shadow-sm transition-all duration-150 active:scale-[0.98]">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span>+ הודעה חדשה</span>
+</button>
+<!-- Main Navigation Menu -->
+<nav class="flex flex-col gap-1 mt-1">
+<!-- 1. דשבורד -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="text-body-md font-body-md">דשבורד</span>
+</a>
+<!-- 2. דירות ודיירים -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]">apartment</span>
+<span class="text-body-md font-body-md">דירות ודיירים</span>
+</a>
+<!-- 3. תקלות וקריאות -->
+<a class="flex items-center justify-between px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px]">build</span>
+<span class="text-body-md font-body-md">תקלות וקריאות</span>
+</div>
+<span class="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[11px] font-semibold rounded-full">4</span>
+</a>
+<!-- 4. גבייה ותשלומים -->
+<a class="flex items-center justify-between px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-[20px]">payments</span>
+<span class="text-body-md font-body-md">גבייה ותשלומים</span>
+</div>
+<span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-semibold rounded-full">91%</span>
+</a>
+<!-- 5. הודעות לדיירים (ACTIVE) -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-container-high text-primary font-headline-sm font-semibold border-r-4 border-primary transition-all" href="#">
+<span class="material-symbols-outlined fill-icon text-[20px]">campaign</span>
+<span class="text-body-md font-headline-sm font-semibold">הודעות לדיירים</span>
+</a>
+<!-- 6. שריון חדרים -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]">meeting_room</span>
+<span class="text-body-md font-body-md">שריון חדרים</span>
+</a>
+<!-- 7. הגדרות -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="text-body-md font-body-md">הגדרות</span>
+</a>
+</nav>
+</div>
+<!-- Bottom Footer Links & Current User Card -->
+<div class="flex flex-col gap-3 pt-3 border-t border-slate-100">
+<div class="flex flex-col gap-0.5">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-secondary hover:bg-slate-50 transition-colors text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[19px]">help</span>
+<span>עזרה ותמיכה</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-error hover:bg-red-50 transition-colors text-body-sm font-body-sm" href="#">
+<span class="material-symbols-outlined text-[19px]">logout</span>
+<span>התנתקות</span>
+</a>
+</div>
+<!-- User Card -->
+<div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-full bg-blue-100 text-primary font-bold text-xs flex items-center justify-center border border-blue-200">
+            תל
+          </div>
+<div class="leading-tight">
+<p class="text-body-sm font-headline-sm font-semibold text-slate-800">תומר לוי</p>
+<p class="text-[11px] text-slate-500">מנהל ועד • דירה 14</p>
+</div>
+</div>
+<span class="w-2.5 h-2.5 rounded-full bg-emerald-500" title="מחובר כעת"></span>
+</div>
+</div>
+</aside>
+<!-- ========================================================================= -->
+<!-- TOP APP BAR (RTL: fixed top-0 left-0 right-64 h-16 border-b border-slate-200) -->
+<!-- ========================================================================= -->
+<header class="fixed top-0 left-0 right-64 h-16 z-30 bg-surface-container-lowest border-b border-outline-variant flex items-center justify-between px-6">
+<!-- Right side: Search Box -->
+<div class="flex items-center gap-4 flex-1 max-w-lg">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[19px]">search</span>
+<input class="w-full h-[38px] bg-slate-50 border border-slate-200 rounded-lg pr-9 pl-12 text-body-sm font-body-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-right" placeholder="חיפוש הודעה, פרוטוקול, מילת מפתח..." type="text"/>
+<span class="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] bg-white border border-slate-200 text-slate-400 px-1.5 py-0.5 rounded font-mono">⌘K</span>
+</div>
+</div>
+<!-- Center/Left Badges & Top Actions -->
+<div class="flex items-center gap-4">
+<!-- Operational Metric Badges -->
+<div class="hidden lg:flex items-center gap-2">
+<div class="px-3 py-1.5 rounded-md bg-slate-100 border border-slate-200 text-body-sm font-numeric-table text-slate-700 flex items-center gap-1.5">
+<span class="text-slate-400 text-xs font-normal">יתרת קופה:</span>
+<span class="font-bold text-slate-900">₪48,250</span>
+</div>
+<div class="px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-body-sm font-label-md flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+<span>סטטוס שוטף: תקין</span>
+</div>
+</div>
+<div class="h-6 w-px bg-slate-200 hidden md:block"></div>
+<!-- Action Buttons -->
+<div class="flex items-center gap-2">
+<button class="h-[38px] px-3.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 text-body-sm font-label-md flex items-center gap-1.5 transition-colors">
+<span class="material-symbols-outlined text-[17px]">emergency_home</span>
+<span>הודעה דחופה</span>
+</button>
+<button class="h-[38px] px-3.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-body-sm font-label-md flex items-center gap-1.5 transition-colors shadow-2xs">
+<span class="material-symbols-outlined text-[17px]">file_download</span>
+<span>הפקת דוח</span>
+</button>
+</div>
+<!-- Notification Bell with Alert Dot -->
+<button aria-label="התראות" class="relative w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50 text-slate-600 transition-colors">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+</button>
+<!-- Profile Avatar -->
+<div class="flex items-center gap-2 cursor-pointer pl-1">
+<div class="w-9 h-9 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-700 font-bold text-xs" title="תמונת פרופיל תומר לוי - מנהל ועד בית">
+          תל
+        </div>
+</div>
+</div>
+</header>
+<!-- ========================================================================= -->
+<!-- MAIN WORKSPACE CONTAINER (RTL: right-64, pt-16, fluid scroll) -->
+<!-- ========================================================================= -->
+<main class="mr-64 pt-16 min-h-screen pb-16 bg-slate-50 px-8">
+<!-- Top Breadcrumb & Page Title Strip -->
+<div class="pt-6 pb-4">
+<nav class="flex items-center gap-1.5 text-xs text-slate-500 mb-2">
+<a class="hover:text-primary transition-colors" href="#">ניהול שוטף</a>
+<span class="material-symbols-outlined text-[14px]">chevron_left</span>
+<a class="hover:text-primary transition-colors" href="#">רוטשילד 42</a>
+<span class="material-symbols-outlined text-[14px]">chevron_left</span>
+<span class="text-slate-800 font-medium">הודעות לדיירים ועדכונים</span>
+</nav>
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<h1 class="text-headline-lg font-headline-lg text-slate-900 tracking-tight">הודעות ועד ופרוטוקולים</h1>
+<p class="text-body-md font-body-md text-slate-600 mt-0.5">
+            שידור הודעות דחופות ושוטפות, מעקב קריאה ואישורים, ושיתוף פרוטוקולי ישיבות ועד.
+          </p>
+</div>
+<!-- Header Actions -->
+<div class="flex items-center gap-2.5 flex-wrap">
+<button class="h-[38px] px-3.5 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-body-sm font-label-md flex items-center gap-2 transition-colors">
+<span class="material-symbols-outlined text-[18px]">chat</span>
+<span>שידור WhatsApp מרוכז</span>
+</button>
+<button class="h-[38px] px-3.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-body-sm font-label-md flex items-center gap-2 transition-colors shadow-2xs">
+<span class="material-symbols-outlined text-[18px]">post_add</span>
+<span>פרוטוקול ישיבה +</span>
+</button>
+<button class="h-[38px] px-4 rounded-lg bg-primary-container hover:bg-blue-700 text-white text-body-sm font-label-lg flex items-center gap-2 shadow-sm transition-all">
+<span class="material-symbols-outlined text-[18px]">campaign</span>
+<span>+ הודעה חדשה</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Segmented Navigation Pill Tabs -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-3 mt-1">
+<div class="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
+<button class="px-4 py-2 rounded-lg bg-primary-container text-white text-body-sm font-semibold shadow-xs flex items-center gap-1.5 whitespace-nowrap">
+<span>הודעות שוטפות</span>
+<span class="bg-blue-500/40 text-white text-xs px-1.5 py-0.2 rounded-full">14</span>
+</button>
+<button class="px-4 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white text-body-sm font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap">
+<span>פרוטוקולי אסיפות וישיבות</span>
+<span class="bg-slate-200 text-slate-700 text-xs px-1.5 py-0.2 rounded-full">6</span>
+</button>
+<button class="px-4 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white text-body-sm font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap">
+<span>הודעות מתוזמנות</span>
+<span class="bg-slate-200 text-slate-700 text-xs px-1.5 py-0.2 rounded-full">2</span>
+</button>
+<button class="px-4 py-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white text-body-sm font-medium transition-colors whitespace-nowrap">
+          ארכיון ומחוקות
+        </button>
+</div>
+<!-- Filters & Feed Quick Search -->
+<div class="flex items-center gap-2.5">
+<select class="h-9 px-3 text-body-sm bg-white border border-slate-200 rounded-lg text-slate-700 focus:border-primary focus:ring-0">
+<option>כל הסוגים</option>
+<option>דחוף / בטיחות</option>
+<option>תחזוקה ומים</option>
+<option>אירוע קהילתי</option>
+<option>גבייה וכספים</option>
+</select>
+<select class="h-9 px-3 text-body-sm bg-white border border-slate-200 rounded-lg text-slate-700 focus:border-primary focus:ring-0">
+<option>כל הערוצים</option>
+<option>פוש באפליקציה</option>
+<option>מייל</option>
+<option>SMS / וואטסאפ</option>
+</select>
+<div class="relative w-44">
+<input class="w-full h-9 bg-white border border-slate-200 rounded-lg pr-7 pl-2 text-xs placeholder-slate-400 focus:border-primary focus:ring-0" placeholder="סינון ברשימה..." type="text"/>
+<span class="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">filter_list</span>
+</div>
+</div>
+</div>
+<!-- 4 KPI Metrics Strip -->
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-5">
+<!-- KPI 1 -->
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-label-md font-label-md text-slate-500">הודעות פעילות כעת</span>
+<div class="text-headline-xl font-headline-xl text-slate-900 mt-1">5</div>
+</div>
+<div class="w-10 h-10 rounded-lg bg-blue-50 text-primary flex items-center justify-center border border-blue-100">
+<span class="material-symbols-outlined text-[22px]">campaign</span>
+</div>
+</div>
+<div class="mt-3 flex items-center gap-1.5 text-xs text-slate-600 border-t border-slate-100 pt-2.5">
+<span class="material-symbols-outlined text-amber-500 fill-icon text-[14px]">push_pin</span>
+<span>3 מוצמדות לראש הלוח</span>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-label-md font-label-md text-slate-500">נשלחו החודש</span>
+<div class="text-headline-xl font-headline-xl text-slate-900 mt-1">12</div>
+</div>
+<div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+<span class="material-symbols-outlined text-[22px]">send</span>
+</div>
+</div>
+<div class="mt-3 flex items-center gap-1 text-xs text-emerald-700 border-t border-slate-100 pt-2.5">
+<span class="material-symbols-outlined text-[15px]">trending_up</span>
+<span>+4 לעומת חודש שעבר</span>
+</div>
+</div>
+<!-- KPI 3 -->
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-label-md font-label-md text-slate-500">אחוז הגעה וצפייה (Reach)</span>
+<div class="text-headline-xl font-headline-xl text-slate-900 mt-1">96.4%</div>
+</div>
+<div class="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
+<span class="material-symbols-outlined text-[22px]">visibility</span>
+</div>
+</div>
+<div class="mt-3 border-t border-slate-100 pt-2.5">
+<div class="flex justify-between text-[11px] text-slate-500 mb-1">
+<span>27 מתוך 28 דיירים קראו</span>
+<span>96%</span>
+</div>
+<div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+<div class="bg-purple-600 h-1.5 rounded-full" style="width: 96.4%"></div>
+</div>
+</div>
+</div>
+<!-- KPI 4 -->
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs">
+<div class="flex items-start justify-between">
+<div>
+<span class="text-label-md font-label-md text-slate-500">פגות תוקף ב-48 שעות</span>
+<div class="text-headline-xl font-headline-xl text-slate-900 mt-1 text-amber-600">2</div>
+</div>
+<div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+<span class="material-symbols-outlined text-[22px]">timer</span>
+</div>
+</div>
+<div class="mt-3 flex items-center gap-1.5 text-xs text-slate-600 border-t border-slate-100 pt-2.5 truncate" title="שטיפת חניון, החלפת מנעול">
+<span class="material-symbols-outlined text-amber-600 text-[14px]">warning</span>
+<span>שטיפת חניון, החלפת מנעול</span>
+</div>
+</div>
+</div>
+<!-- ========================================================================= -->
+<!-- MAIN WORK AREA (2 Columns: Left 62% Feed, Right 38% Composer & Simulator) -->
+<!-- ========================================================================= -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-6 mt-6 items-start">
+<!-- =============================================================== -->
+<!-- COLUMN 1: Announcement Feed & Past Broadcasts (7 cols = ~58-60%) -->
+<!-- =============================================================== -->
+<div class="xl:col-span-7 flex flex-col gap-4">
+<!-- Feed Top Sub-Header & Sorter -->
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<h2 class="text-headline-sm font-headline-sm text-slate-900">פיד עדכונים פעיל</h2>
+<span class="text-xs text-slate-500">מציג 4 מתוך 14 עדכונים</span>
+</div>
+<div class="flex items-center gap-1.5 text-xs text-slate-500">
+<span>מיון לפי:</span>
+<select class="bg-transparent border-none text-xs font-semibold text-slate-800 focus:ring-0 cursor-pointer p-0">
+<option>תאריך יורד (אחרונים)</option>
+<option>עדיפות גבוהה תחילה</option>
+<option>אחוז צפייה ואישור</option>
+</select>
+</div>
+</div>
+<!-- CARD 1: URGENT / PINNED -->
+<article class="bg-white rounded-xl border-2 border-red-200 p-5 shadow-2xs relative overflow-hidden transition-all hover:border-red-300">
+<div class="absolute top-0 right-0 left-0 h-1 bg-red-500"></div>
+<!-- Card Header & Badges -->
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-center gap-2 flex-wrap">
+<span class="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-label-sm font-medium flex items-center gap-1">
+<span class="material-symbols-outlined fill-icon text-[13px] text-amber-500">push_pin</span>
+<span>נעוץ לראש הלוח</span>
+</span>
+<span class="px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">emergency</span>
+<span>דחוף / מעלית</span>
+</span>
+</div>
+<!-- Contextual Card Actions -->
+<div class="flex items-center gap-1 text-slate-400">
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="עריכה">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="ביטול נעיצה">
+<span class="material-symbols-outlined text-[18px]">keep_off</span>
+</button>
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="תפריט פעולות נוסף">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Title & Body -->
+<div class="mt-3">
+<h3 class="text-headline-sm font-headline-sm text-slate-900 leading-snug">
+              עצירת מעלית ימנית לצורך בדיקה טכנית מקיפה
+            </h3>
+<p class="text-body-md font-body-md text-slate-700 mt-2 leading-relaxed">
+              דיירים יקרים, היום החל מהשעה 14:00 ועד 16:30 מעלית ימנית תושבת לביצוע החלפת כבלי אבטחה על ידי טכנאי חברת ישראליפט. מעלית שמאלית תפעל כסדרה.
+            </p>
+</div>
+<!-- Metadata info -->
+<div class="flex items-center gap-4 text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">schedule</span>
+<span>פורסם: היום, 08:30</span>
+</span>
+<span>•</span>
+<span class="flex items-center gap-1 text-amber-700 font-medium">
+<span class="material-symbols-outlined text-[15px]">event_busy</span>
+<span>תוקף: מחר, 18:00</span>
+</span>
+</div>
+<!-- Delivery Stats & Acknowledgement Stack -->
+<div class="mt-3 pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 -mx-5 -mb-5 p-4 rounded-b-xl">
+<!-- Channels -->
+<div class="flex items-center gap-3 text-xs text-slate-600">
+<div class="flex items-center gap-1" title="התראת פוש">
+<span class="material-symbols-outlined text-blue-600 text-[16px]">smartphone</span>
+<span>פוש: 28/28 (96% נפתח)</span>
+</div>
+<span class="text-slate-300">|</span>
+<div class="flex items-center gap-1" title="דואר אלקטרוני">
+<span class="material-symbols-outlined text-slate-500 text-[16px]">mail</span>
+<span>מייל: 28</span>
+</div>
+<span class="text-slate-300">|</span>
+<div class="flex items-center gap-1" title="וואטסאפ">
+<span class="material-symbols-outlined text-emerald-600 text-[16px]">chat</span>
+<span>וואטסאפ: 28</span>
+</div>
+</div>
+<!-- Avatars / Confirmations -->
+<div class="flex items-center gap-2">
+<div class="flex -space-x-1.5 rtl:space-x-reverse overflow-hidden">
+<span class="inline-block h-6 w-6 rounded-full bg-blue-200 text-blue-800 text-[10px] font-bold text-center leading-6 ring-2 ring-white">שכ</span>
+<span class="inline-block h-6 w-6 rounded-full bg-emerald-200 text-emerald-800 text-[10px] font-bold text-center leading-6 ring-2 ring-white">דכ</span>
+<span class="inline-block h-6 w-6 rounded-full bg-purple-200 text-purple-800 text-[10px] font-bold text-center leading-6 ring-2 ring-white">רא</span>
+<span class="inline-block h-6 w-6 rounded-full bg-amber-200 text-amber-800 text-[10px] font-bold text-center leading-6 ring-2 ring-white">מי</span>
+</div>
+<span class="text-xs font-semibold text-emerald-700">26 אישרו קריאה (93%)</span>
+</div>
+</div>
+</article>
+<!-- CARD 2: MAINTENANCE -->
+<article class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs relative hover:border-slate-300 transition-all">
+<div class="flex items-start justify-between gap-3">
+<span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">cleaning_services</span>
+<span>תחזוקה שוטפת</span>
+</span>
+<div class="flex items-center gap-1 text-slate-400">
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="שכפול">
+<span class="material-symbols-outlined text-[18px]">content_copy</span>
+</button>
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="עריכה">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="עוד">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div class="mt-3">
+<h3 class="text-headline-sm font-headline-sm text-slate-900 leading-snug">
+              שטיפת חניונים חודשית מחר בשעה 09:00
+            </h3>
+<p class="text-body-md font-body-md text-slate-700 mt-2 leading-relaxed">
+              נא לפנות כלי רכב מחניון מפלס 2 (תחתון) עד השעה 08:30 בבוקר. רכב שלא יפונה עלול לעכב את הניקיון ולהיפגע מנתזי מים.
+            </p>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+<span>פורסם: אתמול, 17:00</span>
+<span>•</span>
+<span>תוקף: 18/11/2026</span>
+</div>
+<div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1 text-blue-700">
+<span class="material-symbols-outlined text-[16px]">smartphone</span> פוש: 28/28
+              </span>
+<span class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">mail</span> מייל: 28/28
+              </span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-slate-500">24 אישרו הגעה/פינוי</span>
+<button class="text-primary hover:underline font-medium">דוח מסירה מלא</button>
+</div>
+</div>
+</article>
+<!-- CARD 3: COMMUNITY / POLL -->
+<article class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs relative hover:border-slate-300 transition-all">
+<div class="flex items-start justify-between gap-3">
+<span class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">how_to_vote</span>
+<span>קהילה ורווחה • סקר פעיל</span>
+</span>
+<div class="flex items-center gap-1 text-slate-400">
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="עריכה">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+</button>
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="עוד">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div class="mt-3">
+<h3 class="text-headline-sm font-headline-sm text-slate-900 leading-snug">
+              סקר דיירים: התקנת עמדות טעינה לרכב חשמלי בחניון
+            </h3>
+<p class="text-body-md font-body-md text-slate-700 mt-2 leading-relaxed">
+              הוועד בוחן פריסת תשתית מנוהלת לעמדות טעינה AC משותפות. דעתכם קובעת את היקף ההסכם. אנא הצביעו בסקר באפליקציה עד יום חמישי.
+            </p>
+<!-- Poll Visual Widget -->
+<div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mt-3">
+<div class="flex items-center justify-between text-xs font-medium text-slate-700 mb-1.5">
+<span>סטטוס הצבעה בסקר: 19/28 דיירים הצביעו</span>
+<span class="text-emerald-700 font-bold">68% השתתפות</span>
+</div>
+<div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex">
+<div class="bg-emerald-500 h-2" style="width: 74%" title="בעד: 14"></div>
+<div class="bg-red-400 h-2" style="width: 16%" title="נגד: 3"></div>
+<div class="bg-slate-400 h-2" style="width: 10%" title="נמנע: 2"></div>
+</div>
+<div class="flex items-center gap-4 text-[11px] text-slate-500 mt-2">
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> בעד פריסה (74%)</span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-400"></span> נגד (16%)</span>
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-slate-400"></span> נמנעים (10%)</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-4 text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+<span>פורסם: 12/11/2026</span>
+<span>•</span>
+<span>תוקף: 20/11/2026</span>
+<span>•</span>
+<span class="text-primary font-medium">כולל סקר הצבעה פעיל</span>
+</div>
+</article>
+<!-- CARD 4: FINANCIAL -->
+<article class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs relative hover:border-slate-300 transition-all opacity-85 hover:opacity-100">
+<div class="flex items-start justify-between gap-3">
+<div class="flex items-center gap-2">
+<span class="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">payments</span>
+<span>גבייה וכספים</span>
+</span>
+<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-label-sm">פג תוקף</span>
+</div>
+<div class="flex items-center gap-1 text-slate-400">
+<button class="p-1 hover:text-slate-700 rounded hover:bg-slate-100 transition-colors" title="ארכיון">
+<span class="material-symbols-outlined text-[18px]">archive</span>
+</button>
+</div>
+</div>
+<div class="mt-3">
+<h3 class="text-headline-sm font-headline-sm text-slate-900 leading-snug">
+              תזכורת תשלום דמי ועד בית לחודש נובמבר
+            </h3>
+<p class="text-body-md font-body-md text-slate-700 mt-2 leading-relaxed">
+              נא להסדיר את התשלום השוטף באפליקציה או בהעברה בנקאית עד ה-10 לחודש. תודה ל-25 הדירות שכבר שילמו.
+            </p>
+</div>
+<div class="flex items-center justify-between text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">
+<span>פורסם: 01/11/2026 • 28 נשלח במייל ובאפליקציה</span>
+<button class="text-primary hover:underline text-xs font-medium">שליחת תזכורת ל-3 דירות שבחוב</button>
+</div>
+</article>
+</div>
+<!-- =============================================================== -->
+<!-- COLUMN 2: Rich Composer Panel & Mobile Phone Simulator (5 cols = ~40%) -->
+<!-- =============================================================== -->
+<div class="xl:col-span-5 flex flex-col gap-5 sticky top-20">
+<!-- ============================================== -->
+<!-- COMPOSER PANEL -->
+<!-- ============================================== -->
+<div class="bg-white rounded-xl border border-slate-200 p-5 shadow-2xs">
+<!-- Panel Header -->
+<div class="flex items-center justify-between pb-3 border-b border-slate-100">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-lg bg-blue-50 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">edit_note</span>
+</div>
+<h3 class="text-headline-sm font-headline-sm text-slate-900">יצירת הודעה חדשה לדיירים</h3>
+</div>
+<div class="flex items-center gap-1.5">
+<button class="px-2.5 py-1 text-body-sm text-slate-600 hover:text-slate-900 rounded hover:bg-slate-100 transition-colors">
+                שמור כטיוטה
+              </button>
+<button class="px-2.5 py-1 text-body-sm text-primary font-medium rounded hover:bg-blue-50 transition-colors">
+                תבניות שמורות
+              </button>
+</div>
+</div>
+<!-- Type Selector Chips -->
+<div class="mt-4">
+<label class="block text-label-md font-label-md text-slate-600 mb-1.5">סיווג הודעה:</label>
+<div class="grid grid-cols-5 gap-1.5">
+<button class="py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all text-center">
+                כללי
+              </button>
+<button class="py-1.5 px-2 rounded-lg text-xs font-semibold bg-primary-container text-white border border-primary text-center shadow-xs">
+                תחזוקה
+              </button>
+<button class="py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all text-center">
+                דחוף
+              </button>
+<button class="py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all text-center">
+                אירוע
+              </button>
+<button class="py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all text-center">
+                כספים
+              </button>
+</div>
+</div>
+<!-- Form Fields -->
+<div class="mt-4 flex flex-col gap-3.5">
+<!-- Message Title Input -->
+<div>
+<div class="flex items-center justify-between mb-1">
+<label class="text-label-md font-label-md text-slate-600">כותרת ההודעה:</label>
+<span class="text-[11px] text-slate-400">32 / 80 תווים</span>
+</div>
+<input class="w-full h-[38px] bg-white border border-slate-300 rounded-lg px-3 text-body-sm font-body-sm text-slate-800 focus:border-primary focus:ring-1 focus:ring-primary" placeholder="למשל: הפסקת מים יזומה בקומה 3..." type="text" value="החלפת תאורת חירום בלובי קומה 2"/>
+</div>
+<!-- Message Body Textarea with Rich Formatting Bar -->
+<div>
+<label class="block text-label-md font-label-md text-slate-600 mb-1">תוכן ההודעה:</label>
+<div class="border border-slate-300 rounded-lg overflow-hidden focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+<!-- Toolbar -->
+<div class="bg-slate-50 border-b border-slate-200 px-2 py-1.5 flex items-center gap-1 text-slate-600">
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-200 font-bold text-xs" title="הדגשה">B</button>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-200 italic text-xs" title="נטוי">I</button>
+<span class="w-px h-4 bg-slate-300 mx-1"></span>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-200" title="קישור">
+<span class="material-symbols-outlined text-[15px]">link</span>
+</button>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-slate-200" title="רשימה">
+<span class="material-symbols-outlined text-[15px]">format_list_bulleted</span>
+</button>
+<span class="w-px h-4 bg-slate-300 mx-1"></span>
+<button class="text-xs text-primary flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-blue-50">
+<span class="material-symbols-outlined text-[14px]">attachment</span>
+<span>הוסף קובץ</span>
+</button>
+</div>
+<textarea class="w-full p-3 text-body-sm font-body-md text-slate-800 border-none focus:ring-0 resize-none text-right placeholder-slate-400" rows="3">דיירים נכבדים, ביום רביעי הקרוב בין 10:00 ל-12:00 יבוצעו עבודות שדרוג תאורת חירום ומצברים. לא צפויה הפסקת חשמל בדירות.</textarea>
+</div>
+</div>
+<!-- Upload PDF/Doc row -->
+<button class="w-full border border-dashed border-slate-300 hover:border-primary rounded-lg py-2 px-3 text-xs text-slate-600 flex items-center justify-center gap-1.5 hover:bg-blue-50/50 transition-colors">
+<span class="material-symbols-outlined text-[17px] text-primary">upload_file</span>
+<span>+ צרף קובץ PDF / תמונה (פרוטוקול / מסמך הצעת מחיר)</span>
+</button>
+<!-- Expiration & Pin row -->
+<div class="grid grid-cols-2 gap-3 pt-1">
+<div>
+<label class="block text-label-md font-label-md text-slate-600 mb-1">תאריך פקיעת תוקף:</label>
+<input class="w-full h-[38px] bg-white border border-slate-300 rounded-lg px-2.5 text-body-sm text-slate-700 focus:border-primary focus:ring-0" type="date" value="2026-11-24"/>
+</div>
+<div class="flex flex-col justify-end">
+<label class="h-[38px] px-3 border border-slate-300 rounded-lg flex items-center justify-between cursor-pointer hover:bg-slate-50">
+<span class="text-xs text-slate-700 font-medium">נעץ לראש הלוח</span>
+<input checked="" class="w-4 h-4 rounded text-primary focus:ring-0 border-slate-300" type="checkbox"/>
+</label>
+</div>
+</div>
+<!-- Distribution Channels Toggles (מתגי הפצה) -->
+<div class="mt-2 pt-3 border-t border-slate-100 flex flex-col gap-2">
+<span class="text-label-md font-label-md text-slate-600">ערוצי הפצה לדיירים:</span>
+<!-- Channel 1: App Push -->
+<div class="flex items-center justify-between p-2 rounded-lg bg-blue-50/60 border border-blue-100">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[19px]">notifications_active</span>
+<div>
+<p class="text-xs font-semibold text-slate-800">התראת פוש באפליקציה (מומלץ)</p>
+<p class="text-[11px] text-slate-500">28 מכשירים רשומים ופעילים</p>
+</div>
+</div>
+<!-- Toggle switch (ON) -->
+<div class="w-8 h-4 bg-primary rounded-full relative cursor-pointer">
+<div class="w-3.5 h-3.5 bg-white rounded-full absolute top-0.25 left-0.5 shadow-sm"></div>
+</div>
+</div>
+<!-- Channel 2: Email -->
+<div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-600 text-[19px]">mail</span>
+<div>
+<p class="text-xs font-semibold text-slate-800">דואר אלקטרוני (Email)</p>
+<p class="text-[11px] text-slate-500">28 כתובות מעודכנות במערכת</p>
+</div>
+</div>
+<!-- Toggle switch (ON) -->
+<div class="w-8 h-4 bg-primary rounded-full relative cursor-pointer">
+<div class="w-3.5 h-3.5 bg-white rounded-full absolute top-0.25 left-0.5 shadow-sm"></div>
+</div>
+</div>
+<!-- Channel 3: WhatsApp -->
+<div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-emerald-600 text-[19px]">chat</span>
+<div>
+<p class="text-xs font-semibold text-slate-800">שידור לקבוצת וואטסאפ של הבניין</p>
+<p class="text-[11px] text-slate-500">קישור API פתוח לקהילה</p>
+</div>
+</div>
+<!-- Toggle switch (OFF) -->
+<div class="w-8 h-4 bg-slate-300 rounded-full relative cursor-pointer">
+<div class="w-3.5 h-3.5 bg-white rounded-full absolute top-0.25 right-0.5 shadow-sm"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Simulator Preview Container -->
+<div class="mt-4 pt-3 border-t border-slate-100">
+<div class="flex items-center justify-between mb-2">
+<span class="text-label-md font-label-md text-slate-600 flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-blue-600">visibility</span>
+<span>סימולטור מראה בנייד של הדייר:</span>
+</span>
+<span class="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono font-medium">LIVE PREVIEW</span>
+</div>
+<!-- Smartphone Frame Mockup -->
+<div class="rounded-2xl border-2 border-slate-300 bg-slate-900 p-2 shadow-inner max-w-[340px] mx-auto">
+<!-- Phone Screen Base -->
+<div class="bg-slate-100 rounded-xl p-3 border border-slate-800 text-right">
+<!-- Status bar -->
+<div class="flex items-center justify-between text-[10px] text-slate-500 pb-2 mb-2 border-b border-slate-200 font-mono">
+<span>09:41</span>
+<div class="w-12 h-2.5 bg-slate-800 rounded-full mx-auto"></div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[11px]">wifi</span>
+<span class="material-symbols-outlined text-[11px]">battery_full</span>
+</div>
+</div>
+<!-- Push Notification Widget -->
+<div class="bg-white rounded-lg p-2.5 border border-slate-200 shadow-sm">
+<div class="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+<div class="flex items-center gap-1 font-semibold text-primary">
+<span class="material-symbols-outlined text-[12px] fill-icon">campaign</span>
+<span>ועדלי • רוטשילד 42</span>
+</div>
+<span>עכשיו</span>
+</div>
+<p class="text-xs font-bold text-slate-900 leading-snug">החלפת תאורת חירום בלובי קומה 2</p>
+<p class="text-[11px] text-slate-600 mt-1 line-clamp-2">
+                    דיירים נכבדים, ביום רביעי הקרוב בין 10:00 ל-12:00 יבוצעו עבודות שדרוג תאורת חירום...
+                  </p>
+<div class="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+<span class="text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.2 rounded font-semibold">תחזוקה</span>
+<div class="flex gap-1.5">
+<span class="text-[10px] text-primary font-bold hover:underline cursor-pointer">קראתי ואישרתי</span>
+<span class="text-slate-300">|</span>
+<span class="text-[10px] text-slate-500 hover:underline cursor-pointer">פתח באפליקציה</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Footer Buttons -->
+<div class="mt-5 pt-3 border-t border-slate-100 flex flex-col gap-2">
+<button class="w-full h-11 bg-primary-container hover:bg-blue-700 text-white rounded-xl font-label-lg text-body-md font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-[0.99]">
+<span class="material-symbols-outlined text-[20px]">rocket_launch</span>
+<span>פרסם ושלח לכל הבניין (28 דירות)</span>
+</button>
+<div class="flex items-center justify-between px-1">
+<button class="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">update</span>
+<span>תזמן פרסום למועד מאוחר יותר</span>
+</button>
+<button class="text-xs text-primary hover:underline flex items-center gap-1 font-medium">
+<span class="material-symbols-outlined text-[15px]">send_to_mobile</span>
+<span>בדיקת שליחה לעצמי</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
