@@ -568,7 +568,6 @@ function Buildings() {
             <DetailRow label="שנת בנייה" value={detailBuilding.year_built} />
             <DetailRow label="חניות" value={detailBuilding.parking} />
             <DetailRow label="מחסנים" value={detailBuilding.storage} />
-            <DetailRow label="מקס׳ טלפוני שער חניה" value={detailBuilding.max_gate_phones} />
             <DetailRow label="חניונים" value={Array.isArray(detailBuilding.parking_lots) && detailBuilding.parking_lots.length ? detailBuilding.parking_lots.join(', ') : null} />
             <DetailRow label="מעליות" value={detailBuilding.elevators} />
             <DetailRow label="גנרטור" value={detailBuilding.generator ? 'כן' : null} />
@@ -660,13 +659,6 @@ function Buildings() {
               <p className="text-xs text-[var(--text-muted)] -mt-2 mb-3">
                 כפתור "שלם דמי ועד" בפורטל הדייר יפתח את הקישור הזה.
               </p>
-              <FormField
-                label="מספר טלפונים מקסימלי לשער חניה (לכל דירה)"
-                type="number"
-                value={form.max_gate_phones}
-                onChange={setField('max_gate_phones')}
-                placeholder="למשל: 2"
-              />
               <div className="mt-3">
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
                   חניונים בבניין

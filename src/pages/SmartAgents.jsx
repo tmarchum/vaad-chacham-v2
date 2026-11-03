@@ -1,20 +1,21 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
+import { useUnitDirectory } from '@/hooks/useUnitDirectory'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Progress } from '@/components/ui/progress'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { EmptyState } from '@/components/common/EmptyState'
+import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { callVaadAgent } from '@/lib/vaadAgent'
-import { PageHeader } from '@/components/common/PageHeader'
 import { toast, toastError } from '@/lib/toast'
 import {
   CreditCard, Store, PiggyBank, ShieldCheck,
   Play, CheckCircle, AlertTriangle, XCircle,
-  ChevronDown, ChevronUp, Zap,
+  ChevronDown, ChevronUp, Bot,
   MessageSquare, UserX, TrendingUp, TrendingDown,
-  Plus, Bell, BellOff, Sparkles, Loader2
+  Plus, Bell, BellOff, Sparkles, Loader2, Wallet, FileText, Copy,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -121,7 +122,52 @@ function frequencyLabel(freq) {
 }
 
 // ---------------------------------------------------------------------------
-// AiInsightsPanel — Claude AI response panel (shared by all agents)
+// Small Civic Blue helpers (local)
+// ---------------------------------------------------------------------------
+
+const CALLOUT_TONES = {
+  danger:  'border-[var(--danger)]/20 bg-[var(--danger-light)] text-[var(--danger)]',
+  warning: 'border-[var(--warning)]/20 bg-[var(--warning-light)] text-[var(--warning)]',
+  info:    'border-[var(--primary)]/15 bg-[var(--surface-container)] text-[var(--primary-dark)]',
+  success: 'border-[var(--success)]/20 bg-[var(--success-light)] text-[var(--success)]',
+}
+
+function Callout({ tone = 'info', icon: Icon, title, children }) {
+  return (
+    <div className={cn('flex items-start gap-3 rounded-[var(--radius)] border px-4 py-3 text-[13px]', CALLOUT_TONES[tone])}>
+      {Icon && <Icon className="h-[18px] w-[18px] shrink-0 mt-0.5" strokeWidth={1.75} />}
+      <div className="min-w-0 flex-1">
+        {title && <p className="font-semibold mb-0.5">{title}</p>}
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Bar({ value, tone = 'primary' }) {
+  const color = tone === 'success' ? 'bg-[var(--success)]' : tone === 'warning' ? 'bg-[var(--warning)]' : tone === 'danger' ? 'bg-[var(--danger)]' : 'bg-[var(--primary)]'
+  return (
+    <div className="w-full h-1.5 bg-[var(--surface-container)] rounded-full overflow-hidden">
+      <div className={cn('h-full rounded-full transition-all duration-700', color)} style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    </div>
+  )
+}
+
+function rateTone(rate, good = 80, ok = 60) {
+  return rate >= good ? 'success' : rate >= ok ? 'warning' : 'danger'
+}
+
+function NoBuilding() {
+  return (
+    <SectionCard>
+      <EmptyState icon={AlertTriangle} title="לא נבחר בניין" description="בחר בניין מהתפריט הראשי." />
+    </SectionCard>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// AiInsightsPanel — Claude AI response panel (shared by all agents),
+// rendered as a chat card: the request bubble + Claude's answer bubble.
 // ---------------------------------------------------------------------------
 
 const AGENT_LABELS = {
@@ -131,135 +177,149 @@ const AGENT_LABELS = {
   compliance: { title: 'ניתוח רגולציה', color: 'amber' },
 }
 
-function AiInsightsPanel({ agentType, ai, onAsk }) {
+function sevClass(item) {
+  if (item?.severity === 'high' || item?.urgency === 'high') return 'text-[var(--danger)]'
+  if (item?.severity === 'medium' || item?.urgency === 'medium') return 'text-[var(--warning)]'
+  return 'text-[var(--primary)]'
+}
+
+function AiInsightsPanel({ agentType, ai, onAsk, buildingName }) {
   const label = AGENT_LABELS[agentType] || { title: 'ניתוח AI', color: 'blue' }
 
   return (
-    <Card className="border-2 border-[var(--primary)]/20 bg-gradient-to-l from-[var(--primary)]/5 to-transparent">
-      <CardContent className="pt-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-[var(--primary)]" />
-            <span className="font-semibold text-[var(--text-primary)]">
-              {label.title} — Claude AI
-            </span>
-          </div>
-          <Button
-            size="sm"
-            onClick={onAsk}
-            disabled={ai?.loading}
-            className="gap-2"
-          >
-            {ai?.loading ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin" />מנתח...</>
-            ) : (
-              <><Sparkles className="h-3.5 w-3.5" />{ai?.result ? 'נתח שוב' : 'שאל את Claude'}</>
-            )}
-          </Button>
-        </div>
-
-        {/* Error */}
-        {ai?.error && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
-            <XCircle className="h-4 w-4 shrink-0" />
-            <span>{ai.error}</span>
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {ai?.loading && (
-          <div className="space-y-3 animate-pulse">
-            <div className="h-4 bg-[var(--border)] rounded w-3/4" />
-            <div className="h-4 bg-[var(--border)] rounded w-full" />
-            <div className="h-4 bg-[var(--border)] rounded w-2/3" />
-          </div>
-        )}
-
-        {/* Result */}
-        {ai?.result && !ai.loading && (
-          <div className="space-y-4">
-            {/* Summary */}
-            {ai.result.summary && (
-              <p className="text-sm text-[var(--text-primary)] leading-relaxed border-r-4 border-[var(--primary)] pr-3">
-                {ai.result.summary}
-              </p>
-            )}
-
-            {/* Insights / Alerts / Critical gaps */}
-            {(ai.result.insights || ai.result.alerts || ai.result.critical_gaps || ai.result.gaps) && (
-              <div>
-                <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wide">
-                  {ai.result.alerts ? 'התראות' : ai.result.critical_gaps ? 'פערים קריטיים' : 'תובנות'}
-                </p>
-                <ul className="space-y-2">
-                  {(ai.result.insights || ai.result.alerts || ai.result.critical_gaps || ai.result.gaps || []).map((item, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-[var(--text-primary)]">
-                      <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${
-                        item.severity === 'high' || item.urgency === 'high' ? 'text-red-500' :
-                        item.severity === 'medium' || item.urgency === 'medium' ? 'text-amber-500' : 'text-blue-500'
-                      }`} />
-                      <span>{typeof item === 'string' ? item : (item.description || item.title || item.reason || JSON.stringify(item))}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Recommendations / savings / best_practices */}
-            {(ai.result.savings_opportunities || ai.result.best_practices || ai.result.vendor_recommendations) && (
-              <div>
-                <p className="text-xs font-semibold text-[var(--text-secondary)] mb-2 uppercase tracking-wide">המלצות</p>
-                <ul className="space-y-2">
-                  {(ai.result.savings_opportunities || ai.result.best_practices || ai.result.vendor_recommendations || []).map((item, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-[var(--text-primary)]">
-                      <CheckCircle className="h-4 w-4 shrink-0 mt-0.5 text-green-500" />
-                      <span>{typeof item === 'string' ? item : (item.description || item.how || item.why || item.benefit || item.category || JSON.stringify(item))}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Forecast / legal tip */}
-            {(ai.result.forecast || ai.result.legal_tip || ai.result.market_insights || ai.result.reserve_fund_recommendation) && (
-              <div className="p-3 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-sm text-[var(--text-secondary)]">
-                <span className="font-medium text-[var(--text-primary)]">
-                  {ai.result.legal_tip ? '⚖️ טיפ משפטי: ' :
-                   ai.result.market_insights ? '📊 תובנת שוק: ' :
-                   ai.result.reserve_fund_recommendation ? '🏦 קרן רזרבה: ' : '📈 תחזית: '}
-                </span>
-                {ai.result.forecast || ai.result.legal_tip || ai.result.market_insights || ai.result.reserve_fund_recommendation}
-              </div>
-            )}
-
-            {/* Recommended message */}
-            {ai.result.recommended_message && (
-              <div>
-                <p className="text-xs font-semibold text-[var(--text-secondary)] mb-1 uppercase tracking-wide">הודעה מומלצת לחייבים</p>
-                <pre className="text-sm whitespace-pre-wrap bg-[var(--surface)] p-3 rounded-lg border border-[var(--border)] text-[var(--text-primary)] font-sans">
-                  {ai.result.recommended_message}
-                </pre>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2"
-                  onClick={() => navigator.clipboard.writeText(ai.result.recommended_message)}
-                >
-                  העתק הודעה
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!ai && (
-          <p className="text-sm text-[var(--text-secondary)] text-center py-4">
+    <SectionCard
+      icon={Sparkles}
+      title={`${label.title} — Claude AI`}
+      subtitle="עוזר AI • ניתוח מעמיק של נתוני הבניין"
+      tone="primary"
+      actions={
+        <Button size="sm" onClick={onAsk} disabled={ai?.loading}>
+          {ai?.loading ? (
+            <><Loader2 className="h-3.5 w-3.5 animate-spin" />מנתח...</>
+          ) : (
+            <><Sparkles className="h-3.5 w-3.5" />{ai?.result ? 'נתח שוב' : 'שאל את Claude'}</>
+          )}
+        </Button>
+      }
+      bodyClassName="p-4 space-y-3 bg-[var(--bg)]"
+    >
+      {/* Empty state */}
+      {!ai && (
+        <div className="flex flex-col items-center text-center py-6">
+          <span className="p-2.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] mb-2">
+            <Bot className="h-6 w-6" strokeWidth={1.75} />
+          </span>
+          <p className="text-[13px] text-[var(--text-secondary)] max-w-[260px]">
             לחץ "שאל את Claude" לניתוח AI מעמיק של הנתונים
           </p>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+
+      {ai && (
+        <>
+          {/* Request bubble */}
+          <div className="flex justify-start">
+            <div className="max-w-[85%] rounded-[var(--radius-lg)] rounded-tr-sm bg-[var(--primary)] text-white px-3.5 py-2 text-[13px] shadow-[var(--shadow)]">
+              נתח את נתוני ה{label.title.replace('ניתוח ', '')} של {buildingName}
+            </div>
+          </div>
+
+          {/* Answer bubble */}
+          <div className="flex justify-end">
+            <div className="flex items-start gap-2 max-w-full w-full">
+              <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0">
+                <Bot className="h-4 w-4" strokeWidth={1.75} />
+              </span>
+              <div className="flex-1 min-w-0 rounded-[var(--radius-lg)] rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3 shadow-[var(--shadow)] space-y-4">
+                {/* Error */}
+                {ai.error && (
+                  <Callout tone="danger" icon={XCircle}>{ai.error}</Callout>
+                )}
+
+                {/* Loading skeleton */}
+                {ai.loading && (
+                  <div className="space-y-2.5 animate-pulse">
+                    <div className="h-3.5 bg-[var(--surface-container)] rounded w-3/4" />
+                    <div className="h-3.5 bg-[var(--surface-container)] rounded w-full" />
+                    <div className="h-3.5 bg-[var(--surface-container)] rounded w-2/3" />
+                  </div>
+                )}
+
+                {/* Result */}
+                {ai.result && !ai.loading && (
+                  <>
+                    {ai.result.summary && (
+                      <p className="text-[13px] text-[var(--text-primary)] leading-relaxed border-r-[3px] border-[var(--primary)] pr-3">
+                        {ai.result.summary}
+                      </p>
+                    )}
+
+                    {(ai.result.insights || ai.result.alerts || ai.result.critical_gaps || ai.result.gaps) && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-[var(--text-secondary)] mb-2">
+                          {ai.result.alerts ? 'התראות' : ai.result.critical_gaps ? 'פערים קריטיים' : 'תובנות'}
+                        </p>
+                        <ul className="space-y-2">
+                          {(ai.result.insights || ai.result.alerts || ai.result.critical_gaps || ai.result.gaps || []).map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[13px] text-[var(--text-primary)]">
+                              <AlertTriangle className={cn('h-4 w-4 shrink-0 mt-0.5', sevClass(item))} />
+                              <span>{typeof item === 'string' ? item : (item.description || item.title || item.reason || JSON.stringify(item))}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {(ai.result.savings_opportunities || ai.result.best_practices || ai.result.vendor_recommendations) && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-[var(--text-secondary)] mb-2">המלצות</p>
+                        <ul className="space-y-2">
+                          {(ai.result.savings_opportunities || ai.result.best_practices || ai.result.vendor_recommendations || []).map((item, i) => (
+                            <li key={i} className="flex gap-2 text-[13px] text-[var(--text-primary)]">
+                              <CheckCircle className="h-4 w-4 shrink-0 mt-0.5 text-[var(--success)]" />
+                              <span>{typeof item === 'string' ? item : (item.description || item.how || item.why || item.benefit || item.category || JSON.stringify(item))}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {(ai.result.forecast || ai.result.legal_tip || ai.result.market_insights || ai.result.reserve_fund_recommendation) && (
+                      <div className="p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[13px] text-[var(--text-secondary)]">
+                        <span className="font-semibold text-[var(--text-primary)]">
+                          {ai.result.legal_tip ? 'טיפ משפטי: ' :
+                           ai.result.market_insights ? 'תובנת שוק: ' :
+                           ai.result.reserve_fund_recommendation ? 'קרן רזרבה: ' : 'תחזית: '}
+                        </span>
+                        {ai.result.forecast || ai.result.legal_tip || ai.result.market_insights || ai.result.reserve_fund_recommendation}
+                      </div>
+                    )}
+
+                    {ai.result.recommended_message && (
+                      <div>
+                        <p className="text-[11px] font-semibold text-[var(--text-secondary)] mb-1">הודעה מומלצת לחייבים</p>
+                        <pre className="text-[13px] whitespace-pre-wrap bg-[var(--surface-secondary)] p-3 rounded-[var(--radius)] border border-[var(--border-light)] text-[var(--text-primary)] font-sans">
+                          {ai.result.recommended_message}
+                        </pre>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2"
+                          onClick={() => navigator.clipboard.writeText(ai.result.recommended_message)}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          העתק הודעה
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </SectionCard>
   )
 }
 
@@ -267,170 +327,115 @@ function AiInsightsPanel({ agentType, ai, onAsk }) {
 // CollectionAgentPanel
 // ---------------------------------------------------------------------------
 
-function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreateAnnouncement, notificationsEnabled }) {
-  if (!analysis) {
-    return (
-      <Card>
-        <CardContent className="pt-6 text-center text-[var(--text-secondary)]">
-          לא נבחר בניין. בחר בניין מהתפריט הראשי.
-        </CardContent>
-      </Card>
-    )
-  }
+function CollectionAgentPanel({ analysis, nameOf, onShowMessage, onMarkOverdue, onCreateAnnouncement, notificationsEnabled }) {
+  if (!analysis) return <NoBuilding />
 
-  const { debtors, collectionRate, totalOutstanding, thisMonthTotal, thisMonthPaid } = analysis
-
-  const rateColor = collectionRate >= 80 ? '#22c55e' : collectionRate >= 60 ? '#f59e0b' : '#ef4444'
+  const { debtors, collectionRate, thisMonthTotal, thisMonthPaid } = analysis
+  const msgTitle = !notificationsEnabled ? 'הפעל התראות גבייה כדי לשלוח הודעות' : undefined
 
   return (
     <div className="space-y-4">
-      {/* Notifications-disabled banner */}
       {!notificationsEnabled && (
-        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <BellOff className="h-4 w-4 shrink-0" />
-          <span>
-            <strong>שליחת התראות גבייה כבויה.</strong>{' '}
-            עבור למסך <em>מעקב גבייה</em> כדי להפעיל את המתג ולאפשר שליחת הודעות.
-          </span>
-        </div>
+        <Callout tone="warning" icon={BellOff} title="שליחת התראות גבייה כבויה.">
+          עבור למסך <em>מעקב גבייה</em> כדי להפעיל את המתג ולאפשר שליחת הודעות.
+        </Callout>
       )}
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
-          <div className="p-4">
-            <p className="text-xs text-[var(--text-secondary)] mb-1">אחוז גבייה חודש נוכחי</p>
-            <p className="text-2xl font-bold mb-2" style={{ color: rateColor }}>{collectionRate}%</p>
-            <Progress value={collectionRate} color={rateColor} />
-            <p className="text-xs text-[var(--text-secondary)] mt-1">{thisMonthPaid} מתוך {thisMonthTotal} שילמו</p>
-          </div>
-        </div>
-        <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-red-500 to-red-600" />
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-              <p className="text-xs text-[var(--text-secondary)]">חייבים פעילים</p>
-            </div>
-            <p className="text-2xl font-bold text-red-500">{debtors.length}</p>
-            <p className="text-xs text-[var(--text-secondary)] mt-1">ב-3 חודשים אחרונים</p>
-          </div>
-        </div>
-        <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-orange-500 to-red-500" />
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-red-600 shrink-0" />
-              <p className="text-xs text-[var(--text-secondary)]">סה"כ חוב פתוח</p>
-            </div>
-            <p className="text-2xl font-bold text-red-600">{formatCurrency(totalOutstanding)}</p>
-            <p className="text-xs text-[var(--text-secondary)] mt-1">לגבייה</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Actions bar */}
-      {debtors.length > 0 && (
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onCreateAnnouncement}
-            disabled={!notificationsEnabled}
-            title={!notificationsEnabled ? 'הפעל התראות גבייה כדי לשלוח הודעות' : undefined}
-            className="gap-1.5"
-          >
+      <SectionCard
+        icon={CreditCard}
+        title="רשימת חייבים"
+        subtitle={`ב-3 חודשים אחרונים • ${thisMonthPaid} מתוך ${thisMonthTotal} שילמו החודש (${collectionRate}%)`}
+        actions={debtors.length > 0 && (
+          <Button size="sm" variant="outline" onClick={onCreateAnnouncement} disabled={!notificationsEnabled} title={msgTitle}>
             {notificationsEnabled ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
             צור הודעה לכולם
           </Button>
-        </div>
-      )}
-
-      {/* Debtors list */}
-      {debtors.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6 text-center">
-            <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
-            <p className="text-[var(--text-primary)] font-medium">כל הדיירים שילמו בזמן!</p>
-            <p className="text-sm text-[var(--text-secondary)]">אין חובות פתוחים ב-3 חודשים האחרונים.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-[var(--text-primary)] text-sm">רשימת חייבים</h3>
-          {debtors.map((debtor, idx) => (
-            <div
-              key={idx}
-              className="group flex items-center gap-4 p-4 rounded-xl border border-red-100 bg-white hover:shadow-md hover:border-red-200 transition-all"
-            >
-              {/* Unit number circle */}
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm">
-                {debtor.unit.number}
-              </div>
-
-              {/* Main info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                    דירה {debtor.unit.number}
-                  </span>
-                  {(debtor.unit.ownerName || debtor.unit.tenant_name) && (
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {debtor.unit.ownerName || debtor.unit.tenant_name}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5 mb-1">
-                  {debtor.months.map(m => (
-                    <Badge key={m} variant="danger" className="text-xs">{m}</Badge>
-                  ))}
-                </div>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  {debtor.unpaidCount} חודשים שלא שולמו
-                  {debtor.oldestUnpaid && <span> · חוב ישן מ: {debtor.oldestUnpaid}</span>}
-                </p>
-              </div>
-
-              {/* Debt amount */}
-              <div className="text-left min-w-[90px]">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full shrink-0 bg-red-500" />
-                  <span className="text-[15px] font-bold text-red-600">{formatCurrency(debtor.totalDebt)}</span>
-                </div>
-                <span className="text-[11px] text-[var(--text-muted)]">חוב כולל</span>
-              </div>
-
-              {/* Actions (visible on hover) */}
-              <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onShowMessage(debtor)}
-                  disabled={!notificationsEnabled}
-                  title={!notificationsEnabled ? 'הפעל התראות גבייה כדי לשלוח הודעות' : undefined}
-                  className="gap-1.5"
-                >
-                  {notificationsEnabled
-                    ? <MessageSquare className="h-3.5 w-3.5" />
-                    : <BellOff className="h-3.5 w-3.5" />
-                  }
-                  {notificationsEnabled ? 'צפה בהודעה' : 'התראות כבויות'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => onMarkOverdue(debtor)}
-                  className="gap-1.5"
-                >
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  סמן כבאיחור
-                </Button>
-              </div>
+        )}
+        footer={debtors.length > 0 ? `${debtors.length} חייבים` : undefined}
+      >
+        <div className="px-4 pt-3"><Bar value={collectionRate} tone={rateTone(collectionRate)} /></div>
+        {debtors.length === 0 ? (
+          <EmptyState icon={CheckCircle} title="כל הדיירים שילמו בזמן!" description="אין חובות פתוחים ב-3 החודשים האחרונים." />
+        ) : (
+          <>
+            {/* Desktop ledger */}
+            <div className="hidden md:block overflow-x-auto mt-3 border-t border-[var(--border)]">
+              <table className="ds-table">
+                <thead>
+                  <tr><th>דירה</th><th>חודשים פתוחים</th><th className="!text-left">חוב כולל</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {debtors.map((debtor, idx) => {
+                    const name = nameOf(debtor.unit)
+                    return (
+                      <tr key={idx}>
+                        <td className="whitespace-nowrap">
+                          <span className="text-[13px] font-semibold num-tabular">דירה {debtor.unit.number}</span>
+                          {name && <span className="block text-[11px] text-[var(--text-muted)]">{name}</span>}
+                        </td>
+                        <td>
+                          <div className="flex flex-wrap gap-1">
+                            {debtor.months.map(m => <Badge key={m} variant="danger" className="num-tabular">{m}</Badge>)}
+                          </div>
+                          <span className="block text-[11px] text-[var(--text-muted)] mt-1 num-tabular">
+                            {debtor.unpaidCount} חודשים{debtor.oldestUnpaid && ` · חוב ישן מ: ${debtor.oldestUnpaid}`}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap !text-left">
+                          <span className="text-[14px] font-bold text-[var(--danger)] num-tabular">{formatCurrency(debtor.totalDebt)}</span>
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <div className="flex gap-1.5 justify-end">
+                            <Button size="sm" variant="outline" onClick={() => onShowMessage(debtor)} disabled={!notificationsEnabled} title={msgTitle}>
+                              {notificationsEnabled ? <MessageSquare className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+                              {notificationsEnabled ? 'צפה בהודעה' : 'התראות כבויות'}
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => onMarkOverdue(debtor)}>
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              סמן כבאיחור
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
-      )}
+
+            {/* Mobile cards */}
+            <div className="md:hidden p-3 space-y-2">
+              {debtors.map((debtor, idx) => {
+                const name = nameOf(debtor.unit)
+                return (
+                  <div key={idx} className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold num-tabular">דירה {debtor.unit.number}</p>
+                        {name && <p className="text-[11px] text-[var(--text-muted)] truncate">{name}</p>}
+                      </div>
+                      <span className="text-[14px] font-bold text-[var(--danger)] num-tabular">{formatCurrency(debtor.totalDebt)}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {debtor.months.map(m => <Badge key={m} variant="danger" className="num-tabular">{m}</Badge>)}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" variant="outline" className="flex-1" onClick={() => onShowMessage(debtor)} disabled={!notificationsEnabled} title={msgTitle}>
+                        {notificationsEnabled ? <MessageSquare className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+                        {notificationsEnabled ? 'צפה בהודעה' : 'התראות כבויות'}
+                      </Button>
+                      <Button size="sm" variant="destructive" className="flex-1" onClick={() => onMarkOverdue(debtor)}>
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        סמן כבאיחור
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </SectionCard>
     </div>
   )
 }
@@ -440,157 +445,108 @@ function CollectionAgentPanel({ analysis, onShowMessage, onMarkOverdue, onCreate
 // ---------------------------------------------------------------------------
 
 function VendorAgentPanel({ analysis, onAddVendor }) {
-  if (!analysis) {
-    return (
-      <Card>
-        <CardContent className="pt-6 text-center text-[var(--text-secondary)]">
-          לא נבחר בניין. בחר בניין מהתפריט הראשי.
-        </CardContent>
-      </Card>
-    )
-  }
+  if (!analysis) return <NoBuilding />
 
   const { issueCategoriesWithoutVendor, expiringInsurance, suggestions, blacklistedAssigned } = analysis
 
   return (
     <div className="space-y-4">
-      {/* Alerts */}
       {blacklistedAssigned.length > 0 && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-3">
-              <UserX className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-red-700 text-sm mb-1">ספקים בלתי רצויים מוקצים לתקלות פתוחות</p>
-                <ul className="text-sm text-red-600 space-y-0.5">
-                  {blacklistedAssigned.map(v => (
-                    <li key={v.id}>• {v.name}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <Callout tone="danger" icon={UserX} title="ספקים בלתי רצויים מוקצים לתקלות פתוחות">
+          <ul className="space-y-0.5">
+            {blacklistedAssigned.map(v => <li key={v.id}>• {v.name}</li>)}
+          </ul>
+        </Callout>
       )}
 
       {expiringInsurance.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-amber-700 text-sm mb-1">ביטוח ספקים פג תוקף בקרוב (60 ימים)</p>
-                <ul className="text-sm text-amber-700 space-y-0.5">
-                  {expiringInsurance.map(v => (
-                    <li key={v.id}>
-                      • {v.name} — תפוגה: {formatDate(v.insurance_expiry)}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <Callout tone="warning" icon={AlertTriangle} title="ביטוח ספקים פג תוקף בקרוב (60 ימים)">
+          <ul className="space-y-0.5">
+            {expiringInsurance.map(v => (
+              <li key={v.id} className="num-tabular">• {v.name} — תפוגה: {formatDate(v.insurance_expiry)}</li>
+            ))}
+          </ul>
+        </Callout>
       )}
 
       {issueCategoriesWithoutVendor.length > 0 && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-blue-700 text-sm mb-1">קטגוריות תקלות ללא ספק מוקצה</p>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {issueCategoriesWithoutVendor.map(cat => (
-                    <Badge key={cat} variant="info">{cat}</Badge>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <Callout tone="info" icon={AlertTriangle} title="קטגוריות תקלות ללא ספק מוקצה">
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            {issueCategoriesWithoutVendor.map(cat => <Badge key={cat} variant="info">{cat}</Badge>)}
+          </div>
+        </Callout>
       )}
 
-      {/* Marketplace suggestions */}
-      <div>
-        <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">
-          ספקים מומלצים מהשוק ({suggestions.length})
-        </h3>
+      <SectionCard
+        icon={Store}
+        title="ספקים מומלצים מהשוק"
+        subtitle={`${suggestions.length} ספקים שעדיין אינם ברשימה שלך`}
+      >
         {suggestions.length === 0 ? (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-2" />
-              <p className="text-[var(--text-primary)] font-medium">כל הספקים מהשוק כבר ברשימה שלך!</p>
-            </CardContent>
-          </Card>
+          <EmptyState icon={CheckCircle} title="כל הספקים מהשוק כבר ברשימה שלך!" />
         ) : (
-          <div className="space-y-2">
-            {suggestions.map((vendor, idx) => {
-              const vendorGradients = [
-                'from-blue-500 to-blue-600',
-                'from-emerald-500 to-emerald-600',
-                'from-purple-500 to-purple-600',
-                'from-amber-500 to-amber-600',
-                'from-cyan-500 to-cyan-600',
-                'from-pink-500 to-pink-600',
-                'from-blue-500 to-blue-600',
-                'from-blue-500 to-blue-600',
-                'from-orange-500 to-orange-600',
-                'from-rose-500 to-rose-600',
-              ]
-              const vendorGradient = vendorGradients[idx % vendorGradients.length]
-              const initials = vendor.name.split(' ').map(w => w[0]).slice(0, 2).join('')
-              return (
-                <div
-                  key={idx}
-                  className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
-                >
-                  {/* Vendor initial circle */}
-                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${vendorGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                    {initials}
-                  </div>
-
-                  {/* Main info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{vendor.name}</span>
-                      {vendor.available_24_7 && (
-                        <Badge variant="success" className="text-xs">24/7</Badge>
-                      )}
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="ds-table">
+                <thead>
+                  <tr><th>ספק</th><th>תחום</th><th>אזור</th><th>דירוג</th><th>טלפון</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {suggestions.map((vendor, idx) => (
+                    <tr key={idx}>
+                      <td className="min-w-[200px]">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-[13px] font-semibold">{vendor.name}</span>
+                          {vendor.available_24_7 && <Badge variant="success">24/7</Badge>}
+                        </span>
+                        <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{vendor.description}</span>
+                      </td>
+                      <td className="whitespace-nowrap"><Badge>{vendor.category}</Badge></td>
+                      <td className="whitespace-nowrap text-[12px] text-[var(--text-secondary)]">{vendor.area}</td>
+                      <td className="whitespace-nowrap text-[12px]">
+                        <span className="text-[var(--warning)]">{'★'.repeat(Math.round(vendor.rating))}</span>
+                        <span className="text-[var(--text-muted)] num-tabular"> ({vendor.rating})</span>
+                      </td>
+                      <td className="whitespace-nowrap text-[12px] text-[var(--text-secondary)] num-tabular" dir="ltr">{vendor.phone}</td>
+                      <td className="whitespace-nowrap">
+                        <Button size="sm" variant="soft" onClick={() => onAddVendor(vendor)}>
+                          <Plus className="h-3.5 w-3.5" />
+                          הוסף
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="md:hidden p-3 space-y-2">
+              {suggestions.map((vendor, idx) => (
+                <div key={idx} className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold flex items-center gap-1.5">
+                        {vendor.name}
+                        {vendor.available_24_7 && <Badge variant="success">24/7</Badge>}
+                      </p>
+                      <p className="text-[11px] text-[var(--text-muted)]">{vendor.description}</p>
                     </div>
-                    <p className="text-xs text-[var(--text-secondary)] mb-1">{vendor.description}</p>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-                      <Badge variant="default" className="text-xs">{vendor.category}</Badge>
-                      <span>אזור: {vendor.area}</span>
-                    </div>
-                  </div>
-
-                  {/* Rating & phone */}
-                  <div className="text-left min-w-[80px] shrink-0">
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <span className="text-amber-500 text-sm">{'★'.repeat(Math.round(vendor.rating))}</span>
-                      <span className="text-xs text-[var(--text-secondary)]">({vendor.rating})</span>
-                    </div>
-                    <span className="text-[11px] text-[var(--text-muted)]" dir="ltr">{vendor.phone}</span>
-                  </div>
-
-                  {/* Add button (visible on hover) */}
-                  <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
-                    <Button
-                      size="sm"
-                      onClick={() => onAddVendor(vendor)}
-                      className="gap-1.5"
-                    >
+                    <Button size="sm" variant="soft" onClick={() => onAddVendor(vendor)}>
                       <Plus className="h-3.5 w-3.5" />
                       הוסף
                     </Button>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-[var(--text-secondary)]">
+                    <Badge>{vendor.category}</Badge>
+                    <span>אזור: {vendor.area}</span>
+                    <span className="text-[var(--warning)]">{'★'.repeat(Math.round(vendor.rating))}</span>
+                    <span dir="ltr" className="num-tabular">{vendor.phone}</span>
+                  </div>
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          </>
         )}
-      </div>
+      </SectionCard>
     </div>
   )
 }
@@ -599,194 +555,120 @@ function VendorAgentPanel({ analysis, onAddVendor }) {
 // BudgetAgentPanel
 // ---------------------------------------------------------------------------
 
+const HEBREW_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
+
+function monthLabel(monthStr) {
+  const [, m] = monthStr.split('-')
+  return HEBREW_MONTH_NAMES[parseInt(m, 10) - 1] || monthStr
+}
+
 function BudgetAgentPanel({ analysis, onCreateAlert, onExportReport }) {
-  if (!analysis) {
-    return (
-      <Card>
-        <CardContent className="pt-6 text-center text-[var(--text-secondary)]">
-          לא נבחר בניין. בחר בניין מהתפריט הראשי.
-        </CardContent>
-      </Card>
-    )
-  }
+  if (!analysis) return <NoBuilding />
 
   const {
     annualExpected, totalExpensesYTD, monthlyBudget,
     monthlyData, byCategory, overrunMonths, projectedAnnual, projectedGap,
-    ytdIncome, ytdNet,
+    ytdIncome,
   } = analysis
 
   const projectedSurplus = projectedGap >= 0
   const maxCategoryValue = Math.max(...Object.values(byCategory), 1)
 
-  const hebrewMonths = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר']
-
-  function monthLabel(monthStr) {
-    const [, m] = monthStr.split('-')
-    return hebrewMonths[parseInt(m, 10) - 1] || monthStr
-  }
-
   return (
     <div className="space-y-4">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'תקציב חודשי', value: formatCurrency(monthlyBudget), gradient: 'from-purple-500 to-purple-600', color: 'text-[var(--text-primary)]' },
-          { label: 'הוצאות מצטברות', value: formatCurrency(totalExpensesYTD), gradient: 'from-red-500 to-red-600', color: 'text-red-500' },
-          { label: 'הכנסות מצטברות', value: formatCurrency(ytdIncome), gradient: 'from-emerald-500 to-emerald-600', color: 'text-green-600' },
-          { label: 'מאזן נוכחי', value: formatCurrency(ytdNet), gradient: ytdNet >= 0 ? 'from-emerald-500 to-emerald-600' : 'from-red-500 to-red-600', color: ytdNet >= 0 ? 'text-green-600' : 'text-red-500' },
-        ].map((stat) => (
-          <div key={stat.label} className="relative rounded-xl border bg-white overflow-hidden">
-            <div className={`h-1 w-full bg-gradient-to-r ${stat.gradient}`} />
-            <div className="p-4">
-              <p className="text-xs text-[var(--text-secondary)] mb-1">{stat.label}</p>
-              <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Projected year-end */}
-      <Card className={projectedSurplus ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {projectedSurplus
-                ? <TrendingUp className="h-5 w-5 text-green-600" />
-                : <TrendingDown className="h-5 w-5 text-red-500" />
-              }
-              <div>
-                <p className={`font-semibold text-sm ${projectedSurplus ? 'text-green-700' : 'text-red-600'}`}>
-                  תחזית סוף שנה: {projectedSurplus ? 'עודף' : 'גירעון'} של {formatCurrency(Math.abs(projectedGap))}
-                </p>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  הוצאה חודשית ממוצעת: {formatCurrency(projectedAnnual / 12)} · תקציב שנתי: {formatCurrency(annualExpected)}
-                </p>
-              </div>
-            </div>
-            <Button size="sm" variant="outline" onClick={onExportReport} className="gap-1.5 shrink-0">
-              יצא דוח
-            </Button>
+      <Callout
+        tone={projectedSurplus ? 'success' : 'danger'}
+        icon={projectedSurplus ? TrendingUp : TrendingDown}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <p className="font-semibold num-tabular">
+              תחזית סוף שנה: {projectedSurplus ? 'עודף' : 'גירעון'} של {formatCurrency(Math.abs(projectedGap))}
+            </p>
+            <p className="text-[12px] text-[var(--text-secondary)] num-tabular">
+              תקציב חודשי: {formatCurrency(monthlyBudget)} · הוצאה חודשית ממוצעת: {formatCurrency(projectedAnnual / 12)} · תקציב שנתי: {formatCurrency(annualExpected)}
+            </p>
           </div>
-        </CardContent>
-      </Card>
+          <Button size="sm" variant="outline" onClick={onExportReport} className="shrink-0">
+            <FileText className="h-3.5 w-3.5" />
+            יצא דוח
+          </Button>
+        </div>
+      </Callout>
 
       {/* Overrun months */}
       {overrunMonths.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-2">חודשים בחריגת תקציב</h3>
-          <div className="space-y-2">
+        <SectionCard icon={AlertTriangle} title="חודשים בחריגת תקציב" subtitle={`${overrunMonths.length} חודשים מעל התקציב החודשי`}>
+          <div className="divide-y divide-[var(--border-light)]">
             {overrunMonths.map((m, idx) => (
-              <div
-                key={idx}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-red-200 bg-white hover:shadow-md hover:border-red-300 transition-all"
-              >
-                {/* Month circle */}
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
-                  {monthLabel(m.month).slice(0, 3)}
+              <div key={idx} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-[140px]">
+                  <p className="text-[13px] font-semibold text-[var(--text-primary)]">{monthLabel(m.month)}</p>
+                  <p className="text-[11px] text-[var(--text-muted)] num-tabular">
+                    הוצאות: {formatCurrency(m.expenses)} · הכנסות: {formatCurrency(m.income)}
+                  </p>
                 </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <span className="text-[14px] font-semibold text-[var(--text-primary)]">{monthLabel(m.month)}</span>
-                  <div className="flex items-center gap-3 text-xs text-[var(--text-secondary)] mt-0.5">
-                    <span>הוצאות: {formatCurrency(m.expenses)}</span>
-                    <span>הכנסות: {formatCurrency(m.income)}</span>
-                  </div>
+                <div className="text-left">
+                  <span className="text-[13px] font-bold text-[var(--danger)] num-tabular">{formatCurrency(m.expenses - monthlyBudget)}</span>
+                  <span className="block text-[11px] text-[var(--text-muted)]">חריגה</span>
                 </div>
-
-                {/* Overrun amount */}
-                <div className="text-left min-w-[90px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full shrink-0 bg-red-500" />
-                    <span className="text-[13px] font-bold text-red-500">
-                      {formatCurrency(m.expenses - monthlyBudget)}
-                    </span>
-                  </div>
-                  <span className="text-[11px] text-[var(--text-muted)]">חריגה</span>
-                </div>
-
-                {/* Action (hover) */}
-                <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onCreateAlert(m)}
-                    className="gap-1.5"
-                  >
-                    <Bell className="h-3.5 w-3.5" />
-                    צור התראה
-                  </Button>
-                </div>
+                <Button size="sm" variant="outline" onClick={() => onCreateAlert(m)}>
+                  <Bell className="h-3.5 w-3.5" />
+                  צור התראה
+                </Button>
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
 
-      {/* Monthly table */}
-      <div>
-        <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-2">פירוט חודשי</h3>
-        <Card>
-          <CardContent className="pt-3 pb-3 overflow-x-auto">
-            <table className="w-full text-sm min-w-[480px]">
-              <thead>
-                <tr className="border-b border-[var(--border)] text-[var(--text-secondary)] text-xs">
-                  <th className="pb-2 text-right font-medium">חודש</th>
-                  <th className="pb-2 text-right font-medium">הכנסות</th>
-                  <th className="pb-2 text-right font-medium">הוצאות</th>
-                  <th className="pb-2 text-right font-medium">מאזן</th>
-                  <th className="pb-2 text-right font-medium">סטטוס</th>
+      {/* Monthly ledger */}
+      <SectionCard
+        icon={PiggyBank}
+        title="פירוט חודשי"
+        subtitle={`שנת ${new Date().getFullYear()} עד היום`}
+        footer={<span className="num-tabular">הכנסות מצטברות {formatCurrency(ytdIncome)} · הוצאות מצטברות {formatCurrency(totalExpensesYTD)}</span>}
+      >
+        <div className="overflow-x-auto">
+          <table className="ds-table min-w-[480px]">
+            <thead>
+              <tr><th>חודש</th><th>הכנסות</th><th>הוצאות</th><th>מאזן</th><th>סטטוס</th></tr>
+            </thead>
+            <tbody>
+              {monthlyData.map((m, idx) => (
+                <tr key={idx}>
+                  <td className="font-semibold">{monthLabel(m.month)}</td>
+                  <td className="text-[var(--success)] num-tabular">{formatCurrency(m.income)}</td>
+                  <td className="text-[var(--danger)] num-tabular">{formatCurrency(m.expenses)}</td>
+                  <td className={cn('font-semibold num-tabular', m.net >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]')}>
+                    {formatCurrency(m.net)}
+                  </td>
+                  <td>
+                    {m.overBudget ? <Badge variant="danger">חריגה</Badge> : <Badge variant="success">תקין</Badge>}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {monthlyData.map((m, idx) => (
-                  <tr key={idx} className="border-b border-[var(--border)] last:border-0">
-                    <td className="py-2 text-[var(--text-primary)]">{monthLabel(m.month)}</td>
-                    <td className="py-2 text-green-600">{formatCurrency(m.income)}</td>
-                    <td className="py-2 text-red-500">{formatCurrency(m.expenses)}</td>
-                    <td className={`py-2 font-medium ${m.net >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                      {formatCurrency(m.net)}
-                    </td>
-                    <td className="py-2">
-                      {m.overBudget
-                        ? <Badge variant="danger">חריגה</Badge>
-                        : <Badge variant="success">תקין</Badge>
-                      }
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
 
       {/* Category breakdown */}
       {Object.keys(byCategory).length > 0 && (
-        <div>
-          <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-2">הוצאות לפי קטגוריה</h3>
-          <Card>
-            <CardContent className="pt-4 pb-4 space-y-3">
-              {Object.entries(byCategory)
-                .sort(([, a], [, b]) => b - a)
-                .map(([cat, val]) => (
-                  <div key={cat}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-[var(--text-primary)]">{cat}</span>
-                      <span className="text-sm font-medium text-[var(--text-primary)]">{formatCurrency(val)}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-[var(--border-light)] overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-purple-400 transition-all duration-500"
-                        style={{ width: `${(val / maxCategoryValue) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-            </CardContent>
-          </Card>
-        </div>
+        <SectionCard icon={Wallet} title="הוצאות לפי קטגוריה" bodyClassName="p-4 space-y-3">
+          {Object.entries(byCategory)
+            .sort(([, a], [, b]) => b - a)
+            .map(([cat, val]) => (
+              <div key={cat}>
+                <div className="flex items-center justify-between mb-1 text-[12px]">
+                  <span className="font-medium text-[var(--text-primary)]">{cat}</span>
+                  <span className="font-semibold text-[var(--text-primary)] num-tabular">{formatCurrency(val)}</span>
+                </div>
+                <Bar value={(val / maxCategoryValue) * 100} />
+              </div>
+            ))}
+        </SectionCard>
       )}
     </div>
   )
@@ -799,19 +681,9 @@ function BudgetAgentPanel({ analysis, onCreateAlert, onExportReport }) {
 function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
   const [showCovered, setShowCovered] = useState(false)
 
-  if (!analysis) {
-    return (
-      <Card>
-        <CardContent className="pt-6 text-center text-[var(--text-secondary)]">
-          לא נבחר בניין. בחר בניין מהתפריט הראשי.
-        </CardContent>
-      </Card>
-    )
-  }
+  if (!analysis) return <NoBuilding />
 
   const { missing, covered, coverageRate, expired, overdue } = analysis
-
-  const coverageColor = coverageRate >= 80 ? '#22c55e' : coverageRate >= 50 ? '#f59e0b' : '#ef4444'
 
   function priorityBadgeVariant(priority) {
     if (priority === 'high') return 'danger'
@@ -825,166 +697,101 @@ function ComplianceAgentPanel({ analysis, onAddTask, onAddCompliance }) {
     return 'נמוכה'
   }
 
-  function priorityBorderClass(priority) {
-    if (priority === 'high') return 'border-red-200'
-    if (priority === 'medium') return 'border-amber-200'
-    return 'border-green-200'
-  }
-
   return (
     <div className="space-y-4">
       {/* Coverage score */}
-      <div className="relative rounded-xl border bg-white overflow-hidden">
-        <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 to-amber-600" />
-        <div className="p-5">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xl shrink-0 shadow-sm">
-              {coverageRate}%
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">כיסוי רגולטורי</p>
-              <Progress value={coverageRate} color={coverageColor} className="mb-2" />
-              <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)]">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>{covered.length} מכוסות</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-red-500" />
-                  <span>{missing.length} חסרות</span>
-                </div>
-              </div>
+      <SectionCard icon={ShieldCheck} title="כיסוי רגולטורי" subtitle="דרישות חוק ופרקטיקה לפי מאפייני הבניין" bodyClassName="p-4">
+        <div className="flex items-center gap-4">
+          <span className="text-[30px] leading-9 font-bold tracking-[-0.02em] text-[var(--text-primary)] num-tabular">{coverageRate}%</span>
+          <div className="flex-1 space-y-2">
+            <Bar value={coverageRate} tone={rateTone(coverageRate, 80, 50)} />
+            <div className="flex items-center gap-3 text-[12px] text-[var(--text-secondary)] num-tabular">
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--success)]" />{covered.length} מכוסות</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[var(--danger)]" />{missing.length} חסרות</span>
             </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* Expired and overdue alerts */}
       {(expired.length > 0 || overdue.length > 0) && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-3">
-              <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-              <div className="space-y-2 flex-1">
-                {expired.length > 0 && (
-                  <div>
-                    <p className="font-semibold text-red-700 text-sm mb-1">רגולציה שפגה תוקפה ({expired.length})</p>
-                    <ul className="text-sm text-red-600 space-y-0.5">
-                      {expired.map(c => (
-                        <li key={c.id}>• {c.title} — פג: {formatDate(c.expiry_date)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {overdue.length > 0 && (
-                  <div>
-                    <p className="font-semibold text-red-700 text-sm mb-1">משימות שעבר מועדן ({overdue.length})</p>
-                    <ul className="text-sm text-red-600 space-y-0.5">
-                      {overdue.map(t => (
-                        <li key={t.id}>• {t.title} — היה ב: {formatDate(t.next_due_date)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+        <Callout tone="danger" icon={XCircle}>
+          <div className="space-y-2">
+            {expired.length > 0 && (
+              <div>
+                <p className="font-semibold mb-0.5">רגולציה שפגה תוקפה ({expired.length})</p>
+                <ul className="space-y-0.5 num-tabular">
+                  {expired.map(c => <li key={c.id}>• {c.title} — פג: {formatDate(c.expiry_date)}</li>)}
+                </ul>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            )}
+            {overdue.length > 0 && (
+              <div>
+                <p className="font-semibold mb-0.5">משימות שעבר מועדן ({overdue.length})</p>
+                <ul className="space-y-0.5 num-tabular">
+                  {overdue.map(t => <li key={t.id}>• {t.title} — היה ב: {formatDate(t.next_due_date)}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Callout>
       )}
 
       {/* Missing requirements */}
       {missing.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-2">
-            דרישות חסרות ({missing.length})
-          </h3>
-          <div className="space-y-2">
-            {missing.map((req, idx) => {
-              const priorityGradient = req.priority === 'high' ? 'from-red-500 to-red-600' : req.priority === 'medium' ? 'from-amber-500 to-amber-600' : 'from-emerald-500 to-emerald-600'
-              const priorityDot = req.priority === 'high' ? 'bg-red-500' : req.priority === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
-              return (
-                <div
-                  key={idx}
-                  className={`group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md transition-all ${priorityBorderClass(req.priority)} hover:border-blue-200`}
-                >
-                  {/* Category icon circle */}
-                  <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${priorityGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
-                    <ShieldCheck className="h-5 w-5" />
+        <SectionCard icon={AlertTriangle} title="דרישות חסרות" subtitle={`${missing.length} דרישות ללא משימה או רשומת רגולציה`}>
+          <div className="divide-y divide-[var(--border-light)]">
+            {missing.map((req, idx) => (
+              <div key={idx} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="flex-1 min-w-[200px]">
+                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <span className="text-[13px] font-semibold text-[var(--text-primary)]">{req.title}</span>
+                    <Badge variant={priorityBadgeVariant(req.priority)}>{priorityLabel(req.priority)}</Badge>
+                    <Badge variant="neutral">{req.category}</Badge>
                   </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                      <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{req.title}</span>
-                      <Badge variant={priorityBadgeVariant(req.priority)}>{priorityLabel(req.priority)}</Badge>
-                      <Badge variant="default">{req.category}</Badge>
-                    </div>
-                    <p className="text-xs text-[var(--text-secondary)]">
-                      {req.law} · {frequencyLabel(req.frequency)}
-                    </p>
-                  </div>
-
-                  {/* Status dot */}
-                  <div className="flex items-center gap-2 min-w-[60px] shrink-0">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${priorityDot}`} />
-                    <span className="text-[12px] font-medium text-red-600">חסר</span>
-                  </div>
-
-                  {/* Action (hover) */}
-                  <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => req.type === 'task' ? onAddTask(req) : onAddCompliance(req)}
-                      className="gap-1.5"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      {req.type === 'task' ? 'הוסף כמשימה' : 'הוסף לרגולציה'}
-                    </Button>
-                  </div>
+                  <p className="text-[11px] text-[var(--text-muted)]">{req.law} · {frequencyLabel(req.frequency)}</p>
                 </div>
-              )
-            })}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => req.type === 'task' ? onAddTask(req) : onAddCompliance(req)}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {req.type === 'task' ? 'הוסף כמשימה' : 'הוסף לרגולציה'}
+                </Button>
+              </div>
+            ))}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {/* Covered requirements (collapsible) */}
       {covered.length > 0 && (
-        <div>
-          <button
-            className="flex items-center gap-2 text-sm font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-            onClick={() => setShowCovered(v => !v)}
-          >
-            {showCovered ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            דרישות מכוסות ({covered.length})
-          </button>
+        <SectionCard
+          icon={CheckCircle}
+          title={`דרישות מכוסות (${covered.length})`}
+          actions={
+            <Button size="sm" variant="ghost" onClick={() => setShowCovered(v => !v)}>
+              {showCovered ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {showCovered ? 'הסתר' : 'הצג'}
+            </Button>
+          }
+        >
           {showCovered && (
-            <div className="mt-2 space-y-2">
+            <div className="divide-y divide-[var(--border-light)]">
               {covered.map((req, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-4 p-3 rounded-xl border border-green-100 bg-green-50/30 transition-all"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shrink-0 shadow-sm">
-                    <CheckCircle className="h-4 w-4" />
-                  </div>
+                <div key={idx} className="flex items-center gap-3 px-4 py-2.5">
+                  <CheckCircle className="h-4 w-4 text-[var(--success)] shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-[var(--text-primary)]">{req.title}</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Badge variant="success">{req.category}</Badge>
-                      <span className="text-xs text-[var(--text-secondary)]">{req.law}</span>
-                    </div>
+                    <span className="text-[13px] font-medium text-[var(--text-primary)]">{req.title}</span>
+                    <span className="block text-[11px] text-[var(--text-muted)]">{req.law}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-xs font-medium text-emerald-600">מכוסה</span>
-                  </div>
+                  <Badge variant="success">{req.category}</Badge>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
     </div>
   )
@@ -1013,6 +820,10 @@ export default function SmartAgents() {
   const { create: createRecurringTask } = useCollection('recurringTasks', scope)
   const { create: createCompliance } = useCollection('compliance', scope)
   const { update: updatePayment } = useCollection('payments', scope)
+
+  // Resident names live in unit_residents (units has no owner_name column).
+  const directory = useUnitDirectory(selectedBuilding?.id)
+  const nameOf = (unit) => directory.byId?.[unit.id]?.name || unit.tenant_name || ''
 
   const [activeAgent, setActiveAgent] = useState(null)
   const [messageDialog, setMessageDialog] = useState({ open: false, title: '', content: '' })
@@ -1197,7 +1008,7 @@ export default function SmartAgents() {
   // Helper: generate reminder message
   // -------------------------------------------------------------------------
   function generateReminderMessage(debtor) {
-    const name = debtor.unit.ownerName || debtor.unit.tenant_name || `דירה ${debtor.unit.number}`
+    const name = nameOf(debtor.unit) || `דירה ${debtor.unit.number}`
     return `שלום ${name},\n\nאנו פונים אליך בנושא תשלום דמי ועד בית עבור דירה ${debtor.unit.number} בבניין ${selectedBuilding?.name}.\n\nנמצאו ${debtor.unpaidCount} חודשים שטרם שולמו בסכום כולל של ${formatCurrency(debtor.totalDebt)}.\n\nנבקשך להסדיר את התשלום בהקדם האפשרי.\n\nבברכה,\nועד הבית`
   }
 
@@ -1346,49 +1157,42 @@ export default function SmartAgents() {
       title: 'סוכן גבייה',
       icon: CreditCard,
       description: 'מזהה חייבים, מחשב חובות ומייצר הודעות תזכורת',
-      color: 'blue',
-      bgClass: 'bg-blue-50',
-      borderClass: 'border-blue-200',
-      iconClass: 'text-blue-600',
     },
     {
       id: 'vendor',
       title: 'סוכן ספקים',
       icon: Store,
       description: 'מנתח פערים בכיסוי ספקים ומציע ספקים חדשים',
-      color: 'emerald',
-      bgClass: 'bg-emerald-50',
-      borderClass: 'border-emerald-200',
-      iconClass: 'text-emerald-600',
     },
     {
       id: 'budget',
       title: 'סוכן תקציב',
       icon: PiggyBank,
       description: 'מנתח הכנסות והוצאות ומתריע על חריגות תקציביות',
-      color: 'purple',
-      bgClass: 'bg-purple-50',
-      borderClass: 'border-purple-200',
-      iconClass: 'text-purple-600',
     },
     {
       id: 'compliance',
       title: 'סוכן רגולציה ופרקטיקה',
       icon: ShieldCheck,
       description: 'מגדיר מה נדרש לביצוע תקופתי לפי חוק ופרקטיקה',
-      color: 'amber',
-      bgClass: 'bg-amber-50',
-      borderClass: 'border-amber-200',
-      iconClass: 'text-amber-600',
     },
   ]
 
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
+  const header = (
+    <div className="min-w-0">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">סוכנים חכמים</h1>
+      <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+        סוכני AI שמנתחים את נתוני הבניין ומייצרים פעולות מומלצות{selectedBuilding ? ` • ${selectedBuilding.name}` : ''}
+      </p>
+    </div>
+  )
+
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={Zap} iconColor="amber" title="סוכנים חכמים" />
+    <div className="space-y-6" dir="rtl">
+      {header}
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -1398,170 +1202,178 @@ export default function SmartAgents() {
     </div>
   )
 
+  const AGENT_STATUS = {
+    collection: collectionAnalysis ? `${collectionAnalysis.debtors.length} חייבים` : '—',
+    vendor: vendorAnalysis ? `${vendorAnalysis.suggestions.length} הצעות ספקים` : '—',
+    budget: budgetAnalysis ? `${budgetAnalysis.overrunMonths.length} חודשי חריגה` : '—',
+    compliance: complianceAnalysis ? `${complianceAnalysis.missing.length} דרישות חסרות` : '—',
+  }
+  const activeDef = AGENTS.find(a => a.id === activeAgent)
+
+  const aiPanelProps = {
+    collection: { onAsk: () => askClaude('collection', collectionAnalysis) },
+    vendor: {
+      onAsk: () => askClaude('vendor', {
+        vendors: allVendors,
+        openIssues: allIssues.filter(i => i.buildingId === selectedBuilding?.id && !['resolved','closed','completed'].includes(i.status)),
+        issueCategoriesWithoutVendor: vendorAnalysis?.issueCategoriesWithoutVendor,
+        expiringInsurance: vendorAnalysis?.expiringInsurance,
+      }),
+    },
+    budget: { onAsk: () => askClaude('budget', budgetAnalysis) },
+    compliance: {
+      onAsk: () => askClaude('compliance', {
+        building: selectedBuilding,
+        missingRequirements: complianceAnalysis?.missing,
+        expired: complianceAnalysis?.expired,
+        overdueTasks: complianceAnalysis?.overdue,
+        coverageRate: complianceAnalysis?.coverageRate,
+      }),
+    },
+  }
+
   return (
     <div className="space-y-6" dir="rtl">
-      <PageHeader icon={Zap} iconColor="amber" title="סוכנים חכמים" subtitle={`סוכני AI שמנתחים את נתוני ${selectedBuilding?.name || 'הבניין'} ומייצרים פעולות מומלצות`} />
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        {header}
+        {activeAgent && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => setActiveAgent(null)}>סגור סוכן</Button>
+            <Button onClick={aiPanelProps[activeAgent].onAsk} disabled={aiState[activeAgent]?.loading}>
+              {aiState[activeAgent]?.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              שאל את Claude
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* No building selected warning */}
       {!selectedBuilding && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-              <p className="text-amber-700 text-sm font-medium">
-                לא נבחר בניין. בחר בניין מהתפריט הראשי כדי להפעיל את הסוכנים.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <Callout tone="warning" icon={AlertTriangle}>
+          לא נבחר בניין. בחר בניין מהתפריט הראשי כדי להפעיל את הסוכנים.
+        </Callout>
       )}
 
-      {/* Agent selector cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI row — derived from the analyses the page already computes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          label="אחוז גבייה החודש" icon={CreditCard} color="blue"
+          value={collectionAnalysis ? `${collectionAnalysis.collectionRate}%` : '—'}
+          sub={collectionAnalysis ? `${collectionAnalysis.thisMonthPaid} מתוך ${collectionAnalysis.thisMonthTotal} שילמו` : 'לא נבחר בניין'}
+          progress={collectionAnalysis ? collectionAnalysis.collectionRate : undefined}
+        />
+        <StatCard
+          label="חוב פתוח (3 חודשים)" icon={Wallet}
+          color={collectionAnalysis?.totalOutstanding > 0 ? 'red' : 'emerald'}
+          value={collectionAnalysis ? formatCurrency(collectionAnalysis.totalOutstanding) : '—'}
+          sub={collectionAnalysis ? `${collectionAnalysis.debtors.length} חייבים פעילים` : undefined}
+        />
+        <StatCard
+          label="מאזן מתחילת השנה" icon={PiggyBank}
+          color={budgetAnalysis && budgetAnalysis.ytdNet < 0 ? 'red' : 'emerald'}
+          value={budgetAnalysis ? formatCurrency(budgetAnalysis.ytdNet) : '—'}
+          sub={budgetAnalysis ? `הכנסות ${formatCurrency(budgetAnalysis.ytdIncome)} · הוצאות ${formatCurrency(budgetAnalysis.totalExpensesYTD)}` : undefined}
+        />
+        <StatCard
+          label="כיסוי רגולטורי" icon={ShieldCheck}
+          color={complianceAnalysis && complianceAnalysis.coverageRate < 50 ? 'amber' : 'purple'}
+          value={complianceAnalysis ? `${complianceAnalysis.coverageRate}%` : '—'}
+          sub={complianceAnalysis ? `${complianceAnalysis.missing.length} דרישות חסרות` : undefined}
+          progress={complianceAnalysis ? complianceAnalysis.coverageRate : undefined}
+        />
+      </div>
+
+      {/* Agent selector */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {AGENTS.map(agent => {
           const isActive = activeAgent === agent.id
-          const gradientMap = {
-            blue: 'from-blue-500 to-blue-600',
-            emerald: 'from-emerald-500 to-emerald-600',
-            purple: 'from-purple-500 to-purple-600',
-            amber: 'from-amber-500 to-amber-600',
-          }
-          const gradient = gradientMap[agent.color] || gradientMap.blue
           return (
             <div
               key={agent.id}
-              className={`group relative rounded-xl border-2 bg-white overflow-hidden cursor-pointer transition-all hover:shadow-md ${
-                isActive
-                  ? `${agent.borderClass} shadow-md`
-                  : 'border-[var(--border)] hover:border-blue-200'
-              }`}
+              className={cn(
+                'rounded-[var(--radius)] border bg-[var(--surface)] shadow-[var(--shadow)] p-4 cursor-pointer transition-colors flex flex-col',
+                isActive ? 'border-[var(--primary)] ring-1 ring-[var(--primary)]/30' : 'border-[var(--border)] hover:border-[var(--outline-variant)]'
+              )}
               onClick={() => setActiveAgent(isActive ? null : agent.id)}
             >
-              {/* Gradient accent bar */}
-              <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
-              <div className="p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-sm shrink-0`}>
-                    <agent.icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="font-semibold text-sm text-[var(--text-primary)]">{agent.title}</h3>
-                </div>
-                <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
-                  {agent.description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {isActive ? (
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-xs font-medium text-emerald-600">פעיל</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-slate-300" />
-                        <span className="text-xs text-[var(--text-secondary)]">כבוי</span>
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant={isActive ? 'default' : 'outline'}
-                    className="gap-1.5"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setActiveAgent(isActive ? null : agent.id)
-                    }}
-                  >
-                    {isActive ? (
-                      <>
-                        <CheckCircle className="h-3.5 w-3.5" />
-                        פעיל
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-3.5 w-3.5" />
-                        הפעל
-                      </>
-                    )}
-                  </Button>
-                </div>
+              <div className="flex items-center gap-2.5 mb-2">
+                <span className={cn('p-1.5 rounded-[var(--radius)] shrink-0', isActive ? 'bg-[var(--primary)] text-white' : 'bg-[var(--surface-secondary)] text-[var(--primary)]')}>
+                  <agent.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                </span>
+                <h3 className="text-[14px] font-semibold text-[var(--text-primary)]">{agent.title}</h3>
+              </div>
+              <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed flex-1">{agent.description}</p>
+              <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-[var(--border-light)]">
+                {isActive ? (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--success-light)] text-[var(--success)]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse" />
+                    פעיל
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[var(--text-muted)] num-tabular">{AGENT_STATUS[agent.id]}</span>
+                )}
+                <Button
+                  size="sm"
+                  variant={isActive ? 'default' : 'outline'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveAgent(isActive ? null : agent.id)
+                  }}
+                >
+                  {isActive ? <><CheckCircle className="h-3.5 w-3.5" />פעיל</> : <><Play className="h-3.5 w-3.5" />הפעל</>}
+                </Button>
               </div>
             </div>
           )
         })}
       </div>
 
-      {/* Active agent panels */}
-      {activeAgent === 'collection' && (
-        <>
-          <AiInsightsPanel
-            agentType="collection"
-            ai={aiState['collection']}
-            onAsk={() => askClaude('collection', collectionAnalysis)}
-          />
-          <CollectionAgentPanel
-            analysis={collectionAnalysis}
-            onShowMessage={handleShowMessage}
-            onMarkOverdue={handleMarkOverdue}
-            onCreateAnnouncement={handleCreateAnnouncement}
-            notificationsEnabled={notificationsEnabled}
-          />
-        </>
-      )}
-
-      {activeAgent === 'vendor' && (
-        <>
-          <AiInsightsPanel
-            agentType="vendor"
-            ai={aiState['vendor']}
-            onAsk={() => askClaude('vendor', {
-              vendors: allVendors,
-              openIssues: allIssues.filter(i => i.buildingId === selectedBuilding?.id && !['resolved','closed','completed'].includes(i.status)),
-              issueCategoriesWithoutVendor: vendorAnalysis?.issueCategoriesWithoutVendor,
-              expiringInsurance: vendorAnalysis?.expiringInsurance,
-            })}
-          />
-          <VendorAgentPanel
-            analysis={vendorAnalysis}
-            onAddVendor={handleAddVendor}
-          />
-        </>
-      )}
-
-      {activeAgent === 'budget' && (
-        <>
-          <AiInsightsPanel
-            agentType="budget"
-            ai={aiState['budget']}
-            onAsk={() => askClaude('budget', budgetAnalysis)}
-          />
-          <BudgetAgentPanel
-            analysis={budgetAnalysis}
-            onCreateAlert={handleCreateBudgetAlert}
-            onExportReport={handleExportBudgetReport}
-          />
-        </>
-      )}
-
-      {activeAgent === 'compliance' && (
-        <>
-          <AiInsightsPanel
-            agentType="compliance"
-            ai={aiState['compliance']}
-            onAsk={() => askClaude('compliance', {
-              building: selectedBuilding,
-              missingRequirements: complianceAnalysis?.missing,
-              expired: complianceAnalysis?.expired,
-              overdueTasks: complianceAnalysis?.overdue,
-              coverageRate: complianceAnalysis?.coverageRate,
-            })}
-          />
-          <ComplianceAgentPanel
-            analysis={complianceAnalysis}
-            onAddTask={handleAddTask}
-            onAddCompliance={handleAddCompliance}
-          />
-        </>
+      {/* Active agent workspace */}
+      {!activeDef ? (
+        <SectionCard>
+          <EmptyState icon={Bot} title="בחר סוכן להפעלה" description="כל סוכן מנתח תחום אחר בבניין ומציע פעולות. ניתן גם לבקש ניתוח מעמיק מ-Claude." />
+        </SectionCard>
+      ) : (
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          <div className="xl:col-span-8 space-y-4 min-w-0">
+            {activeAgent === 'collection' && (
+              <CollectionAgentPanel
+                analysis={collectionAnalysis}
+                nameOf={nameOf}
+                onShowMessage={handleShowMessage}
+                onMarkOverdue={handleMarkOverdue}
+                onCreateAnnouncement={handleCreateAnnouncement}
+                notificationsEnabled={notificationsEnabled}
+              />
+            )}
+            {activeAgent === 'vendor' && (
+              <VendorAgentPanel analysis={vendorAnalysis} onAddVendor={handleAddVendor} />
+            )}
+            {activeAgent === 'budget' && (
+              <BudgetAgentPanel
+                analysis={budgetAnalysis}
+                onCreateAlert={handleCreateBudgetAlert}
+                onExportReport={handleExportBudgetReport}
+              />
+            )}
+            {activeAgent === 'compliance' && (
+              <ComplianceAgentPanel
+                analysis={complianceAnalysis}
+                onAddTask={handleAddTask}
+                onAddCompliance={handleAddCompliance}
+              />
+            )}
+          </div>
+          <aside className="xl:col-span-4 xl:sticky xl:top-20 min-w-0">
+            <AiInsightsPanel
+              agentType={activeAgent}
+              ai={aiState[activeAgent]}
+              onAsk={aiPanelProps[activeAgent].onAsk}
+              buildingName={selectedBuilding?.name ?? 'הבניין'}
+            />
+          </aside>
+        </div>
       )}
 
       {/* Message / export dialog */}
@@ -1573,14 +1385,15 @@ export default function SmartAgents() {
           <DialogHeader>
             <DialogTitle>{messageDialog.title}</DialogTitle>
           </DialogHeader>
-          <pre className="text-sm whitespace-pre-wrap bg-[var(--surface)] p-4 rounded-lg border border-[var(--border)] text-[var(--text-primary)] font-sans max-h-80 overflow-y-auto">
+          <pre className="text-[13px] whitespace-pre-wrap bg-[var(--surface-secondary)] p-4 rounded-[var(--radius)] border border-[var(--border)] text-[var(--text-primary)] font-sans max-h-80 overflow-y-auto">
             {messageDialog.content}
           </pre>
           <Button
             variant="outline"
-            className="w-full gap-2"
+            className="w-full"
             onClick={() => navigator.clipboard?.writeText(messageDialog.content)}
           >
+            <Copy className="h-4 w-4" />
             העתק טקסט
           </Button>
         </DialogContent>

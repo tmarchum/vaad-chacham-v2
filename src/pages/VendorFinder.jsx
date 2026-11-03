@@ -1,20 +1,19 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { FormField, FormSelect, FormTextarea, FormBool } from '@/components/common/FormField'
-import { DeleteConfirm } from '@/components/common/DeleteConfirm'
+import { FormField, FormTextarea } from '@/components/common/FormField'
 import { EmptyState } from '@/components/common/EmptyState'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { waLink, telHref } from '@/lib/phone'
-import { PageHeader } from '@/components/common/PageHeader'
 import { toastError } from '@/lib/toast'
 import {
   Search, MessageCircle, Star, CheckCircle, ExternalLink,
   Phone, Plus, ChevronRight, Clock, ThumbsUp, ThumbsDown,
-  Wrench, Send, FileText, Award
+  Wrench, Send, FileText, Award, AlertTriangle, Store, X, ArrowRight, CalendarDays,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -139,55 +138,77 @@ const STATUS_LABELS = { open: 'פתוח', in_progress: 'בטיפול', completed
 const STATUS_VARIANTS = { open: 'default', in_progress: 'warning', completed: 'success', closed: 'info' }
 
 // ---------------------------------------------------------------------------
+// Local Civic Blue helpers
+// ---------------------------------------------------------------------------
+
+// WhatsApp deep-link button: opens wa.me in a new tab for the user to send
+// manually — nothing is sent by the app itself.
+const WA_BTN = 'inline-flex items-center justify-center gap-2 h-[38px] px-3.5 rounded-[var(--radius)] bg-[var(--success)] text-white text-[13px] font-semibold shadow-[var(--shadow)] hover:opacity-90 transition-opacity'
+const LINK_BTN = 'inline-flex items-center justify-center gap-1.5 h-[38px] px-3.5 rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] text-[var(--text-primary)] text-[13px] font-semibold hover:bg-[var(--surface-secondary)] transition-colors'
+
+function KeyVal({ rows }) {
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13px]">
+      {rows.filter(Boolean).map(([k, v, cls]) => (
+        <div key={k} className="contents">
+          <dt className="text-[var(--text-secondary)]">{k}</dt>
+          <dd className={cn('text-[var(--text-primary)] font-medium', cls)}>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function priorityTone(priority) {
+  if (priority === 'urgent') return 'bg-[var(--danger-light)] text-[var(--danger)]'
+  if (priority === 'high') return 'bg-[var(--warning-light)] text-[var(--warning)]'
+  return 'bg-[var(--surface-secondary)] text-[var(--primary)]'
+}
+
+// ---------------------------------------------------------------------------
 // Progress indicator
 // ---------------------------------------------------------------------------
 
 function StepProgress({ currentStep }) {
   return (
-    <div className="relative rounded-xl border bg-white overflow-hidden mb-6">
-      <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-blue-500" />
-      <div className="flex items-center justify-between p-4 overflow-x-auto">
-        {WORKFLOW_STAGES.map((stage, idx) => {
-          const done = idx < currentStep
-          const active = idx === currentStep
-          const Icon = stage.icon
-          return (
-            <div key={stage.key} className="flex items-center shrink-0">
-              <div className="flex flex-col items-center gap-1.5">
-                <div
-                  className={[
-                    'w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition-all shadow-sm',
-                    done
-                      ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
-                      : active
-                        ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
-                        : 'bg-slate-100 text-[var(--text-secondary)]',
-                  ].join(' ')}
-                >
-                  {done ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                </div>
-                <span
-                  className={[
-                    'text-[10px] text-center max-w-[56px] leading-tight',
-                    active ? 'text-blue-600 font-semibold' : done ? 'text-emerald-600 font-medium' : 'text-[var(--text-secondary)]',
-                  ].join(' ')}
-                >
-                  {stage.label}
-                </span>
-              </div>
-              {idx < WORKFLOW_STAGES.length - 1 && (
-                <div
-                  className={[
-                    'h-0.5 w-6 sm:w-10 mx-1 mb-5 shrink-0 rounded-full',
-                    done ? 'bg-emerald-500' : 'bg-slate-200',
-                  ].join(' ')}
-                />
+    <ol className="space-y-1">
+      {WORKFLOW_STAGES.map((stage, idx) => {
+        const done = idx < currentStep
+        const active = idx === currentStep
+        const Icon = stage.icon
+        return (
+          <li
+            key={stage.key}
+            className={cn(
+              'flex items-center gap-2.5 px-2.5 py-2 rounded-[var(--radius)]',
+              active && 'bg-[var(--surface-container)]'
+            )}
+          >
+            <span
+              className={cn(
+                'w-7 h-7 rounded-[var(--radius)] flex items-center justify-center shrink-0',
+                done
+                  ? 'bg-[var(--success-light)] text-[var(--success)]'
+                  : active
+                    ? 'bg-[var(--primary)] text-white'
+                    : 'bg-[var(--surface-secondary)] text-[var(--text-muted)]'
               )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
+            >
+              {done ? <CheckCircle className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+            </span>
+            <span
+              className={cn(
+                'text-[13px] flex-1',
+                active ? 'text-[var(--primary-dark)] font-semibold' : done ? 'text-[var(--success)] font-medium' : 'text-[var(--text-secondary)]'
+              )}
+            >
+              {stage.label}
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)] num-tabular">{idx + 1}/{WORKFLOW_STAGES.length}</span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
@@ -238,183 +259,125 @@ function StepSearch({ issue, buildingCity, existingVendors, pendingVendors, setP
 
   return (
     <div className="space-y-4">
-      {/* Issue summary */}
-      <div className="relative rounded-xl border bg-white overflow-hidden">
-        <div className={`h-1.5 w-full bg-gradient-to-r ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'}`} />
-        <div className="p-4">
-          <div className="flex items-start gap-3">
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-              <Wrench className="h-5 w-5" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-[var(--text-primary)] mb-1">{issue.title}</h3>
-              {issue.description && (
-                <p className="text-sm text-[var(--text-secondary)] mb-2">{issue.description}</p>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {issue.category && <Badge>{issue.category}</Badge>}
-                {issue.priority && (
-                  <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
-                    {PRIORITY_LABELS[issue.priority] || issue.priority}
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Directory links */}
-      <div className="relative rounded-xl border bg-white overflow-hidden">
-        <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-500" />
-        <div className="p-4">
-          <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">חפש ספקים בספריות ישראליות</p>
-          <div className="flex flex-wrap gap-2">
-            <a href={dirUrls.madrag} target="_blank" rel="noopener noreferrer">
-              <Button
-                style={{ backgroundColor: '#e65c00', color: '#fff' }}
-                className="hover:opacity-90 border-none gap-1.5"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                מדרג
-              </Button>
-            </a>
-            <a href={dirUrls.hamektzoanim} target="_blank" rel="noopener noreferrer">
-              <Button
-                style={{ backgroundColor: '#0e7c86', color: '#fff' }}
-                className="hover:opacity-90 border-none gap-1.5"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                המקצוענים
-              </Button>
-            </a>
-            <a href={dirUrls.google} target="_blank" rel="noopener noreferrer">
-              <Button
-                style={{ backgroundColor: '#5f6368', color: '#fff' }}
-                className="hover:opacity-90 border-none gap-1.5"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Google
-              </Button>
-            </a>
-          </div>
+      <SectionCard icon={ExternalLink} title="חפש ספקים בספריות ישראליות" subtitle="נפתח בלשונית חדשה" bodyClassName="p-4">
+        <div className="flex flex-wrap gap-2">
+          <a href={dirUrls.madrag} target="_blank" rel="noopener noreferrer" className={LINK_BTN}>
+            <ExternalLink className="h-3.5 w-3.5 text-[var(--primary)]" />
+            מדרג
+          </a>
+          <a href={dirUrls.hamektzoanim} target="_blank" rel="noopener noreferrer" className={LINK_BTN}>
+            <ExternalLink className="h-3.5 w-3.5 text-[var(--primary)]" />
+            המקצוענים
+          </a>
+          <a href={dirUrls.google} target="_blank" rel="noopener noreferrer" className={LINK_BTN}>
+            <ExternalLink className="h-3.5 w-3.5 text-[var(--primary)]" />
+            Google
+          </a>
         </div>
-      </div>
+      </SectionCard>
 
       {/* Select from existing vendors */}
       {filteredExisting.length > 0 && (
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">בחר ספק קיים במערכת</p>
-            <div className="flex gap-2">
-              <select
-                value={selectedExistingId}
-                onChange={(e) => setSelectedExistingId(e.target.value)}
-                className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-              >
-                <option value="">-- בחר ספק --</option>
-                {filteredExisting.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} {v.phone ? `| ${v.phone}` : ''} {v.rating ? `| ★ ${v.rating}` : ''}
-                  </option>
-                ))}
-              </select>
-              <Button onClick={addExistingVendor} disabled={!selectedExistingId} size="sm">
-                <Plus className="h-3.5 w-3.5" />
-                הוסף
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <SectionCard icon={Store} title="בחר ספק קיים במערכת" subtitle={`${filteredExisting.length} ספקים מתאימים במאגר`} bodyClassName="p-4">
+          <div className="flex gap-2">
+            <select
+              value={selectedExistingId}
+              onChange={(e) => setSelectedExistingId(e.target.value)}
+              className="flex-1 min-w-0 h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]/30"
+            >
+              <option value="">-- בחר ספק --</option>
+              {filteredExisting.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name} {v.phone ? `| ${v.phone}` : ''} {v.rating ? `| ★ ${v.rating}` : ''}
+                </option>
+              ))}
+            </select>
+            <Button onClick={addExistingVendor} disabled={!selectedExistingId}>
+              <Plus className="h-4 w-4" />
+              הוסף
+            </Button>
+          </div>
+        </SectionCard>
       )}
 
       {/* Manual add */}
-      <Card>
-        <CardContent className="pt-5">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">הוסף ספק ידנית</p>
-            {!showManualForm && (
-              <Button size="sm" variant="outline" onClick={() => setShowManualForm(true)} className="gap-1">
-                <Plus className="h-3.5 w-3.5" />
-                הוסף
-              </Button>
-            )}
-          </div>
-          {showManualForm && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <FormField
-                  label="שם הספק"
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
-                  placeholder="לדוגמה: ישראל כהן אינסטלציה"
-                />
-                <FormField
-                  label="טלפון"
-                  value={manualPhone}
-                  onChange={(e) => setManualPhone(e.target.value)}
-                  placeholder="050-1234567"
-                  dir="ltr"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={addManualVendor} disabled={!manualName.trim() || !manualPhone.trim()}>
-                  שמור ספק
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => { setShowManualForm(false); setManualName(''); setManualPhone('') }}>
-                  ביטול
-                </Button>
-              </div>
+      <SectionCard
+        icon={Phone}
+        title="הוסף ספק ידנית"
+        actions={!showManualForm && (
+          <Button size="sm" variant="outline" onClick={() => setShowManualForm(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            הוסף
+          </Button>
+        )}
+      >
+        {showManualForm && (
+          <div className="p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FormField
+                label="שם הספק"
+                value={manualName}
+                onChange={(e) => setManualName(e.target.value)}
+                placeholder="לדוגמה: ישראל כהן אינסטלציה"
+              />
+              <FormField
+                label="טלפון"
+                value={manualPhone}
+                onChange={(e) => setManualPhone(e.target.value)}
+                placeholder="050-1234567"
+                dir="ltr"
+              />
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={addManualVendor} disabled={!manualName.trim() || !manualPhone.trim()}>
+                שמור ספק
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setShowManualForm(false); setManualName(''); setManualPhone('') }}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        )}
+      </SectionCard>
 
       {/* Selected vendors list */}
       {pendingVendors.length > 0 && (
-        <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-cyan-500 to-blue-500" />
-          <div className="p-4">
-            <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">ספקים שנבחרו ({pendingVendors.length})</p>
-            <div className="space-y-2">
-              {pendingVendors.map((v, idx) => {
-                const vGradients = ['from-cyan-500 to-cyan-600', 'from-blue-500 to-blue-600', 'from-blue-500 to-blue-600', 'from-purple-500 to-purple-600', 'from-blue-500 to-blue-600']
-                const vGradient = vGradients[idx % vGradients.length]
-                const initials = v.name.split(' ').map(w => w[0]).slice(0, 2).join('')
-                return (
-                  <div key={v.id} className="group flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-white hover:shadow-sm hover:border-blue-200 transition-all">
-                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${vGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
-                      {initials}
+        <SectionCard icon={CheckCircle} title={`ספקים שנבחרו (${pendingVendors.length})`}>
+          <div className="divide-y divide-[var(--border-light)]">
+            {pendingVendors.map((v) => {
+              const initials = v.name.split(' ').map(w => w[0]).slice(0, 2).join('')
+              return (
+                <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="w-8 h-8 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] flex items-center justify-center text-[12px] font-bold shrink-0">
+                    {initials}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[13px] font-semibold text-[var(--text-primary)]">{v.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-[var(--text-muted)] num-tabular" dir="ltr">{v.phone}</span>
+                      {v.fromExisting && <Badge variant="info">קיים</Badge>}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-[var(--text-primary)]">{v.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-[var(--text-secondary)]" dir="ltr">{v.phone}</span>
-                        {v.fromExisting && <Badge variant="info" className="text-[10px]">קיים</Badge>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span className="text-[11px] text-emerald-600">נבחר</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeVendor(v.id)}
-                      className="text-[var(--danger)] hover:text-[var(--danger)] h-7 w-7 p-0 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"
-                    >
-                      ✕
-                    </Button>
                   </div>
-                )
-              })}
-            </div>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--success-light)] text-[var(--success)] shrink-0">נבחר</span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => removeVendor(v.id)}
+                    aria-label="הסר ספק"
+                    className="hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )
+            })}
           </div>
-        </div>
+        </SectionCard>
       )}
 
       <div className="flex justify-start">
-        <Button onClick={onNext} disabled={!canProceed} className="gap-1.5">
+        <Button onClick={onNext} disabled={!canProceed}>
           המשך לפנייה
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -443,52 +406,45 @@ function StepContact({ issue, buildingName, pendingVendors, setPendingVendors, o
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--text-secondary)]">שלח הודעת וואטסאפ לכל ספק ובקש הצעת מחיר.</p>
+      <p className="text-[13px] text-[var(--text-secondary)]">שלח הודעת וואטסאפ לכל ספק ובקש הצעת מחיר.</p>
 
       {pendingVendors.map((vendor) => (
-        <Card key={vendor.id}>
-          <CardContent className="pt-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-[var(--text-primary)]">{vendor.name}</span>
-                <span className="text-sm text-[var(--text-secondary)]" dir="ltr">{vendor.phone}</span>
-              </div>
-              {vendor.contacted && (
-                <Badge variant="success" className="gap-1">
-                  <Clock className="h-3 w-3" />
-                  נשלח ב-{new Date(vendor.contactedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
-                </Badge>
-              )}
-            </div>
+        <SectionCard
+          key={vendor.id}
+          icon={MessageCircle}
+          title={vendor.name}
+          subtitle={<span dir="ltr" className="num-tabular">{vendor.phone}</span>}
+          actions={vendor.contacted && (
+            <Badge variant="success">
+              <Clock className="h-3 w-3" />
+              נשלח ב-{new Date(vendor.contactedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+            </Badge>
+          )}
+          bodyClassName="p-4 space-y-3"
+        >
+          <FormTextarea
+            label="הודעת וואטסאפ (ניתן לעריכה)"
+            value={messages[vendor.id] || ''}
+            onChange={(e) => setMessages((prev) => ({ ...prev, [vendor.id]: e.target.value }))}
+            rows={8}
+            className="text-sm font-mono"
+          />
 
-            <FormTextarea
-              label="הודעת וואטסאפ (ניתן לעריכה)"
-              value={messages[vendor.id] || ''}
-              onChange={(e) => setMessages((prev) => ({ ...prev, [vendor.id]: e.target.value }))}
-              rows={8}
-              className="text-sm font-mono"
-            />
-
-            <a
-              href={buildWhatsAppUrl(vendor.phone, messages[vendor.id] || '')}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => markContacted(vendor.id)}
-            >
-              <Button
-                style={{ backgroundColor: '#25D366', color: '#fff' }}
-                className="hover:opacity-90 border-none gap-2 w-full sm:w-auto"
-              >
-                <MessageCircle className="h-4 w-4" />
-                שלח בוואטסאפ ל-{vendor.name}
-              </Button>
-            </a>
-          </CardContent>
-        </Card>
+          <a
+            href={buildWhatsAppUrl(vendor.phone, messages[vendor.id] || '')}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => markContacted(vendor.id)}
+            className={cn(WA_BTN, 'w-full sm:w-auto')}
+          >
+            <MessageCircle className="h-4 w-4" />
+            שלח בוואטסאפ ל-{vendor.name}
+          </a>
+        </SectionCard>
       ))}
 
       <div className="flex justify-start">
-        <Button onClick={onNext} className="gap-1.5">
+        <Button onClick={onNext}>
           קיבלתי הצעות - המשך
           <ChevronRight className="h-4 w-4" />
         </Button>
@@ -543,117 +499,106 @@ function StepQuotes({ issue, pendingVendors, quotesCollection, localQuotes, setL
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[var(--text-secondary)]">הזן את הצעות המחיר שקיבלת מהספקים.</p>
+      <p className="text-[13px] text-[var(--text-secondary)]">הזן את הצעות המחיר שקיבלת מהספקים.</p>
 
       {pendingVendors.map((vendor) => {
         const saved = localQuotes.find((q) => q.vendorId === vendor.id)
         const form = forms[vendor.id] || { amount: '', description: '', validUntil: '' }
         return (
-          <Card key={vendor.id}>
-            <CardContent className="pt-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-[var(--text-primary)]">{vendor.name}</span>
-                {saved && (
-                  <Badge
-                    variant={saved.amount === minAmount ? 'success' : 'default'}
-                    className="gap-1"
-                  >
-                    {saved.amount === minAmount && <Award className="h-3 w-3" />}
-                    {saved.amount === minAmount ? 'הזול ביותר · ' : ''}
-                    {formatCurrency(saved.amount)}
-                  </Badge>
-                )}
-              </div>
-
-              {!saved ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <FormField
-                      label="סכום הצעה (₪)"
-                      type="number"
-                      value={form.amount}
-                      onChange={(e) => updateForm(vendor.id, 'amount', e.target.value)}
-                      placeholder="0"
-                      min="0"
-                    />
-                    <FormField
-                      label="תוקף הצעה עד"
-                      type="date"
-                      value={form.validUntil}
-                      onChange={(e) => updateForm(vendor.id, 'validUntil', e.target.value)}
-                    />
-                  </div>
-                  <FormTextarea
-                    label="תיאור העבודה"
-                    value={form.description}
-                    onChange={(e) => updateForm(vendor.id, 'description', e.target.value)}
-                    rows={3}
-                    placeholder="מה כולל המחיר..."
+          <SectionCard
+            key={vendor.id}
+            icon={FileText}
+            title={vendor.name}
+            actions={saved && (
+              <Badge variant={saved.amount === minAmount ? 'success' : 'default'} className="num-tabular">
+                {saved.amount === minAmount && <Award className="h-3 w-3" />}
+                {saved.amount === minAmount ? 'הזול ביותר · ' : ''}
+                {formatCurrency(saved.amount)}
+              </Badge>
+            )}
+            bodyClassName="p-4"
+          >
+            {!saved ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormField
+                    label="סכום הצעה (₪)"
+                    type="number"
+                    value={form.amount}
+                    onChange={(e) => updateForm(vendor.id, 'amount', e.target.value)}
+                    placeholder="0"
+                    min="0"
                   />
-                  <Button size="sm" onClick={() => saveQuote(vendor)} disabled={!form.amount}>
-                    שמור הצעה
-                  </Button>
+                  <FormField
+                    label="תוקף הצעה עד"
+                    type="date"
+                    value={form.validUntil}
+                    onChange={(e) => updateForm(vendor.id, 'validUntil', e.target.value)}
+                  />
                 </div>
-              ) : (
-                <div className="space-y-1 text-sm text-[var(--text-secondary)]">
-                  {saved.description && <p>{saved.description}</p>}
-                  {saved.validUntil && <p>תוקף עד: {formatDate(saved.validUntil)}</p>}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                <FormTextarea
+                  label="תיאור העבודה"
+                  value={form.description}
+                  onChange={(e) => updateForm(vendor.id, 'description', e.target.value)}
+                  rows={3}
+                  placeholder="מה כולל המחיר..."
+                />
+                <Button size="sm" onClick={() => saveQuote(vendor)} disabled={!form.amount}>
+                  שמור הצעה
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-1 text-[13px] text-[var(--text-secondary)]">
+                {saved.description && <p>{saved.description}</p>}
+                {saved.validUntil && <p className="num-tabular">תוקף עד: {formatDate(saved.validUntil)}</p>}
+                {!saved.description && !saved.validUntil && <p className="text-[var(--text-muted)]">ההצעה נשמרה</p>}
+              </div>
+            )}
+          </SectionCard>
         )
       })}
 
       {localQuotes.length > 0 && (
-        <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-emerald-500 to-emerald-600" />
-          <div className="p-4">
-            <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">בחר הצעה לאישור</p>
-            <div className="space-y-2">
-              {localQuotes.map((q) => {
-                const isSelected = selectedQuoteId === q.id
-                const isCheapest = q.amount === minAmount
-                return (
-                  <label
-                    key={q.id}
-                    className={`flex items-center gap-3 cursor-pointer rounded-xl border p-3 transition-all hover:shadow-sm ${
-                      isSelected ? 'border-blue-300 bg-blue-50/50 shadow-sm' : 'border-[var(--border)] bg-white hover:border-blue-200'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="selectedQuote"
-                      value={q.id}
-                      checked={isSelected}
-                      onChange={() => setSelectedQuoteId(q.id)}
-                      className="accent-[var(--primary)]"
-                    />
-                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${isCheapest ? 'from-emerald-500 to-emerald-600' : 'from-blue-500 to-blue-600'} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
-                      {isCheapest ? <Award className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[14px] font-medium text-[var(--text-primary)]">{q.vendorName}</span>
-                      {isCheapest && (
-                        <Badge variant="success" className="mr-2 text-[10px]">הזול ביותר</Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className={`w-2 h-2 rounded-full ${isCheapest ? 'bg-emerald-500' : 'bg-blue-400'}`} />
-                      <span className="text-[15px] font-bold text-[var(--primary)]">{formatCurrency(q.amount)}</span>
-                    </div>
-                  </label>
-                )
-              })}
-            </div>
-            <div className="mt-4 flex justify-start">
-              <Button onClick={handleSelectAndContinue} disabled={!selectedQuoteId} className="gap-1.5">
-                בחר הצעה ושלח לאישור
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+        <SectionCard icon={Award} title="בחר הצעה לאישור" subtitle={`${localQuotes.length} הצעות התקבלו`} tone="primary">
+          <div className="p-3 space-y-2">
+            {localQuotes.map((q) => {
+              const isSelected = selectedQuoteId === q.id
+              const isCheapest = q.amount === minAmount
+              return (
+                <label
+                  key={q.id}
+                  className={cn(
+                    'flex items-center gap-3 cursor-pointer rounded-[var(--radius)] border p-3 transition-colors',
+                    isSelected ? 'border-[var(--primary)] bg-[var(--surface-container)]' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-secondary)]'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="selectedQuote"
+                    value={q.id}
+                    checked={isSelected}
+                    onChange={() => setSelectedQuoteId(q.id)}
+                    className="accent-[var(--primary)]"
+                  />
+                  <span className={cn('p-1.5 rounded-[var(--radius)] shrink-0', isCheapest ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--surface-secondary)] text-[var(--primary)]')}>
+                    {isCheapest ? <Award className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  </span>
+                  <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] font-semibold text-[var(--text-primary)]">{q.vendorName}</span>
+                    {isCheapest && <Badge variant="success">הזול ביותר</Badge>}
+                  </div>
+                  <span className="text-[15px] font-bold text-[var(--primary)] num-tabular shrink-0">{formatCurrency(q.amount)}</span>
+                </label>
+              )
+            })}
           </div>
-        </div>
+          <div className="px-4 pb-4 flex justify-start">
+            <Button onClick={handleSelectAndContinue} disabled={!selectedQuoteId}>
+              בחר הצעה ושלח לאישור
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </SectionCard>
       )}
     </div>
   )
@@ -692,58 +637,45 @@ function StepApproval({ issue, selectedQuote, announcementsCollection, onApprove
   return (
     <div className="space-y-4">
       {/* Summary card */}
-      <Card>
-        <CardContent className="pt-5 space-y-2">
-          <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">סיכום הצעה לאישור</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <span className="text-[var(--text-secondary)]">תקלה:</span>
-            <span className="text-[var(--text-primary)] font-medium">{issue.title}</span>
-            <span className="text-[var(--text-secondary)]">ספק:</span>
-            <span className="text-[var(--text-primary)] font-medium">{selectedQuote.vendorName}</span>
-            <span className="text-[var(--text-secondary)]">סכום:</span>
-            <span className="text-[var(--primary)] font-bold">{formatCurrency(selectedQuote.amount)}</span>
-            {selectedQuote.description && (
-              <>
-                <span className="text-[var(--text-secondary)]">תיאור:</span>
-                <span className="text-[var(--text-primary)]">{selectedQuote.description}</span>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <SectionCard icon={FileText} title="סיכום הצעה לאישור" bodyClassName="p-4">
+        <KeyVal rows={[
+          ['תקלה', issue.title],
+          ['ספק', selectedQuote.vendorName],
+          ['סכום', formatCurrency(selectedQuote.amount), 'text-[var(--primary)] font-bold num-tabular'],
+          selectedQuote.description && ['תיאור', selectedQuote.description, 'font-normal'],
+        ]} />
+      </SectionCard>
 
       {/* Announcement text */}
-      <Card>
-        <CardContent className="pt-5">
-          <FormTextarea
-            label="טקסט ההודעה לועד (ניתן לעריכה)"
-            value={announcementText}
-            onChange={(e) => setAnnouncementText(e.target.value)}
-            rows={10}
-          />
-          {!sent ? (
-            <Button onClick={sendToVote} className="mt-3 gap-1.5">
-              <Send className="h-4 w-4" />
-              שלח להצבעת ועד
-            </Button>
-          ) : (
-            <div className="mt-3 flex items-center gap-2 text-sm text-[var(--success)]">
-              <CheckCircle className="h-4 w-4" />
-              ההודעה נשלחה לועד
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <SectionCard icon={Send} title="הודעה לועד" bodyClassName="p-4">
+        <FormTextarea
+          label="טקסט ההודעה לועד (ניתן לעריכה)"
+          value={announcementText}
+          onChange={(e) => setAnnouncementText(e.target.value)}
+          rows={10}
+        />
+        {!sent ? (
+          <Button onClick={sendToVote} className="mt-3">
+            <Send className="h-4 w-4" />
+            שלח להצבעת ועד
+          </Button>
+        ) : (
+          <div className="mt-3 inline-flex items-center gap-2 text-[12px] font-semibold px-2.5 py-1 rounded-full bg-[var(--success-light)] text-[var(--success)]">
+            <CheckCircle className="h-4 w-4" />
+            ההודעה נשלחה לועד
+          </div>
+        )}
+      </SectionCard>
 
       {/* Approval / Rejection buttons */}
       <div className="flex gap-3">
-        <Button onClick={onApproved} className="gap-1.5 flex-1">
+        <Button onClick={onApproved} className="flex-1">
           <ThumbsUp className="h-4 w-4" />
-          ✓ ועד אישר
+          ועד אישר
         </Button>
-        <Button variant="destructive" onClick={onRejected} className="gap-1.5 flex-1">
+        <Button variant="destructive" onClick={onRejected} className="flex-1">
           <ThumbsDown className="h-4 w-4" />
-          ✗ ועד דחה
+          ועד דחה
         </Button>
       </div>
     </div>
@@ -787,55 +719,34 @@ function StepWork({ issue, selectedQuote, buildingName, issuesCollection, workOr
   return (
     <div className="space-y-4">
       {/* Accepted quote details */}
-      <Card>
-        <CardContent className="pt-5 space-y-2">
-          <p className="text-sm font-semibold text-[var(--text-primary)] mb-2">הצעה שאושרה</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <span className="text-[var(--text-secondary)]">ספק:</span>
-            <span className="text-[var(--text-primary)] font-medium">{selectedQuote.vendorName}</span>
-            <span className="text-[var(--text-secondary)]">סכום:</span>
-            <span className="text-[var(--primary)] font-bold">{formatCurrency(selectedQuote.amount)}</span>
-            {selectedQuote.description && (
-              <>
-                <span className="text-[var(--text-secondary)]">תיאור:</span>
-                <span className="text-[var(--text-primary)]">{selectedQuote.description}</span>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <SectionCard icon={CheckCircle} title="הצעה שאושרה" bodyClassName="p-4">
+        <KeyVal rows={[
+          ['ספק', selectedQuote.vendorName],
+          ['סכום', formatCurrency(selectedQuote.amount), 'text-[var(--primary)] font-bold num-tabular'],
+          selectedQuote.description && ['תיאור', selectedQuote.description, 'font-normal'],
+        ]} />
+      </SectionCard>
 
-      {/* Contact vendor again */}
-      {selectedQuote.vendorPhone && (
-        <Card>
-          <CardContent className="pt-5">
-            <p className="text-sm font-semibold text-[var(--text-primary)] mb-3">אשר תאריך עם הספק</p>
-            <a href={waUrl} target="_blank" rel="noopener noreferrer">
-              <Button
-                style={{ backgroundColor: '#25D366', color: '#fff' }}
-                className="hover:opacity-90 border-none gap-2"
-              >
-                <MessageCircle className="h-4 w-4" />
-                שלח וואטסאפ לתיאום מועד
-              </Button>
+      {/* Contact vendor again + scheduled date */}
+      <SectionCard icon={CalendarDays} title="תיאום מועד" bodyClassName="p-4 space-y-4">
+        {selectedQuote.vendorPhone && (
+          <div>
+            <p className="text-[12px] font-medium text-[var(--text-secondary)] mb-2">אשר תאריך עם הספק</p>
+            <a href={waUrl} target="_blank" rel="noopener noreferrer" className={WA_BTN}>
+              <MessageCircle className="h-4 w-4" />
+              שלח וואטסאפ לתיאום מועד
             </a>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+        <FormField
+          label="תאריך ביצוע מתוכנן"
+          type="date"
+          value={scheduledDate}
+          onChange={(e) => setScheduledDate(e.target.value)}
+        />
+      </SectionCard>
 
-      {/* Scheduled date */}
-      <Card>
-        <CardContent className="pt-5">
-          <FormField
-            label="תאריך ביצוע מתוכנן"
-            type="date"
-            value={scheduledDate}
-            onChange={(e) => setScheduledDate(e.target.value)}
-          />
-        </CardContent>
-      </Card>
-
-      <Button onClick={() => setShowCompletionDialog(true)} className="gap-1.5 w-full sm:w-auto">
+      <Button onClick={() => setShowCompletionDialog(true)} className="w-full sm:w-auto">
         <CheckCircle className="h-4 w-4" />
         סמן כבוצע
       </Button>
@@ -927,67 +838,59 @@ function StepRating({ issue, selectedQuote, completionData, vendorsCollection, a
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="pt-5 space-y-4">
-          <p className="text-base font-semibold text-[var(--text-primary)]">האם אתם מרוצים מהטיפול?</p>
-
-          {/* Star rating */}
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => setRating(star)}
-                className="text-3xl transition-transform hover:scale-110 focus:outline-none"
-                style={{ color: star <= rating ? '#f59e0b' : '#d1d5db' }}
-                aria-label={`${star} כוכבים`}
-              >
-                ★
-              </button>
-            ))}
-          </div>
-
-          <FormTextarea
-            label="משוב (אופציונלי)"
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-            rows={3}
-            placeholder="תיאור חוויית העבודה עם הספק..."
-          />
-
-          {rating >= 4 && (
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={addToDatabase}
-                onChange={(e) => setAddToDatabase(e.target.checked)}
-                className="accent-[var(--primary)] w-4 h-4"
-              />
-              <span className="text-sm text-[var(--text-primary)]">הוסף למאגר הספקים הקבוע</span>
-            </label>
-          )}
-
-          {/* Summary */}
-          <div className="rounded-lg border border-[var(--border)] p-3 bg-[var(--surface)] space-y-1 text-sm">
-            <p className="text-[var(--text-secondary)]">
-              ספק: <span className="text-[var(--text-primary)] font-medium">{selectedQuote.vendorName}</span>
-            </p>
-            <p className="text-[var(--text-secondary)]">
-              עלות בפועל: <span className="text-[var(--primary)] font-bold">{formatCurrency(completionData.actualCost)}</span>
-            </p>
-            {completionData.notes && (
-              <p className="text-[var(--text-secondary)]">הערות: {completionData.notes}</p>
+    <SectionCard icon={Star} title="האם אתם מרוצים מהטיפול?" subtitle="דירוג הספק ושמירה למאגר" bodyClassName="p-4 space-y-4">
+      {/* Star rating */}
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => setRating(star)}
+            className={cn(
+              'text-3xl transition-transform hover:scale-110 focus:outline-none',
+              star <= rating ? 'text-[var(--warning)]' : 'text-[var(--outline-variant)]'
             )}
-          </div>
+            aria-label={`${star} כוכבים`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
 
-          <Button onClick={finish} disabled={rating === 0} className="gap-1.5 w-full">
-            <Award className="h-4 w-4" />
-            סיים ושמור
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+      <FormTextarea
+        label="משוב (אופציונלי)"
+        value={feedback}
+        onChange={(e) => setFeedback(e.target.value)}
+        rows={3}
+        placeholder="תיאור חוויית העבודה עם הספק..."
+      />
+
+      {rating >= 4 && (
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={addToDatabase}
+            onChange={(e) => setAddToDatabase(e.target.checked)}
+            className="accent-[var(--primary)] w-4 h-4"
+          />
+          <span className="text-[13px] text-[var(--text-primary)]">הוסף למאגר הספקים הקבוע</span>
+        </label>
+      )}
+
+      {/* Summary */}
+      <div className="rounded-[var(--radius)] border border-[var(--border-light)] p-3 bg-[var(--surface-secondary)]">
+        <KeyVal rows={[
+          ['ספק', selectedQuote.vendorName],
+          ['עלות בפועל', formatCurrency(completionData.actualCost), 'text-[var(--primary)] font-bold num-tabular'],
+          completionData.notes && ['הערות', completionData.notes, 'font-normal'],
+        ]} />
+      </div>
+
+      <Button onClick={finish} disabled={rating === 0} className="w-full">
+        <Award className="h-4 w-4" />
+        סיים ושמור
+      </Button>
+    </SectionCard>
   )
 }
 
@@ -1049,9 +952,18 @@ export default function VendorFinder() {
     setSuccess(false)
   }
 
+  const header = (
+    <div className="min-w-0">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">מציאת ספקים</h1>
+      <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+        חיפוש ספק, פנייה, השוואת הצעות, אישור ועד וביצוע — שלב אחר שלב{selectedBuilding ? ` • ${selectedBuilding.name}` : ''}
+      </p>
+    </div>
+  )
+
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={Search} iconColor="cyan" title="מציאת ספקים" />
+    <div dir="rtl" className="space-y-6">
+      {header}
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -1063,43 +975,68 @@ export default function VendorFinder() {
 
   if (!selectedBuilding) {
     return (
-      <div dir="rtl" className="p-4 max-w-2xl mx-auto">
-        <EmptyState
-          icon={Search}
-          title="לא נבחר בניין"
-          description="בחר בניין מהתפריט הראשי כדי להתחיל בחיפוש ספקים"
-        />
+      <div dir="rtl" className="space-y-6">
+        {header}
+        <SectionCard>
+          <EmptyState
+            icon={Search}
+            title="לא נבחר בניין"
+            description="בחר בניין מהתפריט הראשי כדי להתחיל בחיפוש ספקים"
+          />
+        </SectionCard>
       </div>
     )
   }
 
+  const urgentCount = openIssues.filter((i) => i.priority === 'urgent' || i.priority === 'high').length
+  const unassignedCount = openIssues.filter((i) => !i.vendor_name).length
+
   return (
-    <div dir="rtl" className="p-4 max-w-2xl mx-auto space-y-6">
-      <PageHeader icon={Search} iconColor="cyan" title="מציאת ספקים" subtitle={buildingName} />
+    <div dir="rtl" className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        {header}
+        {selectedIssue && !success && (
+          <Button variant="outline" onClick={resetWorkflow}>
+            <ArrowRight className="h-4 w-4" />
+            חזור לרשימה
+          </Button>
+        )}
+      </div>
+
+      {/* KPI row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="תקלות פתוחות" icon={Wrench} color="blue" value={String(openIssues.length)} sub="ממתינות לספק או לטיפול" />
+        <StatCard label="דחופות / גבוהות" icon={AlertTriangle} color={urgentCount ? 'red' : 'emerald'} value={String(urgentCount)} sub={urgentCount ? 'כדאי לטפל קודם' : 'אין תקלות דחופות'} />
+        <StatCard label="ללא ספק משויך" icon={Search} color={unassignedCount ? 'amber' : 'emerald'} value={String(unassignedCount)} sub="מתוך התקלות הפתוחות" />
+        <StatCard label="ספקים במאגר" icon={Store} color="purple" value={String(vendorsCollection.data.length)} sub={`${quotesCollection.data.length} הצעות מחיר בבניין`} />
+      </div>
 
       {/* Success message */}
       {success && (
-        <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 to-emerald-600" />
-          <div className="p-6 flex flex-col items-center text-center gap-3">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-sm">
-              <CheckCircle className="h-8 w-8" />
-            </div>
-            <p className="text-lg font-semibold text-[var(--text-primary)]">התקלה טופלה בהצלחה!</p>
-            <p className="text-sm text-[var(--text-secondary)]">הספק דורג והודעה נשלחה לדיירים.</p>
-            <Button onClick={resetWorkflow} variant="outline" className="gap-1.5">
+        <SectionCard>
+          <div className="p-8 flex flex-col items-center text-center gap-3">
+            <span className="p-3 rounded-[var(--radius-lg)] bg-[var(--success-light)] text-[var(--success)]">
+              <CheckCircle className="h-8 w-8" strokeWidth={1.75} />
+            </span>
+            <p className="text-[18px] font-bold text-[var(--text-primary)]">התקלה טופלה בהצלחה!</p>
+            <p className="text-[13px] text-[var(--text-secondary)]">הספק דורג והודעה נשלחה לדיירים.</p>
+            <Button onClick={resetWorkflow} variant="outline">
               חזור לרשימת תקלות
             </Button>
           </div>
-        </div>
+        </SectionCard>
       )}
 
       {!success && (
         <>
           {/* Issue selector */}
           {!selectedIssue ? (
-            <div className="space-y-3">
-              <h2 className="text-base font-semibold text-[var(--text-primary)]">בחר תקלה לטיפול</h2>
+            <SectionCard
+              icon={Wrench}
+              title="בחר תקלה לטיפול"
+              subtitle={`${openIssues.length} תקלות פתוחות • ${buildingName}`}
+            >
               {openIssues.length === 0 ? (
                 <EmptyState
                   icon={CheckCircle}
@@ -1107,146 +1044,177 @@ export default function VendorFinder() {
                   description="כל התקלות בבניין זה טופלו"
                 />
               ) : (
-                openIssues.map((issue) => {
-                  const issueGradient = issue.priority === 'urgent' ? 'from-red-500 to-red-600' : issue.priority === 'high' ? 'from-amber-500 to-amber-600' : issue.priority === 'medium' ? 'from-blue-500 to-blue-600' : 'from-slate-400 to-slate-500'
-                  const issueDot = issue.priority === 'urgent' ? 'bg-red-500 animate-pulse' : issue.priority === 'high' ? 'bg-amber-500' : issue.priority === 'medium' ? 'bg-blue-400' : 'bg-slate-400'
-                  const catInitials = issue.category ? issue.category.substring(0, 2) : ''
-                  return (
-                    <div
-                      key={issue.id}
-                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
-                      onClick={() => selectIssue(issue)}
-                    >
-                      {/* Category circle */}
-                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${issueGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                        {catInitials || <Wrench className="h-5 w-5" />}
-                      </div>
+                <>
+                  {/* Desktop ledger */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="ds-table">
+                      <thead>
+                        <tr><th>תקלה</th><th>קטגוריה</th><th>עדיפות</th><th>סטטוס</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {openIssues.map((issue) => (
+                          <tr key={issue.id} className="cursor-pointer" onClick={() => selectIssue(issue)}>
+                            <td className="min-w-[220px]">
+                              <span className="text-[13px] font-semibold">{issue.title}</span>
+                              {issue.description && <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{issue.description}</span>}
+                            </td>
+                            <td className="whitespace-nowrap">{issue.category ? <Badge>{issue.category}</Badge> : <span className="text-[var(--text-muted)]">—</span>}</td>
+                            <td className="whitespace-nowrap">
+                              {issue.priority ? (
+                                <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
+                                  {PRIORITY_LABELS[issue.priority] || issue.priority}
+                                </Badge>
+                              ) : <span className="text-[var(--text-muted)]">—</span>}
+                            </td>
+                            <td className="whitespace-nowrap">
+                              {issue.status && (
+                                <Badge variant={STATUS_VARIANTS[issue.status] || 'default'}>
+                                  {STATUS_LABELS[issue.status] || issue.status}
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--primary)]">
+                                התחל טיפול
+                                <ChevronRight className="h-4 w-4 rotate-180" />
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-semibold text-[var(--text-primary)] mb-0.5 truncate">{issue.title}</p>
-                        {issue.description && (
-                          <p className="text-xs text-[var(--text-secondary)] line-clamp-1 mb-1">{issue.description}</p>
-                        )}
-                        <div className="flex flex-wrap gap-1.5">
-                          {issue.category && <Badge>{issue.category}</Badge>}
-                          {issue.priority && (
-                            <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
-                              {PRIORITY_LABELS[issue.priority] || issue.priority}
-                            </Badge>
-                          )}
-                          {issue.status && (
-                            <Badge variant={STATUS_VARIANTS[issue.status] || 'default'}>
-                              {STATUS_LABELS[issue.status] || issue.status}
-                            </Badge>
-                          )}
+                  {/* Mobile cards */}
+                  <div className="md:hidden p-3 space-y-2">
+                    {openIssues.map((issue) => (
+                      <button
+                        key={issue.id}
+                        type="button"
+                        className="w-full text-right flex items-center gap-3 p-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-secondary)] transition-colors"
+                        onClick={() => selectIssue(issue)}
+                      >
+                        <span className={cn('p-1.5 rounded-[var(--radius)] shrink-0', priorityTone(issue.priority))}>
+                          <Wrench className="h-4 w-4" />
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{issue.title}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {issue.category && <Badge>{issue.category}</Badge>}
+                            {issue.priority && (
+                              <Badge variant={PRIORITY_VARIANTS[issue.priority] || 'default'}>
+                                {PRIORITY_LABELS[issue.priority] || issue.priority}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-
-                      {/* Status dot & arrow */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        <div className={`w-2 h-2 rounded-full ${issueDot}`} />
-                        <ChevronRight className="h-5 w-5 text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" />
-                      </div>
-                    </div>
-                  )
-                })
+                        <ChevronRight className="h-4 w-4 rotate-180 text-[var(--text-muted)] shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
-            </div>
+            </SectionCard>
           ) : (
             /* Workflow panel */
-            <div className="space-y-4">
-              {/* Back + issue title */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={resetWorkflow}
-                  className="text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                >
-                  ← חזור לרשימה
-                </button>
-                <span className="text-[var(--border)]">|</span>
-                <span className="text-sm font-medium text-[var(--text-primary)] truncate">{selectedIssue.title}</span>
-              </div>
-
-              {/* Progress indicator */}
-              <StepProgress currentStep={workflowStep} />
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+              {/* Side panel: issue + progress */}
+              <aside className="xl:col-span-4 xl:order-last xl:sticky xl:top-20 space-y-4 min-w-0">
+                <SectionCard icon={Wrench} title={selectedIssue.title} subtitle="התקלה בטיפול" bodyClassName="p-4 space-y-3">
+                  {selectedIssue.description && (
+                    <p className="text-[13px] text-[var(--text-secondary)]">{selectedIssue.description}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedIssue.category && <Badge>{selectedIssue.category}</Badge>}
+                    {selectedIssue.priority && (
+                      <Badge variant={PRIORITY_VARIANTS[selectedIssue.priority] || 'default'}>
+                        {PRIORITY_LABELS[selectedIssue.priority] || selectedIssue.priority}
+                      </Badge>
+                    )}
+                  </div>
+                </SectionCard>
+                <SectionCard title="שלבי הטיפול" subtitle={`שלב ${workflowStep + 1} מתוך ${WORKFLOW_STAGES.length}`} bodyClassName="p-2">
+                  <StepProgress currentStep={workflowStep} />
+                </SectionCard>
+              </aside>
 
               {/* Step panels */}
-              {workflowStep === 0 && (
-                <StepSearch
-                  issue={selectedIssue}
-                  buildingCity={buildingCity}
-                  existingVendors={vendorsCollection.data}
-                  pendingVendors={pendingVendors}
-                  setPendingVendors={setPendingVendors}
-                  onNext={() => setWorkflowStep(1)}
-                />
-              )}
+              <div className="xl:col-span-8 min-w-0">
+                {workflowStep === 0 && (
+                  <StepSearch
+                    issue={selectedIssue}
+                    buildingCity={buildingCity}
+                    existingVendors={vendorsCollection.data}
+                    pendingVendors={pendingVendors}
+                    setPendingVendors={setPendingVendors}
+                    onNext={() => setWorkflowStep(1)}
+                  />
+                )}
 
-              {workflowStep === 1 && (
-                <StepContact
-                  issue={selectedIssue}
-                  buildingName={buildingName}
-                  pendingVendors={pendingVendors}
-                  setPendingVendors={setPendingVendors}
-                  onNext={() => setWorkflowStep(2)}
-                />
-              )}
+                {workflowStep === 1 && (
+                  <StepContact
+                    issue={selectedIssue}
+                    buildingName={buildingName}
+                    pendingVendors={pendingVendors}
+                    setPendingVendors={setPendingVendors}
+                    onNext={() => setWorkflowStep(2)}
+                  />
+                )}
 
-              {workflowStep === 2 && (
-                <StepQuotes
-                  issue={selectedIssue}
-                  buildingName={buildingName}
-                  pendingVendors={pendingVendors}
-                  quotesCollection={quotesCollection}
-                  localQuotes={localQuotes}
-                  setLocalQuotes={setLocalQuotes}
-                  onNext={(quote) => {
-                    setSelectedQuote(quote)
-                    setWorkflowStep(3)
-                  }}
-                />
-              )}
+                {workflowStep === 2 && (
+                  <StepQuotes
+                    issue={selectedIssue}
+                    buildingName={buildingName}
+                    pendingVendors={pendingVendors}
+                    quotesCollection={quotesCollection}
+                    localQuotes={localQuotes}
+                    setLocalQuotes={setLocalQuotes}
+                    onNext={(quote) => {
+                      setSelectedQuote(quote)
+                      setWorkflowStep(3)
+                    }}
+                  />
+                )}
 
-              {workflowStep === 3 && selectedQuote && (
-                <StepApproval
-                  issue={selectedIssue}
-                  selectedQuote={selectedQuote}
-                  buildingName={buildingName}
-                  announcementsCollection={announcementsCollection}
-                  onApproved={() => setWorkflowStep(4)}
-                  onRejected={() => {
-                    setSelectedQuote(null)
-                    setWorkflowStep(2)
-                  }}
-                />
-              )}
+                {workflowStep === 3 && selectedQuote && (
+                  <StepApproval
+                    issue={selectedIssue}
+                    selectedQuote={selectedQuote}
+                    buildingName={buildingName}
+                    announcementsCollection={announcementsCollection}
+                    onApproved={() => setWorkflowStep(4)}
+                    onRejected={() => {
+                      setSelectedQuote(null)
+                      setWorkflowStep(2)
+                    }}
+                  />
+                )}
 
-              {workflowStep === 4 && selectedQuote && (
-                <StepWork
-                  issue={selectedIssue}
-                  selectedQuote={selectedQuote}
-                  buildingName={buildingName}
-                  issuesCollection={issuesCollection}
-                  workOrdersCollection={workOrdersCollection}
-                  onNext={(data) => {
-                    setCompletionData(data)
-                    setWorkflowStep(5)
-                  }}
-                />
-              )}
+                {workflowStep === 4 && selectedQuote && (
+                  <StepWork
+                    issue={selectedIssue}
+                    selectedQuote={selectedQuote}
+                    buildingName={buildingName}
+                    issuesCollection={issuesCollection}
+                    workOrdersCollection={workOrdersCollection}
+                    onNext={(data) => {
+                      setCompletionData(data)
+                      setWorkflowStep(5)
+                    }}
+                  />
+                )}
 
-              {workflowStep === 5 && selectedQuote && completionData && (
-                <StepRating
-                  issue={selectedIssue}
-                  selectedQuote={selectedQuote}
-                  completionData={completionData}
-                  vendorsCollection={vendorsCollection}
-                  announcementsCollection={announcementsCollection}
-                  onFinish={() => setSuccess(true)}
-                />
-              )}
+                {workflowStep === 5 && selectedQuote && completionData && (
+                  <StepRating
+                    issue={selectedIssue}
+                    selectedQuote={selectedQuote}
+                    completionData={completionData}
+                    vendorsCollection={vendorsCollection}
+                    announcementsCollection={announcementsCollection}
+                    onFinish={() => setSuccess(true)}
+                  />
+                )}
+              </div>
             </div>
           )}
         </>

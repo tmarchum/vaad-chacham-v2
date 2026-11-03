@@ -1,36 +1,32 @@
 import { Link } from 'react-router-dom'
-import { Home, ArrowRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Compass, ArrowRight } from 'lucide-react'
 
 export default function NotFound() {
   return (
-    <div
-      dir="rtl"
-      className="flex min-h-[70vh] flex-col items-center justify-center text-center px-6 py-20"
-    >
-      {/* Large 404 */}
-      <div className="select-none text-[120px] font-black leading-none text-slate-100">
-        404
+    <div dir="rtl" className="flex min-h-[70vh] items-center justify-center px-4 py-16">
+      <div className="w-full max-w-md rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] p-8 text-center">
+        <span className="inline-flex p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)]">
+          <Compass className="h-7 w-7" strokeWidth={1.75} />
+        </span>
+        <p className="mt-5 text-[56px] leading-none font-bold tracking-[-0.03em] text-[var(--primary)] num-tabular select-none">
+          404
+        </p>
+        <h1 className="mt-3 text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">
+          הדף לא נמצא
+        </h1>
+        <p className="mt-1.5 text-[13px] leading-5 text-[var(--text-secondary)]">
+          הכתובת שביקשת אינה קיימת. ייתכן שהקישור שגוי או שהדף הוסר.
+        </p>
+        <div className="mt-6 pt-5 border-t border-[var(--border-light)]">
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center gap-1.5 h-[38px] px-3.5 rounded-[var(--radius)] bg-[var(--primary)] text-white text-[13px] font-semibold shadow-[var(--shadow)] hover:bg-[var(--primary-hover)] transition-colors"
+          >
+            <ArrowRight className="h-4 w-4" />
+            חזרה לדשבורד
+          </Link>
+        </div>
       </div>
-
-      {/* Icon */}
-      <div className="mt-2 mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
-        <Home className="h-8 w-8 text-white" />
-      </div>
-
-      <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
-        הדף לא נמצא
-      </h1>
-      <p className="mt-2 text-sm max-w-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-        הכתובת שביקשת אינה קיימת. ייתכן שהקישור שגוי או שהדף הוסר.
-      </p>
-
-      <Button asChild className="mt-8 gap-2">
-        <Link to="/">
-          <ArrowRight className="h-4 w-4" />
-          חזרה לדשבורד
-        </Link>
-      </Button>
     </div>
   )
 }

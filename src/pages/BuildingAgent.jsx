@@ -1,16 +1,17 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TabGroup } from '@/components/ui/tabs'
-import { Progress } from '@/components/ui/progress'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { EmptyState } from '@/components/common/EmptyState'
+import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { callVaadAgent } from '@/lib/vaadAgent'
-import { PageHeader } from '@/components/common/PageHeader'
 import {
   Bot, Brain, Wrench, AlertTriangle, CheckCircle, TrendingUp,
   Star, Zap, Shield, Activity, RefreshCw, PlusCircle, Sparkles,
+  HeartPulse, ListChecks, Store, CalendarClock, Wallet,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -18,9 +19,21 @@ import {
 // ---------------------------------------------------------------------------
 
 function scoreColorVar(score) {
-  if (score >= 80) return 'var(--success, #22c55e)'
-  if (score >= 60) return '#f59e0b'
-  return 'var(--danger, #ef4444)'
+  if (score >= 80) return 'var(--success)'
+  if (score >= 60) return 'var(--warning)'
+  return 'var(--danger)'
+}
+
+function scoreTone(score) {
+  if (score >= 80) return 'success'
+  if (score >= 60) return 'warning'
+  return 'danger'
+}
+
+const TONE_CHIP = {
+  success: 'bg-[var(--success-light)] text-[var(--success)]',
+  warning: 'bg-[var(--warning-light)] text-[var(--warning)]',
+  danger: 'bg-[var(--danger-light)] text-[var(--danger)]',
 }
 
 function scoreLabel(score) {
@@ -48,13 +61,24 @@ function StarRating({ value = 0 }) {
         <Star
           key={i}
           className="h-3.5 w-3.5"
-          style={{ color: i <= Math.round(value) ? '#f59e0b' : 'var(--border)' }}
-          fill={i <= Math.round(value) ? '#f59e0b' : 'none'}
+          style={{ color: i <= Math.round(value) ? 'var(--warning)' : 'var(--border)' }}
+          fill={i <= Math.round(value) ? 'currentColor' : 'none'}
         />
       ))}
     </span>
   )
 }
+
+function IconTile({ icon: Icon, tone }) {
+  const cls = tone ? TONE_CHIP[tone] : 'bg-[var(--surface-secondary)] text-[var(--primary)]'
+  return (
+    <span className={cn('p-1.5 rounded-[var(--radius)] shrink-0', cls)}>
+      <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+    </span>
+  )
+}
+
+const fmtStamp = (ts) => new Date(ts).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 // ---------------------------------------------------------------------------
 // BuildingAgent
@@ -546,9 +570,18 @@ export default function BuildingAgent() {
   // No building selected guard
   // ---------------------------------------------------------------------------
 
+  const headerText = (
+    <div className="min-w-0">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">סוכן AI חכם</h1>
+      <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+        ניתוח חכם של מצב הבניין, התחזוקה, התקלות והספקים{selectedBuilding ? ` • ${selectedBuilding.name}` : ''}
+      </p>
+    </div>
+  )
+
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={Bot} iconColor="purple" title="סוכן AI חכם" />
+    <div className="space-y-6" dir="rtl">
+      {headerText}
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -560,17 +593,11 @@ export default function BuildingAgent() {
 
   if (!selectedBuilding) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-2">
-          <Bot className="h-7 w-7 text-[var(--text-secondary)]" />
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">סוכן AI חכם</h1>
-        </div>
-        <Card>
-          <CardContent className="pt-6 text-center py-16">
-            <Bot className="h-12 w-12 mx-auto mb-4 text-[var(--text-secondary)] opacity-40" />
-            <p className="text-[var(--text-secondary)]">יש לבחור בניין כדי להפעיל את הסוכן</p>
-          </CardContent>
-        </Card>
+      <div className="space-y-6" dir="rtl">
+        {headerText}
+        <SectionCard>
+          <EmptyState icon={Bot} title="לא נבחר בניין" description="יש לבחור בניין כדי להפעיל את הסוכן" />
+        </SectionCard>
       </div>
     )
   }
@@ -578,47 +605,102 @@ export default function BuildingAgent() {
   const scoreColor = healthScore ? scoreColorVar(healthScore.overall) : 'var(--border)'
   const circumference = 2 * Math.PI * 70
 
+  const tabsWithCounts = tabs.map((t) => (t.key === 'maintain' ? { ...t, count: recommendations.length } : t))
+
+  const healthItems = healthScore ? [
+    {
+      label: 'תקינה', score: healthScore.complianceScore, icon: Shield, weight: '20%',
+      finding: healthScore.complianceScore < 80 ? 'ישנם מסמכי תקינות שפג תוקפם' : 'כל מסמכי התקינות בתוקף',
+    },
+    {
+      label: 'תחזוקה', score: healthScore.maintenanceScore, icon: Wrench, weight: '25%',
+      finding: healthScore.overdueTasks > 0 ? `${healthScore.overdueTasks} משימות תחזוקה באיחור` : 'כל משימות התחזוקה מעודכנות',
+    },
+    {
+      label: 'תקלות', score: healthScore.issueScore, icon: AlertTriangle, weight: '25%',
+      finding: healthScore.openIssues > 0 ? `${healthScore.openIssues} תקלות פתוחות, ${healthScore.urgentIssues} דחופות` : 'אין תקלות פתוחות',
+    },
+    {
+      label: 'גבייה', score: healthScore.financialScore, icon: TrendingUp, weight: '15%',
+      finding: healthScore.financialScore < 80 ? 'שיעור הגבייה החודשי נמוך מהמצופה' : 'שיעור הגבייה החודשי תקין',
+    },
+    {
+      label: 'ציוד', score: healthScore.assetScore, icon: Activity, weight: '15%',
+      finding: healthScore.assetScore < 80 ? 'ציוד מסוים דורש טיפול שירות' : 'כל הציוד מתוחזק כנדרש',
+    },
+  ] : []
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   return (
     <div className="space-y-6" dir="rtl">
-      <PageHeader
-        icon={Bot}
-        iconColor="purple"
-        title="סוכן AI חכם"
-        subtitle={`ניתוח חכם ל${selectedBuilding.name || 'בניין'}`}
-        actions={
-          <div className="flex flex-col items-end gap-1">
-            <Button
-              onClick={runAiHealthAnalysis}
-              disabled={aiLoading || !healthScore}
-              className="gap-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              {aiLoading ? 'מנתח...' : aiResult ? 'עדכן ניתוח AI' : 'ניתוח AI'}
-            </Button>
-            {aiResultTimestamp && !aiLoading && (
-              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                נותח לאחרונה: {new Date(aiResultTimestamp).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-          </div>
-        }
-      />
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        {headerText}
+        <div className="flex flex-col items-start lg:items-end gap-1">
+          <Button onClick={runAiHealthAnalysis} disabled={aiLoading || !healthScore}>
+            <Sparkles className="h-4 w-4" />
+            {aiLoading ? 'מנתח...' : aiResult ? 'עדכן ניתוח AI' : 'ניתוח AI'}
+          </Button>
+          {aiResultTimestamp && !aiLoading && (
+            <span className="text-[11px] text-[var(--text-muted)] num-tabular">
+              נותח לאחרונה: {fmtStamp(aiResultTimestamp)}
+            </span>
+          )}
+        </div>
+      </div>
 
-      {/* Hero Health Card */}
+      {/* KPI row */}
       {healthScore && (
-        <div className="relative rounded-xl border bg-white overflow-hidden">
-          <div className="h-1.5 w-full bg-gradient-to-r from-purple-500 to-blue-500" />
-          <div className="p-6">
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              {/* Circle */}
-              <div className="flex-shrink-0 flex flex-col items-center gap-2">
-                <div className="relative flex items-center justify-center" style={{ width: 160, height: 160 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            label="ציון בריאות הבניין" icon={HeartPulse}
+            color={healthScore.overall >= 80 ? 'emerald' : healthScore.overall >= 60 ? 'amber' : 'red'}
+            value={String(healthScore.overall)} note="/ 100"
+            sub={scoreLabel(healthScore.overall)}
+            progress={healthScore.overall}
+          />
+          <StatCard
+            label="תקלות פתוחות" icon={AlertTriangle}
+            color={healthScore.openIssues > 3 ? 'red' : 'blue'}
+            value={String(healthScore.openIssues)}
+            sub={healthScore.urgentIssues > 0 ? `${healthScore.urgentIssues} דחופות` : 'אין תקלות דחופות'}
+          />
+          <StatCard
+            label="תחזוקות באיחור" icon={Wrench}
+            color={healthScore.overdueTasks > 0 ? 'amber' : 'emerald'}
+            value={String(healthScore.overdueTasks)}
+            sub={healthScore.overdueTasks > 0 ? 'משימות קבועות שעבר מועדן' : 'כל המשימות בזמן'}
+          />
+          <StatCard
+            label="המלצות פעילות" icon={ListChecks} color="purple"
+            value={String(recommendations.length)}
+            sub={`${recommendations.filter((r) => r.urgency === 'high').length} בעדיפות גבוהה`}
+            footer={recommendations.length > 0 ? (
+              <button onClick={() => setActiveTab('maintain')} className="text-[var(--primary)] font-semibold hover:underline">לרשימת התחזוקה ←</button>
+            ) : null}
+          />
+        </div>
+      )}
+
+      {/* Filter card */}
+      <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <TabGroup tabs={tabsWithCounts} activeTab={activeTab} onChange={setActiveTab} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <div className="xl:col-span-8 space-y-4 min-w-0">
+          {/* -------------------------------------------------------------- */}
+          {/* Tab: בריאות הבניין                                             */}
+          {/* -------------------------------------------------------------- */}
+          {activeTab === 'health' && healthScore && (
+            <SectionCard icon={HeartPulse} title="בריאות הבניין" subtitle="ציון משוקלל של תקינה, תחזוקה, תקלות, גבייה וציוד">
+              <div className="flex flex-col md:flex-row items-center gap-6 p-4 border-b border-[var(--border-light)]">
+                <div className="relative flex items-center justify-center shrink-0" style={{ width: 160, height: 160 }}>
                   <svg width="160" height="160" style={{ position: 'absolute', top: 0, left: 0 }}>
-                    <circle cx="80" cy="80" r="70" fill="none" stroke="var(--border)" strokeWidth="12" />
+                    <circle cx="80" cy="80" r="70" fill="none" stroke="var(--surface-container)" strokeWidth="12" />
                     <circle
                       cx="80" cy="80" r="70"
                       fill="none"
@@ -631,690 +713,380 @@ export default function BuildingAgent() {
                     />
                   </svg>
                   <div className="text-center z-10">
-                    <div className="text-4xl font-bold" style={{ color: scoreColor }}>
-                      {healthScore.overall}
-                    </div>
-                    <div className="text-xs text-[var(--text-secondary)]">ציון בריאות</div>
+                    <div className="text-[36px] leading-10 font-bold num-tabular" style={{ color: scoreColor }}>{healthScore.overall}</div>
+                    <div className="text-[11px] text-[var(--text-secondary)]">ציון בריאות</div>
                   </div>
                 </div>
-                <span
-                  className="text-sm font-semibold px-3 py-1 rounded-full"
-                  style={{ backgroundColor: scoreColor + '22', color: scoreColor }}
-                >
-                  {scoreLabel(healthScore.overall)}
-                </span>
-              </div>
-
-              {/* Quick stats */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 flex-1 w-full">
-                {[
-                  { label: 'תחזוקות באיחור', value: healthScore.overdueTasks, icon: <Wrench className="h-4 w-4" />, danger: healthScore.overdueTasks > 0, gradient: 'from-amber-500 to-amber-600' },
-                  { label: 'תקלות פתוחות', value: healthScore.openIssues, icon: <AlertTriangle className="h-4 w-4" />, danger: healthScore.openIssues > 3, gradient: 'from-orange-500 to-orange-600' },
-                  { label: 'תקלות דחופות', value: healthScore.urgentIssues, icon: <Zap className="h-4 w-4" />, danger: healthScore.urgentIssues > 0, gradient: 'from-red-500 to-red-600' },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="relative flex flex-col items-center justify-center rounded-xl p-4 gap-1 border bg-white overflow-hidden"
-                  >
-                    <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
-                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${stat.gradient} flex items-center justify-center text-white shadow-sm`}>
-                      {stat.icon}
-                    </div>
-                    <span
-                      className="text-2xl font-bold"
-                      style={{ color: stat.danger ? 'var(--danger)' : 'var(--text-primary)' }}
-                    >
-                      {stat.value}
-                    </span>
-                    <span className="text-xs text-[var(--text-secondary)] text-center">
-                      {stat.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div>
-        <TabGroup tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
-
-        <div className="mt-4 space-y-4">
-          {/* ---------------------------------------------------------------- */}
-          {/* Tab: בריאות הבניין                                               */}
-          {/* ---------------------------------------------------------------- */}
-          {/* AI Analysis Panel */}
-          {(aiLoading || aiResult || aiError) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-[var(--primary)]" />
-                    ניתוח AI — בריאות הבניין
+                <div className="flex-1 text-center md:text-right">
+                  <span className={cn('inline-block text-[12px] font-semibold px-2.5 py-0.5 rounded-full', TONE_CHIP[scoreTone(healthScore.overall)])}>
+                    {scoreLabel(healthScore.overall)}
                   </span>
-                  {aiResultTimestamp && !aiLoading && (
-                    <span className="text-xs font-normal" style={{ color: 'var(--text-muted)' }}>
-                      עודכן: {new Date(aiResultTimestamp).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {aiLoading && (
-                  <div className="flex items-center gap-3 py-4">
-                    <RefreshCw className="h-5 w-5 animate-spin text-[var(--primary)]" />
-                    <span className="text-[var(--text-secondary)]">Claude מנתח את הבניין...</span>
-                  </div>
-                )}
-                {aiError && (
-                  <p className="text-sm text-[var(--danger)]">שגיאה: {aiError}</p>
-                )}
-                {aiResult && (
-                  <div className="space-y-5">
-                    {/* Summary */}
-                    {aiResult.summary && (
-                      <p className="text-sm text-[var(--text-primary)] leading-relaxed bg-[var(--surface-hover)] rounded-lg p-3">
-                        {aiResult.summary}
-                      </p>
-                    )}
-
-                    {/* Top priorities */}
-                    {aiResult.top_priorities?.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">עדיפויות לטיפול מיידי</h4>
-                        <div className="space-y-2">
-                          {aiResult.top_priorities.map((p, i) => (
-                            <div key={i} className="flex items-start gap-2 p-2 rounded-lg border border-[var(--border)]">
-                              <Badge variant={p.urgency === 'high' ? 'danger' : p.urgency === 'medium' ? 'warning' : 'default'}>
-                                {p.urgency === 'high' ? 'דחוף' : p.urgency === 'medium' ? 'בינוני' : 'נמוך'}
-                              </Badge>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-[var(--text-primary)]">{p.title}</p>
-                                <p className="text-xs text-[var(--text-secondary)] mt-0.5">{p.action}</p>
-                                {p.impact && <p className="text-xs text-[var(--primary)] mt-0.5">השפעה: {p.impact}</p>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Quick wins */}
-                    {aiResult.quick_wins?.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">ניצחונות מהירים השבוע</h4>
-                        <ul className="space-y-1">
-                          {aiResult.quick_wins.map((w, i) => (
-                            <li key={i} className="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-                              <CheckCircle className="h-4 w-4 text-[var(--success,#22c55e)] shrink-0 mt-0.5" />
-                              {w}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Risk forecast */}
-                    {aiResult.risk_forecast && (
-                      <div className="rounded-lg bg-orange-50 border border-orange-200 p-3">
-                        <p className="text-xs font-semibold text-orange-700 mb-1">תחזית סיכונים 30 יום</p>
-                        <p className="text-sm text-orange-800">{aiResult.risk_forecast}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === 'health' && healthScore && (
-            <div className="space-y-2">
-              {[
-                {
-                  label: 'תקינה',
-                  score: healthScore.complianceScore,
-                  icon: <Shield className="h-5 w-5" />,
-                  gradient: 'from-blue-500 to-blue-600',
-                  finding:
-                    healthScore.complianceScore < 80
-                      ? 'ישנם מסמכי תקינות שפג תוקפם'
-                      : 'כל מסמכי התקינות בתוקף',
-                },
-                {
-                  label: 'תחזוקה',
-                  score: healthScore.maintenanceScore,
-                  icon: <Wrench className="h-5 w-5" />,
-                  gradient: 'from-amber-500 to-amber-600',
-                  finding:
-                    healthScore.overdueTasks > 0
-                      ? `${healthScore.overdueTasks} משימות תחזוקה באיחור`
-                      : 'כל משימות התחזוקה מעודכנות',
-                },
-                {
-                  label: 'תקלות',
-                  score: healthScore.issueScore,
-                  icon: <AlertTriangle className="h-5 w-5" />,
-                  gradient: 'from-red-500 to-red-600',
-                  finding:
-                    healthScore.openIssues > 0
-                      ? `${healthScore.openIssues} תקלות פתוחות, ${healthScore.urgentIssues} דחופות`
-                      : 'אין תקלות פתוחות',
-                },
-                {
-                  label: 'גבייה',
-                  score: healthScore.financialScore,
-                  icon: <TrendingUp className="h-5 w-5" />,
-                  gradient: 'from-emerald-500 to-emerald-600',
-                  finding:
-                    healthScore.financialScore < 80
-                      ? 'שיעור הגבייה החודשי נמוך מהמצופה'
-                      : 'שיעור הגבייה החודשי תקין',
-                },
-                {
-                  label: 'ציוד',
-                  score: healthScore.assetScore,
-                  icon: <Activity className="h-5 w-5" />,
-                  gradient: 'from-purple-500 to-purple-600',
-                  finding:
-                    healthScore.assetScore < 80
-                      ? 'ציוד מסוים דורש טיפול שירות'
-                      : 'כל הציוד מתוחזק כנדרש',
-                },
-              ].map((item) => {
-                const color = scoreColorVar(item.score)
-                const dotColor = item.score >= 80 ? 'bg-emerald-500' : item.score >= 60 ? 'bg-amber-500' : 'bg-red-500'
-                return (
-                  <div key={item.label} className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all">
-                    {/* Score circle */}
-                    <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${item.gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                      {item.icon}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[14px] font-semibold text-[var(--text-primary)]">
-                          {item.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 flex-1 max-w-[200px] rounded-full bg-slate-100 overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{ width: `${item.score}%`, backgroundColor: color }}
-                          />
-                        </div>
-                        <span className="text-xs text-[var(--text-secondary)]">{item.finding}</span>
-                      </div>
-                    </div>
-
-                    {/* Score & status dot */}
-                    <div className="flex items-center gap-2 min-w-[60px] shrink-0">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                      <span className="text-lg font-bold" style={{ color }}>
-                        {item.score}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* ---------------------------------------------------------------- */}
-          {/* Tab: מה לתחזק                                                    */}
-          {/* ---------------------------------------------------------------- */}
-          {activeTab === 'maintain' && (
-            <div className="space-y-3">
-              {recommendations.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6 text-center py-12">
-                    <CheckCircle className="h-10 w-10 mx-auto mb-3 text-[var(--success,#22c55e)]" />
-                    <p className="text-[var(--text-secondary)]">אין המלצות פעילות כרגע. כל הבניין תקין!</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                recommendations.map((rec) => {
-                  const recGradient = rec.urgency === 'high' ? 'from-red-500 to-red-600' : rec.urgency === 'medium' ? 'from-amber-500 to-amber-600' : 'from-blue-500 to-blue-600'
-                  const urgDot = rec.urgency === 'high' ? 'bg-red-500 animate-pulse' : rec.urgency === 'medium' ? 'bg-amber-500' : 'bg-blue-400'
+                  <p className="text-[13px] text-[var(--text-secondary)] mt-2 leading-relaxed">
+                    הציון מחושב מחמישה רכיבים. רכיב מתחת ל-80 מסומן כדורש תשומת לב — ראו את הפירוט למטה ואת המלצות "מה לתחזק".
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y divide-[var(--border-light)]">
+                {healthItems.map((item) => {
+                  const tone = scoreTone(item.score)
                   return (
-                    <div
-                      key={rec.id}
-                      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
-                    >
-                      {/* Type icon */}
-                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${recGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                        {rec.type === 'asset' ? <Activity className="h-5 w-5" /> : rec.type === 'compliance' ? <Shield className="h-5 w-5" /> : <Wrench className="h-5 w-5" />}
-                      </div>
-
-                      {/* Info */}
+                    <div key={item.label} className="flex items-center gap-3 px-4 py-3">
+                      <IconTile icon={item.icon} tone={tone} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                          <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{rec.title}</span>
-                          <Badge variant={urgencyVariant(rec.urgency)}>{urgencyLabel(rec.urgency)}</Badge>
-                          {rec.category && <Badge variant="default">{rec.category}</Badge>}
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[13px] font-semibold text-[var(--text-primary)]">{item.label}</span>
+                          <span className="text-[11px] text-[var(--text-muted)] num-tabular">משקל {item.weight}</span>
                         </div>
-                        <p className="text-xs text-[var(--text-secondary)]">
-                          {rec.reason}
-                        </p>
+                        <div className="h-1.5 w-full max-w-[260px] rounded-full bg-[var(--surface-container)] overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${item.score}%`, backgroundColor: scoreColorVar(item.score) }} />
+                        </div>
+                        <p className="text-[11px] text-[var(--text-secondary)] mt-1">{item.finding}</p>
                       </div>
-
-                      {/* Urgency dot */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${urgDot}`} />
-                      </div>
-
-                      {/* Action (hover) */}
-                      <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => createTaskFromRec(rec)}
-                          className="gap-1.5"
-                        >
-                          <PlusCircle className="h-3.5 w-3.5" />
-                          צור משימה
-                        </Button>
-                      </div>
+                      <span className="text-[18px] font-bold num-tabular shrink-0" style={{ color: scoreColorVar(item.score) }}>{item.score}</span>
                     </div>
                   )
-                })
-              )}
-            </div>
+                })}
+              </div>
+            </SectionCard>
           )}
 
-          {/* ---------------------------------------------------------------- */}
-          {/* Tab: ניתוח תקלות                                                 */}
-          {/* ---------------------------------------------------------------- */}
-          {activeTab === 'issues' && issueAnalysis && (
-            <div className="space-y-4">
-              {/* Stats row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { label: 'סה"כ תקלות', value: issueAnalysis.total, icon: <Activity className="h-4 w-4" />, gradient: 'from-blue-500 to-blue-600' },
-                  { label: 'פתוחות', value: issueAnalysis.open, icon: <AlertTriangle className="h-4 w-4" />, gradient: 'from-red-500 to-red-600', color: 'var(--danger)' },
-                  { label: 'סגורות', value: issueAnalysis.resolved, icon: <CheckCircle className="h-4 w-4" />, gradient: 'from-emerald-500 to-emerald-600', color: 'var(--success,#22c55e)' },
-                  { label: 'ימי טיפול ממוצע', value: issueAnalysis.avgResolutionDays || '—', icon: <RefreshCw className="h-4 w-4" />, gradient: 'from-purple-500 to-purple-600' },
-                ].map((s) => (
-                  <div key={s.label} className="relative rounded-xl border bg-white overflow-hidden">
-                    <div className={`h-1 w-full bg-gradient-to-r ${s.gradient}`} />
-                    <div className="p-4 text-center">
-                      <div className={`w-8 h-8 mx-auto mb-2 rounded-lg bg-gradient-to-br ${s.gradient} flex items-center justify-center text-white shadow-sm`}>
-                        {s.icon}
+          {/* -------------------------------------------------------------- */}
+          {/* Tab: מה לתחזק                                                  */}
+          {/* -------------------------------------------------------------- */}
+          {activeTab === 'maintain' && (
+            <SectionCard
+              icon={ListChecks}
+              title="מה לתחזק"
+              subtitle="משימות באיחור, ציוד לטיפול ומסמכי תקינות לחידוש"
+              footer={recommendations.length > 0 ? `${recommendations.length} המלצות` : undefined}
+            >
+              {recommendations.length === 0 ? (
+                <EmptyState icon={CheckCircle} title="הכל תקין" description="אין המלצות פעילות כרגע. כל הבניין תקין!" />
+              ) : (
+                <div className="divide-y divide-[var(--border-light)]">
+                  {recommendations.map((rec) => (
+                    <div key={rec.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                      <IconTile
+                        icon={rec.type === 'asset' ? Activity : rec.type === 'compliance' ? Shield : Wrench}
+                        tone={rec.urgency === 'high' ? 'danger' : rec.urgency === 'medium' ? 'warning' : undefined}
+                      />
+                      <div className="flex-1 min-w-[180px]">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                          <span className="text-[13px] font-semibold text-[var(--text-primary)]">{rec.title}</span>
+                          <Badge variant={urgencyVariant(rec.urgency)}>{urgencyLabel(rec.urgency)}</Badge>
+                          {rec.category && <Badge variant="neutral">{rec.category}</Badge>}
+                        </div>
+                        <p className="text-[11px] text-[var(--text-muted)] num-tabular">{rec.reason}</p>
                       </div>
-                      <div
-                        className="text-2xl font-bold"
-                        style={{ color: s.color || 'var(--text-primary)' }}
-                      >
-                        {s.value}
-                      </div>
-                      <div className="text-xs text-[var(--text-secondary)] mt-0.5">{s.label}</div>
+                      <Button size="sm" variant="outline" onClick={() => createTaskFromRec(rec)}>
+                        <PlusCircle className="h-3.5 w-3.5" />
+                        צור משימה
+                      </Button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          {/* -------------------------------------------------------------- */}
+          {/* Tab: ניתוח תקלות                                               */}
+          {/* -------------------------------------------------------------- */}
+          {activeTab === 'issues' && issueAnalysis && (
+            <>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard label='סה"כ תקלות' icon={Activity} color="blue" value={String(issueAnalysis.total)} />
+                <StatCard label="פתוחות" icon={AlertTriangle} color="red" value={String(issueAnalysis.open)} />
+                <StatCard label="סגורות" icon={CheckCircle} color="emerald" value={String(issueAnalysis.resolved)} />
+                <StatCard label="ימי טיפול ממוצע" icon={RefreshCw} color="purple" value={String(issueAnalysis.avgResolutionDays || '—')} />
               </div>
 
-              {/* Category breakdown */}
               {issueAnalysis.categories.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>פילוח לפי קטגוריה</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {issueAnalysis.categories.map((cat) => (
-                      <div key={cat.name} className="flex items-center gap-3">
-                        <span className="text-sm text-[var(--text-secondary)] w-24 shrink-0 text-right">
-                          {cat.name}
-                        </span>
-                        <div className="flex-1 h-5 rounded-full overflow-hidden bg-[var(--border-light,var(--border))]">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${Math.round((cat.count / issueAnalysis.maxCategoryCount) * 100)}%`,
-                              backgroundColor: 'var(--primary)',
-                            }}
-                          />
-                        </div>
-                        <span className="text-sm font-semibold text-[var(--text-primary)] w-6 text-left">
-                          {cat.count}
-                        </span>
+                <SectionCard icon={Activity} title="פילוח לפי קטגוריה" bodyClassName="p-4 space-y-3">
+                  {issueAnalysis.categories.map((cat) => (
+                    <div key={cat.name} className="flex items-center gap-3">
+                      <span className="text-[12px] text-[var(--text-secondary)] w-24 shrink-0 truncate">{cat.name}</span>
+                      <div className="flex-1 h-2 rounded-full overflow-hidden bg-[var(--surface-container)]">
+                        <div
+                          className="h-full rounded-full bg-[var(--primary)] transition-all duration-500"
+                          style={{ width: `${Math.round((cat.count / issueAnalysis.maxCategoryCount) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[12px] font-semibold text-[var(--text-primary)] w-6 text-left num-tabular">{cat.count}</span>
+                    </div>
+                  ))}
+                </SectionCard>
+              )}
+
+              {issueAnalysis.recurringTitles.length > 0 && (
+                <SectionCard icon={RefreshCw} title="תקלות חוזרות" subtitle="אותה כותרת נפתחה יותר מפעם אחת">
+                  <div className="divide-y divide-[var(--border-light)]">
+                    {issueAnalysis.recurringTitles.map((r) => (
+                      <div key={r.title} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="text-[12px] font-bold num-tabular px-2 py-0.5 rounded-full bg-[var(--warning-light)] text-[var(--warning)] shrink-0">{r.count}x</span>
+                        <span className="text-[13px] text-[var(--text-primary)] flex-1 min-w-0 truncate">{r.title}</span>
+                        <Badge variant="warning">חוזרת</Badge>
                       </div>
                     ))}
-                  </CardContent>
-                </Card>
+                  </div>
+                </SectionCard>
               )}
 
-              {/* Recurring issues */}
-              {issueAnalysis.recurringTitles.length > 0 && (
-                <div className="relative rounded-xl border bg-white overflow-hidden">
-                  <div className="h-1 w-full bg-gradient-to-r from-amber-500 to-amber-600" />
-                  <div className="p-4">
-                    <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">תקלות חוזרות</h3>
-                    <div className="space-y-2">
-                      {issueAnalysis.recurringTitles.map((r) => (
-                        <div
-                          key={r.title}
-                          className="flex items-center gap-3 p-3 rounded-xl border border-amber-100 bg-white hover:shadow-sm transition-all"
-                        >
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
-                            {r.count}x
-                          </div>
-                          <span className="text-sm text-[var(--text-primary)] flex-1">{r.title}</span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <div className="w-2 h-2 rounded-full bg-amber-500" />
-                            <Badge variant="warning">חוזרת</Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              <SectionCard icon={CalendarClock} title="מגמה חודשית" subtitle="6 חודשים אחרונים">
+                <div className="overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr>
+                        {issueAnalysis.months.map((m) => <th key={m.key} className="!text-center">{m.label}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        {issueAnalysis.months.map((m) => (
+                          <td key={m.key} className="!text-center">
+                            <span className={cn(
+                              'inline-flex w-8 h-8 rounded-full text-[12px] font-bold items-center justify-center num-tabular',
+                              m.count > 0 ? 'bg-[var(--surface-container)] text-[var(--primary)]' : 'bg-[var(--surface-secondary)] text-[var(--text-muted)]'
+                            )}>
+                              {m.count}
+                            </span>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
-              )}
-
-              {/* Monthly trend */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>מגמה חודשית (6 חודשים אחרונים)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr>
-                          {issueAnalysis.months.map((m) => (
-                            <th
-                              key={m.key}
-                              className="text-center pb-2 text-xs text-[var(--text-secondary)] font-medium"
-                            >
-                              {m.label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          {issueAnalysis.months.map((m) => (
-                            <td key={m.key} className="text-center">
-                              <span
-                                className="inline-block w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center mx-auto"
-                                style={{
-                                  background: m.count > 0 ? 'var(--primary-bg, #eff6ff)' : 'var(--border-light, #f1f5f9)',
-                                  color: m.count > 0 ? 'var(--primary)' : 'var(--text-secondary)',
-                                }}
-                              >
-                                {m.count}
-                              </span>
-                            </td>
-                          ))}
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+              </SectionCard>
+            </>
           )}
 
-          {/* ---------------------------------------------------------------- */}
-          {/* Tab: ניתוח ספקים                                                  */}
-          {/* ---------------------------------------------------------------- */}
+          {/* -------------------------------------------------------------- */}
+          {/* Tab: ניתוח ספקים                                               */}
+          {/* -------------------------------------------------------------- */}
           {activeTab === 'vendors' && vendorIntel && (
-            <div className="space-y-4">
-              {/* Top performers */}
-              <div className="relative rounded-xl border bg-white overflow-hidden">
-                <div className="h-1.5 w-full bg-gradient-to-r from-emerald-500 to-emerald-600" />
-                <div className="p-4">
-                  <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">ספקים מובילים</h3>
-                  {vendorIntel.topVendors.length === 0 ? (
-                    <p className="text-sm text-[var(--text-secondary)]">אין נתוני ספקים</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {vendorIntel.topVendors.map((v, idx) => {
-                        const medalGradient = idx === 0 ? 'from-amber-400 to-amber-500' : idx === 1 ? 'from-slate-400 to-slate-500' : 'from-orange-400 to-orange-500'
-                        return (
-                          <div
-                            key={v.id}
-                            className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all"
-                          >
-                            {/* Rank circle */}
-                            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${medalGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                              #{idx + 1}
-                            </div>
-
-                            {/* Info */}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                                {v.name}
-                              </p>
-                              {v.category && (
-                                <p className="text-xs text-[var(--text-secondary)]">{v.category}</p>
-                              )}
-                            </div>
-
-                            {/* Rating & jobs */}
-                            <div className="flex flex-col items-end gap-1 shrink-0">
-                              <StarRating value={v.rating} />
-                              <span className="text-xs text-[var(--text-secondary)]">
-                                {v.jobCount} עבודות
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Issue matching */}
-              {vendorIntel.matchedIssues.length > 0 && (
-                <div className="relative rounded-xl border bg-white overflow-hidden">
-                  <div className="h-1 w-full bg-gradient-to-r from-blue-500 to-blue-600" />
-                  <div className="p-4">
-                    <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">התאמת תקלות לספקים</h3>
-                    <div className="space-y-2">
-                      {vendorIntel.matchedIssues.map(({ issue, vendor }) => (
-                        <div
-                          key={issue.id}
-                          className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-white hover:shadow-sm transition-all"
-                        >
-                          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${vendor ? 'from-emerald-500 to-emerald-600' : 'from-slate-400 to-slate-500'} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                            <Wrench className="h-4 w-4" />
-                          </div>
-                          <span className="flex-1 text-sm text-[var(--text-primary)] truncate">
-                            {issue.title}
-                          </span>
-                          {vendor ? (
-                            <div className="flex items-center gap-2 shrink-0">
-                              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                              <span className="text-sm text-[var(--text-primary)] font-medium">
-                                {vendor.name}
-                              </span>
-                              <StarRating value={vendor.rating} />
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <div className="w-2 h-2 rounded-full bg-slate-400" />
-                              <span className="text-xs text-[var(--text-secondary)]">אין ספק מתאים</span>
-                            </div>
-                          )}
+            <>
+              <SectionCard icon={Store} title="ספקים מובילים" subtitle="לפי דירוג">
+                {vendorIntel.topVendors.length === 0 ? (
+                  <EmptyState icon={Store} title="אין נתוני ספקים" />
+                ) : (
+                  <div className="divide-y divide-[var(--border-light)]">
+                    {vendorIntel.topVendors.map((v, idx) => (
+                      <div key={v.id} className="flex items-center gap-3 px-4 py-3">
+                        <span className="w-8 h-8 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] flex items-center justify-center text-[12px] font-bold shrink-0 num-tabular">#{idx + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{v.name}</p>
+                          {v.category && <p className="text-[11px] text-[var(--text-muted)]">{v.category}</p>}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Expiring insurance */}
-              {vendorIntel.expiringInsurance.length > 0 && (
-                <div className="relative rounded-xl border bg-white overflow-hidden">
-                  <div className="h-1 w-full bg-gradient-to-r from-amber-500 to-amber-600" />
-                  <div className="p-4">
-                    <h3 className="font-semibold text-[var(--text-primary)] text-sm mb-3">ביטוח ספקים שפג עד 60 יום</h3>
-                    <div className="space-y-2">
-                      {vendorIntel.expiringInsurance.map((v) => (
-                        <div
-                          key={v.id}
-                          className="flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-white hover:shadow-sm transition-all"
-                        >
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shrink-0 shadow-sm">
-                            <AlertTriangle className="h-4 w-4" />
-                          </div>
-                          <span className="text-sm font-medium text-[var(--text-primary)] flex-1">
-                            {v.name}
-                          </span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <div className="w-2 h-2 rounded-full bg-amber-500" />
-                            <Badge variant="warning">
-                              פג תוקף: {formatDate(v.insurance_expiry)}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ---------------------------------------------------------------- */}
-          {/* Tab: תחזית                                                        */}
-          {/* ---------------------------------------------------------------- */}
-          {activeTab === 'forecast' && forecast && (
-            <div className="space-y-4">
-              {/* Prediction banner */}
-              <div className="relative rounded-xl border bg-white overflow-hidden">
-                <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 to-purple-500" />
-                <div className="p-5">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white shrink-0 shadow-sm">
-                      <Brain className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-secondary)]">תחזית הוצאות חודש הבא</p>
-                      <p className="text-xl font-bold text-[var(--text-primary)]">
-                        {formatCurrency(forecast.avgExpenses)}
-                      </p>
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        ממוצע 3 חודשים אחרונים
-                      </p>
-                    </div>
-                    {forecast.reserveFund > 0 && (
-                      <div className="mr-auto text-left">
-                        <p className="text-xs text-[var(--text-secondary)]">קרן רזרבה מומלצת (10%)</p>
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-amber-500" />
-                          <p className="text-lg font-bold text-amber-500">
-                            {formatCurrency(forecast.reserveFund)}
-                          </p>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <StarRating value={v.rating} />
+                          <span className="text-[11px] text-[var(--text-secondary)] num-tabular">{v.jobCount} עבודות</span>
                         </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                </div>
-              </div>
+                )}
+              </SectionCard>
 
-              {/* Payment collection trend */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>שיעור גבייה (6 חודשים)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--border)]">
-                          <th className="text-right py-2 pr-2 text-[var(--text-secondary)] font-medium">
-                            חודש
-                          </th>
-                          <th className="text-center py-2 text-[var(--text-secondary)] font-medium">
-                            שולמו
-                          </th>
-                          <th className="text-center py-2 text-[var(--text-secondary)] font-medium">
-                            סה"כ
-                          </th>
-                          <th className="text-center py-2 text-[var(--text-secondary)] font-medium">
-                            %
-                          </th>
-                        </tr>
-                      </thead>
+              {vendorIntel.matchedIssues.length > 0 && (
+                <SectionCard icon={Wrench} title="התאמת תקלות לספקים" subtitle="תקלות פתוחות מול ספקים באותו תחום">
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="ds-table">
+                      <thead><tr><th>תקלה</th><th>ספק מתאים</th><th>דירוג</th></tr></thead>
                       <tbody>
-                        {forecast.months.map((m) => {
-                          const pct = m.total > 0 ? Math.round((m.paid / m.total) * 100) : null
-                          return (
-                            <tr
-                              key={m.key}
-                              className="border-b border-[var(--border)] last:border-0"
-                            >
-                              <td className="py-2 pr-2 text-[var(--text-primary)]">{m.label}</td>
-                              <td className="py-2 text-center text-[var(--text-primary)]">
-                                {m.paid}
-                              </td>
-                              <td className="py-2 text-center text-[var(--text-primary)]">
-                                {m.total}
-                              </td>
-                              <td className="py-2 text-center">
-                                {pct !== null ? (
-                                  <span
-                                    className="font-semibold"
-                                    style={{ color: scoreColorVar(pct) }}
-                                  >
-                                    {pct}%
-                                  </span>
-                                ) : (
-                                  <span className="text-[var(--text-secondary)]">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Monthly expenses trend */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>הוצאות חודשיות (6 חודשים)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[var(--border)]">
-                          <th className="text-right py-2 pr-2 text-[var(--text-secondary)] font-medium">
-                            חודש
-                          </th>
-                          <th className="text-left py-2 pl-2 text-[var(--text-secondary)] font-medium">
-                            הוצאות
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {forecast.months.map((m) => (
-                          <tr
-                            key={m.key}
-                            className="border-b border-[var(--border)] last:border-0"
-                          >
-                            <td className="py-2 pr-2 text-[var(--text-primary)]">{m.label}</td>
-                            <td className="py-2 pl-2 text-left font-medium text-[var(--text-primary)]">
-                              {m.expenses > 0 ? formatCurrency(m.expenses) : '—'}
+                        {vendorIntel.matchedIssues.map(({ issue, vendor }) => (
+                          <tr key={issue.id}>
+                            <td className="min-w-[180px] font-semibold">{issue.title}</td>
+                            <td className="whitespace-nowrap">
+                              {vendor
+                                ? <span className="text-[13px] font-medium">{vendor.name}</span>
+                                : <Badge variant="neutral">אין ספק מתאים</Badge>}
                             </td>
+                            <td className="whitespace-nowrap">{vendor ? <StarRating value={vendor.rating} /> : <span className="text-[var(--text-muted)]">—</span>}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+                  <div className="md:hidden divide-y divide-[var(--border-light)]">
+                    {vendorIntel.matchedIssues.map(({ issue, vendor }) => (
+                      <div key={issue.id} className="px-4 py-3">
+                        <p className="text-[13px] font-semibold text-[var(--text-primary)]">{issue.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          {vendor ? (
+                            <>
+                              <span className="text-[12px] text-[var(--text-secondary)]">{vendor.name}</span>
+                              <StarRating value={vendor.rating} />
+                            </>
+                          ) : <Badge variant="neutral">אין ספק מתאים</Badge>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </SectionCard>
+              )}
+
+              {vendorIntel.expiringInsurance.length > 0 && (
+                <SectionCard icon={AlertTriangle} title="ביטוח ספקים שפג עד 60 יום">
+                  <div className="divide-y divide-[var(--border-light)]">
+                    {vendorIntel.expiringInsurance.map((v) => (
+                      <div key={v.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <IconTile icon={AlertTriangle} tone="warning" />
+                        <span className="text-[13px] font-medium text-[var(--text-primary)] flex-1">{v.name}</span>
+                        <Badge variant="warning" className="num-tabular">פג תוקף: {formatDate(v.insurance_expiry)}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </SectionCard>
+              )}
+            </>
+          )}
+
+          {/* -------------------------------------------------------------- */}
+          {/* Tab: תחזית                                                     */}
+          {/* -------------------------------------------------------------- */}
+          {activeTab === 'forecast' && forecast && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <StatCard label="תחזית הוצאות חודש הבא" icon={Brain} color="blue" value={formatCurrency(forecast.avgExpenses)} sub="ממוצע 3 חודשים אחרונים" />
+                <StatCard
+                  label="קרן רזרבה מומלצת (10%)" icon={Wallet} color="amber"
+                  value={forecast.reserveFund > 0 ? formatCurrency(forecast.reserveFund) : '—'}
+                  sub={forecast.annualIncome > 0 ? `מתוך הכנסות השנה ${formatCurrency(forecast.annualIncome)}` : 'אין עדיין הכנסות השנה'}
+                />
+              </div>
+
+              <SectionCard icon={TrendingUp} title="גבייה והוצאות" subtitle="6 חודשים אחרונים">
+                <div className="overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr><th>חודש</th><th className="!text-center">שולמו</th><th className="!text-center">סה"כ</th><th className="!text-center">% גבייה</th><th className="!text-left">הוצאות</th></tr>
+                    </thead>
+                    <tbody>
+                      {forecast.months.map((m) => {
+                        const pct = m.total > 0 ? Math.round((m.paid / m.total) * 100) : null
+                        return (
+                          <tr key={m.key}>
+                            <td className="font-semibold">{m.label}</td>
+                            <td className="!text-center num-tabular">{m.paid}</td>
+                            <td className="!text-center num-tabular">{m.total}</td>
+                            <td className="!text-center">
+                              {pct !== null ? (
+                                <span className={cn('px-2 py-0.5 rounded-full text-[11px] font-semibold num-tabular', TONE_CHIP[scoreTone(pct)])}>{pct}%</span>
+                              ) : <span className="text-[var(--text-muted)]">—</span>}
+                            </td>
+                            <td className="!text-left font-semibold num-tabular">{m.expenses > 0 ? formatCurrency(m.expenses) : '—'}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
+            </>
           )}
         </div>
+
+        {/* AI assistant side panel (chat card) */}
+        <aside className="xl:col-span-4 xl:sticky xl:top-20 min-w-0">
+          <SectionCard
+            icon={Sparkles}
+            title="ניתוח AI — בריאות הבניין"
+            subtitle={aiResultTimestamp && !aiLoading ? `עודכן: ${fmtStamp(aiResultTimestamp)}` : 'Claude AI • שמור ל-12 שעות'}
+            tone="primary"
+            bodyClassName="p-4 space-y-3 bg-[var(--bg)]"
+          >
+            {!aiLoading && !aiResult && !aiError && (
+              <div className="flex flex-col items-center text-center py-6">
+                <span className="p-2.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] mb-2">
+                  <Bot className="h-6 w-6" strokeWidth={1.75} />
+                </span>
+                <p className="text-[13px] text-[var(--text-secondary)] max-w-[260px] mb-3">
+                  בקשו מ-Claude לנתח את ציוני הבריאות ולהציע עדיפויות לטיפול.
+                </p>
+                <Button size="sm" onClick={runAiHealthAnalysis} disabled={!healthScore}>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  ניתוח AI
+                </Button>
+              </div>
+            )}
+
+            {(aiLoading || aiResult || aiError) && (
+              <>
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-[var(--radius-lg)] rounded-tr-sm bg-[var(--primary)] text-white px-3.5 py-2 text-[13px] shadow-[var(--shadow)]">
+                    נתח את בריאות הבניין {selectedBuilding.name}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0">
+                    <Bot className="h-4 w-4" strokeWidth={1.75} />
+                  </span>
+                  <div className="flex-1 min-w-0 rounded-[var(--radius-lg)] rounded-tl-sm border border-[var(--border)] bg-[var(--surface)] px-3.5 py-3 shadow-[var(--shadow)] space-y-4">
+                    {aiLoading && (
+                      <div className="flex items-center gap-2 text-[13px] text-[var(--text-secondary)]">
+                        <RefreshCw className="h-4 w-4 animate-spin text-[var(--primary)]" />
+                        Claude מנתח את הבניין...
+                      </div>
+                    )}
+                    {aiError && (
+                      <p className="text-[13px] px-3 py-2 rounded-[var(--radius)] bg-[var(--danger-light)] text-[var(--danger)]">שגיאה: {aiError}</p>
+                    )}
+                    {aiResult && (
+                      <>
+                        {aiResult.summary && (
+                          <p className="text-[13px] text-[var(--text-primary)] leading-relaxed border-r-[3px] border-[var(--primary)] pr-3">
+                            {aiResult.summary}
+                          </p>
+                        )}
+
+                        {aiResult.top_priorities?.length > 0 && (
+                          <div>
+                            <h4 className="text-[11px] font-semibold text-[var(--text-secondary)] mb-2">עדיפויות לטיפול מיידי</h4>
+                            <div className="space-y-2">
+                              {aiResult.top_priorities.map((p, i) => (
+                                <div key={i} className="flex items-start gap-2 p-2.5 rounded-[var(--radius)] border border-[var(--border-light)] bg-[var(--surface-secondary)]">
+                                  <Badge variant={p.urgency === 'high' ? 'danger' : p.urgency === 'medium' ? 'warning' : 'default'}>
+                                    {p.urgency === 'high' ? 'דחוף' : p.urgency === 'medium' ? 'בינוני' : 'נמוך'}
+                                  </Badge>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-semibold text-[var(--text-primary)]">{p.title}</p>
+                                    <p className="text-[12px] text-[var(--text-secondary)] mt-0.5">{p.action}</p>
+                                    {p.impact && <p className="text-[12px] text-[var(--primary)] mt-0.5">השפעה: {p.impact}</p>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {aiResult.quick_wins?.length > 0 && (
+                          <div>
+                            <h4 className="text-[11px] font-semibold text-[var(--text-secondary)] mb-2">ניצחונות מהירים השבוע</h4>
+                            <ul className="space-y-1.5">
+                              {aiResult.quick_wins.map((w, i) => (
+                                <li key={i} className="flex items-start gap-2 text-[13px] text-[var(--text-primary)]">
+                                  <CheckCircle className="h-4 w-4 text-[var(--success)] shrink-0 mt-0.5" />
+                                  {w}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {aiResult.risk_forecast && (
+                          <div className="rounded-[var(--radius)] bg-[var(--warning-light)] border border-[var(--warning)]/20 p-3">
+                            <p className="text-[11px] font-semibold text-[var(--warning)] mb-1 flex items-center gap-1"><Zap className="h-3.5 w-3.5" />תחזית סיכונים 30 יום</p>
+                            <p className="text-[13px] text-[var(--text-primary)]">{aiResult.risk_forecast}</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </SectionCard>
+        </aside>
       </div>
     </div>
   )
