@@ -16,10 +16,27 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   })
 }
 
+// After a new deploy, an open tab still points at the old hashed chunks, which no
+// longer exist. Reload once to pick up the new build instead of showing a crash.
+const isChunkError = (err) => /dynamically imported module|Importing a module script failed|Loading chunk|error loading dynamically/i.test(err?.message || '')
+function reloadForNewBuild() {
+  try {
+    const last = Number(sessionStorage.getItem('chunk-reload-at') || 0)
+    if (Date.now() - last < 30000) return false
+    sessionStorage.setItem('chunk-reload-at', String(Date.now()))
+  } catch { /* storage blocked — reload anyway */ }
+  window.location.reload()
+  return true
+}
+window.addEventListener('vite:preloadError', (e) => { if (reloadForNewBuild()) e.preventDefault() })
+
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
-  componentDidCatch(error, info) { console.error('App crash:', error, info); Sentry.captureException(error) }
+  componentDidCatch(error, info) {
+    if (isChunkError(error) && reloadForNewBuild()) return
+    console.error('App crash:', error, info); Sentry.captureException(error)
+  }
   render() {
     if (this.state.error) {
       return (
