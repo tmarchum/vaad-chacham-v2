@@ -1,23 +1,25 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
+import { useUnitDirectory } from '@/hooks/useUnitDirectory'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { TabGroup } from '@/components/ui/tabs'
-import { Progress } from '@/components/ui/progress'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { SearchBar } from '@/components/common/SearchBar'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
-import { PageHeader } from '@/components/common/PageHeader'
-import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank, Download } from 'lucide-react'
+import { HEBREW_MONTHS } from '@/lib/constants'
+import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank, Download, Printer, Scale, CalendarDays, Wallet, Timer, CheckCircle2, Building2, Gauge } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const TABS = [
-  { key: 'financial', label: 'כספי' },
-  { key: 'residents', label: 'דיירים' },
-  { key: 'maintenance', label: 'תחזוקה' },
-  { key: 'budget', label: 'תקציב' },
+  { key: 'financial', label: 'כספי', icon: BarChart2 },
+  { key: 'residents', label: 'דיירים', icon: Users },
+  { key: 'maintenance', label: 'תחזוקה', icon: Wrench },
+  { key: 'budget', label: 'תקציב', icon: PiggyBank },
 ]
 
 const PERIODS = [
@@ -28,7 +30,8 @@ const PERIODS = [
   { key: 'custom', label: 'טווח מותאם' },
 ]
 
-import { HEBREW_MONTHS } from '@/lib/constants'
+// Same categorical palette the Expenses page uses for its breakdown.
+const PALETTE = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#64748b', '#ec4899']
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -115,105 +118,46 @@ function exportToCSV(filename, headers, rows) {
   URL.revokeObjectURL(url)
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+const tone = (n) => (n >= 0 ? 'text-[var(--success)]' : 'text-[var(--danger)]')
 
-const STAT_GRADIENTS = {
-  '#22c55e': 'from-emerald-500 to-emerald-600',
-  '#ef4444': 'from-red-500 to-red-600',
-  '#f59e0b': 'from-amber-500 to-amber-600',
-  '#6366f1': 'from-blue-500 to-blue-600',
-  '#06b6d4': 'from-cyan-500 to-cyan-600',
+function RateChip({ rate }) {
+  const cls = rate >= 80
+    ? 'bg-[var(--success-light)] text-[var(--success)]'
+    : rate >= 50
+      ? 'bg-[var(--warning-light)] text-[var(--warning)]'
+      : 'bg-[var(--danger-light)] text-[var(--danger)]'
+  return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold num-tabular ${cls}`}>{rate}%</span>
 }
 
-function StatCard({ icon: Icon, label, value, sub, color = 'var(--primary)', className = '' }) {
-  const gradient = STAT_GRADIENTS[color] || 'from-blue-500 to-blue-600'
+function BarRow({ label, valueText, pct, color }) {
   return (
-    <Card className={cn('overflow-hidden border border-[var(--border)] hover:shadow-md transition-all', className)}>
-      <div className={`h-1 bg-gradient-to-r ${gradient}`} />
-      <CardContent className="flex items-start gap-3 p-4">
-        <div
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} shadow-sm`}
-        >
-          <Icon size={20} className="text-white" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-            {label}
-          </p>
-          <p className="mt-0.5 text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-            {value}
-          </p>
-          {sub && (
-            <div className="mt-1">{sub}</div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function HorizontalBar({ label, amount, pct, color = 'var(--primary)' }) {
-  return (
-    <div className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-slate-50/50 transition-colors">
-      <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-          <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
-        </div>
-        <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-          {formatCurrency(amount)}{' '}
-          <span className="text-xs font-normal text-[var(--text-muted)]">({Math.round(pct)}%)</span>
+    <div>
+      <div className="flex items-center justify-between gap-2 text-[12px]">
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+          <span className="truncate font-medium text-[var(--text-primary)]">{label}</span>
         </span>
+        <span className="shrink-0 num-tabular">{valueText}</span>
       </div>
-      <div
-        className="h-2 w-full overflow-hidden rounded-full"
-        style={{ backgroundColor: 'var(--border-light, #e5e7eb)' }}
-      >
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }}
-        />
+      <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-container)] overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, pct)}%`, background: color }} />
       </div>
     </div>
   )
+}
+
+function TableShell({ children }) {
+  return <div className="overflow-x-auto">{children}</div>
 }
 
 // ---------------------------------------------------------------------------
 // Tab: Financial
 // ---------------------------------------------------------------------------
 
-function FinancialTab({ payments, expenses, period, buildingId, customFrom, customTo }) {
-  // Filter payments
-  const filteredPayments = useMemo(() => {
-    return payments.filter((p) => {
-      const matchBuilding = !buildingId || buildingId === 'all' || p.buildingId === buildingId
-      const dateField = p.status === 'paid' ? p.paidAt : p.month
-      return matchBuilding && inPeriod(dateField, period, customFrom, customTo)
-    })
-  }, [payments, buildingId, period, customFrom, customTo])
-
-  const paidPayments = filteredPayments.filter((p) => p.status === 'paid')
-  const totalIncome = sumBy(paidPayments, 'amount')
-  const totalExpected = sumBy(filteredPayments, 'amount')
-  const collectionRate = totalExpected > 0 ? (totalIncome / totalExpected) * 100 : 0
-
-  // Filter expenses
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter((e) => {
-      const matchBuilding = !buildingId || buildingId === 'all' || e.buildingId === buildingId
-      return matchBuilding && inPeriod(e.date, period, customFrom, customTo)
-    })
-  }, [expenses, buildingId, period, customFrom, customTo])
-
-  const totalExpenses = sumBy(filteredExpenses, 'amount')
-  const netBalance = totalIncome - totalExpenses
-
+function FinancialTab({ payments, expenses, buildingId, filteredExpenses, periodLabel }) {
   // Monthly breakdown (last 6 months)
-  const monthKeys = getLast6MonthKeys()
   const monthlyRows = useMemo(() => {
-    return monthKeys.map((key) => {
+    return getLast6MonthKeys().map((key) => {
       const monthPayments = payments.filter((p) => {
         const matchBuilding = !buildingId || buildingId === 'all' || p.buildingId === buildingId
         return matchBuilding && getMonthKey(p.status === 'paid' ? p.paidAt : p.month) === key
@@ -232,7 +176,7 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
 
       return { key, income, expenses: expenseSum, net, rate }
     })
-  }, [monthKeys, payments, expenses, buildingId])
+  }, [payments, expenses, buildingId])
 
   // Expense by category
   const expenseByCategory = useMemo(() => {
@@ -249,11 +193,6 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
       pct: total > 0 ? (amt / total) * 100 : 0,
     }))
   }, [filteredExpenses])
-
-  const CATEGORY_COLORS = [
-    '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4',
-    '#a855f7', '#ec4899', '#14b8a6',
-  ]
 
   // SVG chart data
   const chartData = monthlyRows.map((row) => ({
@@ -274,93 +213,43 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
   const barW = Math.min(28, barGroupW * 0.35)
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => ({ pct: t, value: Math.round(chartMax * t) }))
 
+  const totals = monthlyRows.reduce((a, r) => ({ income: a.income + r.income, expenses: a.expenses + r.expenses }), { income: 0, expenses: 0 })
+
   return (
     <div className="space-y-6">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard
-          icon={TrendingUp}
-          label="הכנסות"
-          value={formatCurrency(totalIncome)}
-          color="#22c55e"
-        />
-        <StatCard
-          icon={TrendingDown}
-          label="הוצאות"
-          value={formatCurrency(totalExpenses)}
-          color="#ef4444"
-        />
-        <StatCard
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Chart */}
+        <SectionCard
+          className="xl:col-span-8"
           icon={BarChart2}
-          label="מאזן"
-          value={formatCurrency(netBalance)}
-          color={netBalance >= 0 ? '#22c55e' : '#ef4444'}
-        />
-        <StatCard
-          icon={PiggyBank}
-          label="אחוז גבייה"
-          value={`${Math.round(collectionRate)}%`}
-          color="var(--primary)"
-          sub={<Progress value={collectionRate} />}
-        />
-      </div>
-
-      {/* SVG Bar Chart */}
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-green-500 to-emerald-500" />
-        <CardContent className="p-4">
-          <h3 className="mb-3 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-sm">
-              <BarChart2 size={16} className="text-white" />
+          title="הכנסות מול הוצאות"
+          subtitle="6 חודשים אחרונים"
+          actions={
+            <div className="flex items-center gap-3 text-[11px] text-[var(--text-secondary)]">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--success)]" />הכנסות</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-[var(--danger)]" />הוצאות</span>
             </div>
-            הכנסות מול הוצאות — 6 חודשים אחרונים
-          </h3>
-          {/* Legend */}
-          <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#22c55e' }} />
-              <span>הכנסות</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#ef4444' }} />
-              <span>הוצאות</span>
-            </div>
-          </div>
+          }
+          bodyClassName="p-4"
+        >
           <div style={{ width: '100%', overflowX: 'auto' }}>
             <svg
               viewBox={`0 0 ${svgW} ${svgH}`}
-              width={svgW}
-              height={svgH}
-              style={{ display: 'block', minWidth: '300px' }}
+              width="100%"
+              style={{ display: 'block', minWidth: '300px', maxHeight: 260 }}
             >
-              {/* Y-axis ticks and grid lines */}
               {ticks.map(({ pct, value }) => {
                 const y = padT + innerH * (1 - pct)
                 return (
                   <g key={pct}>
-                    <line
-                      x1={padL}
-                      y1={y}
-                      x2={svgW - padR}
-                      y2={y}
-                      stroke="#e5e7eb"
-                      strokeWidth="1"
-                    />
-                    <text
-                      x={padL - 4}
-                      y={y + 4}
-                      textAnchor="end"
-                      fontSize="9"
-                      fill="#9ca3af"
-                    >
+                    <line x1={padL} y1={y} x2={svgW - padR} y2={y} style={{ stroke: 'var(--border)' }} strokeWidth="1" />
+                    <text x={padL - 4} y={y + 4} textAnchor="end" fontSize="9" style={{ fill: 'var(--text-muted)' }}>
                       {value >= 1000 ? `${Math.round(value / 1000)}k` : value}
                     </text>
                   </g>
                 )
               })}
-              {/* Y axis line */}
-              <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} stroke="#d1d5db" strokeWidth="1" />
-              {/* Bars */}
+              <line x1={padL} y1={padT} x2={padL} y2={padT + innerH} style={{ stroke: 'var(--outline-variant)' }} strokeWidth="1" />
               {chartData.map((d, i) => {
                 const groupX = padL + i * barGroupW + barGroupW / 2
                 const incomeH = chartMax > 0 ? (d.income / chartMax) * innerH : 0
@@ -369,33 +258,10 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
                 const expensesX = groupX + 1
                 const labelY = padT + innerH + 14
                 return (
-                  <g key={d.label}>
-                    {/* Income bar */}
-                    <rect
-                      x={incomeX}
-                      y={padT + innerH - incomeH}
-                      width={barW}
-                      height={incomeH}
-                      fill="#22c55e"
-                      rx="2"
-                    />
-                    {/* Expenses bar */}
-                    <rect
-                      x={expensesX}
-                      y={padT + innerH - expensesH}
-                      width={barW}
-                      height={expensesH}
-                      fill="#ef4444"
-                      rx="2"
-                    />
-                    {/* X-axis label */}
-                    <text
-                      x={groupX}
-                      y={labelY}
-                      textAnchor="middle"
-                      fontSize="10"
-                      fill="#6b7280"
-                    >
+                  <g key={d.label + i}>
+                    <rect x={incomeX} y={padT + innerH - incomeH} width={barW} height={incomeH} style={{ fill: 'var(--success)' }} rx="2" />
+                    <rect x={expensesX} y={padT + innerH - expensesH} width={barW} height={expensesH} style={{ fill: 'var(--danger)' }} rx="2" />
+                    <text x={groupX} y={labelY} textAnchor="middle" fontSize="10" style={{ fill: 'var(--text-secondary)' }}>
                       {d.label}
                     </text>
                   </g>
@@ -403,85 +269,60 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
               })}
             </svg>
           </div>
-        </CardContent>
-      </Card>
+        </SectionCard>
 
-      {/* Monthly breakdown */}
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-500" />
-        <CardContent className="p-4">
-          <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-500 flex items-center justify-center shadow-sm">
-              <BarChart2 size={16} className="text-white" />
-            </div>
-            פירוט חודשי (6 חודשים אחרונים)
-          </h3>
-          <div className="overflow-x-auto">
-            {/* Header */}
-            <div
-              className="mb-2 grid grid-cols-5 gap-2 border-b pb-2 text-xs font-medium"
-              style={{
-                borderColor: 'var(--border)',
-                color: 'var(--text-secondary)',
-                gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
-              }}
-            >
-              <span>חודש</span>
-              <span className="text-left">הכנסות</span>
-              <span className="text-left">הוצאות</span>
-              <span className="text-left">נטו</span>
-              <span className="text-left">% גבייה</span>
-            </div>
-            {monthlyRows.map((row) => (
-              <div
-                key={row.key}
-                className="group grid gap-2 border-b py-2.5 text-sm hover:bg-slate-50/50 transition-colors rounded-lg px-1"
-                style={{
-                  borderColor: 'var(--border)',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
-                }}
-              >
-                <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{monthLabel(row.key)}</span>
-                <span className="font-medium" style={{ color: '#22c55e' }}>{formatCurrency(row.income)}</span>
-                <span className="font-medium" style={{ color: '#ef4444' }}>{formatCurrency(row.expenses)}</span>
-                <span className="font-semibold" style={{ color: row.net >= 0 ? '#22c55e' : '#ef4444' }}>
-                  {formatCurrency(row.net)}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${row.rate >= 80 ? 'bg-emerald-500' : row.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} />
-                  <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{row.rate}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Expense by category */}
-      {expenseByCategory.length > 0 && (
-        <Card className="overflow-hidden border border-[var(--border)]">
-          <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
-          <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-sm">
-                <PiggyBank size={16} className="text-white" />
-              </div>
-              הוצאות לפי קטגוריה
-            </h3>
-            <div className="space-y-1">
+        {/* Expense by category */}
+        <SectionCard
+          className="xl:col-span-4 xl:sticky xl:top-20"
+          icon={PiggyBank}
+          title="הוצאות לפי קטגוריה"
+          subtitle={periodLabel}
+          bodyClassName="p-4"
+        >
+          {expenseByCategory.length === 0 ? (
+            <p className="py-6 text-center text-[12px] text-[var(--text-muted)]">אין הוצאות בתקופה</p>
+          ) : (
+            <div className="space-y-3">
               {expenseByCategory.map(({ cat, amt, pct }, i) => (
-                <HorizontalBar
+                <BarRow
                   key={cat}
                   label={cat}
-                  amount={amt}
                   pct={pct}
-                  color={CATEGORY_COLORS[i % CATEGORY_COLORS.length]}
+                  color={PALETTE[i % PALETTE.length]}
+                  valueText={<><strong>{formatCurrency(amt)}</strong> <span className="text-[var(--text-muted)]">({Math.round(pct)}%)</span></>}
                 />
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </SectionCard>
+      </div>
+
+      {/* Monthly breakdown ledger */}
+      <SectionCard
+        icon={CalendarDays}
+        title="פירוט חודשי"
+        subtitle="6 חודשים אחרונים"
+        footer={<span className="num-tabular">סה״כ הכנסות {formatCurrency(totals.income)} • סה״כ הוצאות {formatCurrency(totals.expenses)}</span>}
+      >
+        <TableShell>
+          <table className="ds-table">
+            <thead>
+              <tr><th>חודש</th><th className="!text-left">הכנסות</th><th className="!text-left">הוצאות</th><th className="!text-left">נטו</th><th>% גבייה</th></tr>
+            </thead>
+            <tbody>
+              {monthlyRows.map((row) => (
+                <tr key={row.key}>
+                  <td className="whitespace-nowrap text-[13px] font-semibold">{monthLabel(row.key)}</td>
+                  <td className="!text-left whitespace-nowrap num-tabular text-[13px] text-[var(--success)] font-medium">{formatCurrency(row.income)}</td>
+                  <td className="!text-left whitespace-nowrap num-tabular text-[13px] text-[var(--danger)] font-medium">{formatCurrency(row.expenses)}</td>
+                  <td className={cn('!text-left whitespace-nowrap num-tabular text-[13px] font-bold', tone(row.net))}>{formatCurrency(row.net)}</td>
+                  <td className="whitespace-nowrap"><RateChip rate={row.rate} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </TableShell>
+      </SectionCard>
     </div>
   )
 }
@@ -490,7 +331,7 @@ function FinancialTab({ payments, expenses, period, buildingId, customFrom, cust
 // Tab: Residents
 // ---------------------------------------------------------------------------
 
-function ResidentsTab({ units, payments, buildingId }) {
+function ResidentsTab({ units, payments, buildingId, directory }) {
   const [search, setSearch] = useState('')
 
   const filteredUnits = useMemo(() => {
@@ -509,20 +350,21 @@ function ResidentsTab({ units, payments, buildingId }) {
       const totalDebt = sumBy([...pending, ...overdue], 'amount')
       return {
         unit,
+        name: directory.byId[unit.id]?.name || '',
         paidCount: paid.length,
         pendingCount: pending.length,
         overdueCount: overdue.length,
         totalPaid,
         totalDebt,
       }
-    })
-  }, [filteredUnits, payments])
+    }).sort((a, b) => String(a.unit.number || '').localeCompare(String(b.unit.number || ''), 'he', { numeric: true }))
+  }, [filteredUnits, payments, directory])
 
   const searched = useMemo(() => {
     if (!search.trim()) return rows
     const q = search.trim().toLowerCase()
     return rows.filter((r) => {
-      const name = (r.unit.ownerName || r.unit.tenant_name || '').toLowerCase()
+      const name = r.name.toLowerCase()
       const num = String(r.unit.number || '').toLowerCase()
       return name.includes(q) || num.includes(q)
     })
@@ -530,111 +372,79 @@ function ResidentsTab({ units, payments, buildingId }) {
 
   const totalPaidAll = rows.reduce((s, r) => s + r.totalPaid, 0)
   const totalDebtAll = rows.reduce((s, r) => s + r.totalDebt, 0)
+  const debtors = rows.filter((r) => r.totalDebt > 0).length
 
   return (
-    <div className="space-y-4">
-      {/* Search */}
-      <input
-        type="text"
-        placeholder="חיפוש לפי שם או מספר דירה..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
-        style={{
-          borderColor: 'var(--border)',
-          backgroundColor: 'var(--surface)',
-          color: 'var(--text-primary)',
-        }}
-        dir="rtl"
-      />
-
-      {searched.length === 0 && (
-        <p className="px-4 py-6 text-center text-sm" style={{ color: 'var(--text-secondary)' }}>
-          אין נתונים
-        </p>
-      )}
-
-      {/* Resident cards */}
-      <div className="space-y-2">
-        {searched.map(({ unit, paidCount, pendingCount, overdueCount, totalPaid, totalDebt }) => {
-          const hasDebt = totalDebt > 0
-          const debtCount = pendingCount + overdueCount
-          return (
-            <div
-              key={unit.id}
-              className={cn(
-                'group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all',
-                hasDebt ? 'border-red-200/60' : 'border-[var(--border)]'
-              )}
-            >
-              {/* Unit number circle */}
-              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${hasDebt ? 'from-red-500 to-red-600' : 'from-emerald-500 to-emerald-600'} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                {unit.number || unit.unit_number}
-              </div>
-
-              {/* Main info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                    דירה {unit.number || unit.unit_number}
-                  </span>
-                </div>
-                <span className="text-xs text-[var(--text-muted)]">
-                  {unit.ownerName || unit.tenant_name || '—'}
-                </span>
-              </div>
-
-              {/* Payment status badges */}
-              <div className="flex items-center gap-2">
-                {paidCount > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full shrink-0 bg-emerald-500" />
-                    <span className="text-xs font-medium text-emerald-700">{paidCount} שולם</span>
-                  </div>
-                )}
-                {debtCount > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full shrink-0 bg-red-500" />
-                    <span className="text-xs font-medium text-red-700">{debtCount} חוב</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Amounts */}
-              <div className="text-left min-w-[100px]">
-                <div className="text-[13px] font-bold text-emerald-600">{formatCurrency(totalPaid)}</div>
-                {hasDebt && (
-                  <div className="text-[11px] font-semibold text-red-500">חוב: {formatCurrency(totalDebt)}</div>
-                )}
-              </div>
-            </div>
-          )
-        })}
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label="סה״כ שולם (כל הזמנים)" icon={Wallet} color="emerald" value={formatCurrency(totalPaidAll)} sub={`${rows.length} דירות`} />
+        <StatCard label="חוב פתוח" icon={TrendingDown} color={totalDebtAll > 0 ? 'red' : 'emerald'} value={formatCurrency(totalDebtAll)} sub="ממתין + באיחור" />
+        <StatCard label="דירות עם חוב" icon={Users} color={debtors ? 'amber' : 'emerald'} value={String(debtors)} sub={rows.length ? `${Math.round((debtors / rows.length) * 100)}% מהדירות` : '—'} />
       </div>
 
-      {/* Summary card */}
-      {searched.length > 0 && (
-        <Card className="overflow-hidden border-2 border-[var(--border)]">
-          <div className="h-1 bg-gradient-to-r from-blue-500 to-purple-500" />
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-[var(--text-primary)]">סה"כ</span>
-              <div className="flex items-center gap-6">
-                <div className="text-left">
-                  <div className="text-xs text-[var(--text-muted)]">שולם</div>
-                  <div className="text-sm font-bold text-emerald-600">{formatCurrency(totalPaidAll)}</div>
-                </div>
-                <div className="text-left">
-                  <div className="text-xs text-[var(--text-muted)]">חוב</div>
-                  <div className={cn('text-sm font-bold', totalDebtAll > 0 ? 'text-red-500' : 'text-[var(--text-secondary)]')}>
-                    {formatCurrency(totalDebtAll)}
+      <SectionCard
+        icon={Users}
+        title="מצב תשלומים לפי דירה"
+        subtitle={`${searched.length} מתוך ${rows.length} דירות`}
+        actions={<SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי שם או מספר דירה..." className="w-full sm:w-64" />}
+        footer={rows.length ? (
+          <span className="num-tabular">שולם: <strong className="text-[var(--success)]">{formatCurrency(totalPaidAll)}</strong> • חוב: <strong className={totalDebtAll > 0 ? 'text-[var(--danger)]' : ''}>{formatCurrency(totalDebtAll)}</strong></span>
+        ) : null}
+      >
+        {searched.length === 0 ? (
+          <p className="px-4 py-8 text-center text-[13px] text-[var(--text-muted)]">אין נתונים</p>
+        ) : (
+          <>
+            <div className="hidden md:block">
+              <TableShell>
+                <table className="ds-table">
+                  <thead>
+                    <tr><th>דירה</th><th>דייר/ת</th><th>תשלומים</th><th className="!text-left">שולם</th><th className="!text-left">חוב</th></tr>
+                  </thead>
+                  <tbody>
+                    {searched.map(({ unit, name, paidCount, pendingCount, overdueCount, totalPaid, totalDebt }) => {
+                      const debtCount = pendingCount + overdueCount
+                      return (
+                        <tr key={unit.id} className={totalDebt > 0 ? '!bg-[var(--danger-light)]/30' : ''}>
+                          <td className="whitespace-nowrap text-[13px] font-semibold num-tabular">דירה {unit.number}</td>
+                          <td className="text-[13px]">{name || <span className="text-[var(--text-muted)]">—</span>}</td>
+                          <td className="whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              {paidCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--success-light)] text-[var(--success)] num-tabular">{paidCount} שולם</span>}
+                              {debtCount > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--danger-light)] text-[var(--danger)] num-tabular">{debtCount} חוב</span>}
+                              {paidCount === 0 && debtCount === 0 && <span className="text-[11px] text-[var(--text-muted)]">—</span>}
+                            </div>
+                          </td>
+                          <td className="!text-left whitespace-nowrap num-tabular text-[13px] font-bold text-[var(--success)]">{formatCurrency(totalPaid)}</td>
+                          <td className={cn('!text-left whitespace-nowrap num-tabular text-[13px] font-bold', totalDebt > 0 ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]')}>{formatCurrency(totalDebt)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </TableShell>
+            </div>
+            <div className="md:hidden divide-y divide-[var(--border-light)]">
+              {searched.map(({ unit, name, totalPaid, totalDebt }) => (
+                <div key={unit.id} className="flex items-center gap-3 px-4 py-3">
+                  <span className={cn('shrink-0 h-10 w-10 rounded-[var(--radius)] flex items-center justify-center text-[13px] font-bold num-tabular',
+                    totalDebt > 0 ? 'bg-[var(--danger-light)] text-[var(--danger)]' : 'bg-[var(--surface-secondary)] text-[var(--primary)]')}>
+                    {unit.number}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-semibold text-[var(--text-primary)] truncate">דירה {unit.number}</span>
+                    <span className="block text-[11px] text-[var(--text-muted)] truncate">{name || '—'}</span>
+                  </div>
+                  <div className="text-left">
+                    <div className="text-[13px] font-bold num-tabular text-[var(--success)]">{formatCurrency(totalPaid)}</div>
+                    {totalDebt > 0 && <div className="text-[11px] font-semibold num-tabular text-[var(--danger)]">חוב: {formatCurrency(totalDebt)}</div>}
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </>
+        )}
+      </SectionCard>
     </div>
   )
 }
@@ -643,7 +453,7 @@ function ResidentsTab({ units, payments, buildingId }) {
 // Tab: Maintenance
 // ---------------------------------------------------------------------------
 
-function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
+function MaintenanceTab({ issues, period, buildingId, customFrom, customTo, periodLabel }) {
   const filtered = useMemo(() => {
     return issues.filter((i) => {
       const matchBuilding = !buildingId || buildingId === 'all' || i.buildingId === buildingId
@@ -707,8 +517,6 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
       .map(([name, v]) => ({ name, ...v }))
   }, [filtered])
 
-  const CATEGORY_COLORS = ['#6366f1', '#f59e0b', '#ef4444', '#22c55e', '#06b6d4', '#a855f7']
-
   function statusBadge(status) {
     // Collapsed to the same five committee-facing buckets used on the Issues board.
     const BUCKET = {
@@ -731,146 +539,89 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo }) {
 
   return (
     <div className="space-y-6">
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard
-          icon={Wrench}
-          label="תקלות פתוחות"
-          value={openIssues.length}
-          color="#ef4444"
-        />
-        <StatCard
-          icon={Wrench}
-          label="תקלות שנסגרו"
-          value={resolvedIssues.length}
-          color="#22c55e"
-        />
-        <StatCard
-          icon={PiggyBank}
-          label="עלות כוללת"
-          value={formatCurrency(totalCost)}
-          color="#f59e0b"
-        />
-        <StatCard
-          icon={BarChart2}
-          label="זמן תיקון ממוצע"
-          value={avgRepairDays != null ? `${avgRepairDays} ימים` : '—'}
-          color="var(--primary)"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard icon={Wrench} label="תקלות פתוחות" value={String(openIssues.length)} color={openIssues.length ? 'red' : 'emerald'} sub={periodLabel} />
+        <StatCard icon={CheckCircle2} label="תקלות שנסגרו" value={String(resolvedIssues.length)} color="emerald"
+          sub={filtered.length ? `${Math.round((resolvedIssues.length / filtered.length) * 100)}% מהתקלות בתקופה` : 'אין תקלות בתקופה'} />
+        <StatCard icon={PiggyBank} label="עלות כוללת" value={formatCurrency(totalCost)} color="amber" sub={`${filtered.length} תקלות`} />
+        <StatCard icon={Timer} label="זמן תיקון ממוצע" value={avgRepairDays != null ? `${avgRepairDays} ימים` : '—'} color="blue" sub="מדיווח ועד סגירה" />
       </div>
 
-      {/* Top categories */}
-      {byCategory.length > 0 && (
-        <Card className="overflow-hidden border border-[var(--border)]">
-          <div className="h-1 bg-gradient-to-r from-blue-500 to-purple-500" />
-          <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-sm">
-                <Wrench size={16} className="text-white" />
-              </div>
-              תקלות לפי קטגוריה
-            </h3>
-            <div className="space-y-1">
+      {filtered.length === 0 && (
+        <p className="p-8 text-center text-[13px] text-[var(--text-muted)] rounded-[var(--radius)] border border-dashed border-[var(--border)] bg-[var(--surface)]">אין תקלות בתקופה הנבחרת</p>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <div className="xl:col-span-8 space-y-6">
+          {/* Top 5 most expensive */}
+          {top5.length > 0 && (
+            <SectionCard icon={TrendingDown} title="5 התקלות היקרות ביותר" subtitle={periodLabel}>
+              <TableShell>
+                <table className="ds-table">
+                  <thead>
+                    <tr><th>#</th><th>תקלה</th><th>קטגוריה</th><th>סטטוס</th><th className="!text-left">עלות</th></tr>
+                  </thead>
+                  <tbody>
+                    {top5.map((issue, idx) => (
+                      <tr key={issue.id}>
+                        <td className="text-[12px] font-bold text-[var(--text-muted)] num-tabular">{idx + 1}</td>
+                        <td className="min-w-[180px] text-[13px] font-semibold">{issue.title || issue.description || '—'}</td>
+                        <td className="whitespace-nowrap text-[12px] text-[var(--text-secondary)]">{issue.category || issue.priority || '—'}</td>
+                        <td className="whitespace-nowrap">{statusBadge(issue.status)}</td>
+                        <td className="!text-left whitespace-nowrap num-tabular text-[13px] font-bold">{formatCurrency(issue.cost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableShell>
+            </SectionCard>
+          )}
+
+          {/* Vendor utilization */}
+          {byVendor.length > 0 && (
+            <SectionCard icon={Users} title="ספקים ונותני שירות" subtitle={`${byVendor.length} ספקים`}>
+              <TableShell>
+                <table className="ds-table">
+                  <thead>
+                    <tr><th>ספק</th><th>תקלות</th><th className="!text-left">עלות מצטברת</th></tr>
+                  </thead>
+                  <tbody>
+                    {byVendor.map(({ name, count, cost }) => (
+                      <tr key={name}>
+                        <td className="text-[13px] font-semibold">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="h-7 w-7 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] flex items-center justify-center text-[12px] font-bold">{name.charAt(0)}</span>
+                            {name}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap text-[12px] num-tabular">{count}</td>
+                        <td className="!text-left whitespace-nowrap num-tabular text-[13px] font-bold">{formatCurrency(cost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </TableShell>
+            </SectionCard>
+          )}
+        </div>
+
+        {/* Top categories */}
+        {byCategory.length > 0 && (
+          <SectionCard className="xl:col-span-4 xl:sticky xl:top-20" icon={Wrench} title="תקלות לפי קטגוריה" subtitle={periodLabel} bodyClassName="p-4">
+            <div className="space-y-3">
               {byCategory.map(({ cat, count, pct }, i) => (
-                <div key={cat} className="group flex flex-col gap-1.5 p-2.5 rounded-lg hover:bg-slate-50/50 transition-colors">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }} />
-                      <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{cat}</span>
-                    </div>
-                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{count} <span className="font-normal text-xs text-[var(--text-muted)]">תקלות</span></span>
-                  </div>
-                  <div
-                    className="h-2 w-full overflow-hidden rounded-full"
-                    style={{ backgroundColor: 'var(--border-light, #e5e7eb)' }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, pct)}%`,
-                        backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
-                      }}
-                    />
-                  </div>
-                </div>
+                <BarRow
+                  key={cat}
+                  label={cat}
+                  pct={pct}
+                  color={PALETTE[i % PALETTE.length]}
+                  valueText={<><strong>{count}</strong> <span className="text-[var(--text-muted)]">תקלות</span></>}
+                />
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Top 5 most expensive */}
-      {top5.length > 0 && (
-        <Card className="overflow-hidden border border-[var(--border)]">
-          <div className="h-1 bg-gradient-to-r from-red-500 to-orange-500" />
-          <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-sm">
-                <TrendingDown size={16} className="text-white" />
-              </div>
-              5 התקלות היקרות ביותר
-            </h3>
-            <div className="space-y-2">
-              {top5.map((issue, idx) => (
-                <div
-                  key={issue.id}
-                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
-                    {idx + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {issue.title || issue.description || '—'}
-                    </p>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {issue.category || issue.priority || ''}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-sm font-bold" style={{ color: '#f59e0b' }}>
-                      {formatCurrency(issue.cost)}
-                    </span>
-                    {statusBadge(issue.status)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Vendor utilization */}
-      {byVendor.length > 0 && (
-        <Card className="overflow-hidden border border-[var(--border)]">
-          <div className="h-1 bg-gradient-to-r from-cyan-500 to-blue-500" />
-          <CardContent className="p-4">
-            <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-sm">
-                <Users size={16} className="text-white" />
-              </div>
-              ספקים ונותני שירות
-            </h3>
-            <div className="space-y-2">
-              {byVendor.map(({ name, count, cost }) => (
-                <div
-                  key={name}
-                  className="group flex items-center gap-4 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
-                    {name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-[var(--text-primary)] truncate block">{name}</span>
-                    <span className="text-xs text-[var(--text-muted)]">{count} תקלות</span>
-                  </div>
-                  <span className="text-sm font-bold text-amber-600">{formatCurrency(cost)}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          </SectionCard>
+        )}
+      </div>
     </div>
   )
 }
@@ -909,12 +660,14 @@ function BudgetTab({ units, expenses, buildingId }) {
   const gap = annualRevenue - projectedAnnualExpenses
   const budgetUsedPct =
     annualRevenue > 0 ? Math.min(100, (projectedAnnualExpenses / annualRevenue) * 100) : 0
+  const usedColor = budgetUsedPct > 90 ? 'red' : budgetUsedPct > 70 ? 'amber' : 'blue'
+  const usedBar = budgetUsedPct > 90 ? 'bg-[var(--danger)]' : budgetUsedPct > 70 ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'
 
   // Reserve fund
   const recommendedReserve = annualRevenue * 0.1
   const hypotheticalAvailable = annualRevenue - annualExpenses
 
-  // Annual projection table: remaining months (currentMonthIdx+1 .. 11)
+  // Annual projection table: remaining months (currentMonthIdx .. 11)
   const remainingMonths = useMemo(() => {
     const months = []
     for (let m = currentMonthIdx; m < 12; m++) {
@@ -930,139 +683,60 @@ function BudgetTab({ units, expenses, buildingId }) {
 
   return (
     <div className="space-y-6">
-      {/* Overview cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard
-          icon={TrendingUp}
-          label="הכנסה שנתית צפויה"
-          value={formatCurrency(annualRevenue)}
-          color="#22c55e"
-        />
-        <StatCard
-          icon={TrendingDown}
-          label="הוצאות שנתיות צפויות"
-          value={formatCurrency(projectedAnnualExpenses)}
-          color="#ef4444"
-        />
-        <StatCard
-          icon={BarChart2}
-          label="פער תקציבי"
-          value={formatCurrency(gap)}
-          color={gap >= 0 ? '#22c55e' : '#ef4444'}
-        />
-        <StatCard
-          icon={PiggyBank}
-          label="ניצול תקציב"
-          value={`${Math.round(budgetUsedPct)}%`}
-          color={budgetUsedPct > 90 ? '#ef4444' : budgetUsedPct > 70 ? '#f59e0b' : 'var(--primary)'}
-          sub={
-            <Progress
-              value={budgetUsedPct}
-              color={budgetUsedPct > 90 ? '#ef4444' : budgetUsedPct > 70 ? '#f59e0b' : undefined}
-            />
-          }
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard icon={TrendingUp} label="הכנסה שנתית צפויה" value={formatCurrency(annualRevenue)} color="emerald" sub={`${formatCurrency(monthlyRevenue)} לחודש`} />
+        <StatCard icon={TrendingDown} label="הוצאות שנתיות צפויות" value={formatCurrency(projectedAnnualExpenses)} color="red" valueClassName="text-[var(--text-primary)]" sub={`ממוצע ${formatCurrency(Math.round(avgMonthlyExpenses))} לחודש`} />
+        <StatCard icon={Scale} label="פער תקציבי" value={formatCurrency(gap)} color={gap >= 0 ? 'emerald' : 'red'} sub={gap >= 0 ? 'עודף צפוי' : 'גירעון צפוי'} />
+        <StatCard icon={Gauge} label="ניצול תקציב" value={`${Math.round(budgetUsedPct)}%`} color={usedColor} progress={budgetUsedPct} />
       </div>
 
-      {/* Budget bar */}
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-emerald-500 to-blue-500" />
-        <CardContent className="p-4">
-          <h3 className="mb-3 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center shadow-sm">
-              <BarChart2 size={16} className="text-white" />
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <div className="xl:col-span-8 space-y-6">
+          {/* Budget bar */}
+          <SectionCard icon={BarChart2} title={`תקציב שנתי — ${currentYear}`} subtitle="הוצאות צפויות מול הכנסות" bodyClassName="p-4">
+            <div className="mb-2 flex justify-between text-[12px] text-[var(--text-secondary)] num-tabular">
+              <span>הוצאות צפויות: {formatCurrency(projectedAnnualExpenses)}</span>
+              <span>הכנסות: {formatCurrency(annualRevenue)}</span>
             </div>
-            תקציב שנתי — {currentYear}
-          </h3>
-          <div className="mb-2 flex justify-between text-xs" style={{ color: 'var(--text-secondary)' }}>
-            <span>הוצאות צפויות: {formatCurrency(projectedAnnualExpenses)}</span>
-            <span>הכנסות: {formatCurrency(annualRevenue)}</span>
-          </div>
-          <Progress
-            value={budgetUsedPct}
-            color={budgetUsedPct > 90 ? '#ef4444' : budgetUsedPct > 70 ? '#f59e0b' : '#22c55e'}
-            className="h-4"
-          />
-        </CardContent>
-      </Card>
+            <div className="h-4 w-full rounded-full bg-[var(--surface-container)] overflow-hidden">
+              <div className={cn('h-full rounded-full transition-all duration-700', usedBar)} style={{ width: `${budgetUsedPct}%` }} />
+            </div>
+          </SectionCard>
 
-      {/* Reserve fund */}
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-purple-500 to-blue-500" />
-        <CardContent className="p-4">
-          <h3 className="mb-3 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center shadow-sm">
-              <PiggyBank size={16} className="text-white" />
-            </div>
-            קרן רזרבה מומלצת (10% מהכנסות שנתיות)
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg border p-3" style={{ borderColor: 'var(--border)' }}>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                רזרבה מומלצת
-              </p>
-              <p className="mt-1 text-lg font-bold" style={{ color: 'var(--primary)' }}>
-                {formatCurrency(recommendedReserve)}
-              </p>
-            </div>
-            <div className="rounded-lg border p-3" style={{ borderColor: 'var(--border)' }}>
-              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                עודף היפותטי (הכנסות פחות הוצאות)
-              </p>
-              <p
-                className="mt-1 text-lg font-bold"
-                style={{ color: hypotheticalAvailable >= 0 ? '#22c55e' : '#ef4444' }}
-              >
-                {formatCurrency(hypotheticalAvailable)}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          {/* Monthly projection table */}
+          <SectionCard icon={TrendingUp} title="תחזית חודשית שנתית" subtitle={`${remainingMonths.length} חודשים עד סוף ${currentYear}`}>
+            <TableShell>
+              <table className="ds-table">
+                <thead>
+                  <tr><th>חודש</th><th className="!text-left">הכנסה צפויה</th><th className="!text-left">הוצאות צפויות</th><th className="!text-left">נטו</th></tr>
+                </thead>
+                <tbody>
+                  {remainingMonths.map((row) => (
+                    <tr key={row.label}>
+                      <td className="whitespace-nowrap text-[13px] font-semibold">{row.label}</td>
+                      <td className="!text-left whitespace-nowrap num-tabular text-[13px] text-[var(--success)]">{formatCurrency(row.income)}</td>
+                      <td className="!text-left whitespace-nowrap num-tabular text-[13px] text-[var(--danger)]">{formatCurrency(row.expenses)}</td>
+                      <td className={cn('!text-left whitespace-nowrap num-tabular text-[13px] font-bold', tone(row.net))}>{formatCurrency(row.net)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableShell>
+          </SectionCard>
+        </div>
 
-      {/* Monthly projection table */}
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-blue-500 to-cyan-500" />
-        <CardContent className="p-4">
-          <h3 className="mb-4 text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-sm">
-              <TrendingUp size={16} className="text-white" />
-            </div>
-            תחזית חודשית שנתית
-          </h3>
-          {/* Header */}
-          <div
-            className="mb-1 grid gap-2 border-b pb-2 text-xs font-medium"
-            style={{
-              borderColor: 'var(--border)',
-              color: 'var(--text-secondary)',
-              gridTemplateColumns: '2fr 1fr 1fr 1fr',
-            }}
-          >
-            <span>חודש</span>
-            <span>הכנסה צפויה</span>
-            <span>הוצאות צפויות</span>
-            <span>נטו</span>
+        {/* Reserve fund */}
+        <SectionCard className="xl:col-span-4 xl:sticky xl:top-20" icon={PiggyBank} title="קרן רזרבה מומלצת" subtitle="10% מההכנסות השנתיות" bodyClassName="p-4 space-y-3">
+          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-3">
+            <p className="text-[12px] text-[var(--text-secondary)]">רזרבה מומלצת</p>
+            <p className="mt-1 text-[20px] font-bold num-tabular text-[var(--primary)]">{formatCurrency(recommendedReserve)}</p>
           </div>
-          {remainingMonths.map((row) => (
-            <div
-              key={row.label}
-              className="grid gap-2 border-b py-2 text-sm"
-              style={{
-                borderColor: 'var(--border)',
-                gridTemplateColumns: '2fr 1fr 1fr 1fr',
-              }}
-            >
-              <span style={{ color: 'var(--text-primary)' }}>{row.label}</span>
-              <span style={{ color: '#22c55e' }}>{formatCurrency(row.income)}</span>
-              <span style={{ color: '#ef4444' }}>{formatCurrency(row.expenses)}</span>
-              <span style={{ color: row.net >= 0 ? '#22c55e' : '#ef4444' }}>
-                {formatCurrency(row.net)}
-              </span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-3">
+            <p className="text-[12px] text-[var(--text-secondary)]">עודף היפותטי (הכנסות פחות הוצאות)</p>
+            <p className={cn('mt-1 text-[20px] font-bold num-tabular', tone(hypotheticalAvailable))}>{formatCurrency(hypotheticalAvailable)}</p>
+          </div>
+        </SectionCard>
+      </div>
     </div>
   )
 }
@@ -1077,18 +751,44 @@ export default function Reports() {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
-  const { buildings } = useBuildingContext()
-  const [buildingFilter, setBuildingFilter] = useState('all')
+  const { selectedBuilding } = useBuildingContext()
+  // Data is scoped server-side to the sidebar's building.
+  const buildingFilter = 'all'
+  const scope = { building_id: selectedBuilding?.id }
 
-  // cross-building on purpose — the reports page has an "all buildings" filter
-  // and aggregates totals across every building, so these stay unscoped.
-  const { data: payments, isLoading } = useCollection('payments')
-  const { data: expenses } = useCollection('expenses')
-  const { data: issues } = useCollection('issues')
-  const { data: units } = useCollection('units')
+  const { data: payments, isLoading } = useCollection('payments', scope)
+  const { data: expenses } = useCollection('expenses', scope)
+  const { data: issues } = useCollection('issues', scope)
+  const { data: units } = useCollection('units', scope)
+  const directory = useUnitDirectory(selectedBuilding?.id)
 
   const activeBuildingId =
     buildingFilter === 'all' ? 'all' : buildingFilter
+
+  // Period-level financial KPIs (shown on every tab)
+  const fin = useMemo(() => {
+    const filteredPayments = (payments || []).filter((p) => {
+      const dateField = p.status === 'paid' ? p.paidAt : p.month
+      return inPeriod(dateField, period, customFrom, customTo)
+    })
+    const paidPayments = filteredPayments.filter((p) => p.status === 'paid')
+    const totalIncome = sumBy(paidPayments, 'amount')
+    const totalExpected = sumBy(filteredPayments, 'amount')
+    const collectionRate = totalExpected > 0 ? (totalIncome / totalExpected) * 100 : 0
+    const filteredExpenses = (expenses || []).filter((e) => inPeriod(e.date, period, customFrom, customTo))
+    const totalExpenses = sumBy(filteredExpenses, 'amount')
+    return {
+      totalIncome, totalExpected, collectionRate, totalExpenses,
+      netBalance: totalIncome - totalExpenses,
+      filteredExpenses,
+      paidCount: paidPayments.length,
+      expenseCount: filteredExpenses.length,
+    }
+  }, [payments, expenses, period, customFrom, customTo])
+
+  const periodLabel = period === 'custom'
+    ? (customFrom || customTo ? `${customFrom ? formatDate(customFrom) : '…'} – ${customTo ? formatDate(customTo) : '…'}` : 'טווח מותאם')
+    : PERIODS.find((p) => p.key === period)?.label
 
   // Derive data needed for CSV export from filtered collections
   function handleExport() {
@@ -1127,15 +827,15 @@ export default function Reports() {
         const totalPaid = sumBy(paid, 'amount')
         const totalDebt = sumBy([...pending, ...overdue], 'amount')
         return [
-          unit.number || unit.unit_number || '',
-          unit.ownerName || unit.tenant_name || '',
+          unit.number || '',
+          directory.byId[unit.id]?.name || '',
           paid.length,
           pending.length + overdue.length,
           totalPaid,
           totalDebt,
         ]
       })
-      exportToCSV('דוח_דיירים.csv', ['מספר דירה', 'שם בעלים', 'תשלומים ששולמו', 'חובות', 'סה"כ שולם', 'סה"כ חוב'], rows)
+      exportToCSV('דוח_דיירים.csv', ['מספר דירה', 'שם דייר', 'תשלומים ששולמו', 'חובות', 'סה"כ שולם', 'סה"כ חוב'], rows)
     } else if (activeTab === 'maintenance') {
       const filtered = (issues || []).filter((i) => {
         const matchBuilding = !activeBuildingId || activeBuildingId === 'all' || i.buildingId === activeBuildingId
@@ -1173,9 +873,14 @@ export default function Reports() {
     }
   }
 
+  const subtitle = `סקירה כספית ותפעולית של הבניין${selectedBuilding?.name ? ` • ${selectedBuilding.name}` : ''}`
+
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={BarChart2} iconColor="blue" title="דוחות וניתוחים" />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">דוחות וניתוחים</h1>
+        <p className="text-[13px] text-[var(--text-secondary)] mt-1">{subtitle}</p>
+      </div>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -1185,80 +890,74 @@ export default function Reports() {
     </div>
   )
 
+  const periodApplies = activeTab === 'financial' || activeTab === 'maintenance'
+
   return (
-    <div className="space-y-6 p-4 sm:p-6" dir="rtl">
-      <PageHeader
-        icon={BarChart2}
-        iconColor="blue"
-        title="דוחות וניתוחים"
-        subtitle="סקירה כללית של פעילות הבניין"
-        actions={
-          <div className="flex items-center gap-2">
-            <select
-              value={buildingFilter}
-              onChange={(e) => setBuildingFilter(e.target.value)}
-              className="rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2"
-              style={{
-                borderColor: 'var(--border)',
-                backgroundColor: 'var(--surface)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              <option value="all">כל הבניינים</option>
-              {buildings.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name || b.address}
-                </option>
-              ))}
-            </select>
-            <Button variant="outline" size="sm" onClick={handleExport} className="flex items-center gap-1.5">
-              <Download size={15} />
-              ייצוא CSV
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Period selector (visible on financial & maintenance tabs) */}
-      {(activeTab === 'financial' || activeTab === 'maintenance') && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            {PERIODS.map((p) => (
-              <Button
-                key={p.key}
-                variant={period === p.key ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setPeriod(p.key)}
-              >
-                {p.label}
-              </Button>
-            ))}
-          </div>
-          {period === 'custom' && (
-            <div className="flex items-center gap-3 flex-wrap">
-              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>מתאריך:</label>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="rounded-lg border px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--primary-light)]"
-                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
-              />
-              <label className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>עד:</label>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="rounded-lg border px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--primary-light)]"
-                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text-primary)' }}
-              />
-            </div>
-          )}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">דוחות וניתוחים — {periodLabel}</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">{subtitle}</p>
         </div>
-      )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <TabGroup tabs={PERIODS} activeTab={period} onChange={setPeriod} />
+          <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />הדפסה</Button>
+          <Button onClick={handleExport}><Download className="h-4 w-4" />ייצוא CSV</Button>
+        </div>
+      </div>
 
-      {/* Tabs */}
-      <TabGroup tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+      {/* KPI row — financial health for the selected period */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="הכנסות (נגבו)" icon={TrendingUp} color="emerald"
+          value={formatCurrency(fin.totalIncome)}
+          sub={`${fin.paidCount} תשלומים • ${periodLabel}`} />
+        <StatCard label="הוצאות" icon={TrendingDown} color="red" valueClassName="text-[var(--text-primary)]"
+          value={formatCurrency(fin.totalExpenses)}
+          sub={`${fin.expenseCount} הוצאות • ${periodLabel}`} />
+        <StatCard label="מאזן" icon={Scale} color={fin.netBalance >= 0 ? 'emerald' : 'red'}
+          value={formatCurrency(fin.netBalance)}
+          footer={
+            <span className={cn('inline-flex items-center gap-1 font-semibold', tone(fin.netBalance))}>
+              {fin.netBalance >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+              {fin.netBalance >= 0 ? 'עודף בתקופה' : 'גירעון בתקופה'}
+            </span>
+          } />
+        <StatCard label="אחוז גבייה" icon={PiggyBank} color={fin.collectionRate >= 80 ? 'blue' : fin.collectionRate >= 50 ? 'amber' : 'red'}
+          valueClassName="text-[var(--text-primary)]"
+          value={`${Math.round(fin.collectionRate)}%`}
+          sub={`${formatCurrency(fin.totalIncome)} מתוך ${formatCurrency(fin.totalExpected)}`}
+          progress={fin.collectionRate} />
+      </div>
+
+      {/* Filter card — report section + custom range */}
+      <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <TabGroup tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+          <span className="inline-flex items-center gap-1.5 text-[12px] text-[var(--text-secondary)]">
+            <Building2 className="h-4 w-4 text-[var(--primary)]" />
+            {periodApplies ? `תקופה: ${periodLabel}` : activeTab === 'budget' ? `שנת ${new Date().getFullYear()} (התקופה לא חלה)` : 'כל התקופות (התקופה לא חלה)'}
+          </span>
+        </div>
+        {period === 'custom' && (
+          <div className="flex items-center gap-3 flex-wrap pt-3 border-t border-[var(--border-light)]">
+            <label className="text-[12px] font-medium text-[var(--text-secondary)]">מתאריך:</label>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+            />
+            <label className="text-[12px] font-medium text-[var(--text-secondary)]">עד:</label>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-3 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--primary)]"
+            />
+          </div>
+        )}
+      </div>
 
       {/* Tab content */}
       <div>
@@ -1266,10 +965,9 @@ export default function Reports() {
           <FinancialTab
             payments={payments}
             expenses={expenses}
-            period={period}
             buildingId={activeBuildingId}
-            customFrom={customFrom}
-            customTo={customTo}
+            filteredExpenses={fin.filteredExpenses}
+            periodLabel={periodLabel}
           />
         )}
         {activeTab === 'residents' && (
@@ -1277,6 +975,7 @@ export default function Reports() {
             units={units}
             payments={payments}
             buildingId={activeBuildingId}
+            directory={directory}
           />
         )}
         {activeTab === 'maintenance' && (
@@ -1286,6 +985,7 @@ export default function Reports() {
             buildingId={activeBuildingId}
             customFrom={customFrom}
             customTo={customTo}
+            periodLabel={periodLabel}
           />
         )}
         {activeTab === 'budget' && (

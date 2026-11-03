@@ -1,7 +1,6 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, createElement } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,9 +9,11 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { TabGroup } from '@/components/ui/tabs'
 import { formatDate } from '@/lib/utils'
-import { PageHeader } from '@/components/common/PageHeader'
-import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink, FolderOpen, AlertTriangle } from 'lucide-react'
+import { Plus, Pencil, Trash2, FileText, Shield, BookOpen, CheckSquare, FileSignature, File, LayoutGrid, List, Upload, Download, ExternalLink, FolderOpen, AlertTriangle, CalendarClock, CloudUpload } from 'lucide-react'
 import { toastError } from '@/lib/toast'
 
 // ---------------------------------------------------------------------------
@@ -69,218 +70,83 @@ function getTypeIcon(type) {
   return TYPE_CONFIG[type]?.icon ?? File
 }
 
-// ---------------------------------------------------------------------------
-// Summary stat card
-// ---------------------------------------------------------------------------
+const CHIP = {
+  danger:  'bg-[var(--danger-light)] text-[var(--danger)]',
+  warning: 'bg-[var(--warning-light)] text-[var(--warning)]',
+  success: 'bg-[var(--success-light)] text-[var(--success)]',
+}
 
-function DocStatCard({ label, value, icon: Icon, gradient }) {
+function ExpiryChip({ expiresAt }) {
+  const expiry = getExpiryStatus(expiresAt)
+  if (!expiry) return <span className="text-[11px] text-[var(--text-muted)]">ללא תוקף</span>
   return (
-    <Card className="border-0 shadow-sm">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-sm`}>
-            <Icon className="h-5 w-5 text-white" />
-          </div>
-          <div>
-            <p className="text-xs text-[var(--text-secondary)]">{label}</p>
-            <p className="text-2xl font-bold text-[var(--text-primary)]">{value}</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${CHIP[expiry.variant]}`}>
+      {expiry.label}
+    </span>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Document Grid Card
-// ---------------------------------------------------------------------------
-
-// Gradient map for document types
-const DOC_TYPE_GRADIENTS = {
-  insurance:  'from-sky-500 to-sky-600',
-  protocol:   'from-violet-500 to-violet-600',
-  bylaws:     'from-blue-500 to-blue-600',
-  inspection: 'from-amber-500 to-amber-600',
-  contract:   'from-blue-500 to-blue-600',
-  other:      'from-slate-500 to-slate-600',
+function CategoryChip({ category }) {
+  if (!category) return <span className="text-[var(--text-muted)]">—</span>
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-[var(--primary)]/15 bg-[var(--surface-container)] text-[var(--primary-dark)] text-[11px] font-semibold whitespace-nowrap">
+      {category}
+    </span>
+  )
 }
 
-function DocumentGridCard({ doc, onEdit, onDelete, onView }) {
-  const TypeIcon = getTypeIcon(doc.type)
-  const expiry = getExpiryStatus(doc.expiresAt)
-  const gradient = DOC_TYPE_GRADIENTS[doc.type] || DOC_TYPE_GRADIENTS.other
-
-  // Expiry dot color
-  const expiryDotColor = expiry
-    ? expiry.variant === 'danger' ? 'bg-red-500'
-      : expiry.variant === 'warning' ? 'bg-amber-500'
-      : 'bg-emerald-500'
-    : null
-  const expiryTextColor = expiry
-    ? expiry.variant === 'danger' ? 'text-red-700'
-      : expiry.variant === 'warning' ? 'text-amber-700'
-      : 'text-emerald-700'
-    : null
-
+function TypeTile({ type, size = 'md' }) {
   return (
-    <div
-      className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
-      onClick={() => onView(doc)}
-    >
-      {/* Gradient top accent */}
-      <div className={`h-1.5 bg-gradient-to-l ${gradient}`} />
+    <span className={`shrink-0 inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] ${size === 'lg' ? 'p-2.5' : 'p-1.5'}`}>
+      {createElement(getTypeIcon(type), { className: size === 'lg' ? 'h-6 w-6' : 'h-4 w-4', strokeWidth: 1.75 })}
+    </span>
+  )
+}
 
-      <div className="p-5 flex flex-col items-center gap-3 text-center">
-        {/* Gradient icon circle */}
-        <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-sm`}>
-          <TypeIcon className="h-7 w-7" />
-        </div>
-
-        {/* Title */}
-        <p className="font-semibold text-[var(--text-primary)] line-clamp-2 leading-tight text-[14px]">
-          {doc.title}
-        </p>
-
-        {/* Category badge */}
-        {doc.category && (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-            {doc.category}
-          </span>
-        )}
-
-        {/* Meta info row */}
-        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-          {doc.uploadedAt && <span>{formatDate(doc.uploadedAt)}</span>}
-          {doc.fileSize && <span>{doc.fileSize}</span>}
-        </div>
-
-        {/* Expiry status */}
-        {expiry && (
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${expiryDotColor}`} />
-            <span className={`text-[11px] font-medium ${expiryTextColor}`}>{expiry.label}</span>
-          </div>
-        )}
-
-        {/* Expiry urgency badge */}
-        {(() => {
-          const badge = getExpiryBadge(doc.expiresAt || doc.expires_at)
-          return badge ? (
-            <Badge variant={badge.variant} className={`text-[10px] ${badge.urgent ? 'animate-pulse' : ''}`}>
-              {badge.label}
-            </Badge>
-          ) : null
-        })()}
-      </div>
-
-      {/* Hover actions */}
-      <div
-        className="absolute top-3 left-3 flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 bg-white/80 backdrop-blur-sm shadow-sm"
-          onClick={(e) => { e.stopPropagation(); onEdit(doc) }}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 bg-white/80 backdrop-blur-sm shadow-sm"
-          onClick={(e) => { e.stopPropagation(); onDelete(doc) }}
-        >
-          <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-        </Button>
-      </div>
+function RowActions({ doc, onEdit, onDelete }) {
+  const url = doc.fileUrl || doc.file_url
+  return (
+    <div className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+      {url && (
+        <a href={url} target="_blank" rel="noopener noreferrer" title="צפייה / הורדה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--primary)] hover:bg-[var(--surface-secondary)]">
+          <Download className="h-3.5 w-3.5" />
+        </a>
+      )}
+      <button onClick={() => onEdit(doc)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
+      <button onClick={() => onDelete(doc)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Document List Row
+// Document file card (grid view + mobile fallback)
 // ---------------------------------------------------------------------------
 
-function DocumentListRow({ doc, onEdit, onDelete, onView }) {
-  const TypeIcon = getTypeIcon(doc.type)
-  const expiry = getExpiryStatus(doc.expiresAt)
-  const gradient = DOC_TYPE_GRADIENTS[doc.type] || DOC_TYPE_GRADIENTS.other
-
-  // Expiry dot
-  const expiryDotColor = expiry
-    ? expiry.variant === 'danger' ? 'bg-red-500'
-      : expiry.variant === 'warning' ? 'bg-amber-500'
-      : 'bg-emerald-500'
-    : null
-  const expiryTextColor = expiry
-    ? expiry.variant === 'danger' ? 'text-red-700'
-      : expiry.variant === 'warning' ? 'text-amber-700'
-      : 'text-emerald-700'
-    : null
-
+function DocumentCard({ doc, onEdit, onDelete, onView }) {
+  const badge = getExpiryBadge(doc.expiresAt || doc.expires_at)
   return (
     <div
-      className="group flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer"
+      className="group p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] hover:border-[var(--primary)]/30 transition-colors cursor-pointer flex flex-col gap-3"
       onClick={() => onView(doc)}
     >
-      {/* Gradient type circle */}
-      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-        <TypeIcon className="h-5 w-5" />
-      </div>
-
-      {/* Title + category */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-            {doc.title}
-          </span>
-          {doc.category && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 shrink-0">
-              {doc.category}
-            </span>
-          )}
+      <div className="flex items-start gap-3">
+        <TypeTile type={doc.type} size="lg" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-semibold text-[var(--text-primary)] line-clamp-2 leading-5">{doc.title}</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-0.5 num-tabular">
+            {TYPE_CONFIG[doc.type]?.label || 'מסמך'}
+            {doc.uploadedAt && ` • ${formatDate(doc.uploadedAt)}`}
+            {doc.fileSize && ` • ${doc.fileSize}`}
+          </p>
         </div>
-        <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
-          {doc.uploadedAt && <span>{formatDate(doc.uploadedAt)}</span>}
-          {doc.fileSize && <span>{doc.fileSize}</span>}
-        </div>
+        <RowActions doc={doc} onEdit={onEdit} onDelete={onDelete} />
       </div>
-
-      {/* Expiry status */}
-      <div className="hidden sm:flex items-center gap-2 min-w-[100px]">
-        {expiry ? (
-          <>
-            <div className={`w-2 h-2 rounded-full shrink-0 ${expiryDotColor}`} />
-            <span className={`text-[12px] font-medium ${expiryTextColor}`}>{expiry.label}</span>
-          </>
-        ) : (
-          <span className="text-xs text-[var(--text-muted)]">—</span>
+      <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-[var(--border-light)]">
+        <CategoryChip category={doc.category} />
+        <ExpiryChip expiresAt={doc.expiresAt} />
+        {badge && (
+          <Badge variant={badge.variant} className={`text-[10px] ${badge.urgent ? 'animate-pulse' : ''}`}>{badge.label}</Badge>
         )}
-      </div>
-
-      {/* Expiry urgency badge */}
-      {(() => {
-        const badge = getExpiryBadge(doc.expiresAt || doc.expires_at)
-        return badge ? (
-          <Badge variant={badge.variant} className={`text-[10px] shrink-0 ${badge.urgent ? 'animate-pulse' : ''}`}>
-            {badge.label}
-          </Badge>
-        ) : null
-      })()}
-
-      {/* Actions (visible on hover) */}
-      <div
-        className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Button size="icon" variant="ghost" onClick={() => onEdit(doc)}>
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-        <Button size="icon" variant="ghost" onClick={() => onDelete(doc)}>
-          <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-        </Button>
       </div>
     </div>
   )
@@ -291,14 +157,14 @@ function DocumentListRow({ doc, onEdit, onDelete, onView }) {
 // ---------------------------------------------------------------------------
 
 export default function Documents() {
-  const { data: documents, create, update, remove, isLoading } = useCollection('documents')
-  const { buildings } = useBuildingContext()
+  const { buildings, selectedBuilding } = useBuildingContext()
+  // Building-scoped server-side by the sidebar's building.
+  const { data: documents, create, update, remove, isLoading } = useCollection('documents', { building_id: selectedBuilding?.id })
 
   // UI state
   const [search, setSearch] = useState('')
-  const [buildingFilter, setBuildingFilter] = useState('הכל')
   const [categoryFilter, setCategoryFilter] = useState('הכל')
-  const [viewMode, setViewMode] = useState('grid')
+  const [viewMode, setViewMode] = useState('list')
 
   // Dialog / modal state
   const [formOpen, setFormOpen] = useState(false)
@@ -328,26 +194,24 @@ export default function Documents() {
   // -------------------------------------------------------------------------
 
   const filtered = useMemo(() => {
-    return documents.filter((doc) => {
-      // Building filter
-      if (buildingFilter !== 'הכל') {
-        const building = buildingMap[doc.buildingId]
-        if (!building || building.name !== buildingFilter) return false
-      }
+    return documents
+      .filter((doc) => {
+        if (categoryFilter !== 'הכל' && doc.category !== categoryFilter) return false
+        if (search) {
+          const q = search.toLowerCase()
+          const haystack = [doc.title, doc.category, doc.notes].join(' ').toLowerCase()
+          if (!haystack.includes(q)) return false
+        }
+        return true
+      })
+      .sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''))
+  }, [documents, categoryFilter, search])
 
-      // Category filter
-      if (categoryFilter !== 'הכל' && doc.category !== categoryFilter) return false
-
-      // Search
-      if (search) {
-        const q = search.toLowerCase()
-        const haystack = [doc.title, doc.category, doc.notes].join(' ').toLowerCase()
-        if (!haystack.includes(q)) return false
-      }
-
-      return true
-    })
-  }, [documents, buildingFilter, categoryFilter, search, buildingMap])
+  const categoryCounts = useMemo(() => {
+    const m = {}
+    documents.forEach((d) => { if (d.category) m[d.category] = (m[d.category] || 0) + 1 })
+    return m
+  }, [documents])
 
   // -------------------------------------------------------------------------
   // Summary stats
@@ -356,19 +220,24 @@ export default function Documents() {
   const summary = useMemo(() => {
     let expiringSoon = 0
     let expired = 0
+    const attention = []
+    const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30)
+    let recent = 0
 
     documents.forEach((doc) => {
+      if (doc.uploadedAt && new Date(doc.uploadedAt) >= monthAgo) recent++
       if (!doc.expiresAt) return
       const today = new Date()
       const expiry = new Date(doc.expiresAt)
       const diff = Math.floor((expiry - today) / (1000 * 60 * 60 * 24))
-      if (diff < 0) expired++
-      else if (diff <= 30) expiringSoon++
+      if (diff < 0) { expired++; attention.push(doc) }
+      else if (diff <= 30) { expiringSoon++; attention.push(doc) }
     })
+    attention.sort((a, b) => (a.expiresAt || '').localeCompare(b.expiresAt || ''))
 
     const categories = new Set(documents.map((d) => d.category).filter(Boolean))
 
-    return { total: documents.length, expiringSoon, expired, categories: categories.size }
+    return { total: documents.length, expiringSoon, expired, categories: categories.size, recent, attention }
   }, [documents])
 
   // -------------------------------------------------------------------------
@@ -377,7 +246,7 @@ export default function Documents() {
 
   function openCreate() {
     setEditingDoc(null)
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, buildingId: selectedBuilding?.id ?? '' })
     setSelectedFile(null)
     setFormOpen(true)
   }
@@ -462,10 +331,11 @@ export default function Documents() {
   async function handleDelete() {
     if (deleteDoc) {
       try {
-        if (deleteDoc.file_url) {
+        const fileUrl = deleteDoc.file_url || deleteDoc.fileUrl
+        if (fileUrl) {
           try {
             // Extract path after /documents/
-            const match = deleteDoc.file_url.match(/\/documents\/(.+)$/)
+            const match = fileUrl.match(/\/documents\/(.+)$/)
             if (match) {
               const filePath = decodeURIComponent(match[1])
               await supabase.storage.from('documents').remove([filePath])
@@ -485,9 +355,14 @@ export default function Documents() {
   // Render
   // -------------------------------------------------------------------------
 
+  const subtitle = `ספריית המסמכים, החוזים והביטוחים של הבניין${selectedBuilding?.name ? ` • ${selectedBuilding.name}` : ''}`
+
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={FolderOpen} iconColor="blue" title="ארכיון מסמכים" />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">ארכיון מסמכים</h1>
+        <p className="text-[13px] text-[var(--text-secondary)] mt-1">{subtitle}</p>
+      </div>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -498,136 +373,182 @@ export default function Documents() {
   )
 
   return (
-    <div dir="rtl" className="space-y-6 p-6">
-
-      <PageHeader
-        icon={FolderOpen}
-        iconColor="blue"
-        title="ארכיון מסמכים"
-        subtitle="ניהול מסמכים ותיקים של הבניין"
-        actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            מסמך חדש
-          </Button>
-        }
-      />
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <DocStatCard label="סה״כ מסמכים" value={summary.total} icon={FolderOpen} gradient="from-blue-500 to-blue-600" />
-        <DocStatCard label="פגים בעוד 30 יום" value={summary.expiringSoon} icon={AlertTriangle} gradient="from-amber-400 to-amber-500" />
-        <DocStatCard label="פג תוקף" value={summary.expired} icon={AlertTriangle} gradient="from-red-500 to-red-600" />
-        <DocStatCard label="קטגוריות" value={summary.categories} icon={LayoutGrid} gradient="from-blue-500 to-blue-600" />
-      </div>
-
-      {/* Search + view toggle */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-          placeholder="חיפוש לפי כותרת, קטגוריה, הערות..."
-          className="w-full sm:w-80"
-        />
-
-        {/* View toggle */}
-        <div className="flex items-center gap-1 rounded-lg border border-[var(--border)] p-1 self-end sm:self-auto">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`rounded p-1.5 transition-colors ${
-              viewMode === 'grid'
-                ? 'bg-[var(--primary)] text-white'
-                : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
-            }`}
-            title="תצוגת כרטיסים"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`rounded p-1.5 transition-colors ${
-              viewMode === 'list'
-                ? 'bg-[var(--primary)] text-white'
-                : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
-            }`}
-            title="תצוגת רשימה"
-          >
-            <List className="h-4 w-4" />
-          </button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">ארכיון מסמכים</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />מסמך חדש</Button>
         </div>
       </div>
 
-      {/* Building filter pills */}
-      {buildings.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {['הכל', ...buildings.map((b) => b.name)].map((name) => (
-            <button
-              key={name}
-              onClick={() => setBuildingFilter(name)}
-              className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                buildingFilter === name
-                  ? 'bg-[var(--primary)] text-white'
-                  : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
-              }`}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Category filter pills */}
-      <div className="flex flex-wrap gap-2">
-        {CATEGORY_FILTERS.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setCategoryFilter(cat)}
-            className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-              categoryFilter === cat
-                ? 'bg-[var(--primary)] text-white'
-                : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="סה״כ מסמכים" icon={FolderOpen} color="blue"
+          value={String(summary.total)}
+          sub={`${summary.categories} קטגוריות פעילות`} />
+        <StatCard label="פגים בעוד 30 יום" icon={CalendarClock} color={summary.expiringSoon ? 'amber' : 'emerald'}
+          value={String(summary.expiringSoon)}
+          sub={summary.expiringSoon ? 'דורשים חידוש בקרוב' : 'אין מסמכים שפגים בקרוב'} />
+        <StatCard label="פג תוקף" icon={AlertTriangle} color={summary.expired ? 'red' : 'emerald'}
+          value={String(summary.expired)}
+          sub={summary.expired ? 'יש לחדש או להעלות גרסה עדכנית' : 'כל המסמכים בתוקף ✓'} />
+        <StatCard label="הועלו ב-30 הימים האחרונים" icon={CloudUpload} color="purple"
+          value={String(summary.recent)}
+          sub={summary.total ? `${Math.round((summary.recent / summary.total) * 100)}% מהארכיון` : 'הארכיון ריק'} />
       </div>
 
-      {/* Documents */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={File}
-          title="לא נמצאו מסמכים"
-          description="הוסף מסמך חדש או שנה את הסינון"
-          actionLabel="מסמך חדש"
-          onAction={openCreate}
-        />
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((doc) => (
-            <DocumentGridCard
-              key={doc.id}
-              doc={doc}
-              onEdit={openEdit}
-              onDelete={setDeleteDoc}
-              onView={setDetailDoc}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <div className="xl:col-span-8 space-y-4">
+          {/* Filter card */}
+          <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי כותרת, קטגוריה, הערות..." />
+              </div>
+              <TabGroup
+                tabs={[
+                  { key: 'list', label: 'טבלה', icon: List },
+                  { key: 'grid', label: 'כרטיסים', icon: LayoutGrid },
+                ]}
+                activeTab={viewMode}
+                onChange={setViewMode}
+                className="self-end sm:self-auto shrink-0"
+              />
+            </div>
+            <TabGroup
+              tabs={CATEGORY_FILTERS.map((cat) => ({
+                key: cat,
+                label: cat,
+                count: cat === 'הכל' ? documents.length : (categoryCounts[cat] || 0),
+              }))}
+              activeTab={categoryFilter}
+              onChange={setCategoryFilter}
             />
-          ))}
-        </div>
-      ) : (
-        /* List view — premium card rows */
-        <div className="space-y-2">
-          {filtered.map((doc) => (
-            <DocumentListRow
-              key={doc.id}
-              doc={doc}
-              onEdit={openEdit}
-              onDelete={setDeleteDoc}
-              onView={setDetailDoc}
+          </div>
+
+          {/* Documents */}
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={File}
+              title="לא נמצאו מסמכים"
+              description="הוסף מסמך חדש או שנה את הסינון"
+              actionLabel="מסמך חדש"
+              onAction={openCreate}
             />
-          ))}
+          ) : viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {filtered.map((doc) => (
+                <DocumentCard key={doc.id} doc={doc} onEdit={openEdit} onDelete={setDeleteDoc} onView={setDetailDoc} />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Desktop ledger */}
+              <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr><th>מסמך</th><th>קטגוריה</th><th>הועלה</th><th>תוקף</th><th>גודל</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((doc) => {
+                        const badge = getExpiryBadge(doc.expiresAt || doc.expires_at)
+                        return (
+                          <tr key={doc.id} onClick={() => setDetailDoc(doc)} className="cursor-pointer">
+                            <td className="min-w-[220px]">
+                              <div className="flex items-center gap-2.5">
+                                <TypeTile type={doc.type} />
+                                <div className="min-w-0">
+                                  <span className="block text-[13px] font-semibold truncate">{doc.title}</span>
+                                  {doc.notes && <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{doc.notes}</span>}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap"><CategoryChip category={doc.category} /></td>
+                            <td className="whitespace-nowrap text-[12px] num-tabular">{doc.uploadedAt ? formatDate(doc.uploadedAt) : '—'}</td>
+                            <td className="whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <ExpiryChip expiresAt={doc.expiresAt} />
+                                {badge?.urgent && <Badge variant={badge.variant} className="text-[10px] animate-pulse">{badge.label}</Badge>}
+                              </div>
+                              {doc.expiresAt && <span className="block text-[11px] text-[var(--text-muted)] num-tabular mt-0.5">{formatDate(doc.expiresAt)}</span>}
+                            </td>
+                            <td className="whitespace-nowrap text-[12px] text-[var(--text-secondary)] num-tabular">{doc.fileSize || '—'}</td>
+                            <td className="whitespace-nowrap"><RowActions doc={doc} onEdit={openEdit} onDelete={setDeleteDoc} /></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                  <span>מציג {filtered.length} מתוך {documents.length} מסמכים</span>
+                  <span>ממוין לפי תאריך העלאה</span>
+                </div>
+              </div>
+              {/* Mobile cards */}
+              <div className="md:hidden grid grid-cols-1 gap-3">
+                {filtered.map((doc) => (
+                  <DocumentCard key={doc.id} doc={doc} onEdit={openEdit} onDelete={setDeleteDoc} onView={setDetailDoc} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
-      )}
+
+        {/* Side panel: expiry watch-list */}
+        <aside className="xl:col-span-4 xl:sticky xl:top-20 space-y-4">
+          <SectionCard
+            icon={CalendarClock}
+            title="מעקב תוקף"
+            subtitle="מסמכים שפג תוקפם או פגים ב-30 הימים הקרובים"
+            footer={summary.attention.length ? `${summary.attention.length} מסמכים דורשים טיפול` : null}
+          >
+            {summary.attention.length === 0 ? (
+              <p className="p-6 text-center text-[12px] text-[var(--text-muted)]">כל המסמכים בתוקף ✓</p>
+            ) : (
+              <ul className="divide-y divide-[var(--border-light)]">
+                {summary.attention.slice(0, 8).map((doc) => (
+                  <li key={doc.id}>
+                    <button onClick={() => setDetailDoc(doc)} className="w-full flex items-center gap-3 px-4 py-3 text-right hover:bg-[var(--surface-secondary)]">
+                      <TypeTile type={doc.type} />
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-semibold text-[var(--text-primary)] truncate">{doc.title}</span>
+                        <span className="block text-[11px] text-[var(--text-muted)] num-tabular">{formatDate(doc.expiresAt)}</span>
+                      </div>
+                      <ExpiryChip expiresAt={doc.expiresAt} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+
+          <SectionCard icon={FolderOpen} title="לפי קטגוריה" subtitle={`${summary.categories} קטגוריות`}>
+            <div className="p-4 space-y-3">
+              {CATEGORY_FILTERS.slice(1).map((cat) => {
+                const n = categoryCounts[cat] || 0
+                const pct = summary.total ? Math.round((n / summary.total) * 100) : 0
+                return (
+                  <button key={cat} onClick={() => setCategoryFilter(cat)} className="w-full text-right">
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className={`font-medium ${categoryFilter === cat ? 'text-[var(--primary)]' : 'text-[var(--text-primary)]'}`}>{cat}</span>
+                      <span className="num-tabular text-[var(--text-secondary)]"><strong>{n}</strong> ({pct}%)</span>
+                    </div>
+                    <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-container)] overflow-hidden">
+                      <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${pct}%` }} />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </SectionCard>
+        </aside>
+      </div>
 
       {/* ------------------------------------------------------------------ */}
       {/* Create / Edit Dialog                                                */}
@@ -698,7 +619,7 @@ export default function Documents() {
               onChange={(e) => handleFormChange('fileSize', e.target.value)}
               placeholder="מחושב אוטומטית בעת העלאת קובץ"
               readOnly
-              className="bg-gray-100"
+              className="bg-[var(--surface-secondary)]"
             />
 
             {/* File upload */}
@@ -706,7 +627,7 @@ export default function Documents() {
               <label className="block text-sm font-medium text-[var(--text-primary)] mb-1.5">
                 העלאת קובץ
               </label>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 p-3 rounded-[var(--radius)] border border-dashed border-[var(--outline-variant)] bg-[var(--bg)]">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -804,6 +725,20 @@ export default function Documents() {
               }
             />
           )}
+          <div className="flex gap-2 pt-4">
+            <Button variant="outline" size="sm" onClick={() => openEdit(detailDoc)}>
+              <Pencil className="h-3.5 w-3.5" />
+              עריכה
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => { const d = detailDoc; setDetailDoc(null); setDeleteDoc(d) }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              מחיקה
+            </Button>
+          </div>
         </DetailModal>
       )}
 
