@@ -437,12 +437,18 @@ function Announcements() {
     // ── Send email notifications to residents on new publish ─────────────
     if (isNew && createdId && wantEmail && form.buildingId) {
       try {
-        const { data: residents } = await supabase
-          .from('unit_residents')
-          .select('email, first_name, last_name')
-          .eq('building_id', form.buildingId)
-          .not('email', 'is', null)
-          .neq('email', '')
+        // unit_residents has no building_id — go through the building's units.
+        const { data: bUnits } = await supabase.from('units').select('id').eq('building_id', form.buildingId)
+        const unitIds = (bUnits || []).map((u) => u.id)
+        const { data: residents } = unitIds.length
+          ? await supabase
+            .from('unit_residents')
+            .select('email, first_name, last_name')
+            .in('unit_id', unitIds)
+            .eq('archived', false)
+            .not('email', 'is', null)
+            .neq('email', '')
+          : { data: [] }
 
         if (residents && residents.length > 0) {
           const building = buildings.find((b) => b.id === form.buildingId)

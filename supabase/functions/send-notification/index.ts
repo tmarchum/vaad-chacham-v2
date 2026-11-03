@@ -306,6 +306,17 @@ Deno.serve(async (req) => {
         body: String(ann.title || '').slice(0, 200),
         data: { type: 'announcement', announcementId: String(ann.id) },
       })
+      try {
+        await supabase.from('notification_log').insert({
+          building_id: ann.building_id, channel: 'push', provider: 'fcm', audience: 'resident',
+          recipient: `${(profs || []).length} משתמשים בבניין`,
+          subject: `פוש: ${String(ann.title || '').slice(0, 200)}`,
+          body: String(ann.content || '').slice(0, 4000),
+          status: out.sent > 0 ? 'sent' : (out.skipped ? 'skipped' : 'failed'),
+          error_message: out.sent > 0 ? null : JSON.stringify(out).slice(0, 500),
+          sent_by: caller?.kind === 'user' ? caller.uid : null,
+        })
+      } catch { /* */ }
       return json({ success: true, push: out })
     }
 
@@ -415,6 +426,8 @@ Deno.serve(async (req) => {
           unit_id: unitId || null,
           case_id: caseId || null,
           channel,
+          provider: sendResult.provider || null,
+          sent_by: caller?.kind === 'user' ? caller.uid : null,
           recipient: r.to,
           subject: r.subject,
           body: html,

@@ -49,6 +49,7 @@ import NotFound from '@/pages/NotFound'
 
 // Lazy-load all page components for code splitting
 const Dashboard        = lazy(() => import('@/pages/Dashboard'))
+const Messaging        = lazy(() => import('@/pages/Messaging'))
 const Buildings        = lazy(() => import('@/pages/Buildings'))
 const Units            = lazy(() => import('@/pages/Units'))
 const Residents        = lazy(() => import('@/pages/Residents'))
@@ -120,6 +121,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="compliance" element={<Suspense fallback={<PageLoader />}><Compliance /></Suspense>} />
               <Route path="recurring-tasks" element={<Suspense fallback={<PageLoader />}><RecurringTasks /></Suspense>} />
               <Route path="building-assets" element={<Suspense fallback={<PageLoader />}><BuildingAssets /></Suspense>} />
+              <Route path="messaging" element={<Suspense fallback={<PageLoader />}><Messaging /></Suspense>} />
               <Route path="announcements" element={<Suspense fallback={<PageLoader />}><Announcements /></Suspense>} />
               <Route path="documents" element={<Suspense fallback={<PageLoader />}><Documents /></Suspense>} />
               <Route path="reports" element={<Suspense fallback={<PageLoader />}><Reports /></Suspense>} />

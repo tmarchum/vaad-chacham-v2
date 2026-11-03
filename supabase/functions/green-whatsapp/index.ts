@@ -98,7 +98,8 @@ Deno.serve(async (req: Request) => {
         await svc.from('vendors').update({ membership_status: newStatus }).eq('id', vendor.id)
         // Audit trail of the inbound reply.
         await svc.from('notification_log').insert({
-          channel: 'whatsapp_in', recipient: vendor.phone, status: 'received',
+          channel: 'whatsapp_in', provider: 'greenapi', audience: 'vendor', vendor_id: vendor.id,
+          recipient: vendor.phone, status: 'received',
           subject: `תשובת ספק: ${vendor.name} → ${newStatus === 'agreed' ? 'אישר' : 'סירב'}`,
           body: text,
         }).then(() => {}, () => {})
@@ -236,7 +237,7 @@ Deno.serve(async (req: Request) => {
         : null
       if (!targetVendor) {
         await svc.from('notification_log').insert({
-          channel: 'whatsapp', recipient: String(chatId), status: 'blocked',
+          channel: 'whatsapp', provider: 'greenapi', sent_by: uid, recipient: String(chatId), status: 'blocked',
           subject: 'נחסם: יעד שאינו ספק', body: String(message || '').slice(0, 2000),
           error_message: 'green-whatsapp is vendor-only',
         }).then(() => {}, () => {})
@@ -260,6 +261,17 @@ Deno.serve(async (req: Request) => {
         })
       }
       const j = await r.json().catch(() => ({}))
+      // Every outbound message goes to the admin-visible message log.
+      await svc.from('notification_log').insert({
+        channel: 'whatsapp', provider: 'greenapi', audience: 'vendor',
+        recipient: String(chatId), vendor_id: targetVendor.id, sent_by: uid,
+        subject: fileUrl ? `קובץ לספק: ${targetVendor.name}` : `הודעה לספק: ${targetVendor.name}`,
+        body: String(message || '').slice(0, 4000) + (fileUrl ? `
+[קובץ] ${fileUrl}` : ''),
+        status: r.ok ? 'sent' : 'failed',
+        external_id: j?.idMessage ? String(j.idMessage) : null,
+        error_message: r.ok ? null : JSON.stringify(j).slice(0, 500),
+      }).then(() => {}, () => {})
       return json({ ok: r.ok, result: j }, r.ok ? 200 : 502)
     }
 

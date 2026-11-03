@@ -884,8 +884,23 @@ function Issues() {
 
   // Send a vendor quote — via the GreenAPI gateway when enabled, else opens
   // manual WhatsApp / phone.
-  const handleVendorSend = async (vendor, message) => {
-    const sent = await sendOrOpen(vendor.phone, message)
+  // Variables for the Meta-approved "vendor_quote_request" template (used when
+  // the official WhatsApp channel is active).
+  const quoteTemplate = (iss, vendor, building) => ({
+    key: 'vendor_quote_request',
+    variables: [
+      vendor?.name || vendor?.business_name || 'שלום',
+      [building?.name, building?.address].filter(Boolean).join(', ') || 'הבניין',
+      [iss?.title, iss?.description, iss?.photo_url ? `תמונה: ${iss.photo_url}` : ''].filter(Boolean).join(' — '),
+      'ועד הבית',
+    ],
+  })
+
+  const handleVendorSend = async (vendor, message, iss, building) => {
+    const sent = await sendOrOpen(vendor.phone, message, {
+      audience: 'vendor', buildingId: iss?.buildingId,
+      template: iss ? quoteTemplate(iss, vendor, building) : undefined,
+    })
     if (sent) toast('הבקשה נשלחה לספק בוואטסאפ דרך המערכת')
   }
 
@@ -903,7 +918,10 @@ function Issues() {
     let sent = 0
     for (const v of targets) {
       const msg = buildVendorQuoteMessage(iss, v, building)
-      const res = await systemSendWhatsapp(v.phone, msg, iss.photo_url ? { fileUrl: iss.photo_url, fileName: 'fault.jpg' } : {})
+      const res = await systemSendWhatsapp(v.phone, msg, {
+        ...(iss.photo_url ? { fileUrl: iss.photo_url, fileName: 'fault.jpg' } : {}),
+        audience: 'vendor', buildingId: iss.buildingId, template: quoteTemplate(iss, v, building),
+      })
       if (res.sent) sent++
       setQuoteBulk((b) => ({ ...b, done: b.done + 1 }))
       await new Promise((r) => setTimeout(r, 1200))
@@ -955,7 +973,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     const message = buildVendorQuoteMessage(iss, vendor, building)
     // Prefer the system gateway — it sends the photo as a file with the text.
     if (iss.photo_url && (await isWhatsappSystemEnabled())) {
-      const res = await systemSendWhatsapp(vendor.phone, message, { fileUrl: iss.photo_url, fileName: 'fault.jpg' })
+      const res = await systemSendWhatsapp(vendor.phone, message, {
+        fileUrl: iss.photo_url, fileName: 'fault.jpg',
+        audience: 'vendor', buildingId: iss.buildingId, template: quoteTemplate(iss, vendor, building),
+      })
       if (res.sent) { toast('נשלח לספק עם התמונה בוואטסאפ דרך המערכת'); return }
     }
     if (iss.photo_url && navigator.canShare) {
@@ -1769,7 +1790,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                                     <Button size="sm" variant="outline" onClick={() => shareQuoteWithPhoto(workflowIssue, v, building)}>📷 שלח עם תמונה</Button>
                                   )}
                                   {v.phone && (
-                                    <Button size="sm" variant="outline" onClick={() => handleVendorSend(v, quoteMsg)}>
+                                    <Button size="sm" variant="outline" onClick={() => handleVendorSend(v, quoteMsg, workflowIssue, building)}>
                                       {isWhatsappable(v.phone) ? '💬 שלח' : '📞 התקשר'}
                                     </Button>
                                   )}

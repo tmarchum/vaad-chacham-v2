@@ -9,7 +9,7 @@ import {
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, X, ChevronDown, ChevronsUpDown, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
-  Coins, Tags, GitBranch, Eye, Plus, Palette,
+  Coins, Tags, GitBranch, Eye, Plus, Palette, MessageCircle,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/common/BrandLogo'
 import { THEMES, getTheme, setTheme } from '@/lib/theme'
@@ -33,6 +33,7 @@ const NAV_GROUPS = [
       { to: '/units',             label: 'דירות',        icon: Home },
       { to: '/residents',         label: 'דיירים',       icon: Users },
       { to: '/vendors',           label: 'ספקים',        icon: Store },
+      { to: '/messaging',         label: 'וואטסאפ והודעות', icon: MessageCircle },
       { to: '/expenses',          label: 'הוצאות',       icon: Wallet },
       { to: '/bank-transactions', label: 'תנועות בנק',  icon: ArrowLeftRight },
       { to: '/documents',         label: 'מסמכים',       icon: FolderOpen },

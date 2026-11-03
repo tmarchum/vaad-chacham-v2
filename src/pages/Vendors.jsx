@@ -207,6 +207,12 @@ function MembershipBadge({ status }) {
   return <Badge variant={m.variant} className="text-[10px] whitespace-nowrap">{m.label}</Badge>
 }
 
+// Variables for the Meta-approved "vendor_invite" template (official channel).
+const inviteTemplate = (vendor) => ({
+  key: 'vendor_invite',
+  variables: [vendor?.name || 'שלום', vendor?.category || 'שירותי תחזוקה לבניינים'],
+})
+
 function buildInviteMessage(vendor) {
   const trade = vendor?.category ? ` בתחום ${vendor.category}` : ''
   return `שלום${vendor?.name ? ' ' + vendor.name : ''},\n\n` +
@@ -521,7 +527,7 @@ function Vendors() {
   // Invite a vendor to the pool — via the GreenAPI gateway when enabled, else
   // opens manual WhatsApp / phone. Marks the vendor invited either way.
   const sendInvite = async (vendor) => {
-    const sent = await sendOrOpen(vendor.phone, buildInviteMessage(vendor))
+    const sent = await sendOrOpen(vendor.phone, buildInviteMessage(vendor), { audience: 'vendor', template: inviteTemplate(vendor) })
     if (sent) toast('ההזמנה נשלחה בוואטסאפ דרך המערכת')
     await update(vendor.id, { membership_status: 'invited', invited_at: new Date().toISOString() })
   }
@@ -543,7 +549,7 @@ function Vendors() {
     setBulk({ running: true, done: 0, total: targets.length })
     let sent = 0
     for (const v of targets) {
-      const res = await systemSendWhatsapp(v.phone, buildInviteMessage(v))
+      const res = await systemSendWhatsapp(v.phone, buildInviteMessage(v), { audience: 'vendor', template: inviteTemplate(v) })
       if (res.sent) { sent++; await update(v.id, { membership_status: 'invited', invited_at: new Date().toISOString() }) }
       setBulk((b) => ({ ...b, done: b.done + 1 }))
       await new Promise((r) => setTimeout(r, 1200)) // pacing between messages
