@@ -1,16 +1,16 @@
 import { useState, useMemo, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { TabGroup } from '@/components/ui/tabs'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { EmptyState } from '@/components/common/EmptyState'
+import { StatCard } from '@/components/common/StatCard'
 import { FormField, FormSelect } from '@/components/common/FormField'
-import { PageHeader } from '@/components/common/PageHeader'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
-import { GitBranch, Plus, Pencil, Trash2, Power, Mail, UserCheck, Wrench } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { GitBranch, Plus, Pencil, Trash2, Power, Mail, UserCheck, Wrench, Info, Zap, LayoutGrid } from 'lucide-react'
 
 const CATEGORY_OPTIONS = ISSUE_CATEGORIES.map((c) => ({ value: c, label: c }))
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -22,6 +22,17 @@ const EMPTY_FORM = {
   notify_email: '',
   auto_acknowledge: false,
   active: true,
+}
+
+const ICON_BTN = 'p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--surface-secondary)]'
+const Dash = () => <span className="text-[var(--text-muted)]">—</span>
+
+function StatusChip({ active }) {
+  return active ? (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--success-light)] text-[var(--success)]">פעיל</span>
+  ) : (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--surface-container)] text-[var(--text-secondary)]">כבוי</span>
+  )
 }
 
 // Automatic routing of resident reports (תקלות/פניות) by category.
@@ -56,6 +67,7 @@ function IssueRouting() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [error, setError] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const sorted = useMemo(
     () => [...(rules || [])].sort((a, b) => (a.category || '').localeCompare(b.category || '')),
@@ -65,6 +77,25 @@ function IssueRouting() {
     () => new Set(sorted.filter((r) => r.id !== editingId).map((r) => r.category)),
     [sorted, editingId],
   )
+
+  const visible = useMemo(() => {
+    if (statusFilter === 'active') return sorted.filter((r) => r.active !== false)
+    if (statusFilter === 'inactive') return sorted.filter((r) => r.active === false)
+    return sorted
+  }, [sorted, statusFilter])
+
+  const kpi = useMemo(() => {
+    const active = sorted.filter((r) => r.active !== false)
+    return {
+      total: sorted.length,
+      active: active.length,
+      covered: new Set(active.map((r) => r.category).filter(Boolean)).size,
+      withVendor: active.filter((r) => r.vendor_name).length,
+      withMember: active.filter((r) => r.assigned_to).length,
+      autoAck: active.filter((r) => r.auto_acknowledge).length,
+      withEmail: active.filter((r) => r.notify_email).length,
+    }
+  }, [sorted])
 
   const memberOptions = useMemo(() => [
     { value: '', label: '— ללא —' },
@@ -124,61 +155,144 @@ function IssueRouting() {
     return <EmptyState icon={GitBranch} title="בחר בניין" description="יש לבחור בניין כדי להגדיר ניתוב פניות" />
   }
 
-  return (
-    <div className="space-y-5">
-      <PageHeader
-        icon={GitBranch}
-        title="ניתוב פניות"
-        subtitle="העברה אוטומטית של פניות ותקלות לפי קטגוריה — מלווה, ספק ועדכון במייל"
-        actions={<Button onClick={openNew}><Plus className="w-4 h-4 ml-1" />כלל ניתוב חדש</Button>}
-      />
+  const rowActions = (r) => (
+    <div className="flex gap-0.5">
+      <button
+        className={cn(ICON_BTN, r.active === false ? 'hover:text-[var(--success)]' : 'text-[var(--success)] hover:text-[var(--text-primary)]')}
+        title={r.active === false ? 'הפעל כלל' : 'כבה כלל'}
+        onClick={() => update(r.id, { active: r.active === false })}
+      >
+        <Power className="h-4 w-4" />
+      </button>
+      <button className={cn(ICON_BTN, 'hover:text-[var(--text-primary)]')} title="עריכה" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></button>
+      <button className={cn(ICON_BTN, 'hover:text-[var(--danger)] hover:bg-[var(--danger-light)]')} title="מחיקה" onClick={() => setDeleteTarget(r)}><Trash2 className="h-4 w-4" /></button>
+    </div>
+  )
 
-      <Card>
-        <CardContent className="p-4 text-sm text-[var(--text-secondary)] leading-relaxed">
+  const autoAckChip = <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[var(--surface-container)] text-[var(--primary-dark)] whitespace-nowrap"><Zap className="h-3 w-3" />אישור אוטומטי</span>
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">ניתוב פניות</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">העברה אוטומטית של פניות ותקלות לפי קטגוריה — מלווה, ספק ועדכון במייל • {selectedBuilding.name}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={openNew}><Plus className="h-4 w-4" />כלל ניתוב חדש</Button>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="קטגוריות מנותבות" icon={LayoutGrid} color="blue" value={String(kpi.covered)}
+          note={`מתוך ${CATEGORY_OPTIONS.length}`}
+          progress={CATEGORY_OPTIONS.length ? Math.round((kpi.covered / CATEGORY_OPTIONS.length) * 100) : 0} />
+        <StatCard label="כללים פעילים" icon={GitBranch} color="emerald" value={String(kpi.active)}
+          sub={kpi.total - kpi.active ? `${kpi.total - kpi.active} כבויים` : 'כל הכללים פעילים'} />
+        <StatCard label="עם ספק מועדף" icon={Wrench} color="purple" value={String(kpi.withVendor)}
+          sub={`${kpi.withMember} עם מלווה • ${kpi.withEmail} עם עדכון מייל`} />
+        <StatCard label="אישור אוטומטי" icon={Zap} color="amber" value={String(kpi.autoAck)}
+          sub="פניות שעוברות ישירות ל«התקבלה»" />
+      </div>
+
+      {/* How it works */}
+      <div className="flex items-start gap-3 p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Info className="h-4 w-4" /></span>
+        <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
           כשדייר (או הוועד) פותח פנייה בקטגוריה שמוגדר לה כלל, המערכת מבצעת אוטומטית, כבר ברגע הפתיחה:
-          משייכת <b>מלווה אחראי</b>, קובעת <b>ספק מועדף</b>, שולחת <b>עדכון במייל</b> לגורם המטפל —
+          משייכת <b className="text-[var(--text-primary)]">מלווה אחראי</b>, קובעת <b className="text-[var(--text-primary)]">ספק מועדף</b>, שולחת <b className="text-[var(--text-primary)]">עדכון במייל</b> לגורם המטפל —
           ואם מסומן, מעבירה את הפנייה ישירות לסטטוס «התקבלה» (דילוג על שלב האישור הידני).
           <br />הניתוב נאכף בצד השרת, כך שהוא חל על כל פנייה — מהפורטל, מהאפליקציה או מהמערכת.
-        </CardContent>
-      </Card>
+        </p>
+      </div>
+
+      {/* Filter card */}
+      <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+        <TabGroup
+          tabs={[
+            { key: 'all', label: 'הכל', count: sorted.length },
+            { key: 'active', label: 'פעילים', count: kpi.active },
+            { key: 'inactive', label: 'כבויים', count: kpi.total - kpi.active },
+          ]}
+          activeTab={statusFilter}
+          onChange={setStatusFilter}
+        />
+      </div>
 
       {isLoading ? (
-        <div className="text-center py-10 text-[var(--text-muted)]">טוען…</div>
-      ) : sorted.length === 0 ? (
-        <EmptyState icon={GitBranch} title="אין כללי ניתוב עדיין" description="הוסיפו כלל ראשון — למשל: כל פניות המעלית יעברו אוטומטית לספק המעליות ולמלווה האחראי" />
-      ) : (
-        <div className="grid gap-2">
-          {sorted.map((r) => (
-            <Card key={r.id} className={r.active === false ? 'opacity-50' : ''}>
-              <CardContent className="p-3 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
-                  <GitBranch className="w-4 h-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">{r.category}</span>
-                    {r.auto_acknowledge && <Badge variant="info">אישור אוטומטי</Badge>}
-                    {r.active === false && <Badge variant="outline">כבוי</Badge>}
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)] mt-0.5 flex items-center gap-3 flex-wrap">
-                    {r.assigned_to && <span className="inline-flex items-center gap-1"><UserCheck className="w-3 h-3" />{memberNameById[r.assigned_to] || 'חבר ועד'}</span>}
-                    {r.vendor_name && <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" />{r.vendor_name}</span>}
-                    {r.notify_email && <span className="inline-flex items-center gap-1"><Mail className="w-3 h-3" />{r.notify_email}</span>}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost" size="icon"
-                  title={r.active === false ? 'הפעל כלל' : 'כבה כלל'}
-                  onClick={() => update(r.id, { active: r.active === false })}
-                >
-                  <Power className={`w-4 h-4 ${r.active === false ? 'text-slate-400' : 'text-emerald-600'}`} />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => openEdit(r)}><Pencil className="w-4 h-4" /></Button>
-                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(r)}><Trash2 className="w-4 h-4 text-red-500" /></Button>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="flex items-center justify-center py-16">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
         </div>
+      ) : sorted.length === 0 ? (
+        <EmptyState icon={GitBranch} title="אין כללי ניתוב עדיין" description="הוסיפו כלל ראשון — למשל: כל פניות המעלית יעברו אוטומטית לספק המעליות ולמלווה האחראי" actionLabel="כלל ניתוב חדש" onAction={openNew} />
+      ) : visible.length === 0 ? (
+        <EmptyState icon={GitBranch} title="אין כללים בסטטוס זה" description="בחר סינון אחר" />
+      ) : (
+        <>
+          {/* Desktop ledger */}
+          <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="ds-table">
+                <thead>
+                  <tr><th>קטגוריה</th><th>מלווה אחראי</th><th>ספק מועדף</th><th>עדכון במייל</th><th>אישור</th><th>סטטוס</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {visible.map((r) => (
+                    <tr key={r.id} className={r.active === false ? 'opacity-60' : ''}>
+                      <td className="min-w-[140px]">
+                        <div className="flex items-center gap-2.5">
+                          <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><GitBranch className="h-4 w-4" /></span>
+                          <span className="text-[13px] font-semibold">{r.category}</span>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap text-[12px]">
+                        {r.assigned_to ? <span className="inline-flex items-center gap-1"><UserCheck className="h-3.5 w-3.5 text-[var(--text-muted)]" />{memberNameById[r.assigned_to] || 'חבר ועד'}</span> : <Dash />}
+                      </td>
+                      <td className="whitespace-nowrap text-[12px]">
+                        {r.vendor_name ? <span className="inline-flex items-center gap-1"><Wrench className="h-3.5 w-3.5 text-[var(--text-muted)]" />{r.vendor_name}</span> : <Dash />}
+                      </td>
+                      <td className="text-[12px]">
+                        {r.notify_email ? <span className="inline-flex items-center gap-1" dir="ltr"><Mail className="h-3.5 w-3.5 text-[var(--text-muted)]" />{r.notify_email}</span> : <Dash />}
+                      </td>
+                      <td>{r.auto_acknowledge ? autoAckChip : <span className="text-[11px] text-[var(--text-muted)]">ידני</span>}</td>
+                      <td><StatusChip active={r.active !== false} /></td>
+                      <td className="whitespace-nowrap">{rowActions(r)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] text-[11px] text-[var(--text-secondary)]">
+              מציג <span className="num-tabular">{visible.length}</span> מתוך <span className="num-tabular">{sorted.length}</span> כללי ניתוב
+            </div>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-2">
+            {visible.map((r) => (
+              <div key={r.id} className={cn('p-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-2', r.active === false && 'opacity-60')}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><GitBranch className="h-4 w-4" /></span>
+                    <span className="text-[13px] font-semibold truncate">{r.category}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {r.auto_acknowledge && autoAckChip}
+                    <StatusChip active={r.active !== false} />
+                  </div>
+                </div>
+                <div className="text-[12px] text-[var(--text-secondary)] flex items-center gap-3 flex-wrap">
+                  {r.assigned_to && <span className="inline-flex items-center gap-1"><UserCheck className="h-3 w-3" />{memberNameById[r.assigned_to] || 'חבר ועד'}</span>}
+                  {r.vendor_name && <span className="inline-flex items-center gap-1"><Wrench className="h-3 w-3" />{r.vendor_name}</span>}
+                  {r.notify_email && <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{r.notify_email}</span>}
+                </div>
+                <div className="flex justify-end pt-2 border-t border-[var(--border-light)]">{rowActions(r)}</div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
@@ -218,7 +332,7 @@ function IssueRouting() {
                 type="checkbox"
                 checked={!!form.auto_acknowledge}
                 onChange={(e) => setForm((f) => ({ ...f, auto_acknowledge: e.target.checked }))}
-                className="h-4 w-4 rounded border-slate-300"
+                className="h-4 w-4 rounded border-[var(--outline-variant)] accent-[var(--primary)]"
               />
               אישור אוטומטי — הפנייה תעבור ישירות לסטטוס «התקבלה»
             </label>
@@ -227,11 +341,11 @@ function IssueRouting() {
                 type="checkbox"
                 checked={form.active !== false}
                 onChange={(e) => setForm((f) => ({ ...f, active: e.target.checked }))}
-                className="h-4 w-4 rounded border-slate-300"
+                className="h-4 w-4 rounded border-[var(--outline-variant)] accent-[var(--primary)]"
               />
               כלל פעיל
             </label>
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setFormOpen(false)}>ביטול</Button>

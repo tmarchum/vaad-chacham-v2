@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { TabGroup } from '@/components/ui/tabs'
 import { FormField } from '@/components/common/FormField'
-import { PageHeader } from '@/components/common/PageHeader'
+import { StatCard } from '@/components/common/StatCard'
+import { EmptyState } from '@/components/common/EmptyState'
 import { formatCurrency } from '@/lib/utils'
-import { Coins, RefreshCw, Store, Building2 } from 'lucide-react'
+import { RefreshCw, Store, Building2, Hourglass, CheckCircle2, Settings2, Info } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
 // Platform revenue (ועד פלוס): vendors pay a fee per service call, buildings pay
@@ -19,6 +19,17 @@ const VENDOR_ENGAGED_STATUSES = ['approved', 'scheduled', 'in_progress', 'comple
 
 const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 
+const STATUS_CHIP = {
+  paid: { label: 'שולם', cls: 'bg-[var(--success-light)] text-[var(--success)]' },
+  waived: { label: 'בוטל', cls: 'bg-[var(--surface-container)] text-[var(--text-secondary)]' },
+  pending: { label: 'ממתין', cls: 'bg-[var(--warning-light)] text-[var(--warning)]' },
+}
+
+function StatusChip({ s }) {
+  const m = STATUS_CHIP[s] || STATUS_CHIP.pending
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${m.cls}`}>{m.label}</span>
+}
+
 export default function Billing() {
   const { isAdmin } = useAuth()
   const [settings, setSettings] = useState({ vendor_call_fee: '', building_fee_per_unit: '' })
@@ -29,6 +40,8 @@ export default function Billing() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [typeTab, setTypeTab] = useState('vendor_call')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -115,77 +128,193 @@ export default function Billing() {
     const paid = charges.filter((c) => c.status === 'paid')
     return {
       pending: sum(pending), paid: sum(paid),
+      pendingCount: pending.length, paidCount: paid.length,
       vendorPending: sum(pending.filter((c) => c.type === 'vendor_call')),
+      vendorPendingCount: pending.filter((c) => c.type === 'vendor_call').length,
       buildingPending: sum(pending.filter((c) => c.type === 'building_subscription')),
+      buildingPendingCount: pending.filter((c) => c.type === 'building_subscription').length,
     }
   }, [charges])
 
-  if (!isAdmin) return <div className="flex items-center justify-center h-64"><p className="text-[var(--text-secondary)]">אין הרשאה לדף זה</p></div>
-  if (loading) return <div className="p-6"><PageHeader icon={Coins} iconColor="emerald" title="הכנסות פלטפורמה" /><p className="text-center text-[var(--text-muted)] py-12">טוען...</p></div>
-
-  const vendorCharges = charges.filter((c) => c.type === 'vendor_call')
-  const buildingCharges = charges.filter((c) => c.type === 'building_subscription')
-
-  const StatusBadge = ({ s }) => (
-    <Badge variant={s === 'paid' ? 'success' : s === 'waived' ? 'default' : 'warning'}>
-      {s === 'paid' ? 'שולם' : s === 'waived' ? 'בוטל' : 'ממתין'}
-    </Badge>
+  const header = (
+    <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">הכנסות פלטפורמה</h1>
+        <p className="text-[13px] text-[var(--text-secondary)] mt-1">עמלת ספק לכל קריאה + דמי שימוש חודשיים מהבניינים • ספר חיובים בלבד, ללא חיוב אוטומטי</p>
+      </div>
+      {isAdmin && !loading && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={generate} disabled={generating}>
+            <RefreshCw className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />{generating ? 'מפיק...' : 'הפק חיובים'}
+          </Button>
+        </div>
+      )}
+    </div>
   )
 
-  const ChargeRow = ({ c, label }) => (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] p-3">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{label}</p>
-        {c.note && <p className="text-xs text-[var(--text-muted)] truncate">{c.note}</p>}
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-sm font-semibold">{formatCurrency(c.amount)}</span>
-        <StatusBadge s={c.status} />
-        {c.status !== 'paid' && <Button size="sm" variant="outline" onClick={() => setStatus(c, 'paid')}>סמן שולם</Button>}
-        {c.status === 'pending' && <Button size="sm" variant="ghost" className="text-[var(--text-muted)]" onClick={() => setStatus(c, 'waived')}>בטל</Button>}
+  if (!isAdmin) return <div className="flex items-center justify-center h-64"><p className="text-[var(--text-secondary)]">אין הרשאה לדף זה</p></div>
+  if (loading) return (
+    <div className="space-y-6">
+      {header}
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
       </div>
     </div>
   )
 
-  return (
-    <div className="space-y-6 p-6" dir="rtl">
-      <PageHeader icon={Coins} iconColor="emerald" title="הכנסות פלטפורמה"
-        subtitle="עמלת ספק לכל קריאה + דמי שימוש חודשיים מהבניינים"
-        actions={<Button onClick={generate} disabled={generating}>{generating ? <><RefreshCw className="h-4 w-4 animate-spin" />מפיק...</> : 'הפק חיובים'}</Button>}
-      />
+  const typeCharges = charges.filter((c) => c.type === typeTab)
+  const visible = statusFilter === 'all' ? typeCharges : typeCharges.filter((c) => c.status === statusFilter)
+  const countBy = (s) => typeCharges.filter((c) => c.status === s).length
+  const isVendor = typeTab === 'vendor_call'
+  const chargeLabel = (c) => (isVendor
+    ? (vendorName[c.vendor_id] || c.note || 'ספק')
+    : (buildingName[c.building_id] || 'בניין'))
+  const collectPct = totals.paid + totals.pending > 0 ? Math.round((totals.paid / (totals.paid + totals.pending)) * 100) : 0
 
-      {/* Tariffs */}
-      <Card className="border border-[var(--border)]">
-        <CardHeader><CardTitle className="text-base">תעריפים</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  const chargeActions = (c) => (
+    <div className="flex items-center gap-1.5">
+      {c.status !== 'paid' && <Button size="sm" variant="outline" onClick={() => setStatus(c, 'paid')}>סמן שולם</Button>}
+      {c.status === 'pending' && <Button size="sm" variant="ghost" className="text-[var(--text-muted)]" onClick={() => setStatus(c, 'waived')}>בטל</Button>}
+    </div>
+  )
+
+  return (
+    <div className="space-y-6">
+      {header}
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="ממתין לגבייה" icon={Hourglass} color="amber" value={formatCurrency(totals.pending)}
+          sub={`${totals.pendingCount} חיובים פתוחים`} />
+        <StatCard label="נגבה" icon={CheckCircle2} color="emerald" value={formatCurrency(totals.paid)}
+          note={`${collectPct}%`} sub={`${totals.paidCount} חיובים שולמו`} progress={collectPct} />
+        <StatCard label="עמלות ספקים (ממתין)" icon={Store} color="blue" value={formatCurrency(totals.vendorPending)}
+          sub={`${totals.vendorPendingCount} קריאות פתוחות`}
+          footer={<button onClick={() => { setTypeTab('vendor_call'); setStatusFilter('pending') }} className="text-[var(--primary)] font-semibold hover:underline">לעמלות הפתוחות ←</button>} />
+        <StatCard label="דמי בניינים (ממתין)" icon={Building2} color="purple" value={formatCurrency(totals.buildingPending)}
+          sub={`${totals.buildingPendingCount} מנויים פתוחים`}
+          footer={<button onClick={() => { setTypeTab('building_subscription'); setStatusFilter('pending') }} className="text-[var(--primary)] font-semibold hover:underline">לדמי השימוש הפתוחים ←</button>} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Ledger */}
+        <div className="xl:col-span-8 space-y-4">
+          <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <TabGroup
+              tabs={[
+                { key: 'vendor_call', label: 'עמלות ספקים', icon: Store, count: charges.filter((c) => c.type === 'vendor_call').length },
+                { key: 'building_subscription', label: 'דמי שימוש — בניינים', icon: Building2, count: charges.filter((c) => c.type === 'building_subscription').length },
+              ]}
+              activeTab={typeTab}
+              onChange={setTypeTab}
+            />
+            <TabGroup
+              tabs={[
+                { key: 'all', label: 'הכל' },
+                { key: 'pending', label: 'ממתין', count: countBy('pending') },
+                { key: 'paid', label: 'שולם', count: countBy('paid') },
+                { key: 'waived', label: 'בוטל', count: countBy('waived') },
+              ]}
+              activeTab={statusFilter}
+              onChange={setStatusFilter}
+            />
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState icon={isVendor ? Store : Building2} title="אין חיובים"
+              description={typeCharges.length ? 'אין חיובים בסטטוס זה' : 'הגדר תעריף ולחץ "הפק חיובים".'} />
+          ) : (
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="ds-table">
+                  <thead>
+                    {isVendor
+                      ? <tr><th>ספק</th><th>קריאה</th><th>בניין</th><th className="!text-left">סכום</th><th>סטטוס</th><th></th></tr>
+                      : <tr><th>בניין</th><th>תקופה</th><th>דירות</th><th className="!text-left">סכום</th><th>סטטוס</th><th></th></tr>}
+                  </thead>
+                  <tbody>
+                    {visible.map((c) => (
+                      <tr key={c.id}>
+                        <td className="min-w-[150px] text-[13px] font-semibold">{chargeLabel(c)}</td>
+                        {isVendor ? (
+                          <>
+                            <td className="min-w-[160px] text-[12px] text-[var(--text-secondary)]"><span className="line-clamp-1">{c.note || '—'}</span></td>
+                            <td className="whitespace-nowrap text-[12px]">{buildingName[c.building_id] || <span className="text-[var(--text-muted)]">—</span>}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="whitespace-nowrap text-[12px] font-semibold num-tabular">{c.period}</td>
+                            <td className="whitespace-nowrap text-[12px] num-tabular">{c.units || 0}</td>
+                          </>
+                        )}
+                        <td className="whitespace-nowrap !text-left"><span className="text-[14px] font-bold num-tabular">{formatCurrency(c.amount)}</span></td>
+                        <td><StatusChip s={c.status} /></td>
+                        <td className="whitespace-nowrap">{chargeActions(c)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-[var(--border-light)]">
+                {visible.map((c) => (
+                  <div key={c.id} className="p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold truncate">{chargeLabel(c)}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] truncate">
+                          {isVendor ? (c.note || '') : `${c.period} · ${c.units || 0} דירות`}
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-[14px] font-bold num-tabular">{formatCurrency(c.amount)}</span>
+                        <StatusChip s={c.status} />
+                      </div>
+                    </div>
+                    {c.status !== 'paid' && chargeActions(c)}
+                  </div>
+                ))}
+              </div>
+
+              <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                <span>מציג <span className="num-tabular">{visible.length}</span> חיובים</span>
+                <span>סך הכל המוצג: <strong className="text-[var(--primary)] num-tabular">{formatCurrency(visible.reduce((a, c) => a + (Number(c.amount) || 0), 0))}</strong></span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Tariffs side panel */}
+        <aside className="xl:col-span-4 xl:sticky xl:top-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[var(--border)]">
+            <Settings2 className="h-6 w-6 text-[var(--primary)] shrink-0" strokeWidth={1.75} />
+            <div>
+              <h2 className="text-[16px] leading-6 font-bold text-[var(--text-primary)]">תעריפים</h2>
+              <p className="text-[11px] text-[var(--text-muted)]">משמשים בהפקת החיובים הבאה</p>
+            </div>
+          </div>
+          <div className="p-4 space-y-4">
             <FormField label="עמלת ספק לקריאה (₪)" type="number" value={settings.vendor_call_fee} onChange={(e) => setSettings((p) => ({ ...p, vendor_call_fee: e.target.value }))} />
             <FormField label="דמי שימוש לבניין — ₪ לדירה לחודש" type="number" value={settings.building_fee_per_unit} onChange={(e) => setSettings((p) => ({ ...p, building_fee_per_unit: e.target.value }))} />
+            <Button onClick={saveSettings} disabled={saving} className="w-full">{saving ? 'שומר...' : 'שמור תעריפים'}</Button>
+            <div className="flex items-start gap-2 p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[11px] leading-[16px] text-[var(--text-secondary)]">
+              <Info className="h-3.5 w-3.5 text-[var(--primary)] shrink-0 mt-0.5" />
+              <span>"הפק חיובים" יוצר רק חיובים חסרים: עמלה אחת לכל קריאה שבה שובץ ספק, ודמי שימוש לחודש הנוכחי לכל בניין (מספר דירות × תעריף). אין חיוב אוטומטי — הסימון "שולם" ידני.</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="p-3 rounded-[var(--radius)] border border-[var(--border)]">
+                <p className="text-[11px] text-[var(--text-secondary)]">בניינים</p>
+                <p className="text-[18px] font-bold num-tabular">{buildings.length}</p>
+              </div>
+              <div className="p-3 rounded-[var(--radius)] border border-[var(--border)]">
+                <p className="text-[11px] text-[var(--text-secondary)]">דירות במנוי</p>
+                <p className="text-[18px] font-bold num-tabular">{buildings.reduce((a, b) => a + (b.total_units || 0), 0)}</p>
+              </div>
+            </div>
           </div>
-          <Button onClick={saveSettings} disabled={saving}>{saving ? 'שומר...' : 'שמור תעריפים'}</Button>
-        </CardContent>
-      </Card>
-
-      {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card><CardContent className="py-3 text-center"><p className="text-xl font-bold text-amber-600">{formatCurrency(totals.pending)}</p><p className="text-xs text-[var(--text-secondary)]">ממתין לגבייה</p></CardContent></Card>
-        <Card><CardContent className="py-3 text-center"><p className="text-xl font-bold text-emerald-600">{formatCurrency(totals.paid)}</p><p className="text-xs text-[var(--text-secondary)]">נגבה</p></CardContent></Card>
-        <Card><CardContent className="py-3 text-center"><p className="text-xl font-bold text-[var(--primary)]">{formatCurrency(totals.vendorPending)}</p><p className="text-xs text-[var(--text-secondary)]">עמלות ספקים (ממתין)</p></CardContent></Card>
-        <Card><CardContent className="py-3 text-center"><p className="text-xl font-bold text-[var(--primary)]">{formatCurrency(totals.buildingPending)}</p><p className="text-xs text-[var(--text-secondary)]">דמי בניינים (ממתין)</p></CardContent></Card>
-      </div>
-
-      {/* Vendor call charges */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2"><Store className="h-4 w-4" />עמלות ספקים — לפי קריאה</h3>
-        {vendorCharges.length === 0 ? <p className="text-sm text-[var(--text-muted)]">אין חיובים. הגדר תעריף ולחץ "הפק חיובים".</p> :
-          vendorCharges.map((c) => <ChargeRow key={c.id} c={c} label={vendorName[c.vendor_id] || c.note || 'ספק'} />)}
-      </div>
-
-      {/* Building subscription charges */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2"><Building2 className="h-4 w-4" />דמי שימוש — בניינים</h3>
-        {buildingCharges.length === 0 ? <p className="text-sm text-[var(--text-muted)]">אין חיובים. הגדר תעריף ולחץ "הפק חיובים".</p> :
-          buildingCharges.map((c) => <ChargeRow key={c.id} c={c} label={`${buildingName[c.building_id] || 'בניין'} · ${c.period} · ${c.units || 0} דירות`} />)}
+        </aside>
       </div>
     </div>
   )
