@@ -1,17 +1,18 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DetailModal, DetailRow } from '@/components/common/DetailModal'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
+import { StatCard } from '@/components/common/StatCard'
+import { TabGroup } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
-import { formatCurrency } from '@/lib/utils'
-import { PageHeader } from '@/components/common/PageHeader'
-import { Building2, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { formatCurrency, calcUnitFee } from '@/lib/utils'
+import { Building2, Plus, Pencil, Trash2, X, Home, Wallet, AlertTriangle, MapPin, Landmark, Info, CheckCircle2 } from 'lucide-react'
 
 const ELEVATOR_OPTIONS = [0,1,2,3,4,5].map(n => ({ value: String(n), label: String(n) }))
 
@@ -35,7 +36,7 @@ function FeeTiersEditor({ mode, tiers, onChange }) {
   return (
     <div className="mt-3 space-y-2">
       {tiers.map((tier, idx) => (
-        <div key={idx} className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 py-2 space-y-2">
+        <div key={idx} className="bg-[var(--surface-secondary)] border border-[var(--border)] rounded-[var(--radius)] px-3 py-2 space-y-2">
           {/* Label row */}
           <div className="flex items-center gap-2">
             <div className="flex-1 space-y-0.5">
@@ -47,7 +48,7 @@ function FeeTiersEditor({ mode, tiers, onChange }) {
                 placeholder="3 חדרים / דופלקס / פנטהאוז..."
               />
             </div>
-            <button type="button" onClick={() => removeTier(idx)} className="text-[var(--text-muted)] hover:text-red-500 mt-4 shrink-0">
+            <button type="button" onClick={() => removeTier(idx)} className="text-[var(--text-muted)] hover:text-[var(--danger)] mt-4 shrink-0">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -122,33 +123,73 @@ function feeSummary(b) {
   return b.monthly_fee || b.monthlyFee ? formatCurrency(b.monthly_fee ?? b.monthlyFee) : null
 }
 
+// Facility flags shown as chips in the side panel
+const FACILITIES = [
+  ['generator', 'גנרטור'], ['water_pump', 'משאבת מים'], ['fire_suppression', 'כיבוי אש'],
+  ['intercom', 'אינטרקום'], ['shared_roof', 'גג משותף'], ['gym', 'חדר כושר'],
+  ['pool', 'בריכה'], ['residents_room', 'חדר דיירים'], ['management_company', 'חברת ניהול'],
+]
+
+// What's missing for a building to be "operational" (fee + bank details)
+function missingInfo(b) {
+  const out = []
+  const hasFee = b.fee_mode && b.fee_mode !== 'flat'
+    ? Array.isArray(b.fee_tiers) && b.fee_tiers.length > 0
+    : Number(b.monthly_fee ?? b.monthlyFee) > 0
+  if (!hasFee) out.push('תעריף ועד')
+  if (!b.bank_name || !b.account_number) out.push('פרטי בנק')
+  if (!buildAddress(b)) out.push('כתובת')
+  return out
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 function Buildings() {
   const { data: buildings, create, update, remove, isSaving, isLoading } = useCollection('buildings')
-  const { refreshBuildings } = useBuildingContext()
+  const { refreshBuildings, selectedBuilding: activeBuilding, setSelectedBuilding } = useBuildingContext()
   const { data: allUnits } = useCollection('units')
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all') // all | complete | incomplete
+  const [selectedId, setSelectedId] = useState(null)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [detailBuilding, setDetailBuilding] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
-  const filtered = useMemo(() => {
-    if (!search) return buildings
-    const q = search.toLowerCase()
-    return buildings.filter(b =>
-      b.name?.toLowerCase().includes(q) ||
-      b.street?.toLowerCase().includes(q) ||
-      b.city?.toLowerCase().includes(q)
-    )
-  }, [buildings, search])
-
   const unitCountMap = useMemo(() => {
     const m = {}
     allUnits.forEach(u => { m[u.buildingId || u.building_id] = (m[u.buildingId || u.building_id] || 0) + 1 })
     return m
   }, [allUnits])
+
+  // Expected monthly dues per building = Σ calcUnitFee over its registered units
+  const expectedMap = useMemo(() => {
+    const byId = Object.fromEntries(buildings.map(b => [b.id, b]))
+    const m = {}
+    allUnits.forEach(u => {
+      const bid = u.buildingId || u.building_id
+      if (!byId[bid]) return
+      m[bid] = (m[bid] || 0) + (calcUnitFee(u, byId[bid]) || 0)
+    })
+    return m
+  }, [allUnits, buildings])
+
+  const searched = useMemo(() => {
+    if (!search) return buildings
+    const q = search.toLowerCase()
+    return buildings.filter(b =>
+      b.name?.toLowerCase().includes(q) ||
+      b.alias?.toLowerCase().includes(q) ||
+      b.street?.toLowerCase().includes(q) ||
+      b.city?.toLowerCase().includes(q)
+    )
+  }, [buildings, search])
+
+  const filtered = useMemo(() => {
+    if (statusFilter === 'complete') return searched.filter(b => missingInfo(b).length === 0)
+    if (statusFilter === 'incomplete') return searched.filter(b => missingInfo(b).length > 0)
+    return searched
+  }, [searched, statusFilter])
 
   const openCreate = () => {
     setEditingId(null)
@@ -269,6 +310,7 @@ function Buildings() {
     if (deleteTarget) {
       await remove(deleteTarget.id)
       await refreshBuildings()
+      if (selectedId === deleteTarget.id) setSelectedId(null)
       setDeleteTarget(null)
     }
   }
@@ -280,8 +322,8 @@ function Buildings() {
   ]
 
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={Building2} iconColor="slate" title="בניינים" />
+    <div className="space-y-6">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תיק הבניינים</h1>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -291,92 +333,225 @@ function Buildings() {
     </div>
   )
 
+  // ── Portfolio KPIs (across all buildings — this page is not building-scoped) ──
+  const registeredUnits = allUnits.length
+  const declaredUnits = buildings.reduce((a, b) => a + (Number(b.total_units ?? b.totalUnits) || 0), 0)
+  const expectedTotal = buildings.reduce((a, b) => a + (expectedMap[b.id] || 0), 0)
+  const balanceTotal = buildings.reduce((a, b) => a + (Number(b.balance) || 0), 0)
+  const cities = new Set(buildings.map(b => b.city).filter(Boolean))
+  const incomplete = buildings.filter(b => missingInfo(b).length > 0)
+  const selected = buildings.find(b => b.id === selectedId) || filtered[0] || null
+  const unitsOf = b => unitCountMap[b.id] || 0
+  const declaredOf = b => Number(b.total_units ?? b.totalUnits) || 0
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Building2}
-        iconColor="slate"
-        title="בניינים"
-        subtitle={`${buildings.length} בניינים`}
-        actions={<Button onClick={openCreate}><Plus className="h-4 w-4" />בניין חדש</Button>}
-      />
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תיק הבניינים</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">כל הבניינים בניהולך — נתוני בסיס, תעריפי ועד, פרטי בנק וגבייה צפויה</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />בניין חדש</Button>
+        </div>
+      </div>
 
-      <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי שם או כתובת..." />
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="בניינים בניהול" icon={Building2} color="blue"
+          value={String(buildings.length)}
+          sub={cities.size ? `ב-${cities.size} ${cities.size === 1 ? 'עיר' : 'ערים'}` : 'לא הוזנו ערים'} />
+        <StatCard label="דירות רשומות" icon={Home} color="purple"
+          value={String(registeredUnits)}
+          note={declaredUnits ? `מתוך ${declaredUnits} מוצהרות` : null}
+          sub={declaredUnits ? `${Math.round((registeredUnits / declaredUnits) * 100)}% מהדירות הוזנו למערכת` : 'לא הוזן מספר דירות לבניינים'}
+          progress={declaredUnits ? Math.min(100, Math.round((registeredUnits / declaredUnits) * 100)) : undefined} />
+        <StatCard label="גבייה חודשית צפויה" icon={Wallet} color="emerald"
+          value={formatCurrency(Math.round(expectedTotal))}
+          sub="סך דמי הוועד לפי תעריפי הבניינים והדירות"
+          footer={balanceTotal ? <span>יתרות קופה מוצהרות: <strong className="num-tabular text-[var(--text-primary)]">{formatCurrency(balanceTotal)}</strong></span> : null} />
+        <StatCard label="בניינים הדורשים השלמה" icon={AlertTriangle} color={incomplete.length ? 'amber' : 'emerald'}
+          value={String(incomplete.length)}
+          sub={incomplete.length ? 'חסר תעריף ועד, פרטי בנק או כתובת' : 'כל הבניינים מוגדרים במלואם ✓'}
+          footer={incomplete.length ? <button onClick={() => setStatusFilter('incomplete')} className="text-[var(--primary)] font-semibold hover:underline">להצגת הבניינים ←</button> : null} />
+      </div>
+
+      {/* Filter card */}
+      <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] flex flex-col md:flex-row md:items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי שם, כינוי, רחוב או עיר..." />
+        </div>
+        <TabGroup
+          tabs={[
+            { key: 'all', label: 'הכל', count: searched.length },
+            { key: 'complete', label: 'מוגדרים', count: searched.filter(b => missingInfo(b).length === 0).length },
+            { key: 'incomplete', label: '⚠ דורשים השלמה', count: searched.filter(b => missingInfo(b).length > 0).length },
+          ]}
+          activeTab={statusFilter}
+          onChange={setStatusFilter}
+        />
+      </div>
 
       {filtered.length === 0 ? (
         <EmptyState icon={Building2} title="אין בניינים"
-          description={search ? 'לא נמצאו תוצאות' : 'הוסף בניין ראשון כדי להתחיל'}
-          actionLabel={!search ? 'הוסף בניין' : undefined} onAction={!search ? openCreate : undefined} />
+          description={search || statusFilter !== 'all' ? 'לא נמצאו תוצאות' : 'הוסף בניין ראשון כדי להתחיל'}
+          actionLabel={!search && statusFilter === 'all' ? 'הוסף בניין' : undefined} onAction={!search && statusFilter === 'all' ? openCreate : undefined} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(b => {
-            const unitCount = unitCountMap[b.id] || b.total_units || b.totalUnits || 0
-            const address = buildAddress(b)
-            const fee = feeSummary(b)
-            const initial = (b.name || '?').charAt(0)
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          {/* Ledger */}
+          <div className="xl:col-span-8 space-y-4">
+            {/* Desktop table */}
+            <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="ds-table">
+                  <thead>
+                    <tr><th>בניין</th><th>דירות</th><th>תעריף ועד</th><th className="!text-left">גבייה צפויה / חודש</th><th className="!text-left">יתרה</th><th>סטטוס</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(b => {
+                      const missing = missingInfo(b)
+                      const isSel = selected?.id === b.id
+                      return (
+                        <tr key={b.id} onClick={() => setSelectedId(b.id)} className={`cursor-pointer ${isSel ? '!bg-[var(--surface-container)]' : ''}`}>
+                          <td className="min-w-[200px]">
+                            <div className="flex items-center gap-3">
+                              <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Building2 className="h-4 w-4" /></span>
+                              <div className="min-w-0">
+                                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--text-primary)]">
+                                  <span className="truncate">{b.name}</span>
+                                  {activeBuilding?.id === b.id && <Badge variant="info">פעיל</Badge>}
+                                </span>
+                                <span className="block text-[11px] text-[var(--text-muted)] truncate">{[b.alias, buildAddress(b)].filter(Boolean).join(' • ') || '—'}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap text-[12px] num-tabular">
+                            <strong className="text-[13px]">{unitsOf(b)}</strong>
+                            {declaredOf(b) > 0 && declaredOf(b) !== unitsOf(b) && <span className="text-[var(--text-muted)]"> / {declaredOf(b)}</span>}
+                          </td>
+                          <td className="whitespace-nowrap text-[12px]">{feeSummary(b) || <span className="text-[var(--text-muted)]">—</span>}</td>
+                          <td className="whitespace-nowrap !text-left"><span className="text-[14px] font-bold num-tabular">{expectedMap[b.id] ? formatCurrency(Math.round(expectedMap[b.id])) : '—'}</span></td>
+                          <td className="whitespace-nowrap !text-left text-[12px] num-tabular">{b.balance ? formatCurrency(b.balance) : <span className="text-[var(--text-muted)]">—</span>}</td>
+                          <td className="whitespace-nowrap">
+                            {missing.length === 0
+                              ? <Badge variant="success"><CheckCircle2 className="h-3 w-3" />מוגדר</Badge>
+                              : <Badge variant="warning" title={`חסר: ${missing.join(', ')}`}>חסר {missing[0]}{missing.length > 1 ? ` +${missing.length - 1}` : ''}</Badge>}
+                          </td>
+                          <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex gap-0.5">
+                              <button onClick={() => setDetailBuilding(b)} title="פרטים מלאים" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Info className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => openEdit(b)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
+                              <button onClick={() => setDeleteTarget(b)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                <span>מציג {filtered.length} מתוך {buildings.length} בניינים</span>
+                <span>גבייה צפויה במוצג: <strong className="text-[var(--primary)] num-tabular">{formatCurrency(Math.round(filtered.reduce((a, b) => a + (expectedMap[b.id] || 0), 0)))}</strong></span>
+              </div>
+            </div>
 
-            return (
-              <div
-                key={b.id}
-                className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
-                onClick={() => setDetailBuilding(b)}
-              >
-                {/* Top gradient accent bar */}
-                <div className="h-1 w-full bg-gradient-to-l from-blue-500 to-blue-600" />
-
-                <div className="p-5">
-                  <div className="flex items-start gap-4 mb-4">
-                    {/* Building gradient circle */}
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-sm">
-                      {initial}
+            {/* Mobile cards */}
+            <div className="md:hidden grid grid-cols-1 gap-3">
+              {filtered.map(b => {
+                const missing = missingInfo(b)
+                return (
+                  <div key={b.id} onClick={() => setDetailBuilding(b)}
+                    className="p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] cursor-pointer">
+                    <div className="flex items-start gap-3">
+                      <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Building2 className="h-4 w-4" /></span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[14px] font-semibold text-[var(--text-primary)]">{b.name}</span>
+                          {activeBuilding?.id === b.id && <Badge variant="info">פעיל</Badge>}
+                        </div>
+                        <p className="text-[11px] text-[var(--text-muted)]">{[b.alias, buildAddress(b)].filter(Boolean).join(' • ') || '—'}</p>
+                      </div>
+                      <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => openEdit(b)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"><Pencil className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setDeleteTarget(b)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)]"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
                     </div>
-
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-[15px] font-semibold text-[var(--text-primary)] truncate">{b.name}</h3>
-                      {b.alias && <p className="text-xs text-[var(--text-muted)]">{b.alias}</p>}
-                      {address && <p className="text-xs text-[var(--text-secondary)] mt-0.5">{address}</p>}
-                    </div>
-
-                    {/* Hover-reveal actions */}
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(b)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setDeleteTarget(b) }}>
-                        <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                      </Button>
+                    <div className="mt-3 pt-3 border-t border-[var(--border-light)] grid grid-cols-3 gap-2 text-[11px] text-[var(--text-secondary)]">
+                      <div><span className="block text-[var(--text-muted)]">דירות</span><strong className="num-tabular text-[13px] text-[var(--text-primary)]">{unitsOf(b)}</strong></div>
+                      <div><span className="block text-[var(--text-muted)]">גבייה צפויה</span><strong className="num-tabular text-[13px] text-[var(--text-primary)]">{expectedMap[b.id] ? formatCurrency(Math.round(expectedMap[b.id])) : '—'}</strong></div>
+                      <div><span className="block text-[var(--text-muted)]">סטטוס</span>
+                        {missing.length === 0 ? <Badge variant="success">מוגדר</Badge> : <Badge variant="warning">חסר {missing[0]}</Badge>}
+                      </div>
                     </div>
                   </div>
+                )
+              })}
+            </div>
+          </div>
 
-                  {/* Stats row */}
-                  <div className="flex flex-wrap gap-3 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full bg-blue-500" />
-                      <span className="text-[var(--text-secondary)]">{unitCount} דירות</span>
+          {/* Side panel — selected building */}
+          {selected && (
+            <aside className="hidden md:block xl:col-span-4 xl:sticky xl:top-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+              <div className="px-4 py-3.5 border-b border-[var(--border)] flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-[16px] font-bold text-[var(--text-primary)] truncate">{selected.name}</h2>
+                  <p className="text-[11px] text-[var(--text-muted)] flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" />{buildAddress(selected) || 'לא הוזנה כתובת'}</p>
+                </div>
+                {activeBuilding?.id === selected.id
+                  ? <Badge variant="info">הבניין הפעיל</Badge>
+                  : <Button size="sm" variant="outline" onClick={() => setSelectedBuilding(selected.id)}>הגדר כפעיל</Button>}
+              </div>
+              <div className="p-4 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    ['דירות רשומות', unitsOf(selected) + (declaredOf(selected) ? ` / ${declaredOf(selected)}` : '')],
+                    ['קומות', selected.floors || '—'],
+                    ['גבייה צפויה', expectedMap[selected.id] ? formatCurrency(Math.round(expectedMap[selected.id])) : '—'],
+                    ['יתרה', selected.balance ? formatCurrency(selected.balance) : '—'],
+                  ].map(([label, val]) => (
+                    <div key={label} className="p-3 rounded-[var(--radius)] bg-[var(--bg)] border border-[var(--border-light)]">
+                      <span className="block text-[11px] text-[var(--text-muted)]">{label}</span>
+                      <span className="text-[15px] font-bold num-tabular text-[var(--text-primary)]">{val}</span>
                     </div>
-                    {b.floors && (
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-slate-400" />
-                        <span className="text-[var(--text-secondary)]">{b.floors} קומות</span>
-                      </div>
-                    )}
-                    {fee && (
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="text-[var(--text-secondary)]">ועד: {fee}</span>
-                      </div>
-                    )}
-                    {b.elevators > 0 && (
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-amber-500" />
-                        <span className="text-[var(--text-secondary)]">{b.elevators} מעליות</span>
-                      </div>
-                    )}
+                  ))}
+                </div>
+
+                <div className="space-y-1.5 text-[12px]">
+                  <div className="flex items-center justify-between gap-2"><span className="text-[var(--text-secondary)]">תעריף ועד</span><span className="font-semibold num-tabular">{feeSummary(selected) || '—'}</span></div>
+                  <div className="flex items-center justify-between gap-2"><span className="text-[var(--text-secondary)]">מעליות</span><span className="font-semibold num-tabular">{selected.elevators || 0}</span></div>
+                  <div className="flex items-center justify-between gap-2"><span className="text-[var(--text-secondary)]">חניות / מחסנים</span><span className="font-semibold num-tabular">{selected.parking || 0} / {selected.storage || 0}</span></div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[var(--text-secondary)] flex items-center gap-1"><Landmark className="h-3.5 w-3.5" />חשבון בנק</span>
+                    <span className="font-semibold num-tabular">{selected.bank_name ? [selected.bank_name, selected.branch, selected.account_number].filter(Boolean).join(' / ') : '—'}</span>
                   </div>
                 </div>
+
+                {FACILITIES.some(([k]) => selected[k]) && (
+                  <div>
+                    <span className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1.5">מתקנים ושירותים</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FACILITIES.filter(([k]) => selected[k]).map(([k, label]) => <Badge key={k} variant="neutral">{label}</Badge>)}
+                    </div>
+                  </div>
+                )}
+
+                {missingInfo(selected).length > 0 && (
+                  <div className="p-3 rounded-[var(--radius)] bg-[var(--warning-light)] text-[var(--warning)] text-[12px] flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>חסר להשלמה: {missingInfo(selected).join(', ')}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button size="sm" onClick={() => openEdit(selected)}><Pencil className="h-3.5 w-3.5" />עריכה</Button>
+                  <Button size="sm" variant="outline" onClick={() => setDetailBuilding(selected)}><Info className="h-3.5 w-3.5" />פרטים מלאים</Button>
+                  <Button size="sm" variant="outline" onClick={() => setDeleteTarget(selected)} className="text-[var(--danger)]"><Trash2 className="h-3.5 w-3.5" />מחיקה</Button>
+                </div>
               </div>
-            )
-          })}
+            </aside>
+          )}
         </div>
       )}
 
@@ -508,7 +683,7 @@ function Buildings() {
                         placeholder="למשל: חניון תחתון"
                         className="flex-1"
                       />
-                      <button type="button" onClick={() => removeLot(idx)} className="text-[var(--text-muted)] hover:text-red-500 shrink-0">
+                      <button type="button" onClick={() => removeLot(idx)} className="text-[var(--text-muted)] hover:text-[var(--danger)] shrink-0">
                         <X className="h-4 w-4" />
                       </button>
                     </div>

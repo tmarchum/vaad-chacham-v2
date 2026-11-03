@@ -3,13 +3,13 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { TabGroup } from '@/components/ui/tabs'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { PageHeader } from '@/components/common/PageHeader'
+import { SectionCard } from '@/components/common/SectionCard'
+import { SearchBar } from '@/components/common/SearchBar'
 import { FormField, FormSelect, FormBool } from '@/components/common/FormField'
-import { Settings, Users, Database, Building, Shield, Key, MessageCircle } from 'lucide-react'
+import { Users, Database, Building, Key, MessageCircle, ShieldAlert, Plus, Trash2, UserCog, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { resetWhatsappEnabledCache } from '@/lib/whatsapp'
 import { DeleteConfirm } from '@/components/common/DeleteConfirm'
 import { toast, toastError } from '@/lib/toast'
@@ -67,7 +67,8 @@ function UsersTab() {
   const [editRoleUser, setEditRoleUser] = useState(null) // { id, email, role }
   const [newRole, setNewRole] = useState('')
   const [savingRole, setSavingRole] = useState(false)
-
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -107,74 +108,105 @@ function UsersTab() {
 
   if (loading) {
     return (
-      <p className="text-[var(--text-secondary)] py-8 text-center">טוען משתמשים...</p>
+      <SectionCard icon={Users} title="משתמשים והרשאות">
+        <p className="text-[var(--text-secondary)] py-8 text-center text-[13px]">טוען משתמשים...</p>
+      </SectionCard>
     )
   }
 
-  const ROLE_GRADIENTS = {
-    admin: 'from-red-500 to-rose-600',
-    committee: 'from-blue-500 to-blue-600',
-    resident: 'from-slate-400 to-slate-500',
-  }
+  const q = search.trim().toLowerCase()
+  const shown = users.filter((u) => {
+    if (roleFilter !== 'all' && (u.role ?? 'resident') !== roleFilter) return false
+    if (!q) return true
+    return [u.first_name, u.last_name, u.email].some((v) => v && v.toLowerCase().includes(q))
+  })
+  const roleCount = (r) => users.filter((u) => (u.role ?? 'resident') === r).length
 
   return (
     <div className="space-y-4">
-      {users.length === 0 && (
-        <p className="px-4 py-8 text-center text-[var(--text-secondary)]">לא נמצאו משתמשים</p>
-      )}
+      <SectionCard
+        icon={Users}
+        title="משתמשים והרשאות"
+        subtitle={`${users.length} משתמשים רשומים • ${roleCount('admin')} מנהלים • ${roleCount('committee')} ועד`}
+        footer={`מציג ${shown.length} מתוך ${users.length}`}
+      >
+        <div className="p-3 sm:p-4 border-b border-[var(--border)] flex flex-col lg:flex-row lg:items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי שם או אימייל..." />
+          </div>
+          <TabGroup
+            tabs={[
+              { key: 'all', label: 'הכל', count: users.length },
+              { key: 'admin', label: 'מנהלים', count: roleCount('admin') },
+              { key: 'committee', label: 'ועד', count: roleCount('committee') },
+              { key: 'resident', label: 'דיירים', count: roleCount('resident') },
+            ]}
+            activeTab={roleFilter}
+            onChange={setRoleFilter}
+          />
+        </div>
 
-      <div className="space-y-2">
-        {users.map((user) => {
-          const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || '—'
-          const initials = [user.first_name?.[0], user.last_name?.[0]].filter(Boolean).join('') || '?'
-          const gradient = ROLE_GRADIENTS[user.role] || ROLE_GRADIENTS.resident
-          const userBuildings = buildingsForUser(user.id).join(', ')
-
-          return (
-            <div
-              key={user.id}
-              className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
-            >
-              {/* Avatar circle */}
-              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                {initials}
-              </div>
-
-              {/* Main info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                    {fullName}
-                  </span>
-                  <Badge variant={ROLE_BADGE_VARIANT[user.role] ?? 'default'}>
-                    {ROLE_LABELS[user.role] ?? user.role ?? '—'}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-[var(--text-muted)] truncate">{user.email ?? '—'}</span>
-                  {userBuildings && (
-                    <span className="text-xs text-[var(--text-muted)]">
-                      <Building className="h-3 w-3 inline ml-0.5" />
-                      {userBuildings}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Action (hover reveal) */}
-              <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openEditRole(user)}
-                >
-                  ערוך תפקיד
-                </Button>
-              </div>
+        {shown.length === 0 ? (
+          <p className="px-4 py-8 text-center text-[13px] text-[var(--text-secondary)]">לא נמצאו משתמשים</p>
+        ) : (
+          <>
+            {/* Desktop ledger */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="ds-table">
+                <thead>
+                  <tr><th>משתמש</th><th>אימייל</th><th>תפקיד</th><th>בניינים</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {shown.map((user) => {
+                    const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || '—'
+                    const initials = [user.first_name?.[0], user.last_name?.[0]].filter(Boolean).join('') || '?'
+                    const userBuildings = buildingsForUser(user.id).join(', ')
+                    return (
+                      <tr key={user.id}>
+                        <td className="min-w-[160px]">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-8 w-8 rounded-full bg-[var(--surface-secondary)] text-[var(--primary)] flex items-center justify-center text-[12px] font-bold shrink-0">{initials}</span>
+                            <span className="text-[13px] font-semibold truncate">{fullName}</span>
+                          </div>
+                        </td>
+                        <td className="text-[12px] text-[var(--text-secondary)]">{user.email ?? '—'}</td>
+                        <td className="whitespace-nowrap">
+                          <Badge variant={ROLE_BADGE_VARIANT[user.role] ?? 'default'}>{ROLE_LABELS[user.role] ?? user.role ?? '—'}</Badge>
+                        </td>
+                        <td className="text-[12px] text-[var(--text-secondary)]">{userBuildings || <span className="text-[var(--text-muted)]">—</span>}</td>
+                        <td className="whitespace-nowrap">
+                          <Button variant="outline" size="sm" onClick={() => openEditRole(user)}><UserCog className="h-3.5 w-3.5" />ערוך תפקיד</Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          )
-        })}
-      </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-[var(--border-light)]">
+              {shown.map((user) => {
+                const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || '—'
+                const userBuildings = buildingsForUser(user.id).join(', ')
+                return (
+                  <div key={user.id} className="p-4 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[14px] font-semibold text-[var(--text-primary)]">{fullName}</span>
+                        <Badge variant={ROLE_BADGE_VARIANT[user.role] ?? 'default'}>{ROLE_LABELS[user.role] ?? user.role ?? '—'}</Badge>
+                      </div>
+                      <p className="text-[12px] text-[var(--text-muted)] truncate">{user.email ?? '—'}</p>
+                      {userBuildings && <p className="text-[12px] text-[var(--text-muted)] flex items-center gap-1"><Building className="h-3 w-3" />{userBuildings}</p>}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => openEditRole(user)}>ערוך תפקיד</Button>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </SectionCard>
 
       {/* Edit Role Dialog */}
       <Dialog open={!!editRoleUser} onOpenChange={(open) => !open && setEditRoleUser(null)}>
@@ -275,128 +307,86 @@ function CustomFieldsTab() {
   return (
     <div className="space-y-6">
       {/* Existing fields */}
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-blue-500 to-purple-500" />
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center shadow-sm">
-              <Database size={16} className="text-white" />
-            </div>
-            שדות קיימים
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {isLoading ? (
-            <p className="text-[var(--text-secondary)] px-5 py-8 text-center">טוען שדות...</p>
-          ) : fields.length === 0 ? (
-            <p className="px-4 py-8 text-center text-[var(--text-secondary)]">לא הוגדרו שדות מותאמים</p>
-          ) : (
-            <div className="space-y-2">
-              {fields.map((field) => {
-                const TYPE_GRADIENTS = {
-                  text: 'from-blue-500 to-blue-600',
-                  number: 'from-emerald-500 to-emerald-600',
-                  boolean: 'from-amber-500 to-amber-600',
-                  date: 'from-purple-500 to-purple-600',
-                }
-                const TYPE_ICONS = { text: 'T', number: '#', boolean: '?', date: 'D' }
-                const gradient = TYPE_GRADIENTS[field.field_type] || TYPE_GRADIENTS.text
-
-                return (
-                  <div
-                    key={field.id}
-                    className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
-                  >
-                    {/* Type icon circle */}
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                      {TYPE_ICONS[field.field_type] || 'T'}
-                    </div>
-
-                    {/* Field info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[14px] font-semibold text-[var(--text-primary)]">{field.name}</span>
-                        {field.required && (
-                          <div className="flex items-center gap-1">
-                            <div className="w-2 h-2 rounded-full shrink-0 bg-amber-500" />
-                            <span className="text-[11px] font-medium text-amber-700">חובה</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs text-[var(--text-muted)]">{field.field_key}</span>
-                        <span className="text-xs text-[var(--text-muted)]">{FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}</span>
-                      </div>
-                    </div>
-
-                    {/* Delete action (hover reveal) */}
-                    <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                      <Button
-                        variant="destructive"
-                        size="sm"
+      <SectionCard
+        icon={Database}
+        title="שדות קיימים"
+        subtitle="שדות נוספים שמופיעים בכרטיס כל דירה"
+        footer={!isLoading && fields.length ? `${fields.length} שדות מוגדרים` : null}
+      >
+        {isLoading ? (
+          <p className="text-[var(--text-secondary)] px-5 py-8 text-center text-[13px]">טוען שדות...</p>
+        ) : fields.length === 0 ? (
+          <p className="px-4 py-8 text-center text-[13px] text-[var(--text-secondary)]">לא הוגדרו שדות מותאמים</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="ds-table">
+              <thead>
+                <tr><th>שם תצוגה</th><th>מפתח</th><th>סוג</th><th>חובה</th><th></th></tr>
+              </thead>
+              <tbody>
+                {fields.map((field) => (
+                  <tr key={field.id}>
+                    <td className="text-[13px] font-semibold">{field.name}</td>
+                    <td><span className="font-mono text-[12px] text-[var(--text-secondary)]" dir="ltr">{field.field_key}</span></td>
+                    <td className="whitespace-nowrap"><Badge variant="neutral">{FIELD_TYPE_LABELS[field.field_type] ?? field.field_type}</Badge></td>
+                    <td className="whitespace-nowrap">{field.required ? <Badge variant="warning">חובה</Badge> : <span className="text-[12px] text-[var(--text-muted)]">רשות</span>}</td>
+                    <td className="whitespace-nowrap">
+                      <button
                         disabled={deletingId === field.id}
                         onClick={() => handleDelete(field.id)}
+                        title="מחק שדה"
+                        className="px-2 py-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)] disabled:opacity-50 inline-flex items-center gap-1 text-[12px] font-semibold"
                       >
-                        {deletingId === field.id ? 'מוחק...' : 'מחק'}
-                      </Button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                        <Trash2 className="h-3.5 w-3.5" />{deletingId === field.id ? 'מוחק...' : 'מחק'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionCard>
 
       {/* Create new field */}
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-emerald-500 to-blue-500" />
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center shadow-sm">
-              <Key size={16} className="text-white" />
-            </div>
-            הוסף שדה חדש
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} dir="rtl">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                label="שם תצוגה *"
-                value={form.name}
-                onChange={handleNameChange}
-                placeholder="לדוגמה: קומה"
-                required
-              />
-              <FormField
-                label='מפתח שדה *'
-                value={form.field_key}
-                onChange={(e) => setForm((prev) => ({ ...prev, field_key: e.target.value }))}
-                placeholder="floor"
-                required
-                dir="ltr"
-              />
-              <FormSelect
-                label="סוג שדה"
-                value={form.field_type}
-                onChange={handleChange('field_type')}
-                options={FIELD_TYPE_OPTIONS}
-              />
-              <FormBool
-                label="חובה"
-                value={form.required}
-                onChange={handleRequiredChange}
-              />
-            </div>
-            <div className="mt-4 flex justify-start">
-              <Button type="submit" disabled={saving || !form.name.trim() || !form.field_key.trim()}>
-                {saving ? 'שומר...' : 'הוסף שדה'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+      <SectionCard icon={Key} title="הוסף שדה חדש" subtitle="מפתח השדה נוצר אוטומטית משם התצוגה וניתן לעריכה" bodyClassName="p-4">
+        <form onSubmit={handleSubmit} dir="rtl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              label="שם תצוגה *"
+              value={form.name}
+              onChange={handleNameChange}
+              placeholder="לדוגמה: קומה"
+              required
+            />
+            <FormField
+              label='מפתח שדה *'
+              value={form.field_key}
+              onChange={(e) => setForm((prev) => ({ ...prev, field_key: e.target.value }))}
+              placeholder="floor"
+              required
+              dir="ltr"
+            />
+            <FormSelect
+              label="סוג שדה"
+              value={form.field_type}
+              onChange={handleChange('field_type')}
+              options={FIELD_TYPE_OPTIONS}
+            />
+            <FormBool
+              label="חובה"
+              value={form.required}
+              onChange={handleRequiredChange}
+            />
+          </div>
+          <div className="mt-4 pt-4 border-t border-[var(--border-light)] flex justify-start">
+            <Button type="submit" disabled={saving || !form.name.trim() || !form.field_key.trim()}>
+              <Plus className="h-4 w-4" />
+              {saving ? 'שומר...' : 'הוסף שדה'}
+            </Button>
+          </div>
+        </form>
+      </SectionCard>
     </div>
   )
 }
@@ -485,95 +475,72 @@ function BuildingsCommitteesTab() {
 
   if (loading) {
     return (
-      <p className="text-[var(--text-secondary)] py-8 text-center">טוען נתונים...</p>
+      <SectionCard icon={Building} title="בניינים וועדים">
+        <p className="text-[var(--text-secondary)] py-8 text-center text-[13px]">טוען נתונים...</p>
+      </SectionCard>
     )
   }
 
   return (
     <div className="space-y-4" dir="rtl">
       {buildings.length === 0 && (
-        <p className="text-[var(--text-secondary)] py-8 text-center">לא נמצאו בניינים</p>
+        <SectionCard icon={Building} title="בניינים וועדים">
+          <p className="text-[var(--text-secondary)] py-8 text-center text-[13px]">לא נמצאו בניינים</p>
+        </SectionCard>
       )}
 
-      {buildings.map((building, bIdx) => {
+      {buildings.map((building) => {
         const members = membersForBuilding(building.id)
-        const BUILDING_GRADIENTS = [
-          'from-blue-500 to-blue-600',
-          'from-emerald-500 to-blue-600',
-          'from-purple-500 to-violet-600',
-          'from-amber-500 to-orange-600',
-          'from-cyan-500 to-blue-600',
-        ]
-        const buildingGradient = BUILDING_GRADIENTS[bIdx % BUILDING_GRADIENTS.length]
+        const hasChair = members.some((m) => m.role === 'committee_chair')
 
         return (
-          <Card key={building.id} className="overflow-hidden border border-[var(--border)]">
-            <div className={`h-1 bg-gradient-to-r ${buildingGradient}`} />
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${buildingGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-                    <Building size={18} className="text-white" />
-                  </div>
-                  {building.name}
-                </CardTitle>
-                <Button size="sm" onClick={() => openAddMember(building)}>
-                  + הוסף חבר ועד
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {members.length === 0 ? (
-                <p className="text-sm text-[var(--text-secondary)]">לא הוגדרו חברי ועד לבניין זה</p>
-              ) : (
-                <div className="space-y-2">
-                  {members.map((m) => {
-                    const memberName = m.profile
-                      ? [m.profile.first_name, m.profile.last_name].filter(Boolean).join(' ') || m.profile.email
-                      : m.user_id
-                    const initials = m.profile
-                      ? [m.profile.first_name?.[0], m.profile.last_name?.[0]].filter(Boolean).join('') || '?'
-                      : '?'
-                    const MEMBER_ROLE_GRADIENTS = {
-                      committee_chair: 'from-amber-500 to-orange-600',
-                      committee: 'from-blue-500 to-blue-600',
-                      manager: 'from-emerald-500 to-blue-600',
-                    }
-                    const memberGradient = MEMBER_ROLE_GRADIENTS[m.role] || 'from-slate-400 to-slate-500'
+          <SectionCard
+            key={building.id}
+            icon={Building}
+            title={building.name}
+            subtitle={members.length ? `${members.length} חברי ועד${hasChair ? '' : ' • לא הוגדר יו"ר'}` : 'לא הוגדרו חברי ועד'}
+            actions={<Button size="sm" onClick={() => openAddMember(building)}><Plus className="h-3.5 w-3.5" />הוסף חבר ועד</Button>}
+          >
+            {members.length === 0 ? (
+              <p className="px-4 py-6 text-[13px] text-[var(--text-secondary)]">לא הוגדרו חברי ועד לבניין זה</p>
+            ) : (
+              <div className="divide-y divide-[var(--border-light)]">
+                {members.map((m) => {
+                  const memberName = m.profile
+                    ? [m.profile.first_name, m.profile.last_name].filter(Boolean).join(' ') || m.profile.email
+                    : m.user_id
+                  const initials = m.profile
+                    ? [m.profile.first_name?.[0], m.profile.last_name?.[0]].filter(Boolean).join('') || '?'
+                    : '?'
 
-                    return (
-                      <div
-                        key={m.id}
-                        className="group flex items-center gap-3 p-3 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all border-[var(--border)]"
-                      >
-                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${memberGradient} flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm`}>
-                          {initials}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-semibold text-[var(--text-primary)]">
-                            {memberName}
-                          </span>
-                        </div>
-                        <Badge variant="info">
-                          {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
-                        </Badge>
-                        <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-[var(--danger)] hover:text-[var(--danger)]"
-                            onClick={() => setConfirmRemove(m)}
-                          >
-                            הסר
-                          </Button>
-                        </div>
+                  return (
+                    <div key={m.id} className="group flex items-center gap-3 px-4 py-3 hover:bg-[var(--surface-secondary)] transition-colors">
+                      <span className="h-8 w-8 rounded-full bg-[var(--surface-secondary)] text-[var(--primary)] flex items-center justify-center text-[12px] font-bold shrink-0">
+                        {initials}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[13px] font-semibold text-[var(--text-primary)] truncate block">{memberName}</span>
+                        {m.profile?.email && memberName !== m.profile.email && <span className="text-[11px] text-[var(--text-muted)] truncate block">{m.profile.email}</span>}
                       </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      <Badge variant={m.role === 'committee_chair' ? 'warning' : 'info'}>
+                        {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
+                      </Badge>
+                      <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-[var(--danger)] hover:text-[var(--danger)]"
+                          onClick={() => setConfirmRemove(m)}
+                        >
+                          הסר
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </SectionCard>
         )
       })}
 
@@ -707,65 +674,86 @@ function WhatsappTab() {
     setTestResult({ ok: !!data?.ok, text: data?.ok ? 'מענה אוטומטי הופעל ✓ — תשובות "מאשר"/"מסרב" מספקים יעודכנו במערכת מעצמן' : 'GreenAPI סירב לעדכון ההגדרות' })
   }
 
-  if (loading) return <p className="text-[var(--text-secondary)] py-8 text-center">טוען הגדרות...</p>
+  if (loading) return (
+    <SectionCard icon={MessageCircle} title="חיבור וואטסאפ (GreenAPI)">
+      <p className="text-[var(--text-secondary)] py-8 text-center text-[13px]">טוען הגדרות...</p>
+    </SectionCard>
+  )
+
+  const statusTiles = [
+    { label: 'חיבור', ok: form.enabled, value: form.enabled ? 'פעיל' : 'כבוי' },
+    { label: 'טוקן', ok: meta.has_token, value: meta.has_token ? 'מאוחסן' : 'לא הוזן' },
+    { label: 'סטטוס אחרון', ok: meta.status === 'authorized', value: meta.status || 'לא נבדק', sub: meta.last_checked_at ? new Date(meta.last_checked_at).toLocaleString('he-IL') : null },
+  ]
 
   return (
     <div className="space-y-6" dir="rtl">
-      <Card className="overflow-hidden border border-[var(--border)]">
-        <div className="h-1 bg-gradient-to-r from-green-500 to-emerald-600" />
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-sm">
-              <MessageCircle size={16} className="text-white" />
+      {/* Connection status strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {statusTiles.map((k) => (
+          <div key={k.label} className="p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] flex items-center gap-3">
+            <span className={`p-1.5 rounded-[var(--radius)] shrink-0 ${k.ok ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--warning-light)] text-[var(--warning)]'}`}>
+              {k.ok ? <CheckCircle2 className="h-[18px] w-[18px]" /> : <AlertTriangle className="h-[18px] w-[18px]" />}
+            </span>
+            <div className="min-w-0">
+              <span className="block text-[12px] text-[var(--text-secondary)]">{k.label}</span>
+              <span className="block text-[15px] font-bold text-[var(--text-primary)]" dir="auto">{k.value}</span>
+              {k.sub && <span className="block text-[11px] text-[var(--text-muted)] num-tabular">{k.sub}</span>}
             </div>
-            חיבור וואטסאפ (GreenAPI)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-            הזן את פרטי האינסטנס מקונסולת GreenAPI (idInstance, ApiTokenInstance, ובמידת הצורך apiUrl).
-            הטוקן נשמר מוצפן בצד השרת ואינו מוצג חזרה — בעריכה השאר ריק כדי לא לשנותו.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="idInstance" value={form.id_instance} onChange={set('id_instance')} placeholder="1101234567" dir="ltr" />
-            <FormField label="ApiTokenInstance (סודי)" type="password" value={form.api_token} onChange={set('api_token')} placeholder={meta.has_token ? 'מאוחסן — השאר ריק לשמירה' : 'הזן את הטוקן (חובה)'} dir="ltr" />
-            <FormField label="apiUrl (רשות)" value={form.api_url} onChange={set('api_url')} placeholder="https://api.green-api.com" dir="ltr" />
-            <FormField label="מספר השולח (וואטסאפ)" value={form.sender_number} onChange={set('sender_number')} placeholder="0501234567" dir="ltr" />
-            <FormField label="תווית השולח" value={form.sender_label} onChange={set('sender_label')} placeholder="ועד הבית" />
-            <FormBool label="חיבור פעיל (אפשר שליחה מהמערכת)" value={form.enabled} onChange={set('enabled')} />
           </div>
+        ))}
+      </div>
 
-          {/* Status row */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-[var(--text-secondary)]">טוקן:</span>
-            <Badge variant={meta.has_token ? 'success' : 'danger'}>{meta.has_token ? 'מאוחסן' : 'לא הוזן'}</Badge>
-            <span className="text-[var(--text-secondary)] mr-2">סטטוס אחרון:</span>
-            {meta.status
-              ? <Badge variant={meta.status === 'authorized' ? 'success' : 'warning'}>{meta.status}</Badge>
-              : <span className="text-[var(--text-muted)]">לא נבדק</span>}
-            {meta.last_checked_at && <span className="text-[var(--text-muted)]">· {new Date(meta.last_checked_at).toLocaleString('he-IL')}</span>}
+      <SectionCard
+        icon={MessageCircle}
+        title="חיבור וואטסאפ (GreenAPI)"
+        subtitle="פרטי האינסטנס מקונסולת GreenAPI"
+        bodyClassName="p-4 space-y-4"
+      >
+        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+          הזן את פרטי האינסטנס מקונסולת GreenAPI (idInstance, ApiTokenInstance, ובמידת הצורך apiUrl).
+          הטוקן נשמר מוצפן בצד השרת ואינו מוצג חזרה — בעריכה השאר ריק כדי לא לשנותו.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField label="idInstance" value={form.id_instance} onChange={set('id_instance')} placeholder="1101234567" dir="ltr" />
+          <FormField label="ApiTokenInstance (סודי)" type="password" value={form.api_token} onChange={set('api_token')} placeholder={meta.has_token ? 'מאוחסן — השאר ריק לשמירה' : 'הזן את הטוקן (חובה)'} dir="ltr" />
+          <FormField label="apiUrl (רשות)" value={form.api_url} onChange={set('api_url')} placeholder="https://api.green-api.com" dir="ltr" />
+          <FormField label="מספר השולח (וואטסאפ)" value={form.sender_number} onChange={set('sender_number')} placeholder="0501234567" dir="ltr" />
+          <FormField label="תווית השולח" value={form.sender_label} onChange={set('sender_label')} placeholder="ועד הבית" />
+          <FormBool label="חיבור פעיל (אפשר שליחה מהמערכת)" value={form.enabled} onChange={set('enabled')} />
+        </div>
+
+        {/* Status row */}
+        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+          <span className="text-[var(--text-secondary)]">טוקן:</span>
+          <Badge variant={meta.has_token ? 'success' : 'danger'}>{meta.has_token ? 'מאוחסן' : 'לא הוזן'}</Badge>
+          <span className="text-[var(--text-secondary)] mr-2">סטטוס אחרון:</span>
+          {meta.status
+            ? <Badge variant={meta.status === 'authorized' ? 'success' : 'warning'}>{meta.status}</Badge>
+            : <span className="text-[var(--text-muted)]">לא נבדק</span>}
+          {meta.last_checked_at && <span className="text-[var(--text-muted)] num-tabular">· {new Date(meta.last_checked_at).toLocaleString('he-IL')}</span>}
+        </div>
+
+        {testResult && (
+          <div className={`rounded-[var(--radius)] p-3 text-[13px] ${testResult.ok ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--warning-light)] text-[var(--warning)]'}`}>
+            {testResult.text}
           </div>
+        )}
 
-          {testResult && (
-            <div className={`rounded-lg border p-3 text-sm ${testResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-              {testResult.text}
-            </div>
-          )}
+        <div className="flex flex-wrap gap-2 pt-3 border-t border-[var(--border-light)]">
+          <Button onClick={save} disabled={saving}>{saving ? 'שומר...' : 'שמור הגדרות'}</Button>
+          <Button variant="outline" onClick={test} disabled={testing}>{testing ? 'בודק...' : 'בדוק חיבור'}</Button>
+          <Button variant="outline" onClick={setupReplies} disabled={settingUpReplies}>
+            {settingUpReplies ? 'מגדיר...' : '🔁 הפעל מענה אוטומטי מספקים'}
+          </Button>
+        </div>
+      </SectionCard>
 
-          <div className="flex flex-wrap gap-2 pt-1">
-            <Button onClick={save} disabled={saving}>{saving ? 'שומר...' : 'שמור הגדרות'}</Button>
-            <Button variant="outline" onClick={test} disabled={testing}>{testing ? 'בודק...' : 'בדוק חיבור'}</Button>
-            <Button variant="outline" onClick={setupReplies} disabled={settingUpReplies}>
-              {settingUpReplies ? 'מגדיר...' : '🔁 הפעל מענה אוטומטי מספקים'}
-            </Button>
-          </div>
-
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
-            ⚠️ ערוץ זה מיועד לפנייה לספקים (יזום ע"י הוועד). הודעות לדיירים — ובמיוחד דרישות תשלום/גבייה — יישארו יזומות-ידנית ולא יישלחו אוטומטית דרכו.
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-[var(--radius)] border border-[var(--warning)]/25 bg-[var(--warning-light)] p-4 text-[12px] text-[var(--warning)] leading-relaxed flex items-start gap-2.5">
+        <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+        <span>ערוץ זה מיועד לפנייה לספקים (יזום ע"י הוועד). הודעות לדיירים — ובמיוחד דרישות תשלום/גבייה — יישארו יזומות-ידנית ולא יישלחו אוטומטית דרכו.</span>
+      </div>
     </div>
   )
 }
@@ -775,10 +763,10 @@ function WhatsappTab() {
 // ---------------------------------------------------------------------------
 
 const TABS = [
-  { key: 'users', label: 'משתמשים' },
-  { key: 'fields', label: 'שדות מותאמים' },
-  { key: 'buildings', label: 'בניינים ועדים' },
-  { key: 'whatsapp', label: 'וואטסאפ' },
+  { key: 'users', label: 'משתמשים', icon: Users, desc: 'תפקידים והרשאות גישה' },
+  { key: 'fields', label: 'שדות מותאמים', icon: Database, desc: 'שדות נוספים לכרטיס דירה' },
+  { key: 'buildings', label: 'בניינים ועדים', icon: Building, desc: 'חברי ועד לכל בניין' },
+  { key: 'whatsapp', label: 'וואטסאפ', icon: MessageCircle, desc: 'חיבור GreenAPI לפניות לספקים' },
 ]
 
 export default function AdminSettings() {
@@ -793,17 +781,56 @@ export default function AdminSettings() {
     )
   }
 
+  const current = TABS.find((t) => t.key === activeTab) || TABS[0]
+
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6" dir="rtl">
-      <PageHeader icon={Settings} iconColor="slate" title="הגדרות מערכת" subtitle="ניהול משתמשים, שדות מותאמים ובניינים" />
+    <div className="space-y-6" dir="rtl">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">הגדרות מערכת</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">ניהול משתמשים, שדות מותאמים, ועדי בניינים וחיבור וואטסאפ</p>
+        </div>
+      </div>
 
-      <TabGroup tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+      {/* Mobile / tablet section switcher */}
+      <div className="xl:hidden space-y-2">
+        <TabGroup tabs={TABS.map(({ key, label, icon }) => ({ key, label, icon }))} activeTab={activeTab} onChange={setActiveTab} />
+        <p className="text-[12px] text-[var(--text-muted)]">{current.desc}</p>
+      </div>
 
-      <div className="pt-2">
-        {activeTab === 'users' && <UsersTab />}
-        {activeTab === 'fields' && <CustomFieldsTab />}
-        {activeTab === 'buildings' && <BuildingsCommitteesTab />}
-        {activeTab === 'whatsapp' && <WhatsappTab />}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Section nav */}
+        <nav className="hidden xl:block xl:col-span-3 xl:sticky xl:top-20 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] p-2 space-y-0.5" aria-label="אזורי הגדרות">
+          {TABS.map((t) => {
+            const active = t.key === activeTab
+            const Icon = t.icon
+            return (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                aria-current={active ? 'page' : undefined}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius)] text-right transition-colors ${active ? 'bg-[var(--surface-container)] text-[var(--primary-dark)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]'}`}
+              >
+                <span className={`p-1.5 rounded-[var(--radius)] shrink-0 text-[var(--primary)] ${active ? 'bg-[var(--surface)]' : 'bg-[var(--surface-secondary)]'}`}>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-[13px] ${active ? 'font-bold' : 'font-semibold'}`}>{t.label}</span>
+                  <span className="block text-[11px] text-[var(--text-muted)] truncate">{t.desc}</span>
+                </span>
+              </button>
+            )
+          })}
+        </nav>
+
+        {/* Section content */}
+        <div className="xl:col-span-9 space-y-4 min-w-0">
+          {activeTab === 'users' && <UsersTab />}
+          {activeTab === 'fields' && <CustomFieldsTab />}
+          {activeTab === 'buildings' && <BuildingsCommitteesTab />}
+          {activeTab === 'whatsapp' && <WhatsappTab />}
+        </div>
       </div>
     </div>
   )
