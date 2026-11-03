@@ -14,7 +14,10 @@ import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, calcUnitFee, cn, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { PageHeader } from '@/components/common/PageHeader'
 import { FilterPills } from '@/components/common/FilterPills'
-import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays, CheckCircle2, RotateCcw } from 'lucide-react'
+import { Home, Plus, Pencil, Trash2, Phone, Star, X, Users, Archive, History, CalendarDays, CheckCircle2, RotateCcw, Building2, KeyRound, ShieldCheck, Download, MessageCircle, Car, Lock, Maximize2 } from 'lucide-react'
+import { StatCard } from '@/components/common/StatCard'
+import { TabGroup } from '@/components/ui/tabs'
+import { waLink, telHref } from '@/lib/phone'
 import { toast, toastError } from '@/lib/toast'
 
 // ─── ListField: Add-item pattern ──────────────────────────────────────────────
@@ -200,7 +203,8 @@ function Units() {
   } = useCollection('unitResidents')
 
   const [search, setSearch] = useState('')
-  const [buildingFilter, setBuildingFilter] = useState(() => selectedBuilding?.id || 'all')
+  // Data is already scoped to the sidebar's building.
+  const buildingFilter = 'all'
   const [typeFilter, setTypeFilter] = useState('all')
   const [confirmFilter, setConfirmFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
@@ -213,6 +217,8 @@ function Units() {
   const [archiveDate, setArchiveDate] = useState('')
   const [archiveSelection, setArchiveSelection] = useState({})
   const [archiving, setArchiving] = useState(false)
+  const [floorFilter, setFloorFilter] = useState('all')
+  const [selectedId, setSelectedId] = useState(null)
 
   // IDs of residents existing in DB before edit (to detect deletions)
   const originalPersonIds = useRef([])
@@ -614,185 +620,268 @@ function Units() {
   const scopeUnits = buildingFilter === 'all' ? allUnits : allUnits.filter(u => (u.buildingId || u.building_id) === buildingFilter)
   const confirmedCount = scopeUnits.filter(u => u.details_confirmed_at || u.detailsConfirmedAt).length
 
+  // ── Civic Blue directory view model ──
+  const floors = [...new Set(scopeUnits.map((u) => u.floor).filter((x) => x != null && x !== ''))].sort((a, b) => Number(a) - Number(b))
+  const activeResidents = scopeUnits.reduce((n, u) => n + (residentsByUnit[u.id]?.length || 0), 0)
+  const rentedCount = scopeUnits.filter((u) => getUnitType(u) === 'rented').length
+  const occupied = scopeUnits.filter((u) => (residentsByUnit[u.id] || []).length > 0).length
+  const missingCount = scopeUnits.length - confirmedCount
+  const confirmedPct = scopeUnits.length ? Math.round((confirmedCount / scopeUnits.length) * 1000) / 10 : 0
+  const rows = floorFilter === 'all' ? filtered : filtered.filter((u) => String(u.floor) === floorFilter)
+  const selectedUnit = rows.find((u) => u.id === selectedId) || rows[0] || null
+  const unitFacts = (u) => {
+    const cf = u.custom_fields || u.customFields || {}
+    const parking = Array.isArray(u.parkingSpots || u.parking_spots) ? (u.parkingSpots || u.parking_spots) : []
+    const storage = cf.storage_numbers?.length ? cf.storage_numbers : (u.storage_number ? [u.storage_number] : [])
+    const gate = cf.parking_gate_phones?.length ? cf.parking_gate_phones : (u.parking_gate_phone ? [u.parking_gate_phone] : [])
+    return { cf, parking, storage, gate }
+  }
+  const exportCsv = () => {
+    const out = [['דירה', 'קומה', 'דייר ראשי', 'טלפון', 'סוג', 'נפשות', 'חניות', 'מחסנים', 'טלפוני שער', 'פרטים']]
+    rows.forEach((u) => {
+      const res = residentsByUnit[u.id] || []
+      const p = getPrimaryResident(res)
+      const { parking, storage, gate } = unitFacts(u)
+      out.push([u.number, u.floor, p ? fullName(p) : '', p?.phone || '', getUnitType(u) === 'rented' ? 'שכירות' : 'בעלות', res.length, parking.join(' '), storage.join(' '), gate.join(' '), (u.details_confirmed_at || u.detailsConfirmedAt) ? 'מאושר' : 'חסר'])
+    })
+    const csv = '﻿' + out.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    Object.assign(document.createElement('a'), { href: url, download: 'dirot-vedayarim.csv' }).click()
+    URL.revokeObjectURL(url)
+  }
+  const pickUnit = (u) => {
+    setSelectedId(u.id)
+    // Below xl there is no side panel — open the full detail instead.
+    if (typeof window !== 'undefined' && window.innerWidth < 1280) setDetailUnit(u)
+  }
+  const selCls = 'h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 text-[12px] text-[var(--text-primary)]'
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <PageHeader
-        icon={Home}
-        iconColor="indigo"
-        title="דירות"
-        subtitle={`${scopeUnits.length} דירות · ${confirmedCount} אישרו פרטים`}
-        actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            דירה חדשה
-          </Button>
-        }
-      />
-
-      {/* Building filter */}
-      <div className="flex flex-wrap gap-2">
-        {[{ id: 'all', name: 'כל הבניינים' }, ...buildings].map(b => (
-          <Button
-            key={b.id}
-            variant={buildingFilter === b.id ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setBuildingFilter(b.id)}
-          >
-            {b.name}
-          </Button>
-        ))}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">ספר דירות ודיירים</h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-[var(--surface-container)] text-[var(--primary)] text-[12px] font-semibold num-tabular">
+              {scopeUnits.length} דירות{floors.length ? ` • ${floors.length} קומות` : ''}
+            </span>
+          </div>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">ניהול פרטי בעלי נכסים ושוכרים, אמצעי קשר, חניות ומחסנים והרשאות שער</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4" />ייצוא נתונים</Button>
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />הוספת דירה</Button>
+        </div>
       </div>
 
-      {/* Type filter */}
-      <FilterPills
-        options={[
-          { key: 'all', label: 'הכל' },
-          { key: 'owned', label: 'בעלים' },
-          { key: 'rented', label: 'שוכרים' },
-        ]}
-        value={typeFilter}
-        onChange={setTypeFilter}
-      />
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="סך כל הדירות" icon={Building2} color="blue" value={String(scopeUnits.length)}
+          note={<span className="px-2 py-0.5 rounded-full bg-[var(--success-light)] text-[var(--success)]">{scopeUnits.length ? Math.round((occupied / scopeUnits.length) * 100) : 0}% מאוכלסות</span>}
+          sub={`${occupied} דירות עם דיירים רשומים`} />
+        <StatCard label="דיירים פעילים רשומים" icon={Users} color="purple" value={String(activeResidents)}
+          sub={`${scopeUnits.length - rentedCount} בבעלות • ${rentedCount} בשכירות`} />
+        <StatCard label="דירות בשכירות" icon={KeyRound} color="cyan" value={String(rentedCount)}
+          note={<span className="px-2 py-0.5 rounded-full bg-[var(--surface-variant)] text-[var(--primary-dark)]">{scopeUnits.length ? Math.round((rentedCount / scopeUnits.length) * 1000) / 10 : 0}%</span>}
+          sub="מסך הבניין" />
+        <StatCard label="פרטים מאושרים ומעודכנים" icon={ShieldCheck} color="emerald" value={`${confirmedPct}%`}
+          sub={`${confirmedCount} מתוך ${scopeUnits.length} דירות`}
+          progress={confirmedPct}
+          footer={null} />
+      </div>
 
-      {/* Details-confirmation filter */}
-      <FilterPills
-        options={[
-          { key: 'all', label: 'הכל' },
-          { key: 'confirmed', label: `אישרו פרטים (${confirmedCount})` },
-          { key: 'pending', label: `טרם אישרו (${scopeUnits.length - confirmedCount})` },
-        ]}
-        value={confirmFilter}
-        onChange={setConfirmFilter}
-      />
-
-      <SearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="חיפוש לפי שם דייר או מספר דירה..."
-      />
-
-      {/* Cards grid */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={Home}
-          title="אין דירות"
-          description={search ? 'לא נמצאו תוצאות לחיפוש' : 'הוסף דירה ראשונה כדי להתחיל'}
-          actionLabel={!search ? 'הוסף דירה' : undefined}
-          onAction={!search ? openCreate : undefined}
+      {/* Filter bar */}
+      <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] flex flex-wrap items-center gap-2">
+        <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי שם דייר או מספר דירה..." className="flex-1 min-w-[220px]" />
+        <select value={floorFilter} onChange={(e) => setFloorFilter(e.target.value)} className={selCls} aria-label="קומה">
+          <option value="all">כל הקומות</option>
+          {floors.map((fl) => <option key={fl} value={String(fl)}>קומה {fl}</option>)}
+        </select>
+        <TabGroup
+          tabs={[
+            { key: 'all', label: 'הכל', count: scopeUnits.length },
+            { key: 'owned', label: 'בעלות', count: scopeUnits.length - rentedCount },
+            { key: 'rented', label: 'שכירות', count: rentedCount },
+          ]}
+          activeTab={typeFilter}
+          onChange={setTypeFilter}
         />
+        <button
+          onClick={() => setConfirmFilter(confirmFilter === 'pending' ? 'all' : 'pending')}
+          className={`h-[38px] px-3 rounded-[var(--radius)] border text-[12px] font-semibold flex items-center gap-1.5 transition-colors ${confirmFilter === 'pending' ? 'border-amber-400 bg-[var(--warning-light)] text-[var(--warning)]' : 'border-amber-200 text-[var(--warning)] hover:bg-[var(--warning-light)]'}`}
+        >
+          <span className="h-2 w-2 rounded-full bg-amber-500" />חסר פרטים ({missingCount})
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <EmptyState icon={Home} title="אין דירות" description={search ? 'לא נמצאו תוצאות לחיפוש' : 'הוסף דירה ראשונה כדי להתחיל'}
+          actionLabel={!search ? 'הוסף דירה' : undefined} onAction={!search ? openCreate : undefined} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(u => {
-            const unitResidents = residentsByUnit[u.id] || []
-            const primary = getPrimaryResident(unitResidents)
-            const unitType = getUnitType(u)
-            const tenants = unitType === 'rented'
-              ? unitResidents.filter(r => (r.resident_type || r.residentType) === 'tenant')
-              : unitResidents
-            const owners = unitType === 'rented'
-              ? unitResidents.filter(r => (r.resident_type || r.residentType) === 'owner')
-              : []
-            const unitGradient = unitType === 'rented' ? 'from-cyan-500 to-cyan-600' : 'from-blue-500 to-blue-600'
-            const unitNumber = u.number || u.unit_number
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          {/* Directory table */}
+          <div className="xl:col-span-8 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+            <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+              <h2 className="text-[14px] font-bold text-[var(--text-primary)]">רשימת דירות מלאה <span className="font-medium text-[var(--text-muted)]">({rows.length} יחידות)</span></h2>
+              <span className="text-[11px] text-[var(--text-muted)]">ממוין לפי מספר דירה</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="ds-table">
+                <thead>
+                  <tr><th>דירה וקומה</th><th>דייר ראשי וקשר</th><th>סוג</th><th>נפשות</th><th>חניה ומחסן</th><th>שער</th><th>סטטוס</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map((u) => {
+                    const res = residentsByUnit[u.id] || []
+                    const p = getPrimaryResident(res)
+                    const rented = getUnitType(u) === 'rented'
+                    const { parking, storage, gate } = unitFacts(u)
+                    const ok = !!(u.details_confirmed_at || u.detailsConfirmedAt)
+                    const isSel = selectedUnit?.id === u.id
+                    const initials = p ? [(p.first_name || '')[0], (p.last_name || '')[0]].filter(Boolean).join('') : ''
+                    return (
+                      <tr key={u.id} onClick={() => pickUnit(u)} className={`cursor-pointer ${isSel ? '!bg-[var(--surface-secondary)] shadow-[inset_-3px_0_0_var(--primary)]' : ''}`}>
+                        <td className="whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="h-7 min-w-7 px-1 rounded-[var(--radius)] bg-[var(--surface-container)] text-[var(--primary-dark)] flex items-center justify-center text-[13px] font-bold num-tabular">{u.number}</span>
+                            <div>
+                              <span className="text-[13px] font-semibold">דירה {u.number}</span>
+                              {u.board_member && <span className="mr-1.5 px-1.5 rounded bg-[var(--primary)] text-white text-[10px] font-bold">ועד</span>}
+                              <span className="block text-[11px] text-[var(--text-muted)]">{u.floor != null && u.floor !== '' ? `קומה ${u.floor}` : ''}{u.rooms ? ` • ${u.rooms} חד׳` : ''}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {p ? (
+                            <div className="flex items-center gap-2">
+                              <span className="h-8 w-8 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)] flex items-center justify-center text-[11px] font-bold text-[var(--text-secondary)]">{initials}</span>
+                              <div>
+                                <span className="text-[13px] font-semibold">{fullName(p)}</span>
+                                {p.phone && <span className="block text-[11px] text-[var(--text-muted)] num-tabular" dir="ltr">{p.phone}</span>}
+                              </div>
+                            </div>
+                          ) : <span className="text-[12px] text-[var(--text-muted)]">ללא דייר רשום</span>}
+                        </td>
+                        <td className="whitespace-nowrap"><Badge variant={rented ? 'info' : 'default'}>{rented ? 'שוכר/ת' : 'בעלים'}</Badge></td>
+                        <td className="whitespace-nowrap text-[12px] num-tabular">{res.length || '—'}</td>
+                        <td className="text-[12px] text-[var(--text-secondary)]">
+                          {parking.length ? <span className="block">חניה {parking.join(', ')}</span> : null}
+                          {storage.length ? <span className="block">מחסן {storage.join(', ')}</span> : null}
+                          {!parking.length && !storage.length && '—'}
+                        </td>
+                        <td className="whitespace-nowrap text-[12px] text-[var(--text-secondary)]">
+                          {gate.length ? <span className="inline-flex items-center gap-1"><Lock className="h-3.5 w-3.5 text-[var(--primary)]" />{gate.length} טלפונים</span> : '—'}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {ok ? <Badge variant="success">● מאושר ומעודכן</Badge> : <Badge variant="warning">● חסר / לא אושר</Badge>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
+          {/* Selected-unit panel (xl+) */}
+          {selectedUnit && (() => {
+            const u = selectedUnit
+            const res = residentsByUnit[u.id] || []
+            const rented = getUnitType(u) === 'rented'
+            const { cf, parking, storage, gate } = unitFacts(u)
+            const owner = rented && cf.owner && (cf.owner.first_name || cf.owner.last_name || cf.owner.phone) ? cf.owner : null
+            const primary = getPrimaryResident(res)
+            const ok = !!(u.details_confirmed_at || u.detailsConfirmedAt)
             return (
-              <Card
-                key={u.id}
-                className="group cursor-pointer overflow-hidden border border-[var(--border)] hover:shadow-lg hover:border-blue-200 transition-all bg-white"
-                onClick={() => setDetailUnit(u)}
-              >
-                {/* Gradient accent bar */}
-                <div className={`h-1 bg-gradient-to-r ${unitGradient}`} />
-                <CardContent className="pt-4 pb-4">
-                  {/* Top row: unit circle + info + edit action */}
-                  <div className="flex items-start gap-3 mb-3">
-                    {/* Large gradient circle with unit number */}
-                    <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${unitGradient} flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-md`}>
-                      {unitNumber}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <h3 className="text-base font-bold text-[var(--text-primary)]">
-                          דירה {unitNumber}
-                        </h3>
-                        {u.board_member && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow-sm">
-                            <Star className="h-3 w-3 fill-white" />
-                            ועד
-                          </span>
-                        )}
+              <aside className="hidden xl:block xl:col-span-4 sticky top-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+                <div className="p-4 bg-[var(--surface-secondary)]/60 border-b border-[var(--border)] space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="h-8 min-w-8 px-1.5 rounded-[var(--radius)] bg-[var(--primary)] text-white flex items-center justify-center text-[15px] font-bold num-tabular">{u.number}</span>
+                        <h3 className="text-[18px] font-bold text-[var(--text-primary)]">דירה {u.number}{u.rooms ? ` • ${u.rooms} חדרים` : ''}</h3>
                       </div>
-                      {/* Primary resident name */}
-                      {primary && (
-                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">
-                          {fullName(primary)}
-                        </p>
-                      )}
-                      {tenants.length > 1 && (
-                        <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
-                          <Users className="h-3 w-3" />
-                          {tenants.length} דיירים
-                        </p>
-                      )}
-                    </div>
-                    {/* Edit icon on hover */}
-                    <div className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity shrink-0" onClick={e => { e.stopPropagation(); openEdit(u) }}>
-                      <div className="w-8 h-8 rounded-lg border border-[var(--border)] flex items-center justify-center hover:bg-slate-50 cursor-pointer">
-                        <Pencil className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Badge variant={rented ? 'info' : 'default'}>{rented ? 'דירה בשכירות' : 'דירה בבעלות'}</Badge>
+                        <span className="text-[12px] text-[var(--text-muted)]">{[u.floor != null && u.floor !== '' ? `קומה ${u.floor}` : '', u.area > 0 ? `${u.area} מ״ר` : ''].filter(Boolean).join(' • ')}</span>
                       </div>
                     </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => setDetailUnit(u)} title="פירוט מלא" className="p-1.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-container)] text-[var(--text-secondary)]"><Maximize2 className="h-4 w-4" /></button>
+                      <button onClick={() => openEdit(u)} title="עריכה" className="p-1.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-container)] text-[var(--text-secondary)]"><Pencil className="h-4 w-4" /></button>
+                    </div>
                   </div>
-
-                  {/* Stats badges row */}
-                  <div className="flex flex-wrap gap-1.5 mb-3">
-                    <Badge variant={unitType === 'rented' ? 'info' : 'default'} className="text-[10px] px-2 py-0.5">
-                      {unitType === 'rented' ? 'שכירות' : 'בעלים'}
-                    </Badge>
-                    {(u.details_confirmed_at || u.detailsConfirmedAt) ? (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">✓ אושרו פרטים</span>
-                    ) : (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">טרם אושרו</span>
-                    )}
-                    {u.floor != null && (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
-                        קומה {u.floor}
-                      </span>
-                    )}
-                    {u.rooms != null && (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
-                        {u.rooms} חד׳
-                      </span>
-                    )}
-                    {u.area > 0 && (
-                      <span className="inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
-                        {u.area} מ"ר
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Fee with emphasis */}
-                  <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
-                    <span className="text-lg font-bold text-[var(--primary)]">
-                      {formatCurrency(getDisplayFee(u))}
-                    </span>
-                    {buildingMap[u.buildingId || u.building_id] && (
-                      <span className="text-[11px] text-[var(--text-muted)]">
-                        {buildingMap[u.buildingId || u.building_id].name}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Owners row for rental units */}
-                  {owners.length > 0 && (
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5">
-                      בעלים: {owners.map(fullName).join(', ')}
-                    </p>
+                  {primary?.phone && (
+                    <a href={waLink(primary.phone, `שלום ${primary.first_name || ''}, `) || '#'} target="_blank" rel="noopener noreferrer"
+                      className="w-full h-10 rounded-[var(--radius)] bg-[var(--success)] hover:opacity-90 text-white text-[13px] font-semibold flex items-center justify-center gap-2">
+                      <MessageCircle className="h-4 w-4" />פתיחת צ׳אט וואטסאפ עם {fullName(primary)}
+                    </a>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+
+                <div className="p-4 space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-1.5"><Users className="h-4 w-4 text-[var(--primary)]" />דיירים נוכחים ({res.length})</p>
+                      {isCommittee && res.length > 0 && (
+                        <button onClick={() => openArchiveDialog(u)} className="text-[11px] font-semibold text-[var(--warning)] hover:underline flex items-center gap-1"><Archive className="h-3.5 w-3.5" />עזיבה</button>
+                      )}
+                    </div>
+                    {res.length === 0 ? <p className="text-[12px] text-[var(--text-muted)]">אין דיירים רשומים</p> : (
+                      <div className="space-y-2">
+                        {res.map((r) => (
+                          <div key={r.id} className="p-2.5 rounded-[var(--radius)] border border-[var(--border)] text-[12px]">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-[13px] text-[var(--text-primary)]">{fullName(r)}</span>
+                              {(r.is_primary || r.isPrimary) && <span className="px-1.5 rounded bg-[var(--primary-dark)] text-white text-[10px] font-bold flex items-center gap-0.5"><Star className="h-2.5 w-2.5 fill-white" />דייר ראשי</span>}
+                            </div>
+                            <div className="text-[var(--text-secondary)] mt-0.5 flex items-center gap-2 flex-wrap">
+                              {r.phone && <a href={telHref(r.phone)} className="num-tabular hover:text-[var(--primary)]" dir="ltr">{r.phone}</a>}
+                              {r.email && <span className="truncate">{r.email}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {owner && (
+                    <div className="p-3 rounded-[var(--radius)] border border-[var(--primary)]/20 bg-[var(--surface-secondary)]/60 text-[12px]">
+                      <p className="text-[13px] font-bold text-[var(--text-primary)] mb-1">בעל הנכס (משכיר)</p>
+                      <p className="font-semibold">{fullName(owner)}</p>
+                      <p className="text-[var(--text-secondary)] num-tabular" dir="ltr">{owner.phone}</p>
+                      {owner.email && <p className="text-[var(--text-secondary)]">{owner.email}</p>}
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-[14px] font-bold text-[var(--text-primary)] flex items-center gap-1.5 mb-2"><Car className="h-4 w-4 text-[var(--primary)]" />חניה, מחסן ושער כניסה</p>
+                    <div className="grid grid-cols-2 gap-2 text-[12px]">
+                      <div className="p-2.5 rounded-[var(--radius)] border border-[var(--border)]"><span className="block text-[11px] text-[var(--text-muted)]">חניה</span><strong className="text-[13px]">{parking.length ? parking.join(', ') : '—'}</strong></div>
+                      <div className="p-2.5 rounded-[var(--radius)] border border-[var(--border)]"><span className="block text-[11px] text-[var(--text-muted)]">מחסן</span><strong className="text-[13px]">{storage.length ? storage.join(', ') : '—'}</strong></div>
+                    </div>
+                    {gate.length > 0 && (
+                      <div className="mt-2 p-2.5 rounded-[var(--radius)] border border-[var(--border)] text-[12px]">
+                        <span className="block text-[11px] text-[var(--text-muted)] mb-0.5">טלפונים מורשים לשער ({gate.length})</span>
+                        <span className="font-semibold num-tabular" dir="ltr">{gate.join(' • ')}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-[var(--border)]">
+                    <span className="text-[12px] text-[var(--text-secondary)]">ועד חודשי: <strong className="text-[var(--text-primary)] num-tabular">{formatCurrency(getDisplayFee(u))}</strong></span>
+                    {isCommittee && (
+                      <button disabled={confirmingUnit} onClick={() => toggleDetailsConfirmed(u)}
+                        className={`text-[11px] font-semibold flex items-center gap-1 ${ok ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>
+                        {ok ? <><RotateCcw className="h-3.5 w-3.5" />בטל אישור</> : <><CheckCircle2 className="h-3.5 w-3.5" />אשר פרטים</>}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </aside>
             )
-          })}
+          })()}
         </div>
       )}
 
