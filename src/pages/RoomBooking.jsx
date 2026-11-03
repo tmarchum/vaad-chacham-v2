@@ -1,17 +1,18 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
+import { useUnitDirectory } from '@/hooks/useUnitDirectory'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
-import { PageHeader } from '@/components/common/PageHeader'
+import { StatCard } from '@/components/common/StatCard'
+import { TabGroup } from '@/components/ui/tabs'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import {
   CalendarDays, Plus, Trash2, Pencil, Sun, Moon, SunMoon,
   ChevronRight, ChevronLeft, ExternalLink, Check, X as XIcon,
-  Users, UserPlus, Ban, Star, Settings, Calendar,
+  Users, UserPlus, Ban, Star, Settings, PieChart,
   DoorOpen, CreditCard, List, Clock, CheckCircle2,
   AlertCircle, HelpCircle, FileText, ShieldCheck,
 } from 'lucide-react'
@@ -56,8 +57,6 @@ export default function RoomBooking() {
   const scope = { building_id: selectedBuilding?.id }
   const { data: resources, create: createResource, update: updateResource, remove: removeResource, refresh: refreshResources, isLoading } = useCollection('bookingResources', scope)
   const { data: allBookings, create: createBooking, update: updateBooking, refresh: refreshBookings } = useCollection('bookings', scope)
-  const { data: allUnits } = useCollection('units', scope)
-  const { data: allResidents } = useCollection('residents')
 
   // ── State ────────────────────────────────────────────────────
   const [tab, setTab] = useState('calendar')
@@ -99,34 +98,10 @@ export default function RoomBooking() {
     }
   }, [buildingResources, selectedResourceId])
 
-  const buildingUnits = useMemo(() =>
-    allUnits.filter(u => u.building_id === selectedBuilding?.id).sort((a, b) => {
-      const na = parseInt(a.number) || 0, nb = parseInt(b.number) || 0
-      return na - nb
-    }),
-    [allUnits, selectedBuilding]
-  )
-
-  // Primary resident per unit (residents link to building via unit_id, not building_id)
-  const residentMap = useMemo(() => {
-    const map = {}
-    const unitIds = new Set(buildingUnits.map(u => u.id))
-    // First pass: set any resident for units in this building
-    allResidents.forEach(r => {
-      if (!unitIds.has(r.unit_id)) return
-      if (!map[r.unit_id]) {
-        map[r.unit_id] = { name: `${r.first_name || ''} ${r.last_name || ''}`.trim(), email: r.email, phone: r.phone }
-      }
-    })
-    // Second pass: override with primary resident
-    allResidents.forEach(r => {
-      if (!unitIds.has(r.unit_id)) return
-      if (r.is_primary) {
-        map[r.unit_id] = { name: `${r.first_name || ''} ${r.last_name || ''}`.trim(), email: r.email, phone: r.phone }
-      }
-    })
-    return map
-  }, [allResidents, buildingUnits])
+  // Units + active primary resident (unit_residents, archived excluded).
+  const dir = useUnitDirectory(selectedBuilding?.id)
+  const buildingUnits = dir.units
+  const residentMap = dir.byId
 
   // Active bookings (not cancelled or rejected) — these block slots
   const activeBookings = useMemo(() => {
@@ -556,13 +531,10 @@ export default function RoomBooking() {
   // RENDER
   // ═════════════════════════════════════════════════════════════
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={DoorOpen} iconColor="violet" title="שריון חדרים" />
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
-          <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
-        </div>
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
+        <p className="text-sm text-[var(--text-muted)]">טוען נתונים...</p>
       </div>
     </div>
   )
@@ -571,284 +543,355 @@ export default function RoomBooking() {
     return <EmptyState icon={DoorOpen} title="בחר בניין" description="יש לבחור בניין כדי לנהל שריונים" />
   }
 
+  const pendingList = allResourceBookings
+    .filter(b => b.status === 'pending')
+    .sort((a, b) => new Date(a.booking_date) - new Date(b.booking_date))
+  const approvedList = allResourceBookings.filter(b => b.status === 'approved')
+  const historyList = allResourceBookings.filter(b => b.status === 'rejected' || b.status === 'cancelled')
+  const monthDays = calendarDays.filter(Boolean)
+  const bookableSlots = monthDays.filter(d => !d.isBlocked).length * 2
+  const takenSlots = monthDays.reduce((s, d) => s + (d.hasFullDay ? 2 : (d.hasMorning ? 1 : 0) + (d.hasEvening ? 1 : 0)), 0)
+  const occupancy = bookableSlots ? Math.round((takenSlots / bookableSlots) * 100) : 0
+  const goToday = () => { const n = new Date(); setCalMonth(n.getMonth()); setCalYear(n.getFullYear()) }
+  const firstName = (name) => (name || '').split(' ')[0]
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={DoorOpen} iconColor="violet"
-        title="שריון חדרים"
-        subtitle="הזמנת חדר דיירים, גג או מתקנים — כולל אישור ועד ותשלום"
-        actions={
-          <Button onClick={() => openResourceForm('new')} className="gap-2">
-            <Plus className="h-4 w-4" /> חדר חדש
-          </Button>
-        }
-      />
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-[var(--surface-hover)] p-1 rounded-xl w-fit">
-        {[
-          { key: 'calendar', label: 'לוח שריונים', icon: Calendar },
-          { key: 'bookings', label: 'ניהול שריונים', icon: ShieldCheck },
-          { key: 'settings', label: 'הגדרות', icon: Settings },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-all ${
-              tab === t.key
-                ? 'bg-white text-[var(--text-primary)] shadow-sm font-medium'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <t.icon className="h-4 w-4" />
-            {t.label}
-            {t.key === 'bookings' && stats.pending > 0 && (
-              <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{stats.pending}</span>
-            )}
-          </button>
-        ))}
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">שריון חדרים ומתקנים משותפים</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">ניהול יומן הזמנות, אישור בקשות של דיירים, דמי שימוש וחסימות תחזוקה • {selectedBuilding.name}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {selectedResource && (
+            <Button variant="outline" onClick={() => openResourceForm(selectedResource)}><Settings className="h-4 w-4" />הגדרת חדר ומחיר</Button>
+          )}
+          {selectedResource && (
+            <Button variant="outline" onClick={() => setTab('settings')}><Ban className="h-4 w-4" />חסימת תאריך</Button>
+          )}
+          <Button onClick={() => openResourceForm('new')}><Plus className="h-4 w-4" />חדר חדש</Button>
+        </div>
       </div>
 
-      {/* Resource selector */}
-      {buildingResources.length > 0 && tab !== 'settings' && (
-        <div className="flex gap-2 flex-wrap">
-          {buildingResources.map(r => (
-            <button
-              key={r.id} onClick={() => setSelectedResourceId(r.id)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                selectedResourceId === r.id
-                  ? 'bg-violet-100 text-violet-800 border-2 border-violet-300 shadow-sm'
-                  : 'bg-white border-2 border-[var(--border)] text-[var(--text-secondary)] hover:border-violet-200'
-              }`}
-            >
-              <DoorOpen className="h-4 w-4 inline-block ml-1.5" />{r.name}
-            </button>
-          ))}
+      {/* Resource tabs */}
+      {buildingResources.length > 0 && (
+        <div className="flex items-center gap-1 border-b border-[var(--border)] overflow-x-auto">
+          {buildingResources.map(r => {
+            const active = selectedResource?.id === r.id
+            const pend = allBookings.filter(b => b.resource_id === r.id && b.status === 'pending').length
+            return (
+              <button
+                key={r.id}
+                onClick={() => setSelectedResourceId(r.id)}
+                className={`flex items-center gap-2 px-4 py-2.5 -mb-px border-b-2 text-[13px] whitespace-nowrap transition-colors ${
+                  active ? 'border-[var(--primary)] text-[var(--primary)] font-bold' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium'
+                }`}
+              >
+                <DoorOpen className="h-4 w-4" />{r.name}
+                {pend > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--warning-light)] text-[var(--warning)]">{pend} ממתינים</span>}
+              </button>
+            )
+          })}
         </div>
       )}
 
       {buildingResources.length === 0 && tab !== 'settings' && (
-        <EmptyState icon={DoorOpen} title="אין חדרים מוגדרים" description="הוסף חדר או מתקן בהגדרות"
-          action={<Button onClick={() => { setTab('settings'); openResourceForm('new') }} className="gap-2"><Plus className="h-4 w-4" />הוסף חדר</Button>}
+        <EmptyState icon={DoorOpen} title="אין חדרים מוגדרים" description="הוסיפו חדר דיירים, גג או מועדון כדי לפתוח אותו לשריון"
+          actionLabel="הוסף חדר" onAction={() => openResourceForm('new')}
         />
       )}
 
-      {/* ══════════════════════════════════════════════════════════ */}
-      {/* CALENDAR TAB                                              */}
-      {/* ══════════════════════════════════════════════════════════ */}
-      {tab === 'calendar' && selectedResource && (
-        <div className="space-y-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: 'ממתינים לאישור', value: stats.pending, icon: Clock, gradient: 'from-amber-500 to-amber-600', color: 'text-amber-600' },
-              { label: 'מאושרים', value: stats.approved, icon: CheckCircle2, gradient: 'from-emerald-500 to-emerald-600', color: 'text-emerald-600' },
-              { label: 'שריונים החודש', value: stats.monthCount, icon: CalendarDays, gradient: 'from-violet-500 to-violet-600', color: 'text-violet-600' },
-              { label: 'הכנסות החודש', value: formatCurrency(stats.revenue), icon: CreditCard, gradient: 'from-blue-500 to-blue-600', color: 'text-blue-600' },
-            ].map((s, i) => (
-              <Card key={i} className="border-0 shadow-sm">
-                <CardContent className="p-4">
+      {selectedResource && (
+        <>
+          {/* KPI */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard label="בקשות ממתינות לאישור" icon={Clock} color={stats.pending ? 'amber' : 'slate'}
+              value={String(stats.pending)}
+              className={stats.pending ? 'border-[var(--warning)]/50' : ''}
+              footer={stats.pending
+                ? <button onClick={() => document.getElementById('booking-queue')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="text-[var(--warning)] font-semibold hover:underline">לטיפול בתור ←</button>
+                : <span>אין בקשות פתוחות</span>} />
+            <StatCard label={`שריונים ב${HEBREW_MONTHS[calMonth]}`} icon={CalendarDays} color="blue"
+              value={String(stats.monthCount)}
+              sub={`${stats.approved} מאושרים בסך הכול`} />
+            <StatCard label="תפוסה חודשית" icon={PieChart} color="purple"
+              value={`${occupancy}%`}
+              sub={`${takenSlots} מתוך ${bookableSlots} משבצות`}
+              progress={occupancy} />
+            <StatCard label="הכנסות משימוש החודש" icon={CreditCard} color="emerald"
+              value={formatCurrency(stats.revenue)}
+              footer={<span>בוקר {formatCurrency(selectedResource.price_morning)} • ערב {formatCurrency(selectedResource.price_evening)} • יממה {formatCurrency(selectedResource.price_full_day)}</span>} />
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            {/* Main: calendar / list / settings */}
+            <div className="xl:col-span-8 space-y-4">
+              <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center shadow-sm`}>
-                      <s.icon className="h-5 w-5 text-white" />
+                    <div className="flex items-center h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)]">
+                      <button onClick={prevMonth} className="h-full px-2 text-[var(--text-secondary)] hover:text-[var(--primary)]" aria-label="החודש הקודם"><ChevronRight className="h-4 w-4" /></button>
+                      <button onClick={goToday} className="px-2 text-[12px] font-semibold text-[var(--primary)]">היום</button>
+                      <button onClick={nextMonth} className="h-full px-2 text-[var(--text-secondary)] hover:text-[var(--primary)]" aria-label="החודש הבא"><ChevronLeft className="h-4 w-4" /></button>
                     </div>
-                    <div>
-                      <p className="text-xs text-[var(--text-secondary)]">{s.label}</p>
-                      <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-                    </div>
+                    <h2 className="text-[20px] font-bold num-tabular">{HEBREW_MONTHS[calMonth]} {calYear}</h2>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Month nav */}
-          <div className="flex items-center justify-between">
-            <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-[var(--surface-hover)]"><ChevronRight className="h-5 w-5" /></button>
-            <h3 className="text-lg font-bold">{HEBREW_MONTHS[calMonth]} {calYear}</h3>
-            <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-[var(--surface-hover)]"><ChevronLeft className="h-5 w-5" /></button>
-          </div>
-
-          {/* Calendar grid */}
-          <div className="bg-white rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden">
-            <div className="grid grid-cols-7 border-b border-[var(--border)]">
-              {WEEKDAYS.map((d, i) => (
-                <div key={d} className={`text-center py-2.5 text-xs font-bold ${i === 6 ? 'text-blue-600 bg-blue-50/50' : 'text-[var(--text-secondary)]'}`}>{d}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day, i) => {
-                if (!day) return <div key={`e${i}`} className="min-h-[90px] border-b border-l border-[var(--border)] bg-slate-50/50" />
-                const isToday = isSameDay(day.date, new Date())
-                const canBook = !day.isPast && !day.isBlocked && !day.isTooFar && !day.hasFullDay
-                const holidayName = day.holidays[0]?.hebrew
-                const pendingBookings = day.bookings.filter(b => b.status === 'pending')
-
-                return (
-                  <div
-                    key={day.dk} onClick={() => canBook && handleOpenBooking(day)}
-                    className={`min-h-[90px] border-b border-l border-[var(--border)] p-1.5 transition-all relative ${
-                      day.isBlocked ? 'bg-red-50/60 cursor-not-allowed'
-                      : day.isPast || day.isTooFar ? 'bg-slate-50/50 cursor-not-allowed opacity-60'
-                      : day.isShabbatOrChag ? 'bg-blue-50/40 cursor-pointer hover:bg-blue-50'
-                      : canBook ? 'bg-white cursor-pointer hover:bg-violet-50/40' : 'bg-amber-50/30'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`text-sm font-bold leading-none ${
-                        isToday ? 'bg-violet-600 text-white w-7 h-7 rounded-full flex items-center justify-center'
-                        : day.isSaturday ? 'text-blue-600' : 'text-[var(--text-primary)]'
-                      }`}>{day.day}</span>
-                      {day.isBlocked && <Ban className="h-3.5 w-3.5 text-red-400" />}
-                    </div>
-                    {holidayName && (
-                      <p className={`text-[9px] leading-tight truncate mb-1 ${day.isYomTov ? 'text-blue-700 font-bold' : 'text-blue-500'}`}>
-                        {day.isYomTov && <Star className="h-2.5 w-2.5 inline ml-0.5" />}{holidayName}
-                      </p>
-                    )}
-                    {day.isSaturday && !holidayName && <p className="text-[9px] text-blue-500 mb-1">שבת</p>}
-
-                    <div className="flex flex-wrap gap-0.5 mt-auto">
-                      {day.hasFullDay && <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">יממה 24שע</span>}
-                      {!day.hasFullDay && day.hasMorning && <span className="text-[8px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">08-14</span>}
-                      {!day.hasFullDay && day.hasEvening && <span className="text-[8px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">16-23</span>}
-                      {pendingBookings.length > 0 && <span className="text-[8px] px-1 py-0.5 rounded bg-amber-50 text-amber-600">
-                        <Clock className="h-2.5 w-2.5 inline" />
-                      </span>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-wrap gap-4 text-xs text-[var(--text-secondary)]">
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white border border-[var(--border)]" /> פנוי</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-amber-100" /> בוקר 08:00-14:00</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-100" /> ערב 16:00-23:00</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-100" /> יממה 24 שעות</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-50 border border-blue-200" /> שבת / חג</span>
-            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-50 border border-red-200" /> חסום</span>
-            <span className="flex items-center gap-1.5"><Clock className="h-3 w-3 text-amber-500" /> ממתין לאישור</span>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════ */}
-      {/* BOOKINGS MANAGEMENT TAB                                   */}
-      {/* ══════════════════════════════════════════════════════════ */}
-      {tab === 'bookings' && selectedResource && (
-        <div className="space-y-4">
-          {/* Pending approvals section */}
-          {(() => {
-            const pendingList = allResourceBookings.filter(b => b.status === 'pending')
-            if (pendingList.length === 0) return null
-            return (
-              <div className="space-y-2">
-                <h3 className="text-sm font-bold text-amber-700 flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> ממתינים לאישור ({pendingList.length})
-                </h3>
-                {pendingList.map(bk => (
-                  <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap}
-                    onApprove={() => openApproveDialog(bk)} onReject={() => handleReject(bk)} onCancel={() => handleCancel(bk)}
-                    showActions="approve" />
-                ))}
-              </div>
-            )
-          })()}
-
-          {/* Approved section */}
-          {(() => {
-            const approvedList = allResourceBookings.filter(b => b.status === 'approved')
-            return (
-              <div className="space-y-2">
-                <h3 className="text-sm font-bold text-emerald-700 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" /> מאושרים ({approvedList.length})
-                </h3>
-                {approvedList.length === 0
-                  ? <p className="text-sm text-[var(--text-muted)] pr-6">אין שריונים מאושרים</p>
-                  : approvedList.map(bk => (
-                    <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap}
-                      onCancel={() => handleCancel(bk)} showActions="cancel" />
-                  ))
-                }
-              </div>
-            )
-          })()}
-
-          {/* History (rejected + cancelled) */}
-          {(() => {
-            const historyList = allResourceBookings.filter(b => b.status === 'rejected' || b.status === 'cancelled')
-            if (historyList.length === 0) return null
-            return (
-              <div className="space-y-2">
-                <h3 className="text-sm font-bold text-slate-500 flex items-center gap-2">
-                  <List className="h-4 w-4" /> היסטוריה ({historyList.length})
-                </h3>
-                {historyList.map(bk => (
-                  <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap} showActions="none" />
-                ))}
-              </div>
-            )
-          })()}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════ */}
-      {/* SETTINGS TAB                                              */}
-      {/* ══════════════════════════════════════════════════════════ */}
-      {tab === 'settings' && (
-        <div className="space-y-6">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">חדרים ומתקנים</h3>
-              <Button onClick={() => openResourceForm('new')} variant="outline" className="gap-2"><Plus className="h-4 w-4" />הוסף</Button>
-            </div>
-            {resources.filter(r => r.building_id === selectedBuilding?.id).map(r => (
-              <div key={r.id} className="flex items-center gap-4 p-4 rounded-xl border border-[var(--border)] bg-white">
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-sm">
-                  <DoorOpen className="h-5 w-5" />
+                  <TabGroup
+                    tabs={[
+                      { key: 'calendar', label: 'חודש' },
+                      { key: 'bookings', label: 'רשימת הזמנות', count: allResourceBookings.length },
+                      { key: 'settings', label: 'חדרים וחסימות' },
+                    ]}
+                    activeTab={tab}
+                    onChange={setTab}
+                  />
                 </div>
-                <div className="flex-1">
-                  <p className="font-semibold">{r.name}</p>
-                  <div className="flex gap-3 text-xs text-[var(--text-muted)] mt-0.5">
-                    <span>בוקר: {formatCurrency(r.price_morning)}</span>
-                    <span>ערב: {formatCurrency(r.price_evening)}</span>
-                    <span>יממה: {formatCurrency(r.price_full_day)}</span>
-                    <span>{r.residents_only ? 'דיירים בלבד' : 'דיירים + אורחים'}</span>
-                    {(r.custom_questions || []).length > 0 && <span>{(r.custom_questions || []).length} שאלות</span>}
+                {tab === 'calendar' && (
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+                    <span className="font-semibold">מקרא:</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><span className="h-2 w-2 rounded-full bg-[var(--success)]" />מאושר</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><span className="h-2 w-2 rounded-full bg-[var(--warning)]" />ממתין לאישור</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><Sun className="h-3 w-3" />בוקר 08-14</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><Moon className="h-3 w-3" />ערב 16-23</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><Ban className="h-3 w-3" />חסום</span>
+                  </div>
+                )}
+              </div>
+
+              {tab === 'calendar' && (
+                <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+                  <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--surface-secondary)]">
+                    {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'].map((d, i) => (
+                      <div key={d} className={`text-center py-2.5 text-[12px] font-bold ${i >= 5 ? 'text-[var(--primary)]' : 'text-[var(--text-secondary)]'}`}>
+                        <span className="hidden sm:inline">{d}</span><span className="sm:hidden">{WEEKDAYS[i]}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7">
+                    {calendarDays.map((day, i) => {
+                      if (!day) return <div key={`e${i}`} className="min-h-[96px] border-b border-l border-[var(--border-light)] bg-[var(--bg)]" />
+                      const isToday = isSameDay(day.date, new Date())
+                      const canBook = !day.isPast && !day.isBlocked && !day.isTooFar && !day.hasFullDay
+                      const holidayName = day.holidays[0]?.hebrew
+                      const free = canBook && day.bookings.length === 0
+                      return (
+                        <div
+                          key={day.dk}
+                          onClick={() => canBook && handleOpenBooking(day)}
+                          className={`min-h-[96px] border-b border-l border-[var(--border-light)] p-1.5 flex flex-col gap-1 transition-colors ${
+                            isToday ? 'ring-2 ring-inset ring-[var(--primary)]' : ''
+                          } ${
+                            day.isBlocked ? 'bg-[var(--surface-container)] cursor-not-allowed'
+                            : day.isPast || day.isTooFar ? 'bg-[var(--bg)] cursor-not-allowed'
+                            : day.isShabbatOrChag ? 'bg-[var(--surface-secondary)] cursor-pointer hover:bg-[var(--surface-container)]'
+                            : 'bg-[var(--surface)] cursor-pointer hover:bg-[var(--surface-secondary)]'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            {day.isBlocked ? <Ban className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                              : day.bookings.some(b => b.status === 'pending') ? <Clock className="h-3.5 w-3.5 text-[var(--warning)]" /> : <span />}
+                            <span className={`text-[13px] font-bold num-tabular leading-none ${
+                              isToday ? 'bg-[var(--primary)] text-white h-6 min-w-6 px-1 rounded-full inline-flex items-center justify-center'
+                              : day.isPast ? 'text-[var(--text-muted)]'
+                              : day.isShabbatOrChag ? 'text-[var(--primary)]' : 'text-[var(--text-primary)]'
+                            }`}>{day.day}</span>
+                          </div>
+                          {holidayName && (
+                            <p className={`text-[9px] leading-tight truncate ${day.isYomTov ? 'text-[var(--primary-dark)] font-bold' : 'text-[var(--primary)]'}`}>
+                              {day.isYomTov && <Star className="h-2.5 w-2.5 inline ml-0.5" />}{holidayName}
+                            </p>
+                          )}
+                          <div className="flex flex-col gap-0.5">
+                            {day.bookings.map(b => {
+                              const pending = b.status === 'pending'
+                              const slotWord = b.slot === 'morning' ? 'בוקר' : b.slot === 'full_day' ? 'יממה' : 'ערב'
+                              return (
+                                <span key={b.id} title={`${SLOTS[b.slot]?.label || ''} — ${b.booker_name}`}
+                                  className={`flex items-center gap-1 text-[10px] leading-4 px-1 rounded border truncate ${
+                                    pending ? 'bg-[var(--warning-light)] border-[var(--warning)]/30 text-[var(--warning)]'
+                                    : 'bg-[var(--success-light)] border-[var(--success)]/25 text-[var(--success)]'
+                                  }`}>
+                                  <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${pending ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`} />
+                                  <span className="truncate">{slotWord}: {firstName(b.booker_name)}</span>
+                                </span>
+                              )
+                            })}
+                            {free && !day.isPast && (
+                              <span className="hidden sm:block text-[10px] leading-4 px-1 rounded border border-dashed border-[var(--outline-variant)] text-[var(--text-muted)] text-center">פנוי</span>
+                            )}
+                            {day.isBlocked && <span className="text-[10px] text-[var(--text-muted)]">סגור לתחזוקה</span>}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => openResourceForm(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteResource(r.id)}><Trash2 className="h-3.5 w-3.5 text-red-500" /></Button>
+              )}
+
+              {tab === 'bookings' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <h3 className="text-[14px] font-bold flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[var(--success)]" />שריונים מאושרים ({approvedList.length})</h3>
+                    {approvedList.length === 0
+                      ? <p className="text-[13px] text-[var(--text-muted)]">אין שריונים מאושרים</p>
+                      : approvedList.map(bk => (
+                        <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap}
+                          onCancel={() => handleCancel(bk)} showActions="cancel" />
+                      ))}
+                  </div>
+                  {historyList.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-[14px] font-bold text-[var(--text-secondary)] flex items-center gap-2"><List className="h-4 w-4" />היסטוריה ({historyList.length})</h3>
+                      {historyList.map(bk => (
+                        <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap} showActions="none" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab === 'settings' && (
+                <div className="space-y-4">
+                  <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+                    <div className="flex items-center justify-between px-4 py-3.5 border-b border-[var(--border)]">
+                      <h3 className="text-[16px] font-bold">חדרים ומתקנים</h3>
+                      <Button onClick={() => openResourceForm('new')} variant="outline" size="sm"><Plus className="h-4 w-4" />הוסף</Button>
+                    </div>
+                    <div className="divide-y divide-[var(--border-light)]">
+                      {resources.filter(r => r.building_id === selectedBuilding?.id).map(r => (
+                        <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                          <span className="p-2 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)]"><DoorOpen className="h-5 w-5" /></span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-semibold">{r.name}</p>
+                            <div className="flex flex-wrap gap-x-3 text-[12px] text-[var(--text-muted)] mt-0.5 num-tabular">
+                              <span>בוקר {formatCurrency(r.price_morning)}</span>
+                              <span>ערב {formatCurrency(r.price_evening)}</span>
+                              <span>יממה {formatCurrency(r.price_full_day)}</span>
+                              <span>{r.residents_only ? 'דיירים בלבד' : 'דיירים + אורחים'}</span>
+                              {(r.custom_questions || []).length > 0 && <span>{(r.custom_questions || []).length} שאלות בטופס</span>}
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="icon" onClick={() => openResourceForm(r)} aria-label="עריכה"><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteResource(r.id)} aria-label="מחיקה"><Trash2 className="h-4 w-4 text-[var(--danger)]" /></Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] p-4 space-y-3">
+                    <h3 className="text-[16px] font-bold">ימים חסומים — {selectedResource.name}</h3>
+                    <div className="flex gap-2 items-end">
+                      <FormField label="תאריך לחסימה (תחזוקה / אירוע ועד)" type="date" value={blockDate} onChange={(e) => setBlockDate(e.target.value)} className="w-56" />
+                      <Button onClick={handleBlockDate} disabled={!blockDate}><Ban className="h-4 w-4" />חסום</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(selectedResource.blocked_dates || []).sort().map(d => (
+                        <span key={d} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--surface-container)] text-[12px] font-semibold num-tabular">
+                          {new Date(d).toLocaleDateString('he-IL')}
+                          <button onClick={() => handleUnblockDate(d)} className="text-[var(--text-muted)] hover:text-[var(--danger)]" aria-label="הסרת חסימה"><XIcon className="h-3 w-3" /></button>
+                        </span>
+                      ))}
+                      {(selectedResource.blocked_dates || []).length === 0 && <p className="text-[13px] text-[var(--text-muted)]">אין ימים חסומים</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Side: approvals queue + terms */}
+            <div className="xl:col-span-4 space-y-4 xl:sticky xl:top-20">
+              <div id="booking-queue" className={`rounded-[var(--radius)] border bg-[var(--surface)] shadow-[var(--shadow)] scroll-mt-20 ${pendingList.length ? 'border-[var(--warning)]/50' : 'border-[var(--border)]'}`}>
+                <div className={`flex items-center justify-between gap-2 px-4 py-3.5 border-b border-[var(--border)] ${pendingList.length ? 'bg-[var(--warning-light)]/50' : ''}`}>
+                  <div>
+                    <h2 className="text-[16px] font-bold">תור בקשות לאישור</h2>
+                    <p className="text-[11px] text-[var(--text-muted)]">{pendingList.length ? `${pendingList.length} דיירים ממתינים למענה` : 'אין בקשות ממתינות'}</p>
+                  </div>
+                  {pendingList.length > 0 && <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--warning)] text-white">{pendingList.length} ממתינות</span>}
+                </div>
+                {pendingList.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-[13px] text-[var(--text-muted)]">
+                    <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-[var(--success)]" />הכול מטופל
+                  </div>
+                ) : (
+                  <div className="divide-y divide-[var(--border-light)]">
+                    {pendingList.map(bk => {
+                      const unit = bk.unit_id ? residentMap[bk.unit_id] : null
+                      const d = new Date(bk.booking_date)
+                      const answers = bk.answers || {}
+                      const qs = (selectedResource.custom_questions || []).filter(q => answers[q.id] != null && answers[q.id] !== '')
+                      return (
+                        <div key={bk.id} className="p-4 space-y-3">
+                          <div className="flex items-start gap-3">
+                            <span className="h-9 w-9 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)] text-[12px] font-bold flex items-center justify-center shrink-0">
+                              {(bk.booker_name || '?').split(' ').map(w => w[0]).join('').slice(0, 2)}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[14px] font-bold truncate">{bk.booker_name}</p>
+                              <p className="text-[12px] text-[var(--text-muted)]">
+                                {bk.is_guest ? 'אורח חיצוני' : unit ? `דירה ${unit.number}` : ''}{bk.booker_phone ? ` • ${bk.booker_phone}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="p-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface-secondary)]/60 space-y-1.5 text-[12px]">
+                            <p className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)] num-tabular">
+                              <CalendarDays className="h-3.5 w-3.5 text-[var(--primary)]" />
+                              יום {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][d.getDay()]}, {d.toLocaleDateString('he-IL')} | {SLOTS[bk.slot]?.label || bk.slot}
+                            </p>
+                            {qs.map(q => (
+                              <p key={q.id} className="text-[var(--text-secondary)]">{q.text}: <b>{typeof answers[q.id] === 'boolean' ? (answers[q.id] ? 'כן' : 'לא') : answers[q.id]}</b></p>
+                            ))}
+                            {bk.notes && <p className="text-[var(--text-muted)]">"{bk.notes}"</p>}
+                            <div className="flex items-center justify-between pt-1 num-tabular">
+                              <span className="text-[var(--text-secondary)]">דמי שימוש: <b>{formatCurrency(bk.price || 0)}</b></span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${bk.payment_status === 'paid' ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--warning-light)] text-[var(--warning)]'}`}>
+                                {bk.payment_status === 'paid' ? 'שולם' : 'ממתין לתשלום'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button onClick={() => openApproveDialog(bk)} className="flex-1 bg-[var(--success)] hover:opacity-90"><Check className="h-4 w-4" />אשר שריון</Button>
+                            <Button onClick={() => handleReject(bk)} variant="outline" className="text-[var(--danger)] border-[var(--danger)]/30 hover:bg-[var(--danger-light)]"><XIcon className="h-4 w-4" />דחה</Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+                <div className="flex items-center gap-2 px-4 py-3.5 border-b border-[var(--border)]">
+                  <ShieldCheck className="h-5 w-5 text-[var(--primary)]" />
+                  <h2 className="text-[16px] font-bold">תקנון וכללי השכרה</h2>
+                </div>
+                <div className="p-4 space-y-3 text-[12px] leading-5 text-[var(--text-secondary)]">
+                  {selectedResource.description && <p>{selectedResource.description}</p>}
+                  {selectedResource.rental_terms
+                    ? <p className="whitespace-pre-wrap max-h-48 overflow-y-auto">{selectedResource.rental_terms}</p>
+                    : <p className="text-[var(--text-muted)]">עדיין לא הוגדר תקנון. דיירים לא יתבקשו לאשר תנאים בעת השריון.</p>}
+                  {selectedResource.approval_message && (
+                    <div className="p-2.5 rounded-[var(--radius)] bg-[var(--surface-secondary)]">
+                      <p className="font-semibold text-[var(--text-primary)] mb-0.5">הנחיות שנשלחות עם כל אישור</p>
+                      <p className="whitespace-pre-wrap">{selectedResource.approval_message}</p>
+                    </div>
+                  )}
+                  <ul className="space-y-1 num-tabular">
+                    <li>• הזמנה עד {selectedResource.max_advance_days || 30} ימים מראש</li>
+                    <li>• {selectedResource.residents_only ? 'פתוח לדיירי הבניין בלבד' : 'פתוח גם לאורחים חיצוניים'}</li>
+                    {selectedResource.notify_email && <li>• התראות לנציג: {selectedResource.notify_email}</li>}
+                    {selectedResource.payment_url && <li>• תשלום בקישור חיצוני (PayBox / Bit)</li>}
+                  </ul>
+                </div>
+                <div className="px-4 py-2.5 border-t border-[var(--border-light)]">
+                  <button onClick={() => openResourceForm(selectedResource)} className="text-[12px] font-semibold text-[var(--primary)] hover:underline">עריכת תקנון והגדרות ←</button>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Blocked dates */}
-          {selectedResource && (
-            <div className="space-y-3">
-              <h3 className="text-lg font-bold">ימים חסומים — {selectedResource.name}</h3>
-              <div className="flex gap-2 items-end">
-                <FormField label="תאריך לחסימה" type="date" value={blockDate} onChange={(e) => setBlockDate(e.target.value)} className="w-48" />
-                <Button onClick={handleBlockDate} disabled={!blockDate} className="gap-2"><Ban className="h-4 w-4" />חסום</Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(selectedResource.blocked_dates || []).sort().map(d => (
-                  <span key={d} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-sm border border-red-200">
-                    {new Date(d).toLocaleDateString('he-IL')}
-                    <button onClick={() => handleUnblockDate(d)} className="hover:text-red-900"><XIcon className="h-3 w-3" /></button>
-                  </span>
-                ))}
-                {(selectedResource.blocked_dates || []).length === 0 && <p className="text-sm text-[var(--text-muted)]">אין ימים חסומים</p>}
-              </div>
             </div>
-          )}
-        </div>
+          </div>
+        </>
       )}
+
 
       {/* ══════════════════════════════════════════════════════════ */}
       {/* BOOKING DIALOG                                            */}
@@ -857,19 +900,19 @@ export default function RoomBooking() {
         <DialogContent className="w-full max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-violet-500" />
+              <CalendarDays className="h-5 w-5 text-[var(--primary)]" />
               שריון {selectedResource?.name}
             </DialogTitle>
           </DialogHeader>
           {bookingDialog && (
             <div className="space-y-4 mt-2">
               {/* Date */}
-              <div className="p-3 rounded-xl bg-violet-50 border border-violet-200 text-center">
-                <p className="text-lg font-bold text-violet-800">
+              <div className="p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)] text-center">
+                <p className="text-lg font-bold text-[var(--primary-dark)]">
                   {new Date(bookingDialog.dk).toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
                 {bookingDialog.holidays?.[0]?.hebrew && (
-                  <p className="text-sm text-violet-600 mt-0.5"><Star className="h-3.5 w-3.5 inline ml-1" />{bookingDialog.holidays[0].hebrew}</p>
+                  <p className="text-sm text-[var(--primary)] mt-0.5"><Star className="h-3.5 w-3.5 inline ml-1" />{bookingDialog.holidays[0].hebrew}</p>
                 )}
               </div>
 
@@ -886,13 +929,13 @@ export default function RoomBooking() {
                       <button
                         key={key} disabled={!available}
                         onClick={() => setBookingForm(f => ({ ...f, slot: key }))}
-                        className={`p-3 rounded-xl border-2 text-center transition-all ${
+                        className={`p-3 rounded-[var(--radius)] border-2 text-center transition-all ${
                           !available ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
-                          : isSelected ? 'border-violet-400 bg-violet-50 text-violet-800 shadow-sm'
-                          : 'border-[var(--border)] hover:border-violet-200'
+                          : isSelected ? 'border-[var(--primary)] bg-[var(--surface-secondary)] text-[var(--primary-dark)] shadow-sm'
+                          : 'border-[var(--border)] hover:border-[var(--primary)]'
                         }`}
                       >
-                        <SlotIcon className={`h-5 w-5 mx-auto mb-1 ${isSelected ? 'text-violet-600' : ''}`} />
+                        <SlotIcon className={`h-5 w-5 mx-auto mb-1 ${isSelected ? 'text-[var(--primary)]' : ''}`} />
                         <p className="text-xs font-medium">{slot.short}</p>
                         <p className="text-[10px] mt-0.5">{formatCurrency(getSlotPrice(key))}</p>
                         {isFullDayRestricted && <p className="text-[9px] text-blue-400">שבת/חג בלבד</p>}
@@ -907,11 +950,11 @@ export default function RoomBooking() {
               {!selectedResource?.residents_only && (
                 <div className="flex gap-2">
                   <button onClick={() => setBookingForm(f => ({ ...f, isGuest: false }))}
-                    className={`flex-1 flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 text-sm ${
-                      !bookingForm.isGuest ? 'border-violet-400 bg-violet-50 text-violet-800' : 'border-[var(--border)] text-[var(--text-secondary)]'
+                    className={`flex-1 flex items-center justify-center gap-2 p-2.5 rounded-[var(--radius)] border-2 text-sm ${
+                      !bookingForm.isGuest ? 'border-[var(--primary)] bg-[var(--surface-secondary)] text-[var(--primary-dark)]' : 'border-[var(--border)] text-[var(--text-secondary)]'
                     }`}><Users className="h-4 w-4" />דייר</button>
                   <button onClick={() => setBookingForm(f => ({ ...f, isGuest: true }))}
-                    className={`flex-1 flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 text-sm ${
+                    className={`flex-1 flex items-center justify-center gap-2 p-2.5 rounded-[var(--radius)] border-2 text-sm ${
                       bookingForm.isGuest ? 'border-amber-400 bg-amber-50 text-amber-800' : 'border-[var(--border)] text-[var(--text-secondary)]'
                     }`}><UserPlus className="h-4 w-4" />אורח</button>
                 </div>
@@ -934,7 +977,7 @@ export default function RoomBooking() {
                     { value: '', label: 'בחר דירה...' },
                     ...buildingUnits.map(u => ({
                       value: u.id,
-                      label: `דירה ${u.number} — ${residentMap[u.id]?.name || 'ללא דייר'}`,
+                      label: u.name ? u.label : `דירה ${u.number} — ללא דייר`,
                     }))
                   ]}
                 />
@@ -950,7 +993,7 @@ export default function RoomBooking() {
                   </div>
                 </>
               ) : bookingForm.unitId && (
-                <div className="p-3 rounded-xl bg-slate-50 border border-[var(--border)] text-sm">
+                <div className="p-3 rounded-[var(--radius)] bg-slate-50 border border-[var(--border)] text-sm">
                   <p className="font-medium">{bookingForm.bookerName}</p>
                   <div className="flex gap-4 text-xs text-[var(--text-muted)] mt-1">
                     {bookingForm.bookerPhone && <span>{bookingForm.bookerPhone}</span>}
@@ -961,7 +1004,7 @@ export default function RoomBooking() {
 
               {/* Custom questions */}
               {(selectedResource?.custom_questions || []).length > 0 && (
-                <div className="space-y-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                <div className="space-y-3 p-3 rounded-[var(--radius)] bg-blue-50/50 border border-blue-100">
                   <p className="text-xs font-bold text-blue-700 flex items-center gap-1"><HelpCircle className="h-3.5 w-3.5" />שאלות נוספות</p>
                   {(selectedResource.custom_questions || []).map(q => (
                     <div key={q.id}>
@@ -988,7 +1031,7 @@ export default function RoomBooking() {
 
               {/* Rental terms agreement */}
               {selectedResource?.rental_terms && (
-                <div className="space-y-2 p-3 rounded-xl bg-slate-50 border border-[var(--border)]">
+                <div className="space-y-2 p-3 rounded-[var(--radius)] bg-slate-50 border border-[var(--border)]">
                   <p className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-1"><FileText className="h-3.5 w-3.5" />תנאי השכרה</p>
                   <div className="text-xs text-[var(--text-muted)] whitespace-pre-wrap max-h-32 overflow-y-auto leading-relaxed">
                     {selectedResource.rental_terms}
@@ -998,7 +1041,7 @@ export default function RoomBooking() {
                       type="checkbox"
                       checked={bookingForm.termsAccepted}
                       onChange={(e) => setBookingForm(f => ({ ...f, termsAccepted: e.target.checked }))}
-                      className="w-4 h-4 rounded border-[var(--border)] text-violet-600 focus:ring-violet-500"
+                      className="w-4 h-4 rounded border-[var(--border)] text-[var(--primary)] focus:ring-violet-500"
                     />
                     <span className="text-sm font-medium text-[var(--text-primary)]">קראתי ואני מאשר/ת את תנאי ההשכרה</span>
                   </label>
@@ -1007,14 +1050,14 @@ export default function RoomBooking() {
 
               {/* Price */}
               {getSlotPrice(bookingForm.slot) > 0 && (
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                <div className="p-3 rounded-[var(--radius)] bg-emerald-50 border border-emerald-200 flex items-center justify-between">
                   <span className="text-sm text-emerald-700 font-medium">עלות:</span>
                   <span className="text-lg font-bold text-emerald-700">{formatCurrency(getSlotPrice(bookingForm.slot))}</span>
                 </div>
               )}
 
               {/* Info about approval */}
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+              <div className="flex items-start gap-2 p-3 rounded-[var(--radius)] bg-amber-50 border border-amber-200">
                 <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-700">
                   השריון ייחסם מיידית אך דורש אישור נציג הוועד. תקבל/י מייל עם עדכון הסטטוס.
@@ -1076,7 +1119,7 @@ export default function RoomBooking() {
             />
 
             {/* Custom questions */}
-            <div className="space-y-3 p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+            <div className="space-y-3 p-3 rounded-[var(--radius)] bg-blue-50/50 border border-blue-100">
               <p className="text-sm font-bold text-blue-700 flex items-center gap-1">
                 <HelpCircle className="h-4 w-4" />שאלות בטופס השריון
               </p>
@@ -1156,7 +1199,7 @@ export default function RoomBooking() {
           </DialogHeader>
           {paymentRedirect && (
             <div className="space-y-4 mt-2 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center mx-auto shadow-lg">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-dark)] flex items-center justify-center mx-auto shadow-lg">
                 <Clock className="h-8 w-8 text-white" />
               </div>
               <p className="text-lg font-bold">השריון נשלח לאישור!</p>
@@ -1175,7 +1218,7 @@ export default function RoomBooking() {
 // ═════════════════════════════════════════════════════════════════
 // Booking Card Component
 // ═════════════════════════════════════════════════════════════════
-function BookingCard({ bk, resource, residentMap, onApprove, onReject, onCancel, showActions }) {
+function BookingCard({ bk, resource, residentMap, onCancel, showActions }) {
   const slotInfo = SLOTS[bk.slot] || SLOTS.evening
   const SlotIcon = slotInfo.icon
   const statusCfg = STATUS_CONFIG[bk.status] || STATUS_CONFIG.pending
@@ -1183,74 +1226,47 @@ function BookingCard({ bk, resource, residentMap, onApprove, onReject, onCancel,
   const unit = bk.unit_id ? residentMap?.[bk.unit_id] : null
   const questions = resource?.custom_questions || []
   const answers = bk.answers || {}
+  const muted = bk.status === 'cancelled' || bk.status === 'rejected'
 
   return (
-    <div className={`flex flex-col gap-3 p-4 rounded-xl border border-[var(--border)] bg-white hover:shadow-md transition-all ${
-      bk.status === 'cancelled' || bk.status === 'rejected' ? 'opacity-60' : ''
-    }`}>
-      <div className="flex items-center gap-4">
-        <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${SLOT_GRADIENTS[slotInfo.color] || 'from-slate-500 to-slate-600'} flex items-center justify-center text-white shadow-sm shrink-0`}>
-          <SlotIcon className="h-5 w-5" />
-        </div>
-
+    <div className={`flex flex-col gap-2 p-3.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] ${muted ? 'opacity-60' : ''}`}>
+      <div className="flex items-center gap-3">
+        <span className="p-2 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><SlotIcon className="h-5 w-5" /></span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-sm font-semibold">{bk.booker_name}</span>
-            {bk.is_guest && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">אורח</span>}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${statusCfg.bg}`}>{statusCfg.label}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[14px] font-semibold">{bk.booker_name}</span>
+            {bk.is_guest && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--warning-light)] text-[var(--warning)] font-semibold">אורח</span>}
+            <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold border ${statusCfg.bg}`}>{statusCfg.label}</span>
           </div>
-          <div className="flex items-center gap-3 text-xs text-[var(--text-muted)]">
+          <div className="flex items-center gap-x-3 flex-wrap text-[12px] text-[var(--text-muted)] num-tabular">
             <span>{new Date(bk.booking_date).toLocaleDateString('he-IL')}</span>
             <span>{slotInfo.short}</span>
+            {unit && <span>דירה {unit.number}</span>}
             {bk.booker_phone && <span>{bk.booker_phone}</span>}
-            {unit && <span>דירה {unit.name}</span>}
           </div>
         </div>
-
-        {bk.price > 0 && <span className="text-sm font-bold text-emerald-600">{formatCurrency(bk.price)}</span>}
-
-        {/* Payment status */}
-        <div className="flex items-center gap-1.5">
-          <div className={`w-2 h-2 rounded-full ${bk.payment_status === 'paid' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          <span className={`text-[11px] ${bk.payment_status === 'paid' ? 'text-emerald-700' : 'text-amber-700'}`}>
-            {bk.payment_status === 'paid' ? 'שולם' : 'ממתין'}
-          </span>
+        <div className="text-left shrink-0 num-tabular">
+          {bk.price > 0 && <p className="text-[14px] font-bold">{formatCurrency(bk.price)}</p>}
+          <p className={`text-[11px] font-semibold ${bk.payment_status === 'paid' ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
+            {bk.payment_status === 'paid' ? 'שולם' : 'ממתין לתשלום'}
+          </p>
         </div>
+        {showActions === 'cancel' && !isPast && (
+          <Button onClick={onCancel} size="sm" variant="outline" className="text-[var(--danger)] border-[var(--danger)]/30 hover:bg-[var(--danger-light)] shrink-0">
+            <XIcon className="h-3.5 w-3.5" />בטל
+          </Button>
+        )}
       </div>
-
-      {/* Answers to custom questions */}
       {questions.length > 0 && Object.keys(answers).length > 0 && (
-        <div className="flex flex-wrap gap-2 pr-15">
+        <div className="flex flex-wrap gap-1.5">
           {questions.map(q => answers[q.id] != null && answers[q.id] !== '' ? (
-            <span key={q.id} className="text-[11px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-100">
+            <span key={q.id} className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)]">
               {q.text}: <strong>{typeof answers[q.id] === 'boolean' ? (answers[q.id] ? 'כן' : 'לא') : answers[q.id]}</strong>
             </span>
           ) : null)}
         </div>
       )}
-
-      {bk.notes && (
-        <p className="text-xs text-[var(--text-muted)] pr-15">"{bk.notes}"</p>
-      )}
-
-      {/* Action buttons */}
-      {showActions === 'approve' && (
-        <div className="flex gap-2 pr-15">
-          <Button onClick={onApprove} size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
-            <Check className="h-3.5 w-3.5" />אשר
-          </Button>
-          <Button onClick={onReject} size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50">
-            <XIcon className="h-3.5 w-3.5" />דחה
-          </Button>
-        </div>
-      )}
-      {showActions === 'cancel' && !isPast && (
-        <div className="pr-15">
-          <Button onClick={onCancel} size="sm" variant="outline" className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50">
-            <XIcon className="h-3.5 w-3.5" />בטל שריון
-          </Button>
-        </div>
-      )}
+      {bk.notes && <p className="text-[12px] text-[var(--text-muted)]">"{bk.notes}"</p>}
     </div>
   )
 }
