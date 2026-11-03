@@ -105,8 +105,15 @@ export default function ExpenseAnalysis() {
         },
       })
 
-      if (fnError) throw new Error(fnError.message)
-      setResult(data?.result || null)
+      if (fnError) {
+        // supabase-js hides the body of non-2xx responses — read our Hebrew message.
+        let msg = fnError.message
+        try { msg = (await fnError.context?.json())?.error || msg } catch { /* */ }
+        throw new Error(msg)
+      }
+      const r = data?.result || null
+      if (r && typeof r.summary === 'string' && /^\s*[{[]/.test(r.summary)) throw new Error('הניתוח חזר בפורמט לא תקין — נסו שוב')
+      setResult(r)
     } catch (err) {
       setError(err.message || 'שגיאה בניתוח')
     } finally {

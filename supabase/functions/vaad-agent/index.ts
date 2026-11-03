@@ -107,6 +107,8 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 6. הצע המלצות לחיסכון או שיפור
 
 דבר בעברית. היה ישיר וברור. השתמש במספרים ואחוזים.
+היה תמציתי: monthly_comparison רק לחודשים שיש בהם נתונים, עד 6 התראות, עד 5 תובנות ועד 5 המלצות, משפט אחד לכל שדה טקסט.
+החזר JSON תקין בלבד — בלי טקסט לפני או אחרי, בלי ``` ובלי הערות.
 פלט תשובתך כ-JSON בפורמט הבא בלבד:
 {
   "summary": "סיכום מצב פיננסי כללי",
@@ -413,7 +415,9 @@ Deno.serve(async (req: Request) => {
     // latest Sonnet (much faster + smarter than Sonnet 4 for the same cost).
     const message = await anthropic.messages.create({
       model: Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      // Structured analyses (a year of months + categories, in Hebrew) need room —
+      // at 2000 the JSON was cut mid-object and the raw text leaked to the UI.
+      max_tokens: 8000,
       system: SYSTEM_PROMPTS[agentType],
       messages: [
         {
@@ -439,6 +443,14 @@ Deno.serve(async (req: Request) => {
       } catch {
         parsed = { summary: rawText }
       }
+    }
+    // Never hand the UI a raw/truncated JSON dump as the "summary".
+    const looksLikeJson = typeof parsed.summary === 'string' && /^\s*[{\[]/.test(parsed.summary as string)
+    if (message.stop_reason === 'max_tokens' || looksLikeJson) {
+      return new Response(
+        JSON.stringify({ error: 'הניתוח נקטע לפני שהסתיים — נסו שוב' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     return new Response(
