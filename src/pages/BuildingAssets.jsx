@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,8 +9,10 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
-import { PageHeader } from '@/components/common/PageHeader'
-import { Plus, Pencil, Trash2, Wrench, AlertTriangle, CheckCircle, Clock, Cog } from 'lucide-react'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { TabGroup } from '@/components/ui/tabs'
+import { Plus, Pencil, Trash2, Wrench, AlertTriangle, CheckCircle, Clock, Cog, ShieldOff, CalendarClock } from 'lucide-react'
 
 const CATEGORY_OPTIONS = [
   { value: 'מעלית', label: 'מעלית' },
@@ -66,7 +67,8 @@ function BuildingAssets() {
   const { data: allAssets, create, update, remove, isSaving, isLoading } = useCollection('buildingAssets', scope)
 
   const [search, setSearch] = useState('')
-  const [buildingFilter, setBuildingFilter] = useState('all')
+  // Data is already scoped to the sidebar's building.
+  const buildingFilter = 'all'
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -163,7 +165,7 @@ function BuildingAssets() {
     setEditingId(null)
     setForm({
       ...EMPTY_FORM,
-      buildingId: buildingFilter !== 'all' ? buildingFilter : (buildings[0]?.id || ''),
+      buildingId: buildingFilter !== 'all' ? buildingFilter : (selectedBuilding?.id || buildings[0]?.id || ''),
     })
     setFormOpen(true)
   }
@@ -236,8 +238,8 @@ function BuildingAssets() {
   }
 
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={Cog} iconColor="slate" title="ציוד ומערכות בניין" />
+    <div className="space-y-6">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">ציוד ומערכות בניין</h1>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -247,263 +249,209 @@ function BuildingAssets() {
     </div>
   )
 
+  // ── Civic Blue view model ──
+  const todayMid = new Date()
+  todayMid.setHours(0, 0, 0, 0)
+  const isWarrantyExpired = (a) => !!a.warrantyEnd && new Date(a.warrantyEnd) < todayMid
+  const catCounts = scopedAssets.reduce((m, a) => { const k = a.category || 'אחר'; m[k] = (m[k] || 0) + 1; return m }, {})
+  const catEntries = Object.entries(catCounts).sort((a, b) => b[1] - a[1])
+  const healthyPct = stats.total ? Math.round(((stats.total - stats.overdueService) / stats.total) * 100) : 0
+  const statusChip = (item) => {
+    const st = getServiceStatus(item.nextService)
+    const cls = {
+      ok: 'bg-[var(--success-light)] text-[var(--success)]',
+      soon: 'bg-[var(--warning-light)] text-[var(--warning)]',
+      overdue: 'bg-[var(--danger-light)] text-[var(--danger)]',
+      unknown: 'bg-[var(--surface-secondary)] text-[var(--text-secondary)]',
+    }[st.key]
+    return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap num-tabular ${cls}`}>{st.label}</span>
+  }
+  const warrantyChip = (item) => {
+    if (!item.warrantyEnd) return <span className="text-[11px] text-[var(--text-muted)]">—</span>
+    return isWarrantyExpired(item)
+      ? <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-[var(--danger-light)] text-[var(--danger)]">פגה</span>
+      : <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-[var(--success-light)] text-[var(--success)]">עד {formatDate(item.warrantyEnd)}</span>
+  }
+  const rowActions = (item) => (
+    <div className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+      <button onClick={() => handleServiceDone(item)} title="סמן כמתוחזק" className="p-1.5 rounded-[var(--radius)] text-[var(--success)] hover:bg-[var(--success-light)]"><CheckCircle className="h-3.5 w-3.5" /></button>
+      <button onClick={() => openEdit(item)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
+      <button onClick={() => setDeleteTarget(item)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
+    </div>
+  )
+  const filterActive = search || categoryFilter !== 'all'
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Cog}
-        iconColor="slate"
-        title="ציוד ומערכות בניין"
-        subtitle={selectedBuilding ? `${selectedBuilding.name} · ${filtered.length} פריטים` : `${filtered.length} פריטים`}
-        actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            הוסף ציוד
-          </Button>
-        }
-      />
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-[var(--primary-bg)] p-2">
-                <Wrench className="h-5 w-5 text-[var(--primary)]" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.total}</p>
-                <p className="text-xs text-[var(--text-secondary)]">סה"כ ציוד</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-amber-50 p-2">
-                <Clock className="h-5 w-5 text-[var(--warning)]" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.soon}</p>
-                <p className="text-xs text-[var(--text-secondary)]">טיפול תוך 30 יום</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-red-50 p-2">
-                <AlertTriangle className="h-5 w-5 text-[var(--danger)]" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.warrantyExpired}</p>
-                <p className="text-xs text-[var(--text-secondary)]">אחריות פגה</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-full bg-red-50 p-2">
-                <AlertTriangle className="h-5 w-5 text-[var(--danger)]" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{stats.overdueService}</p>
-                <p className="text-xs text-[var(--text-secondary)]">טיפול באיחור</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <SearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="חיפוש לפי שם, קטגוריה, יצרן או דגם..."
-      />
-
-      {/* Building filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={buildingFilter === 'all' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBuildingFilter('all')}
-        >
-          כל הבניינים
-        </Button>
-        {buildings.map((b) => (
-          <Button
-            key={b.id}
-            variant={buildingFilter === b.id ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setBuildingFilter(b.id)}
-          >
-            {b.name}
-          </Button>
-        ))}
-      </div>
-
-      {/* Category filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <span className="text-sm text-[var(--text-secondary)] self-center ml-2">קטגוריה:</span>
-        {CATEGORY_FILTERS.map((cf) => (
-          <Button
-            key={cf.key}
-            variant={categoryFilter === cf.key ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setCategoryFilter(cf.key)}
-          >
-            {cf.label}
-          </Button>
-        ))}
-      </div>
-
-      {/* Asset cards */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={Wrench}
-          title="אין ציוד"
-          description={search ? 'לא נמצאו תוצאות לחיפוש' : 'לא נוסף ציוד עדיין'}
-          actionLabel={!search ? 'הוסף ציוד' : undefined}
-          onAction={!search ? openCreate : undefined}
-        />
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((item) => {
-            const serviceStatus = getServiceStatus(item.nextService)
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
-            const warrantyExpired = item.warrantyEnd && new Date(item.warrantyEnd) < today
-
-            // Gradient colors based on category
-            const categoryGradientMap = {
-              'מעלית': 'from-blue-500 to-blue-600',
-              'אינסטלציה': 'from-cyan-500 to-cyan-600',
-              'חשמל': 'from-amber-400 to-amber-500',
-              'בטיחות': 'from-red-500 to-red-600',
-              'מיזוג': 'from-sky-400 to-sky-500',
-              'גנרטור': 'from-emerald-500 to-emerald-600',
-              'אחר': 'from-slate-400 to-slate-500',
-            }
-            const circleGradient = categoryGradientMap[item.category] || categoryGradientMap['אחר']
-
-            // Status dot based on service status
-            const dotColorMap = {
-              ok: 'bg-emerald-500',
-              soon: 'bg-amber-500',
-              overdue: 'bg-red-500',
-              unknown: 'bg-slate-400',
-            }
-            const dotColor = dotColorMap[serviceStatus.key] || dotColorMap.unknown
-
-            const textColorMap = {
-              ok: 'text-emerald-700',
-              soon: 'text-amber-700',
-              overdue: 'text-red-700',
-              unknown: 'text-slate-500',
-            }
-            const statusTextColor = textColorMap[serviceStatus.key] || textColorMap.unknown
-
-            return (
-              <div
-                key={item.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
-                onClick={() => setDetailItem(item)}
-              >
-                {/* Category circle */}
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                  <Cog className="h-5 w-5" />
-                </div>
-
-                {/* Main info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                      {item.name}
-                    </span>
-                    {item.category && (
-                      <Badge variant="default" className="shrink-0">{item.category}</Badge>
-                    )}
-                    {warrantyExpired && (
-                      <Badge variant="danger" className="shrink-0">אחריות פגה</Badge>
-                    )}
-                    {item.warrantyEnd && !warrantyExpired && (
-                      <Badge variant="success" className="shrink-0">אחריות בתוקף</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {buildingMap[item.buildingId]?.name || ''}
-                    </span>
-                    {(item.manufacturer || item.model) && (
-                      <span className="text-xs text-[var(--text-muted)]">
-                        {[item.manufacturer, item.model].filter(Boolean).join(' · ')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Last service date */}
-                <div className="text-left min-w-[90px]">
-                  {item.lastService ? (
-                    <>
-                      <div className="text-[11px] text-[var(--text-muted)]">טיפול אחרון</div>
-                      <div className="text-[13px] font-semibold text-[var(--text-primary)]">
-                        {formatDate(item.lastService)}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-[11px] text-[var(--text-muted)]">ללא טיפול</div>
-                  )}
-                </div>
-
-                {/* Next service date */}
-                <div className="text-left min-w-[90px]">
-                  {item.nextService ? (
-                    <>
-                      <div className="text-[11px] text-[var(--text-muted)]">טיפול הבא</div>
-                      <div className={`text-[13px] font-semibold ${serviceStatus.key === 'overdue' ? 'text-red-600' : serviceStatus.key === 'soon' ? 'text-amber-600' : 'text-[var(--text-primary)]'}`}>
-                        {formatDate(item.nextService)}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-[11px] text-[var(--text-muted)]">לא הוגדר</div>
-                  )}
-                </div>
-
-                {/* Service status */}
-                <div className="flex items-center gap-2 min-w-[80px]">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{serviceStatus.label}</span>
-                </div>
-
-                {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" onClick={() => handleServiceDone(item)} title="סמן כמתוחזק">
-                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setDeleteTarget(item)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                  </Button>
-                </div>
-              </div>
-            )
-          })}
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">ציוד ומערכות בניין</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            מרשם נכסים — מעליות, משאבות, מערכות חשמל ובטיחות, אחריות וטיפולים{selectedBuilding?.name ? ` • ${selectedBuilding.name}` : ''}
+          </p>
         </div>
-      )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />הוסף ציוד</Button>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="סה״כ ציוד רשום" icon={Cog} color="blue"
+          value={String(stats.total)}
+          sub={catEntries.length ? `${catEntries.length} קטגוריות` : 'לא נרשם ציוד'}
+          progress={stats.total ? healthyPct : undefined} />
+        <StatCard label="טיפול תוך 30 יום" icon={Clock} color={stats.soon ? 'amber' : 'slate'}
+          value={String(stats.soon)}
+          sub={stats.soon ? 'כדאי לתאם טכנאי' : 'אין טיפולים קרובים'} />
+        <StatCard label="טיפול באיחור" icon={AlertTriangle} color={stats.overdueService ? 'red' : 'emerald'}
+          value={String(stats.overdueService)}
+          sub={stats.overdueService ? 'עבר מועד הטיפול המתוכנן' : 'כל הציוד מטופל בזמן ✓'} />
+        <StatCard label="אחריות פגה" icon={ShieldOff} color={stats.warrantyExpired ? 'amber' : 'emerald'}
+          value={String(stats.warrantyExpired)}
+          sub={stats.warrantyExpired ? 'תיקונים יחויבו במלואם' : 'אין פריטים שאחריותם פגה'} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Register */}
+        <div className="xl:col-span-8 space-y-4">
+          <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+            <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי שם, קטגוריה, יצרן או דגם..." />
+            <TabGroup
+              tabs={CATEGORY_FILTERS.map((cf) => ({ ...cf, count: cf.key === 'all' ? scopedAssets.length : (catCounts[cf.key] || 0) }))}
+              activeTab={categoryFilter}
+              onChange={setCategoryFilter}
+            />
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+              <EmptyState
+                icon={Wrench}
+                title="אין ציוד"
+                description={filterActive ? 'לא נמצאו תוצאות לסינון' : 'לא נוסף ציוד עדיין'}
+                actionLabel={!filterActive ? 'הוסף ציוד' : undefined}
+                onAction={!filterActive ? openCreate : undefined}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-2">
+                {filtered.map((item) => (
+                  <div key={item.id} onClick={() => setDetailItem(item)}
+                    className="p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] cursor-pointer">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Cog className="h-4 w-4" /></span>
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{item.name}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] truncate">
+                            {[item.category, item.manufacturer, item.model].filter(Boolean).join(' · ') || '—'}
+                          </p>
+                        </div>
+                      </div>
+                      {statusChip(item)}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-[var(--border-light)]">
+                      <div className="text-[11px] text-[var(--text-muted)]">
+                        טיפול הבא: <span className="font-semibold text-[var(--text-primary)] num-tabular">{item.nextService ? formatDate(item.nextService) : '—'}</span>
+                      </div>
+                      {rowActions(item)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr><th>ציוד</th><th>קטגוריה</th><th>יצרן / דגם</th><th>טיפול אחרון</th><th>טיפול הבא</th><th>אחריות</th><th>סטטוס</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((item) => {
+                        const st = getServiceStatus(item.nextService)
+                        return (
+                          <tr key={item.id} onClick={() => setDetailItem(item)} className={`cursor-pointer ${st.key === 'overdue' ? '!bg-[var(--danger-light)]/40' : ''}`}>
+                            <td className="min-w-[160px]">
+                              <span className="text-[13px] font-semibold">{item.name || '—'}</span>
+                              {item.notes && <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{item.notes}</span>}
+                            </td>
+                            <td className="whitespace-nowrap">
+                              {item.category
+                                ? <span className="px-2 py-0.5 rounded-full border border-[var(--primary)]/15 bg-[var(--surface-container)] text-[var(--primary-dark)] text-[11px] font-semibold">{item.category}</span>
+                                : <span className="text-[var(--text-muted)]">—</span>}
+                            </td>
+                            <td className="whitespace-nowrap text-[12px]">{[item.manufacturer, item.model].filter(Boolean).join(' · ') || <span className="text-[var(--text-muted)]">—</span>}</td>
+                            <td className="whitespace-nowrap text-[12px] num-tabular">{item.lastService ? formatDate(item.lastService) : <span className="text-[var(--text-muted)]">—</span>}</td>
+                            <td className={`whitespace-nowrap text-[12px] font-semibold num-tabular ${st.key === 'overdue' ? 'text-[var(--danger)]' : st.key === 'soon' ? 'text-[var(--warning)]' : ''}`}>{item.nextService ? formatDate(item.nextService) : '—'}</td>
+                            <td className="whitespace-nowrap">{warrantyChip(item)}</td>
+                            <td className="whitespace-nowrap">{statusChip(item)}</td>
+                            <td className="whitespace-nowrap">{rowActions(item)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                  <span>מציג {filtered.length} מתוך {scopedAssets.length} פריטים</span>
+                  <span>מטופלים בזמן: <strong className="text-[var(--primary)] num-tabular">{healthyPct}%</strong></span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Side panel */}
+        <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-20">
+          <SectionCard icon={CalendarClock} title="לוח תחזוקה קרובה" subtitle="טיפולים ב-90 הימים הקרובים" bodyClassName="p-2">
+            {upcomingServices.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)] py-6">אין טיפולים מתוכננים ב-90 הימים הקרובים</p>
+            ) : (
+              <ul className="divide-y divide-[var(--border-light)]">
+                {upcomingServices.map((item) => (
+                  <li key={item.id}>
+                    <button onClick={() => setDetailItem(item)} className="w-full flex items-center justify-between gap-3 px-2 py-2.5 rounded-[var(--radius)] hover:bg-[var(--surface-secondary)] text-right">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Wrench className="h-4 w-4" /></span>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{item.name}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] num-tabular">{item.category ? `${item.category} • ` : ''}{formatDate(item.nextService)}</p>
+                        </div>
+                      </div>
+                      {statusChip(item)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+
+          <SectionCard icon={Cog} title="פילוח לפי קטגוריה" subtitle={`${stats.total} פריטים`} bodyClassName="p-4 space-y-3">
+            {catEntries.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)]">אין נתונים</p>
+            ) : catEntries.map(([cat, n]) => {
+              const pct = stats.total ? Math.round((n / stats.total) * 100) : 0
+              return (
+                <button key={cat} onClick={() => setCategoryFilter(CATEGORY_FILTERS.some((c) => c.key === cat) ? cat : 'all')} className="block w-full text-right">
+                  <div className="flex items-center justify-between gap-2 text-[12px]">
+                    <span className="truncate font-medium text-[var(--text-primary)]">{cat}</span>
+                    <span className="shrink-0 num-tabular"><strong>{n}</strong> <span className="text-[var(--text-muted)]">({pct}%)</span></span>
+                  </div>
+                  <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-container)] overflow-hidden">
+                    <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${pct}%` }} />
+                  </div>
+                </button>
+              )
+            })}
+          </SectionCard>
+        </aside>
+      </div>
+
 
       {/* Detail Modal */}
       <DetailModal
@@ -656,40 +604,6 @@ function BuildingAssets() {
         </DialogContent>
       </Dialog>
 
-      {/* Upcoming Services Timeline */}
-      {upcomingServices.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">לוח תחזוקה קרובה</h2>
-          <Card>
-            <CardContent className="pt-5">
-              <div className="space-y-2">
-                {upcomingServices.map((item) => {
-                  const serviceStatus = getServiceStatus(item.nextService)
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 py-2 border-b border-[var(--border)] last:border-0"
-                    >
-                      {item.category && (
-                        <Badge variant="default" className="shrink-0">{item.category}</Badge>
-                      )}
-                      <span className="flex-1 text-sm text-[var(--text-primary)] font-medium truncate">
-                        {item.name}
-                      </span>
-                      <span className="text-xs text-[var(--text-secondary)] shrink-0">
-                        {formatDate(item.nextService)}
-                      </span>
-                      <Badge variant={serviceStatus.variant} className="shrink-0">
-                        {serviceStatus.label}
-                      </Badge>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

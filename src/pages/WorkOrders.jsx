@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useCollection, useBuildingContext } from '@/hooks/useStore';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -14,10 +13,10 @@ import { DeleteConfirm } from '@/components/common/DeleteConfirm';
 import { EmptyState } from '@/components/common/EmptyState';
 import { SearchBar } from '@/components/common/SearchBar';
 import { StatCard } from '@/components/common/StatCard';
-import { FilterPills } from '@/components/common/FilterPills';
+import { SectionCard } from '@/components/common/SectionCard';
+import { TabGroup } from '@/components/ui/tabs';
 import { formatDate } from '@/lib/utils';
 import { requiredApproval } from '@/lib/approval';
-import { PageHeader } from '@/components/common/PageHeader'
 import {
   Plus,
   Pencil,
@@ -30,6 +29,7 @@ import {
   Calendar,
   User,
   Star,
+  Wallet,
 } from 'lucide-react';
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -102,168 +102,65 @@ function formatCost(val) {
   return `₪${n.toLocaleString()}`;
 }
 
-// ─── Work Order Card ─────────────────────────────────────────────────────────
+// ─── Status / cost chips (Civic Blue tokens) ────────────────────────────────
 
-function WorkOrderCard({ order, vendorsMap, issuesMap, onEdit, onDelete, onAdvanceStatus }) {
-  const statusCfg   = STATUS_CONFIG[order.status]   || STATUS_CONFIG.pending;
-  const priorityCfg = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.medium;
-  const nextStatus  = getNextStatus(order.status);
-  const vendorName  = vendorsMap[order.vendorId]?.name  || null;
-  const issueTitle  = issuesMap[order.issueId]?.title   || null;
+const STATUS_TONES = {
+  pending:     'bg-[var(--surface-secondary)] text-[var(--text-secondary)]',
+  approved:    'bg-[var(--surface-container)] text-[var(--primary-dark)]',
+  scheduled:   'bg-[var(--warning-light)] text-[var(--warning)]',
+  in_progress: 'bg-[var(--surface-variant)] text-[var(--primary)]',
+  completed:   'bg-[var(--success-light)] text-[var(--success)]',
+  cancelled:   'bg-[var(--danger-light)] text-[var(--danger)]',
+};
 
-  // Status-based gradient for the circle
-  const statusGradients = {
-    pending:     'from-slate-400 to-slate-500',
-    approved:    'from-blue-500 to-blue-600',
-    scheduled:   'from-amber-400 to-amber-500',
-    in_progress: 'from-purple-500 to-purple-600',
-    completed:   'from-emerald-500 to-emerald-600',
-    cancelled:   'from-red-400 to-red-500',
-  };
-  const circleGradient = statusGradients[order.status] || statusGradients.pending;
+function statusProgress(status) {
+  if (status === 'cancelled') return 0;
+  const idx = STATUS_PROGRESSION.indexOf(status);
+  return idx >= 0 ? Math.round(((idx + 1) / STATUS_PROGRESSION.length) * 100) : 0;
+}
 
-  // Status dot colors
-  const statusDotColors = {
-    pending:     'bg-slate-400',
-    approved:    'bg-blue-500',
-    scheduled:   'bg-amber-500',
-    in_progress: 'bg-purple-500',
-    completed:   'bg-emerald-500',
-    cancelled:   'bg-red-500',
-  };
-  const dotColor = statusDotColors[order.status] || statusDotColors.pending;
-
-  // Status text colors
-  const statusTextColors = {
-    pending:     'text-slate-600',
-    approved:    'text-blue-700',
-    scheduled:   'text-amber-700',
-    in_progress: 'text-purple-700',
-    completed:   'text-emerald-700',
-    cancelled:   'text-red-700',
-  };
-  const statusTextColor = statusTextColors[order.status] || statusTextColors.pending;
-
-  // Priority accent bar colors
-  const priorityBarColors = {
-    low:    'bg-slate-300',
-    medium: 'bg-blue-400',
-    high:   'bg-amber-500',
-    urgent: 'bg-red-500',
-  };
-  const priorityBar = priorityBarColors[order.priority] || priorityBarColors.medium;
-
-  // Progress: how far in the status progression
-  const statusIdx = STATUS_PROGRESSION.indexOf(order.status);
-  const progressPct = order.status === 'cancelled' ? 0 : statusIdx >= 0 ? Math.round(((statusIdx + 1) / STATUS_PROGRESSION.length) * 100) : 0;
-
-  const titleInitial = (order.title || '?').charAt(0);
-
+function StatusChip({ status }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   return (
-    <div className="group relative rounded-xl border border-[var(--border)] bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer overflow-hidden"
-      onClick={() => onEdit(order)}
-    >
-      {/* Priority accent bar at top */}
-      <div className={`h-1 w-full ${priorityBar}`} />
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${STATUS_TONES[status] || STATUS_TONES.pending}`}>
+      {cfg.label}
+    </span>
+  );
+}
 
-      <div className="p-4">
-        <div className="flex items-start gap-4">
-          {/* Status gradient circle */}
-          <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm`}>
-            {titleInitial}
-          </div>
-
-          {/* Main info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                {order.title}
-              </span>
-              <Badge variant={priorityCfg.variant} className="text-[10px] px-1.5 py-0 shrink-0">{priorityCfg.label}</Badge>
-            </div>
-            {order.description && (
-              <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-1">{order.description}</p>
-            )}
-            <div className="flex items-center gap-3 flex-wrap text-xs text-[var(--text-secondary)]">
-              {vendorName && (
-                <div className="flex items-center gap-1">
-                  <User className="h-3 w-3 text-[var(--text-muted)]" />
-                  <span>{vendorName}</span>
-                </div>
-              )}
-              {issueTitle && (
-                <div className="flex items-center gap-1">
-                  <ClipboardList className="h-3 w-3 text-[var(--text-muted)]" />
-                  <span className="truncate max-w-[120px]">{issueTitle}</span>
-                </div>
-              )}
-              {order.scheduledDate && (
-                <div className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3 text-[var(--text-muted)]" />
-                  <span>{formatDate(order.scheduledDate)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Cost section */}
-          {(order.estimatedCost || order.actualCost) && (() => {
-            const approval = requiredApproval(order.actualCost || order.estimatedCost)
-            const approved = !!(order.approvedAt || order.approved_at)
-            return (
-              <div className="text-left min-w-[90px] shrink-0">
-                <div className="text-[14px] font-bold text-[var(--text-primary)]">{formatCost(order.actualCost || order.estimatedCost)}</div>
-                <div className="text-[11px] text-[var(--text-muted)]">{order.actualCost ? 'בפועל' : 'הערכה'}</div>
-                {approval.needsApproval && (
-                  <div className={`mt-0.5 text-[10px] px-1.5 py-0.5 rounded inline-block ${approved ? 'bg-emerald-50 text-emerald-600' : approval.level === 'board' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                    {approved ? '✓ אושר' : `דורש: ${approval.label}`}
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-
-          {/* Status with dot */}
-          <div className="flex items-center gap-2 min-w-[80px] shrink-0">
-            <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-            <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusCfg.label}</span>
-          </div>
-        </div>
-
-        {/* Progress bar + rating row */}
-        <div className="mt-3 flex items-center gap-3">
-          <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
-            <div className={`h-full rounded-full ${dotColor}`} style={{ width: progressPct + '%' }} />
-          </div>
-          {order.rating && (
-            <div className="flex items-center gap-1 shrink-0">
-              <Star className="h-3 w-3 text-yellow-400 fill-yellow-400" />
-              <span className="text-[11px] text-[var(--text-secondary)]">{order.rating}/5</span>
-            </div>
-          )}
-        </div>
-
-        {/* Hover-reveal actions */}
-        <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-          {nextStatus && (
-            <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => onAdvanceStatus(order, nextStatus)}>
-              <ArrowRight className="h-3 w-3" />
-              קדם סטטוס
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" onClick={() => onEdit(order)} className="gap-1 text-xs h-7">
-            <Pencil className="h-3 w-3" />
-            עריכה
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => onDelete(order)} className="gap-1 text-xs h-7 text-red-600 hover:text-red-700 hover:bg-red-50">
-            <Trash2 className="h-3 w-3" />
-            מחיקה
-          </Button>
-        </div>
-      </div>
+function CostCell({ order }) {
+  if (!order.estimatedCost && !order.actualCost) return <span className="text-[var(--text-muted)]">—</span>;
+  const approval = requiredApproval(order.actualCost || order.estimatedCost);
+  const approved = !!(order.approvedAt || order.approved_at);
+  return (
+    <div>
+      <span className="text-[13px] font-bold num-tabular text-[var(--text-primary)]">{formatCost(order.actualCost || order.estimatedCost)}</span>
+      <span className="text-[11px] text-[var(--text-muted)] mr-1">{order.actualCost ? 'בפועל' : 'הערכה'}</span>
+      {approval.needsApproval && (
+        <span className={`block w-fit mt-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${approved ? 'bg-[var(--success-light)] text-[var(--success)]' : approval.level === 'board' ? 'bg-[var(--danger-light)] text-[var(--danger)]' : 'bg-[var(--warning-light)] text-[var(--warning)]'}`}>
+          {approved ? '✓ אושר' : `דורש: ${approval.label}`}
+        </span>
+      )}
     </div>
   );
 }
+
+function RowActions({ order, onEdit, onDelete, onAdvanceStatus }) {
+  const nextStatus = getNextStatus(order.status);
+  return (
+    <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+      {nextStatus && (
+        <button onClick={() => onAdvanceStatus(order, nextStatus)} title={`קדם ל: ${STATUS_CONFIG[nextStatus].label}`}
+          className="h-7 px-2 rounded-[var(--radius)] border border-[var(--outline-variant)] text-[11px] font-semibold text-[var(--primary)] hover:bg-[var(--surface-secondary)] inline-flex items-center gap-1 whitespace-nowrap">
+          <ArrowRight className="h-3 w-3" />קדם סטטוס
+        </button>
+      )}
+      <button onClick={() => onEdit(order)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
+      <button onClick={() => onDelete(order)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
+    </div>
+  );
+}
+
 
 // ─── Work Order Form ─────────────────────────────────────────────────────────
 
@@ -458,18 +355,33 @@ export default function WorkOrders() {
     });
   }, [workOrders, selectedBuilding, statusFilter, priorityFilter, searchQuery]);
 
+  // Orders of the selected building (basis for stats / tab counts)
+  const baseOrders = useMemo(
+    () => (selectedBuilding ? workOrders.filter((o) => o.buildingId === selectedBuilding.id) : workOrders),
+    [workOrders, selectedBuilding],
+  );
+  const statusCounts = useMemo(
+    () => baseOrders.reduce((m, o) => { m[o.status] = (m[o.status] || 0) + 1; return m; }, {}),
+    [baseOrders],
+  );
+
   // Stats
   const stats = useMemo(() => {
-    const base = selectedBuilding
-      ? workOrders.filter((o) => o.buildingId === selectedBuilding.id)
-      : workOrders;
+    const base = baseOrders;
+    const active = base.filter((o) => !['completed', 'cancelled'].includes(o.status));
+    const completed = base.filter((o) => o.status === 'completed').length;
     return {
       total:       base.length,
       open:        base.filter((o) => o.status === 'pending' || o.status === 'approved').length,
       in_progress: base.filter((o) => o.status === 'in_progress').length,
-      completed:   base.filter((o) => o.status === 'completed').length,
+      scheduled:   base.filter((o) => o.status === 'scheduled').length,
+      completed,
+      completionPct: base.length ? Math.round((completed / base.length) * 100) : 0,
+      openCost:    active.reduce((a, o) => a + (Number(o.actualCost || o.estimatedCost) || 0), 0),
+      spent:       base.filter((o) => o.status === 'completed').reduce((a, o) => a + (Number(o.actualCost) || 0), 0),
+      awaitingApproval: active.filter((o) => requiredApproval(o.actualCost || o.estimatedCost).needsApproval && !(o.approvedAt || o.approved_at)).length,
     };
-  }, [workOrders, selectedBuilding]);
+  }, [baseOrders]);
 
   // ── Handlers ──
 
@@ -537,76 +449,217 @@ export default function WorkOrders() {
 
   // ── Render ──
 
+  const hasFilters = !!searchQuery || statusFilter !== 'all' || priorityFilter !== 'all';
+  const upcomingScheduled = baseOrders
+    .filter((o) => o.scheduledDate && !['completed', 'cancelled'].includes(o.status))
+    .sort((a, b) => String(a.scheduledDate).localeCompare(String(b.scheduledDate)))
+    .slice(0, 5);
+
   return (
-    <div className="space-y-6 p-4 sm:p-6" dir="rtl">
+    <div className="space-y-6">
       {/* Header */}
-      <PageHeader
-        icon={ClipboardList}
-        iconColor="purple"
-        title="הזמנות עבודה"
-        subtitle={`${stats.total} הזמנות עבודה`}
-        actions={
-          <Button onClick={openCreate} className="gap-2 shrink-0">
-            <Plus className="h-4 w-4" />
-            הזמנה חדשה
-          </Button>
-        }
-      />
-
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard icon={ClipboardList} label="סה״כ הזמנות"  value={stats.total}       color="blue"    />
-        <StatCard icon={Clock}         label="פתוחות"        value={stats.open}        color="amber"   />
-        <StatCard icon={Wrench}        label="בביצוע"        value={stats.in_progress} color="purple"  />
-        <StatCard icon={CheckCircle2}  label="הושלמו"        value={stats.completed}   color="emerald" />
-      </div>
-
-      {/* Filters */}
-      <div className="space-y-3">
-        <FilterPills options={STATUS_FILTERS}   value={statusFilter}   onChange={setStatusFilter}   />
-        <FilterPills options={PRIORITY_FILTERS} value={priorityFilter} onChange={setPriorityFilter} />
-        <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="חיפוש לפי כותרת, תיאור או הערות..."
-        />
-      </div>
-
-      {/* Content */}
-      {isLoading ? (
-        <div className="py-20 text-center text-gray-500">טוען הזמנות עבודה...</div>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          title="לא נמצאו הזמנות עבודה"
-          description={
-            searchQuery || statusFilter !== 'all' || priorityFilter !== 'all'
-              ? 'נסה לשנות את הסינון או החיפוש'
-              : 'לחץ על "+ הזמנה חדשה" כדי להוסיף הזמנה ראשונה'
-          }
-          action={
-            !searchQuery && statusFilter === 'all' && priorityFilter === 'all' ? (
-              <Button onClick={openCreate} className="gap-2 mt-2">
-                <Plus className="h-4 w-4" />
-                הזמנה חדשה
-              </Button>
-            ) : null
-          }
-        />
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((order) => (
-            <WorkOrderCard
-              key={order.id}
-              order={order}
-              vendorsMap={vendorsMap}
-              issuesMap={issuesMap}
-              onEdit={openEdit}
-              onDelete={setDeleteTarget}
-              onAdvanceStatus={handleAdvanceStatus}
-            />
-          ))}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">הזמנות עבודה</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            {stats.total} הזמנות — ספקים, תזמון, עלויות ואישורי תקציב{selectedBuilding?.name ? ` • ${selectedBuilding.name}` : ''}
+          </p>
         </div>
-      )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />הזמנה חדשה</Button>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard icon={Clock} label="פתוחות (ממתין / מאושר)" color={stats.open ? 'amber' : 'slate'}
+          value={String(stats.open)}
+          sub={stats.awaitingApproval ? `${stats.awaitingApproval} דורשות אישור תקציב` : 'אין הזמנות הממתינות לאישור תקציב'}
+          footer={stats.open ? <button onClick={() => setStatusFilter('pending')} className="text-[var(--primary)] font-semibold hover:underline">לממתינות לאישור ←</button> : null} />
+        <StatCard icon={Wrench} label="בביצוע ומתוכננות" color="purple"
+          value={String(stats.in_progress + stats.scheduled)}
+          sub={`${stats.in_progress} בביצוע • ${stats.scheduled} מתוכננות`} />
+        <StatCard icon={CheckCircle2} label="הושלמו" color="emerald"
+          value={String(stats.completed)} note={`מתוך ${stats.total}`}
+          sub={stats.total ? `${stats.completionPct}% שיעור השלמה` : 'אין עדיין הזמנות'}
+          progress={stats.total ? stats.completionPct : undefined} />
+        <StatCard icon={Wallet} label="עלות הזמנות פתוחות" color="blue"
+          value={formatCost(stats.openCost) || '₪0'}
+          sub={stats.spent ? `שולם/בוצע בפועל: ${formatCost(stats.spent)}` : 'לפי הערכות ועלויות בפועל'} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Ledger */}
+        <div className="xl:col-span-8 space-y-4">
+          <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+            <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="חיפוש לפי כותרת, תיאור או הערות..." />
+            <TabGroup
+              tabs={STATUS_FILTERS.map((f) => ({ ...f, count: f.key === 'all' ? baseOrders.length : (statusCounts[f.key] || 0) }))}
+              activeTab={statusFilter}
+              onChange={setStatusFilter}
+            />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[12px] text-[var(--text-secondary)]">עדיפות:</span>
+              <TabGroup tabs={PRIORITY_FILTERS} activeTab={priorityFilter} onChange={setPriorityFilter} />
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="py-20 text-center text-[13px] text-[var(--text-muted)]">טוען הזמנות עבודה...</div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+              <EmptyState
+                icon={ClipboardList}
+                title="לא נמצאו הזמנות עבודה"
+                description={hasFilters ? 'נסה לשנות את הסינון או החיפוש' : 'לחץ על "הזמנה חדשה" כדי להוסיף הזמנה ראשונה'}
+                actionLabel={!hasFilters ? 'הזמנה חדשה' : undefined}
+                onAction={!hasFilters ? openCreate : undefined}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-2">
+                {filtered.map((order) => {
+                  const priorityCfg = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.medium;
+                  return (
+                    <div key={order.id} onClick={() => openEdit(order)}
+                      className="p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] cursor-pointer">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{order.title}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] mt-0.5 truncate">
+                            {[vendorsMap[order.vendorId]?.name, order.scheduledDate ? formatDate(order.scheduledDate) : null].filter(Boolean).join(' • ') || 'ללא ספק'}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <StatusChip status={order.status} />
+                          <Badge variant={priorityCfg.variant}>{priorityCfg.label}</Badge>
+                        </div>
+                      </div>
+                      <div className="mt-3 h-1 rounded-full bg-[var(--surface-container)] overflow-hidden">
+                        <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${statusProgress(order.status)}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-[var(--border-light)]">
+                        <CostCell order={order} />
+                        <RowActions order={order} onEdit={openEdit} onDelete={setDeleteTarget} onAdvanceStatus={handleAdvanceStatus} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr><th>הזמנה</th><th>ספק</th><th>עדיפות</th><th>מתוכנן</th><th>עלות</th><th>סטטוס</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((order) => {
+                        const priorityCfg = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.medium;
+                        const issueTitle = issuesMap[order.issueId]?.title || null;
+                        return (
+                          <tr key={order.id} onClick={() => openEdit(order)} className={`cursor-pointer ${order.priority === 'urgent' && !['completed', 'cancelled'].includes(order.status) ? '!bg-[var(--danger-light)]/40' : ''}`}>
+                            <td className="min-w-[200px]">
+                              <span className="flex items-center gap-1.5 text-[13px] font-semibold">
+                                {order.title}
+                                {order.rating && (
+                                  <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[var(--text-secondary)] num-tabular">
+                                    <Star className="h-3 w-3 text-[var(--warning)] fill-current" />{order.rating}/5
+                                  </span>
+                                )}
+                              </span>
+                              {issueTitle ? (
+                                <span className="flex items-center gap-1 text-[11px] text-[var(--text-muted)]"><ClipboardList className="h-3 w-3" /><span className="truncate max-w-[220px]">{issueTitle}</span></span>
+                              ) : order.description ? (
+                                <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{order.description}</span>
+                              ) : null}
+                            </td>
+                            <td className="whitespace-nowrap text-[12px]">
+                              {vendorsMap[order.vendorId]?.name
+                                ? <span className="inline-flex items-center gap-1"><User className="h-3 w-3 text-[var(--text-muted)]" />{vendorsMap[order.vendorId].name}</span>
+                                : <span className="text-[var(--text-muted)]">—</span>}
+                            </td>
+                            <td className="whitespace-nowrap"><Badge variant={priorityCfg.variant}>{priorityCfg.label}</Badge></td>
+                            <td className="whitespace-nowrap text-[12px] num-tabular">
+                              {order.scheduledDate
+                                ? <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3 text-[var(--text-muted)]" />{formatDate(order.scheduledDate)}</span>
+                                : <span className="text-[var(--text-muted)]">—</span>}
+                            </td>
+                            <td className="whitespace-nowrap"><CostCell order={order} /></td>
+                            <td className="whitespace-nowrap">
+                              <StatusChip status={order.status} />
+                              <div className="mt-1.5 h-1 w-20 rounded-full bg-[var(--surface-container)] overflow-hidden">
+                                <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${statusProgress(order.status)}%` }} />
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap">
+                              <RowActions order={order} onEdit={openEdit} onDelete={setDeleteTarget} onAdvanceStatus={handleAdvanceStatus} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                  <span>מציג {filtered.length} מתוך {baseOrders.length} הזמנות</span>
+                  <span>עלות מוצגת: <strong className="text-[var(--primary)] num-tabular">{formatCost(filtered.reduce((a, o) => a + (Number(o.actualCost || o.estimatedCost) || 0), 0)) || '₪0'}</strong></span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Side panel */}
+        <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-20">
+          <SectionCard icon={ClipboardList} title="צנרת הזמנות" subtitle="לפי שלב בתהליך" bodyClassName="p-4 space-y-3">
+            {STATUS_FILTERS.filter((f) => f.key !== 'all').map((f) => {
+              const n = statusCounts[f.key] || 0;
+              const pct = baseOrders.length ? Math.round((n / baseOrders.length) * 100) : 0;
+              return (
+                <button key={f.key} onClick={() => setStatusFilter(f.key)} className="block w-full text-right">
+                  <div className="flex items-center justify-between gap-2 text-[12px]">
+                    <span className="font-medium text-[var(--text-primary)]">{STATUS_CONFIG[f.key].label}</span>
+                    <span className="num-tabular"><strong>{n}</strong> <span className="text-[var(--text-muted)]">({pct}%)</span></span>
+                  </div>
+                  <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-container)] overflow-hidden">
+                    <div className={`h-full rounded-full ${f.key === 'completed' ? 'bg-[var(--success)]' : f.key === 'cancelled' ? 'bg-[var(--danger)]' : 'bg-[var(--primary)]'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </button>
+              );
+            })}
+          </SectionCard>
+
+          <SectionCard icon={Calendar} title="עבודות מתוכננות" subtitle="הזמנות פתוחות לפי תאריך" bodyClassName="p-2">
+            {upcomingScheduled.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)] py-6">אין עבודות מתוכננות</p>
+            ) : (
+              <ul className="divide-y divide-[var(--border-light)]">
+                {upcomingScheduled.map((order) => (
+                  <li key={order.id}>
+                    <button onClick={() => openEdit(order)} className="w-full flex items-center justify-between gap-3 px-2 py-2.5 rounded-[var(--radius)] hover:bg-[var(--surface-secondary)] text-right">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Wrench className="h-4 w-4" /></span>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{order.title}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] num-tabular truncate">
+                            {formatDate(order.scheduledDate)}{vendorsMap[order.vendorId]?.name ? ` • ${vendorsMap[order.vendorId].name}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <StatusChip status={order.status} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        </aside>
+      </div>
+
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

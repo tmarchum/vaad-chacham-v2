@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,8 +9,10 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
-import { PageHeader } from '@/components/common/PageHeader'
-import { Plus, Pencil, Trash2, ShieldCheck } from 'lucide-react'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { TabGroup } from '@/components/ui/tabs'
+import { Plus, Pencil, Trash2, ShieldCheck, Clock, AlertTriangle, CheckCircle2, CalendarClock, ListChecks } from 'lucide-react'
 
 const TYPE_OPTIONS = [
   { value: 'ביטוח', label: 'ביטוח' },
@@ -24,12 +25,8 @@ const TYPE_OPTIONS = [
   { value: 'אחר', label: 'אחר' },
 ]
 
-const STATUS_FILTERS = [
-  { key: 'all', label: 'הכל' },
-  { key: 'valid', label: 'בתוקף' },
-  { key: 'expired', label: 'פג תוקף' },
-  { key: 'pending', label: 'ממתין' },
-]
+// "Expiring soon" window for the KPI / tab
+const EXPIRING_DAYS = 30
 
 const EMPTY_FORM = {
   buildingId: '',
@@ -51,6 +48,20 @@ function getComplianceStatus(expiryDate) {
   return { label: 'בתוקף', variant: 'success', key: 'valid' }
 }
 
+function daysUntil(date) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return Math.round((d - today) / 86400000)
+}
+
+function isExpiringSoon(item) {
+  if (!item.expiry_date) return false
+  const d = daysUntil(item.expiry_date)
+  return d >= 0 && d <= EXPIRING_DAYS
+}
+
 function Compliance() {
   const { buildings, selectedBuilding } = useBuildingContext()
   // Building-scoped SERVER-SIDE; unselected building yields [].
@@ -58,7 +69,8 @@ function Compliance() {
   const { data: allCompliance, create, update, remove, isSaving, isLoading } = useCollection('compliance', scope)
 
   const [search, setSearch] = useState('')
-  const [buildingFilter, setBuildingFilter] = useState('all')
+  // Data is already scoped to the sidebar's building.
+  const buildingFilter = 'all'
   const [statusFilter, setStatusFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -84,7 +96,9 @@ function Compliance() {
       result = result.filter((c) => c.buildingId === buildingFilter)
     }
 
-    if (statusFilter !== 'all') {
+    if (statusFilter === 'expiring') {
+      result = result.filter(isExpiringSoon)
+    } else if (statusFilter !== 'all') {
       result = result.filter((c) => getComplianceStatus(c.expiry_date).key === statusFilter)
     }
 
@@ -105,7 +119,7 @@ function Compliance() {
     setEditingId(null)
     setForm({
       ...EMPTY_FORM,
-      buildingId: buildingFilter !== 'all' ? buildingFilter : (buildings[0]?.id || ''),
+      buildingId: buildingFilter !== 'all' ? buildingFilter : (selectedBuilding?.id || buildings[0]?.id || ''),
     })
     setFormOpen(true)
   }
@@ -149,8 +163,8 @@ function Compliance() {
   }
 
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={ShieldCheck} iconColor="emerald" title="תקינה ורגולציה" />
+    <div className="space-y-6">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תקינה ורגולציה</h1>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -160,178 +174,239 @@ function Compliance() {
     </div>
   )
 
+  // ── Civic Blue view model ──
+  const counts = { valid: 0, expiring: 0, expired: 0, pending: 0 }
+  allCompliance.forEach((c) => {
+    counts[getComplianceStatus(c.expiry_date).key] += 1
+    if (isExpiringSoon(c)) counts.expiring += 1
+  })
+  const total = allCompliance.length
+  const compliancePct = total ? Math.round((counts.valid / total) * 100) : 0
+  const upcoming = allCompliance
+    .filter((c) => c.expiry_date)
+    .map((c) => ({ ...c, _days: daysUntil(c.expiry_date) }))
+    .sort((a, b) => a._days - b._days)
+    .slice(0, 6)
+  const byType = Object.entries(allCompliance.reduce((m, c) => {
+    const k = c.type || 'לא מסווג'
+    m[k] = m[k] || { total: 0, bad: 0 }
+    m[k].total += 1
+    if (getComplianceStatus(c.expiry_date).key === 'expired') m[k].bad += 1
+    return m
+  }, {})).sort((a, b) => b[1].total - a[1].total)
+
+  const renderStatus = (item) => {
+    const st = getComplianceStatus(item.expiry_date)
+    const soon = isExpiringSoon(item)
+    const cls = st.key === 'expired'
+      ? 'bg-[var(--danger-light)] text-[var(--danger)]'
+      : st.key === 'pending' || soon
+        ? 'bg-[var(--warning-light)] text-[var(--warning)]'
+        : 'bg-[var(--success-light)] text-[var(--success)]'
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${cls}`}>
+        {soon ? 'פג בקרוב' : st.label}
+      </span>
+    )
+  }
+  const renderCountdown = (item) => {
+    if (!item.expiry_date) return <span className="text-[11px] text-[var(--text-muted)]">לא הוגדר תוקף</span>
+    const d = daysUntil(item.expiry_date)
+    return (
+      <span className={`text-[11px] num-tabular ${d < 0 ? 'text-[var(--danger)] font-semibold' : d <= EXPIRING_DAYS ? 'text-[var(--warning)] font-semibold' : 'text-[var(--text-muted)]'}`}>
+        {d > 0 ? `בעוד ${d} ימים` : d === 0 ? 'היום' : `לפני ${Math.abs(d)} ימים`}
+      </span>
+    )
+  }
+  const rowActions = (item) => (
+    <div className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
+      <button onClick={() => openEdit(item)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
+      <button onClick={() => setDeleteTarget(item)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
+    </div>
+  )
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={ShieldCheck}
-        iconColor="emerald"
-        title="תקינה ורגולציה"
-        subtitle={`${filtered.length} רישומים`}
-        actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            רישום חדש
-          </Button>
-        }
-      />
-
-      {/* Search */}
-      <SearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="חיפוש לפי כותרת, סוג או מספר מסמך..."
-      />
-
-      {/* Building filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={buildingFilter === 'all' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBuildingFilter('all')}
-        >
-          כל הבניינים
-        </Button>
-        {buildings.map((b) => (
-          <Button
-            key={b.id}
-            variant={buildingFilter === b.id ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setBuildingFilter(b.id)}
-          >
-            {b.name}
-          </Button>
-        ))}
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תקינה ורגולציה</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            בדיקות תקופתיות, אישורים ורישיונות עם תאריכי תוקף{selectedBuilding?.name ? ` • ${selectedBuilding.name}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />רישום חדש</Button>
+        </div>
       </div>
 
-      {/* Status filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <span className="text-sm text-[var(--text-secondary)] self-center ml-2">סטטוס:</span>
-        {STATUS_FILTERS.map((sf) => (
-          <Button
-            key={sf.key}
-            variant={statusFilter === sf.key ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setStatusFilter(sf.key)}
-          >
-            {sf.label}
-          </Button>
-        ))}
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="אישורים בתוקף" icon={ShieldCheck} color="emerald"
+          value={String(counts.valid)} note={`מתוך ${total}`}
+          sub={counts.pending ? `${counts.pending} ממתינים להגדרת תוקף` : 'כל הרישומים עם תאריך תוקף'} />
+        <StatCard label={`פגים ב-${EXPIRING_DAYS} הימים הקרובים`} icon={Clock} color={counts.expiring ? 'amber' : 'slate'}
+          value={String(counts.expiring)}
+          sub={counts.expiring ? 'כדאי לתאם חידוש כבר עכשיו' : 'אין חידושים דחופים'}
+          footer={counts.expiring ? <button onClick={() => setStatusFilter('expiring')} className="text-[var(--primary)] font-semibold hover:underline">להצגת הרשימה ←</button> : null} />
+        <StatCard label="פג תוקף" icon={AlertTriangle} color={counts.expired ? 'red' : 'emerald'}
+          value={String(counts.expired)}
+          sub={counts.expired ? 'דורש טיפול מיידי' : 'אין אישורים שפג תוקפם ✓'}
+          footer={counts.expired ? <button onClick={() => setStatusFilter('expired')} className="text-[var(--primary)] font-semibold hover:underline">לטיפול עכשיו ←</button> : null} />
+        <StatCard label="אחוז עמידה בתקינה" icon={CheckCircle2} color="blue"
+          value={total ? `${compliancePct}%` : '—'}
+          sub={total ? `${counts.valid} מתוך ${total} רישומים בתוקף` : 'לא נוספו רישומים'}
+          progress={total ? compliancePct : undefined} />
       </div>
 
-      {/* Compliance cards */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={ShieldCheck}
-          title="אין רישומי תקינה"
-          description={search ? 'לא נמצאו תוצאות לחיפוש' : 'לא נוספו רישומי תקינה עדיין'}
-          actionLabel={!search ? 'הוסף רישום' : undefined}
-          onAction={!search ? openCreate : undefined}
-        />
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((item) => {
-            const status = getComplianceStatus(item.expiry_date)
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Ledger */}
+        <div className="xl:col-span-8 space-y-4">
+          <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+            <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי כותרת, סוג או מספר מסמך..." />
+            <TabGroup
+              tabs={[
+                { key: 'all', label: 'הכל', count: total },
+                { key: 'valid', label: 'בתוקף', count: counts.valid },
+                { key: 'expiring', label: 'פג בקרוב', count: counts.expiring },
+                { key: 'expired', label: 'פג תוקף', count: counts.expired },
+                { key: 'pending', label: 'ממתין', count: counts.pending },
+              ]}
+              activeTab={statusFilter}
+              onChange={setStatusFilter}
+            />
+          </div>
 
-            // Gradient colors based on status
-            const gradientMap = {
-              valid: 'from-emerald-500 to-emerald-600',
-              expired: 'from-red-500 to-red-600',
-              pending: 'from-amber-400 to-amber-500',
-            }
-            const circleGradient = gradientMap[status.key] || gradientMap.pending
-
-            // Status dot colors
-            const dotColorMap = {
-              valid: 'bg-emerald-500',
-              expired: 'bg-red-500',
-              pending: 'bg-amber-500',
-            }
-            const dotColor = dotColorMap[status.key] || dotColorMap.pending
-
-            // Status text colors
-            const textColorMap = {
-              valid: 'text-emerald-700',
-              expired: 'text-red-700',
-              pending: 'text-amber-700',
-            }
-            const statusTextColor = textColorMap[status.key] || textColorMap.pending
-
-            // Days until expiry for countdown
-            const daysLeft = item.expiry_date
-              ? Math.ceil((new Date(item.expiry_date) - new Date()) / (1000 * 60 * 60 * 24))
-              : null
-
-            return (
-              <div
-                key={item.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
-                onClick={() => setDetailItem(item)}
-              >
-                {/* Status circle */}
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-
-                {/* Main info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                      {item.title}
-                    </span>
-                    {item.type && (
-                      <Badge variant="default" className="shrink-0">{item.type}</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {buildingMap[item.buildingId]?.name || ''}
-                    </span>
-                    {item.document_number && (
-                      <span className="text-xs text-[var(--text-muted)]">מסמך: {item.document_number}</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Expiry date + countdown */}
-                <div className="text-left min-w-[100px]">
-                  {item.expiry_date ? (
-                    <>
-                      <div className="text-[13px] font-semibold text-[var(--text-primary)]">
-                        {formatDate(item.expiry_date)}
+          {filtered.length === 0 ? (
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+              <EmptyState
+                icon={ShieldCheck}
+                title="אין רישומי תקינה"
+                description={search || statusFilter !== 'all' ? 'לא נמצאו תוצאות לסינון' : 'לא נוספו רישומי תקינה עדיין'}
+                actionLabel={!search && statusFilter === 'all' ? 'הוסף רישום' : undefined}
+                onAction={!search && statusFilter === 'all' ? openCreate : undefined}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-2">
+                {filtered.map((item) => (
+                  <div key={item.id} onClick={() => setDetailItem(item)}
+                    className="p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] cursor-pointer">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{item.title}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                          {item.type || 'ללא סוג'}{item.document_number ? ` • מסמך ${item.document_number}` : ''}
+                        </p>
                       </div>
-                      <div className={`text-[11px] ${daysLeft !== null && daysLeft > 0 ? 'text-[var(--text-muted)]' : 'text-red-500 font-medium'}`}>
-                        {daysLeft !== null && daysLeft > 0 ? `בעוד ${daysLeft} ימים` : daysLeft !== null ? `לפני ${Math.abs(daysLeft)} ימים` : ''}
+                      {renderStatus(item)}
+                    </div>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-light)]">
+                      <div className="flex flex-col">
+                        <span className="text-[12px] font-semibold num-tabular">{item.expiry_date ? formatDate(item.expiry_date) : '—'}</span>
+                        {renderCountdown(item)}
                       </div>
-                    </>
-                  ) : (
-                    <div className="text-[11px] text-[var(--text-muted)]">לא הוגדר תוקף</div>
-                  )}
-                </div>
+                      {rowActions(item)}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                {/* Status */}
-                <div className="flex items-center gap-2 min-w-[80px]">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{status.label}</span>
+              {/* Desktop table */}
+              <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr><th>רישום</th><th>סוג</th><th>מספר מסמך</th><th>הונפק</th><th>בתוקף עד</th><th>סטטוס</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((item) => {
+                        const st = getComplianceStatus(item.expiry_date)
+                        return (
+                          <tr key={item.id} onClick={() => setDetailItem(item)} className={`cursor-pointer ${st.key === 'expired' ? '!bg-[var(--danger-light)]/40' : ''}`}>
+                            <td className="min-w-[180px]">
+                              <span className="text-[13px] font-semibold">{item.title || '—'}</span>
+                              {item.notes && <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{item.notes}</span>}
+                            </td>
+                            <td className="whitespace-nowrap">
+                              {item.type
+                                ? <span className="px-2 py-0.5 rounded-full border border-[var(--primary)]/15 bg-[var(--surface-container)] text-[var(--primary-dark)] text-[11px] font-semibold">{item.type}</span>
+                                : <span className="text-[var(--text-muted)]">—</span>}
+                            </td>
+                            <td className="whitespace-nowrap text-[12px] num-tabular">{item.document_number || <span className="text-[var(--text-muted)]">—</span>}</td>
+                            <td className="whitespace-nowrap text-[12px] num-tabular">{item.issue_date ? formatDate(item.issue_date) : '—'}</td>
+                            <td className="whitespace-nowrap">
+                              <span className="block text-[12px] font-semibold num-tabular">{item.expiry_date ? formatDate(item.expiry_date) : '—'}</span>
+                              {renderCountdown(item)}
+                            </td>
+                            <td className="whitespace-nowrap">{renderStatus(item)}</td>
+                            <td className="whitespace-nowrap">{rowActions(item)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-
-                {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setDeleteTarget(item)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                  </Button>
+                <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                  <span>מציג {filtered.length} מתוך {total} רישומים</span>
+                  <span>עמידה בתקינה: <strong className="text-[var(--primary)] num-tabular">{compliancePct}%</strong></span>
                 </div>
               </div>
-            )
-          })}
+            </>
+          )}
         </div>
-      )}
+
+        {/* Side panel */}
+        <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-20">
+          <SectionCard icon={CalendarClock} title="חידושים קרובים" subtitle="לפי תאריך תוקף" bodyClassName="p-2">
+            {upcoming.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)] py-6">אין רישומים עם תאריך תוקף</p>
+            ) : (
+              <ul className="divide-y divide-[var(--border-light)]">
+                {upcoming.map((item) => (
+                  <li key={item.id}>
+                    <button onClick={() => setDetailItem(item)} className="w-full flex items-center justify-between gap-3 px-2 py-2.5 rounded-[var(--radius)] hover:bg-[var(--surface-secondary)] text-right">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><ShieldCheck className="h-4 w-4" /></span>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{item.title}</p>
+                          <p className="text-[11px] text-[var(--text-muted)] num-tabular">{formatDate(item.expiry_date)}</p>
+                        </div>
+                      </div>
+                      {renderCountdown(item)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+
+          <SectionCard icon={ListChecks} title="פילוח לפי סוג" subtitle={`${byType.length} סוגי בדיקות`} bodyClassName="p-4 space-y-3">
+            {byType.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)]">אין נתונים</p>
+            ) : byType.map(([type, v]) => {
+              const okPct = v.total ? Math.round(((v.total - v.bad) / v.total) * 100) : 0
+              return (
+                <div key={type}>
+                  <div className="flex items-center justify-between gap-2 text-[12px]">
+                    <span className="truncate font-medium text-[var(--text-primary)]">{type}</span>
+                    <span className="shrink-0 num-tabular text-[var(--text-secondary)]">
+                      <strong className="text-[var(--text-primary)]">{v.total}</strong>
+                      {v.bad > 0 && <span className="text-[var(--danger)]"> • {v.bad} פג</span>}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-container)] overflow-hidden">
+                    <div className={`h-full rounded-full ${v.bad ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`} style={{ width: `${okPct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </SectionCard>
+        </aside>
+      </div>
+
 
       {/* Detail Modal */}
       <DetailModal

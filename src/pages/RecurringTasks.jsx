@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -10,8 +9,10 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
-import { PageHeader } from '@/components/common/PageHeader'
-import { Plus, Pencil, Trash2, RefreshCw, CheckCircle2, Scale, CalendarClock } from 'lucide-react'
+import { StatCard } from '@/components/common/StatCard'
+import { SectionCard } from '@/components/common/SectionCard'
+import { TabGroup } from '@/components/ui/tabs'
+import { Plus, Pencil, Trash2, RefreshCw, CheckCircle2, Scale, CalendarClock, AlertTriangle, History } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
 const FREQUENCY_MAP = {
@@ -68,6 +69,21 @@ function isOverdue(dateStr) {
   return due < today
 }
 
+function daysUntil(dateStr) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const d = new Date(dateStr)
+  d.setHours(0, 0, 0, 0)
+  return Math.round((d - today) / 86400000)
+}
+
+// Due within the next 7 days (not overdue)
+function isDueThisWeek(task) {
+  if (!task.next_due_date) return false
+  const d = daysUntil(task.next_due_date)
+  return d >= 0 && d <= 7
+}
+
 function getNextDate(currentDateStr, frequency) {
   const freq = FREQUENCY_MAP[frequency]
   const date = new Date(currentDateStr)
@@ -87,7 +103,9 @@ function RecurringTasks() {
   const issuesCollection = useCollection('issues', scope)
 
   const [search, setSearch] = useState('')
-  const [buildingFilter, setBuildingFilter] = useState('all')
+  // Data is already scoped to the sidebar's building.
+  const buildingFilter = 'all'
+  const [statusFilter, setStatusFilter] = useState('all') // all | overdue | week | law
   const [frequencyFilter, setFrequencyFilter] = useState('all')
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -118,6 +136,10 @@ function RecurringTasks() {
       result = result.filter((t) => t.frequency === frequencyFilter)
     }
 
+    if (statusFilter === 'overdue') result = result.filter((t) => isOverdue(t.next_due_date))
+    else if (statusFilter === 'week') result = result.filter(isDueThisWeek)
+    else if (statusFilter === 'law') result = result.filter((t) => t.is_required_by_law)
+
     if (search) {
       const q = search.toLowerCase()
       result = result.filter(
@@ -139,13 +161,13 @@ function RecurringTasks() {
     })
 
     return result
-  }, [allTasks, buildingFilter, frequencyFilter, search])
+  }, [allTasks, buildingFilter, frequencyFilter, statusFilter, search])
 
   const openCreate = () => {
     setEditingId(null)
     setForm({
       ...EMPTY_FORM,
-      buildingId: buildingFilter !== 'all' ? buildingFilter : (buildings[0]?.id || ''),
+      buildingId: buildingFilter !== 'all' ? buildingFilter : (selectedBuilding?.id || buildings[0]?.id || ''),
       next_due_date: new Date().toISOString().slice(0, 10),
     })
     setFormOpen(true)
@@ -213,8 +235,8 @@ function RecurringTasks() {
   }
 
   if (isLoading) return (
-    <div className="p-6">
-      <PageHeader icon={CalendarClock} iconColor="purple" title="משימות חוזרות" />
+    <div className="space-y-6">
+      <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">משימות חוזרות</h1>
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -224,194 +246,237 @@ function RecurringTasks() {
     </div>
   )
 
+  // ── Civic Blue view model ──
+  const overdueTasks = allTasks.filter((t) => isOverdue(t.next_due_date))
+  const weekTasks = allTasks.filter(isDueThisWeek)
+  const lawTasks = allTasks.filter((t) => t.is_required_by_law)
+  const monthPrefix = new Date().toISOString().slice(0, 7)
+  const completions = allTasks.flatMap((t) =>
+    (Array.isArray(t.completion_history) ? t.completion_history : []).map((h) => ({ ...h, task: t }))
+  ).filter((h) => h.completed_at)
+  const doneThisMonth = completions.filter((h) => String(h.completed_at).startsWith(monthPrefix)).length
+  const recentDone = [...completions].sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at))).slice(0, 5)
+  const agenda = allTasks
+    .filter((t) => isOverdue(t.next_due_date) || isDueThisWeek(t))
+    .sort((a, b) => (a.next_due_date || '').localeCompare(b.next_due_date || ''))
+    .slice(0, 6)
+  const onTimePct = allTasks.length ? Math.round(((allTasks.length - overdueTasks.length) / allTasks.length) * 100) : 0
+
+  const statusChip = (task) => {
+    if (isOverdue(task.next_due_date)) return <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-[var(--danger-light)] text-[var(--danger)]">באיחור</span>
+    if (isDueThisWeek(task)) return <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-[var(--warning-light)] text-[var(--warning)]">השבוע</span>
+    return <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap bg-[var(--success-light)] text-[var(--success)]">תקין</span>
+  }
+  const dueLine = (task) => {
+    if (!task.next_due_date) return <span className="text-[11px] text-[var(--text-muted)]">לא הוגדר</span>
+    const d = daysUntil(task.next_due_date)
+    return (
+      <span className={`text-[11px] num-tabular ${d < 0 ? 'text-[var(--danger)] font-semibold' : 'text-[var(--text-muted)]'}`}>
+        {d > 0 ? `בעוד ${d} ימים` : d < 0 ? `לפני ${Math.abs(d)} ימים` : 'היום'}
+      </span>
+    )
+  }
+  const freqChip = (task) => {
+    const freq = FREQUENCY_MAP[task.frequency] || FREQUENCY_MAP.monthly
+    return <span className="px-2 py-0.5 rounded-full border border-[var(--primary)]/15 bg-[var(--surface-container)] text-[var(--primary-dark)] text-[11px] font-semibold whitespace-nowrap">{freq.label}</span>
+  }
+  const rowActions = (task) => (
+    <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+      {isOverdue(task.next_due_date) && (
+        <button onClick={() => handleCreateIssue(task)} title="צור תקלה" className="h-7 px-2 rounded-[var(--radius)] border border-[var(--danger)]/30 text-[11px] font-semibold text-[var(--danger)] hover:bg-[var(--danger-light)] inline-flex items-center gap-1 whitespace-nowrap">
+          <Plus className="h-3 w-3" />צור תקלה
+        </button>
+      )}
+      <button onClick={() => setConfirmMarkDone(task)} title="סמן כבוצע" className="p-1.5 rounded-[var(--radius)] text-[var(--success)] hover:bg-[var(--success-light)]"><CheckCircle2 className="h-3.5 w-3.5" /></button>
+      <button onClick={() => openEdit(task)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
+      <button onClick={() => setDeleteTarget(task)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
+    </div>
+  )
+  const filterActive = search || statusFilter !== 'all' || frequencyFilter !== 'all'
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={CalendarClock}
-        iconColor="purple"
-        title="משימות חוזרות"
-        subtitle={`${filtered.length} משימות`}
-        actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            משימה חדשה
-          </Button>
-        }
-      />
-
-      {/* Search */}
-      <SearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="חיפוש לפי כותרת או הערות..."
-      />
-
-      {/* Building filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={buildingFilter === 'all' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setBuildingFilter('all')}
-        >
-          כל הבניינים
-        </Button>
-        {buildings.map((b) => (
-          <Button
-            key={b.id}
-            variant={buildingFilter === b.id ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setBuildingFilter(b.id)}
-          >
-            {b.name}
-          </Button>
-        ))}
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">משימות חוזרות</h1>
+          <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+            לוח תחזוקה מתוזמן — בדיקות, ניקיון וטיפולים תקופתיים{selectedBuilding?.name ? ` • ${selectedBuilding.name}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />משימה חדשה</Button>
+        </div>
       </div>
 
-      {/* Frequency filter pills */}
-      <div className="flex flex-wrap gap-2">
-        <span className="text-sm text-[var(--text-secondary)] self-center ml-2">תדירות:</span>
-        {FREQUENCY_FILTERS.map((ff) => (
-          <Button
-            key={ff.key}
-            variant={frequencyFilter === ff.key ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setFrequencyFilter(ff.key)}
-          >
-            {ff.label}
-          </Button>
-        ))}
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard label="לביצוע השבוע" icon={CalendarClock} color={weekTasks.length ? 'amber' : 'slate'}
+          value={String(weekTasks.length)}
+          sub={weekTasks.length ? 'מועד ביצוע ב-7 הימים הקרובים' : 'אין משימות לשבוע הקרוב'}
+          footer={weekTasks.length ? <button onClick={() => setStatusFilter('week')} className="text-[var(--primary)] font-semibold hover:underline">להצגה ←</button> : null} />
+        <StatCard label="משימות באיחור" icon={AlertTriangle} color={overdueTasks.length ? 'red' : 'emerald'}
+          value={String(overdueTasks.length)}
+          sub={overdueTasks.length ? 'עבר מועד הביצוע' : 'הכל בזמן ✓'}
+          footer={overdueTasks.length ? <button onClick={() => setStatusFilter('overdue')} className="text-[var(--primary)] font-semibold hover:underline">לטיפול עכשיו ←</button> : null} />
+        <StatCard label="בוצעו החודש" icon={CheckCircle2} color="emerald"
+          value={String(doneThisMonth)}
+          sub={completions.length ? `${completions.length} ביצועים מתועדים בסך הכל` : 'עדיין לא סומנו ביצועים'} />
+        <StatCard label="עמידה בלוח הזמנים" icon={Scale} color="blue"
+          value={allTasks.length ? `${onTimePct}%` : '—'}
+          note={lawTasks.length ? `${lawTasks.length} נדרשות בחוק` : null}
+          sub={`${allTasks.length} משימות פעילות`}
+          progress={allTasks.length ? onTimePct : undefined} />
       </div>
 
-      {/* Task cards */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          icon={RefreshCw}
-          title="אין משימות חוזרות"
-          description={search ? 'לא נמצאו תוצאות לחיפוש' : 'לא נוספו משימות חוזרות עדיין'}
-          actionLabel={!search ? 'הוסף משימה' : undefined}
-          onAction={!search ? openCreate : undefined}
-        />
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((task) => {
-            const freq = FREQUENCY_MAP[task.frequency] || FREQUENCY_MAP.monthly
-            const overdue = isOverdue(task.next_due_date)
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        {/* Ledger */}
+        <div className="xl:col-span-8 space-y-4">
+          <div className="p-3 sm:p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] space-y-3">
+            <SearchBar value={search} onChange={setSearch} placeholder="חיפוש לפי כותרת או הערות..." />
+            <div className="flex flex-wrap items-center gap-2">
+              <TabGroup
+                tabs={[
+                  { key: 'all', label: 'הכל', count: allTasks.length },
+                  { key: 'overdue', label: 'באיחור', count: overdueTasks.length },
+                  { key: 'week', label: 'השבוע', count: weekTasks.length },
+                  { key: 'law', label: 'נדרש בחוק', count: lawTasks.length },
+                ]}
+                activeTab={statusFilter}
+                onChange={setStatusFilter}
+              />
+              <TabGroup
+                tabs={FREQUENCY_FILTERS.map((f) => ({ ...f, label: f.key === 'all' ? 'כל התדירויות' : f.label }))}
+                activeTab={frequencyFilter}
+                onChange={setFrequencyFilter}
+              />
+            </div>
+          </div>
 
-            // Gradient colors based on frequency
-            const gradientMap = {
-              monthly: 'from-blue-500 to-blue-600',
-              quarterly: 'from-purple-500 to-purple-600',
-              annually: 'from-amber-400 to-amber-500',
-            }
-            const circleGradient = gradientMap[task.frequency] || gradientMap.monthly
-
-            // Status dot
-            const dotColor = overdue ? 'bg-red-500' : 'bg-emerald-500'
-            const statusLabel = overdue ? 'באיחור' : 'תקין'
-            const statusTextColor = overdue ? 'text-red-700' : 'text-emerald-700'
-
-            // Days until due
-            const daysLeft = task.next_due_date
-              ? Math.ceil((new Date(task.next_due_date) - new Date()) / (1000 * 60 * 60 * 24))
-              : null
-
-            return (
-              <div
-                key={task.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border bg-white hover:shadow-md hover:border-blue-200 transition-all cursor-pointer border-[var(--border)]"
-                onClick={() => setDetailTask(task)}
-              >
-                {/* Frequency circle */}
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${circleGradient} flex items-center justify-center text-white shrink-0 shadow-sm`}>
-                  <RefreshCw className="h-5 w-5" />
-                </div>
-
-                {/* Main info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[14px] font-semibold text-[var(--text-primary)] truncate">
-                      {task.title}
-                    </span>
-                    {task.is_required_by_law && (
-                      <Badge variant="info" className="shrink-0">
-                        <Scale className="h-3 w-3 ml-1" />
-                        נדרש בחוק
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {buildingMap[task.buildingId]?.name || ''}
-                    </span>
-                    {task.notes && (
-                      <span className="text-xs text-[var(--text-muted)] line-clamp-1">{task.notes}</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Frequency badge */}
-                <Badge variant={freq.variant} className="shrink-0">{freq.label}</Badge>
-
-                {/* Next due date */}
-                <div className="text-left min-w-[100px]">
-                  {task.next_due_date ? (
-                    <>
-                      <div className="text-[13px] font-semibold text-[var(--text-primary)]">
-                        {formatDate(task.next_due_date)}
+          {filtered.length === 0 ? (
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
+              <EmptyState
+                icon={RefreshCw}
+                title="אין משימות חוזרות"
+                description={filterActive ? 'לא נמצאו תוצאות לסינון' : 'לא נוספו משימות חוזרות עדיין'}
+                actionLabel={!filterActive ? 'הוסף משימה' : undefined}
+                onAction={!filterActive ? openCreate : undefined}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-2">
+                {filtered.map((task) => (
+                  <div key={task.id} onClick={() => setDetailTask(task)}
+                    className="p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] cursor-pointer">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-semibold text-[var(--text-primary)] truncate">{task.title}</p>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          {freqChip(task)}
+                          {task.is_required_by_law && <Badge variant="info"><Scale className="h-3 w-3 ml-1" />נדרש בחוק</Badge>}
+                        </div>
                       </div>
-                      <div className={`text-[11px] ${overdue ? 'text-red-500 font-medium' : 'text-[var(--text-muted)]'}`}>
-                        {daysLeft !== null && daysLeft > 0
-                          ? `בעוד ${daysLeft} ימים`
-                          : daysLeft !== null && daysLeft < 0
-                            ? `לפני ${Math.abs(daysLeft)} ימים`
-                            : 'היום'}
+                      {statusChip(task)}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-[var(--border-light)]">
+                      <div className="flex flex-col">
+                        <span className="text-[12px] font-semibold num-tabular">{task.next_due_date ? formatDate(task.next_due_date) : '—'}</span>
+                        {dueLine(task)}
                       </div>
-                    </>
-                  ) : (
-                    <div className="text-[11px] text-[var(--text-muted)]">לא הוגדר</div>
-                  )}
+                      {rowActions(task)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="ds-table">
+                    <thead>
+                      <tr><th>משימה</th><th>קטגוריה</th><th>תדירות</th><th>ביצוע הבא</th><th>סטטוס</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((task) => {
+                        const overdue = isOverdue(task.next_due_date)
+                        const cat = TASK_CATEGORIES.find((c) => c.value === task.category)?.label || task.category
+                        return (
+                          <tr key={task.id} onClick={() => setDetailTask(task)} className={`cursor-pointer ${overdue ? '!bg-[var(--danger-light)]/40' : ''}`}>
+                            <td className="min-w-[200px]">
+                              <span className="flex items-center gap-1.5 text-[13px] font-semibold">
+                                {task.title}
+                                {task.is_required_by_law && <Scale className="h-3.5 w-3.5 text-[var(--primary)] shrink-0" aria-label="נדרש בחוק" />}
+                              </span>
+                              {task.notes && <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{task.notes}</span>}
+                            </td>
+                            <td className="whitespace-nowrap text-[12px]">{cat || <span className="text-[var(--text-muted)]">—</span>}</td>
+                            <td className="whitespace-nowrap">{freqChip(task)}</td>
+                            <td className="whitespace-nowrap">
+                              <span className="block text-[12px] font-semibold num-tabular">{task.next_due_date ? formatDate(task.next_due_date) : '—'}</span>
+                              {dueLine(task)}
+                            </td>
+                            <td className="whitespace-nowrap">{statusChip(task)}</td>
+                            <td className="whitespace-nowrap">{rowActions(task)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-
-                {/* Status */}
-                <div className="flex items-center gap-2 min-w-[70px]">
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                  <span className={`text-[12px] font-medium ${statusTextColor}`}>{statusLabel}</span>
-                </div>
-
-                {/* Create issue button for overdue tasks */}
-                {overdue && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 px-2 shrink-0"
-                    onClick={(e) => { e.stopPropagation(); handleCreateIssue(task) }}
-                  >
-                    <Plus className="h-3 w-3 ml-1" />
-                    צור תקלה
-                  </Button>
-                )}
-
-                {/* Actions (visible on hover) */}
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" onClick={() => setConfirmMarkDone(task)} title="סמן כבוצע">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(task)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setDeleteTarget(task)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-[var(--danger)]" />
-                  </Button>
+                <div className="px-4 py-3 bg-[var(--bg)] border-t border-[var(--border)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
+                  <span>מציג {filtered.length} מתוך {allTasks.length} משימות</span>
+                  <span>באיחור: <strong className="text-[var(--danger)] num-tabular">{overdueTasks.length}</strong></span>
                 </div>
               </div>
-            )
-          })}
+            </>
+          )}
         </div>
-      )}
+
+        {/* Side panel */}
+        <aside className="xl:col-span-4 space-y-4 xl:sticky xl:top-20">
+          <SectionCard icon={CalendarClock} title="סדר יום תחזוקה" subtitle="באיחור ו-7 הימים הקרובים" bodyClassName="p-2">
+            {agenda.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)] py-6">אין משימות פתוחות לשבוע הקרוב ✓</p>
+            ) : (
+              <ul className="divide-y divide-[var(--border-light)]">
+                {agenda.map((task) => (
+                  <li key={task.id} className="flex items-center justify-between gap-3 px-2 py-2.5">
+                    <button onClick={() => setDetailTask(task)} className="flex items-center gap-2.5 min-w-0 text-right">
+                      <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><RefreshCw className="h-4 w-4" /></span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold text-[var(--text-primary)] truncate">{task.title}</span>
+                        {dueLine(task)}
+                      </span>
+                    </button>
+                    <button onClick={() => setConfirmMarkDone(task)} title="סמן כבוצע" className="p-1.5 rounded-[var(--radius)] text-[var(--success)] hover:bg-[var(--success-light)] shrink-0"><CheckCircle2 className="h-4 w-4" /></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+
+          <SectionCard icon={History} title="ביצועים אחרונים" subtitle="מתוך היסטוריית המשימות" bodyClassName="p-4">
+            {recentDone.length === 0 ? (
+              <p className="text-center text-[12px] text-[var(--text-muted)]">עדיין לא סומנו ביצועים</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {recentDone.map((h, i) => (
+                  <li key={i} className="flex items-start gap-2 text-[12px]">
+                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-[var(--success)] shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block font-medium text-[var(--text-primary)] truncate">{h.task.title}</span>
+                      <span className="text-[11px] text-[var(--text-muted)] num-tabular">בוצע {formatDate(h.completed_at)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </SectionCard>
+        </aside>
+      </div>
+
 
       {/* Detail Modal */}
       <DetailModal
@@ -468,7 +533,7 @@ function RecurringTasks() {
                 <div className="space-y-1">
                   {[...detailTask.completion_history].reverse().slice(0, 3).map((entry, i) => (
                     <div key={i} className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--success)] shrink-0" />
                       <span>בוצע: {formatDate(entry.completed_at)}</span>
                       {entry.previous_due && <span className="text-[var(--text-muted)]">(מועד מקורי: {formatDate(entry.previous_due)})</span>}
                     </div>
