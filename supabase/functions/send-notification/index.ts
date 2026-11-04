@@ -155,9 +155,39 @@ function bookingHtml(resource: Record<string, unknown>, booking: Record<string, 
 const esc = (s: unknown) => String(s ?? '').replace(/[<>&"]/g, (c) =>
   ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string))
 
+// Every step the resident is entitled to hear about, not only the last one.
+// A report that goes quiet for a week feels ignored even when it is being
+// worked on.
+const ISSUE_STATUS_COPY: Record<string, { headline: string; lead: string; subject: (t: string) => string; push: string }> = {
+  resolved: {
+    headline: 'התקלה שדיווחת טופלה ✓',
+    lead: 'נשמח אם תדרגו את הטיפול בפורטל הדיירים — הדירוג עוזר לנו לבחור ספקים טובים.',
+    subject: (t) => `התקלה שדיווחת טופלה — ${t}`,
+    push: 'התקלה שלך טופלה ✓',
+  },
+  closed: {
+    headline: 'התקלה שדיווחת נסגרה',
+    lead: 'לפרטים נוספים ניתן לפנות לוועד הבית.',
+    subject: (t) => `עדכון על התקלה — ${t}`,
+    push: 'עדכון על התקלה שלך',
+  },
+  acknowledged: {
+    headline: 'הפנייה שלך התקבלה לטיפול',
+    lead: 'הוועד קיבל את הפנייה והיא נכנסה לטיפול. נעדכן אותך בהתקדמות.',
+    subject: (t) => `הפנייה שלך התקבלה לטיפול — ${t}`,
+    push: 'הפנייה שלך התקבלה לטיפול',
+  },
+  scheduled: {
+    headline: 'נקבע מועד לטיפול',
+    lead: 'נקבע מועד לטיפול בפנייה שלך. אם המועד לא מתאים — נא לעדכן את הוועד.',
+    subject: (t) => `נקבע מועד לטיפול — ${t}`,
+    push: 'נקבע מועד לטיפול בפנייה שלך',
+  },
+}
+
 function issueStatusHtml(issue: Record<string, unknown>, kind: string, buildingName: string): string {
-  const done = kind !== 'closed'
-  const headline = done ? 'התקלה שדיווחת טופלה ✓' : 'התקלה שדיווחת נסגרה'
+  const copy = ISSUE_STATUS_COPY[kind] || ISSUE_STATUS_COPY.closed
+  const headline = copy.headline
   return `
     <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
       <div style="background:linear-gradient(135deg,#059669,#047857);color:#fff;padding:18px;border-radius:12px 12px 0 0;">
@@ -168,11 +198,8 @@ function issueStatusHtml(issue: Record<string, unknown>, kind: string, buildingN
         ${issue.category ? `<p style="margin:0 0 6px;color:#64748b;">קטגוריה: ${esc(issue.category)}</p>` : ''}
         ${issue.vendor_name ? `<p style="margin:0 0 6px;color:#64748b;">טופל ע"י: ${esc(issue.vendor_name)}</p>` : ''}
         ${buildingName ? `<p style="margin:0 0 6px;color:#64748b;">${esc(buildingName)}</p>` : ''}
-        <p style="margin-top:14px;color:#475569;">
-          ${done
-            ? 'נשמח אם תדרגו את הטיפול בפורטל הדיירים — הדירוג עוזר לנו לבחור ספקים טובים.'
-            : 'לפרטים נוספים ניתן לפנות לוועד הבית.'}
-        </p>
+        ${issue.scheduled_date && kind === 'scheduled' ? `<p style="margin:0 0 6px;color:#64748b;">מועד מתוכנן: <b style="color:#0f172a;">${esc(issue.scheduled_date)}</b></p>` : ''}
+        <p style="margin-top:14px;color:#475569;">${esc(copy.lead)}</p>
       </div>
     </div>`
 }
@@ -187,7 +214,7 @@ async function buildIssueStatusNotification(
 ) {
   const { data: issue } = await svc
     .from('issues')
-    .select('id, building_id, unit_id, title, category, vendor_name, reported_by, status')
+    .select('id, building_id, unit_id, title, category, vendor_name, reported_by, status, scheduled_date')
     .eq('id', issueId)
     .maybeSingle()
   if (!issue) return null
@@ -210,15 +237,15 @@ async function buildIssueStatusNotification(
     email = primary?.email || ''
   }
 
-  const done = kind !== 'closed'
+  const copy = ISSUE_STATUS_COPY[kind] || ISSUE_STATUS_COPY.closed
   return {
     issue,
     buildingName,
     email,
-    subject: done ? `התקלה שדיווחת טופלה — ${issue.title}` : `עדכון על התקלה — ${issue.title}`,
+    subject: copy.subject(String(issue.title || '')),
     html: issueStatusHtml(issue, kind, buildingName),
     push: {
-      title: done ? 'התקלה שלך טופלה ✓' : 'עדכון על התקלה שלך',
+      title: copy.push,
       body: String(issue.title || ''),
       data: { type: 'issue_status', issueId: String(issue.id) },
     },

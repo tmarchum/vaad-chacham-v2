@@ -1042,7 +1042,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   }
 
   // Quick actions
-  const handleAcknowledge = useCallback((iss) => { update(iss.id, { status: 'acknowledged' }) }, [update])
+  const handleAcknowledge = useCallback((iss) => {
+    update(iss.id, { status: 'acknowledged' })
+    notifyIssueStatus(iss.id, 'acknowledged')
+  }, [update])
 
   const handleOpenQuoteDialog = useCallback((iss) => {
     setQuoteDialogIssue(iss)
@@ -1107,6 +1110,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   const handleSchedule = async () => {
     if (!scheduleDialogIssue || !scheduleDate) return
     await update(scheduleDialogIssue.id, { scheduledDate: scheduleDate, status: 'scheduled' })
+    // The resident asked when someone is coming — this is the answer.
+    notifyIssueStatus(scheduleDialogIssue.id, 'scheduled')
     setScheduleDialogIssue(null)
     setScheduleDate('')
   }
@@ -1131,6 +1136,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       return
     }
     update(iss.id, { status: 'closed' })
+    notifyIssueStatus(iss.id, 'closed')
   }, [update])
 
   // Deep links from the shell (header/sidebar "קריאה חדשה", global search,
