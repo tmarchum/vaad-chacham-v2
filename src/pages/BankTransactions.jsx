@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
@@ -13,10 +14,11 @@ import { useUnitDirectory } from '@/hooks/useUnitDirectory'
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, EXPENSE_GROUPS, INCOME_GROUPS, findExpenseCategory, findIncomeCategory } from '@/lib/categories'
 import {
   ArrowDownLeft, ArrowUpRight, Landmark, Link2, X as XIcon,
-  CheckCircle2, AlertCircle, Check, Tag, Ban, Undo2, Users, ChevronLeft,
+  CheckCircle2, AlertCircle, Check, Tag, Ban, Undo2, Users, ChevronLeft, Repeat,
 } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 import { toast } from '@/lib/toast'
+import { loadPatterns, learnPattern, learnFromExisting, unitForTransaction, describePattern, deactivatePattern } from '@/lib/incomePatterns'
 
 const MATCH_STATUS = {
   unmatched:  { label: 'לא משויך', variant: 'warning', icon: AlertCircle },
@@ -49,9 +51,10 @@ const TYPE_FILTERS = [
 
 export default function BankTransactions() {
   const { selectedBuilding } = useBuildingContext()
+  const { user } = useAuth()
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
-  const { data: allTx, update: updateTx, refresh, isLoading } = useCollection('bankTransactions', scope)
+  const { data: allTx, update: updateTx, bulkUpdate: bulkUpdateTx, refresh, isLoading } = useCollection('bankTransactions', scope)
   const { data: allUnits } = useCollection('units', scope)
   const directory = useUnitDirectory(selectedBuilding?.id)
   const { data: allPayments, create: createPayment, update: updatePayment, refresh: refreshPayments } = useCollection('payments', scope)
@@ -62,6 +65,12 @@ export default function BankTransactions() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
   const [matchDialog, setMatchDialog] = useState(null) // transaction to match
+  // Learned rules for recurring nameless credits (see src/lib/incomePatterns.js)
+  const [patterns, setPatterns] = useState([])
+  const reloadPatterns = useCallback(async () => {
+    setPatterns(await loadPatterns(selectedBuilding?.id))
+  }, [selectedBuilding?.id])
+  useEffect(() => { reloadPatterns() }, [reloadPatterns])
   const [paymentSummaryOpen, setPaymentSummaryOpen] = useState(false)
   const [categoryDialog, setCategoryDialog] = useState(null) // transaction to categorize
   const [search, setSearch] = useState('')
@@ -155,13 +164,15 @@ export default function BankTransactions() {
       (p.unit_id || p.unitId) === unitId && p.month === month
     )
 
+    // Silent: this runs once per affected unit+month, so approving a batch
+    // would otherwise raise a toast per unit. The caller shows one summary.
     if (existingPayment) {
       await updatePayment(existingPayment.id, {
         amount: totalPaid,
         status,
         paid_at: totalPaid > 0 ? new Date().toISOString().split('T')[0] : null,
         method: 'הוראת קבע',
-      })
+      }, { silent: true })
     } else if (totalPaid > 0) {
       await createPayment({
         building_id: selectedBuilding.id,
@@ -171,7 +182,7 @@ export default function BankTransactions() {
         status,
         paid_at: new Date().toISOString().split('T')[0],
         method: 'הוראת קבע',
-      })
+      }, { silent: true })
     }
     refreshPayments()
   }
@@ -239,7 +250,7 @@ export default function BankTransactions() {
           p.length >= 3 && txParts.some(tp => tp.length >= 3 && (tp.includes(p) || p.includes(tp)))
         )
         if (overlap.length >= 2) {
-          await updateTx(tx.id, { unit_id: unitId, match_status: 'matched' })
+          await updateTx(tx.id, { unit_id: unitId, match_status: 'matched' }, { silent: true })
           const m = tx.month || monthKey
           creditsByMonth[m] = (creditsByMonth[m] || 0) + credit
           autoCount++
@@ -249,6 +260,39 @@ export default function BankTransactions() {
       if (autoCount > 0) {
         toast(`שויכו ${autoCount} תנועות נוספות אוטומטית`)
       }
+    }
+
+    // Remember the SHAPE of this credit (day of month + amount + description)
+    // so next month's identical one lands on this apartment by itself. This is
+    // what finally matches standing orders that carry no name.
+    const learned = await learnPattern({
+      buildingId: selectedBuilding?.id,
+      unitId,
+      tx: matchDialog,
+      userId: user?.id || null,
+    })
+    if (learned?.conflict) {
+      // Two apartments, identical nameless credit — no rule can tell them
+      // apart, so say so rather than pretend the next one will be matched.
+      toast('דירה אחרת כבר משלמת אותו סכום באותו יום ללא שם — הכלל האוטומטי בוטל, התנועות האלה יישארו לשיוך ידני', 'warning')
+    } else if (learned) {
+      // Apply it right away to credits already sitting unmatched.
+      const byRule = allTx.filter(tx =>
+        tx.building_id === selectedBuilding?.id &&
+        tx.match_status === 'unmatched' &&
+        Number(tx.credit) > 0 &&
+        tx.id !== matchDialog.id &&
+        unitForTransaction([learned], tx) === unitId
+      )
+      for (const tx of byRule) {
+        await updateTx(tx.id, { unit_id: unitId, match_status: 'matched' }, { silent: true })
+        const m = tx.month || monthKey
+        creditsByMonth[m] = (creditsByMonth[m] || 0) + (Number(tx.credit) || 0)
+      }
+      toast(byRule.length
+        ? `נלמד כלל: ${describePattern(learned)} — שויכו ${byRule.length} תנועות קודמות`
+        : `נלמד כלל: ${describePattern(learned)} — יחול אוטומטית בחודשים הבאים`)
+      await reloadPatterns()
     }
 
     setMatchDialog(null)
@@ -308,9 +352,8 @@ export default function BankTransactions() {
     }
     if (!window.confirm(`לאשר ${pending.length} שיוכים מוצעים? תשלומים יעודכנו בהתאם.`)) return
 
-    for (const tx of pending) {
-      await updateTx(tx.id, { match_status: 'matched' })
-    }
+    // One request, one toast — the per-row loop here flooded the screen.
+    await bulkUpdateTx(pending.map(t => t.id), { match_status: 'matched' }, { silent: true })
     // Recompute unit+month totals over matched + just-approved rows.
     const approvedIds = new Set(pending.map(t => t.id))
     const creditsByUnitMonth = {}
@@ -380,10 +423,28 @@ export default function BankTransactions() {
 
   const handleAutoMatch = async () => {
     const unmatched = transactions.filter(tx => tx.match_status === 'unmatched' && Number(tx.credit) > 0)
-    let matched = 0, suggested = 0
+    let matched = 0, suggested = 0, byRule = 0
     const creditsByUnit = {} // unitId -> { month -> total } for payment sync
 
     for (const tx of unmatched) {
+      // A learned rule beats name scoring: it came from a human match of this
+      // exact recurring credit, and it is the only thing that can place a
+      // nameless standing order at all.
+      const ruleUnit = unitForTransaction(patterns, tx)
+      if (ruleUnit) {
+        await updateTx(tx.id, { unit_id: ruleUnit, match_status: 'matched', month: monthKey }, { silent: true })
+        const m = tx.month || monthKey
+        if (!creditsByUnit[ruleUnit]) {
+          creditsByUnit[ruleUnit] = {}
+          allTx.filter(t => t.building_id === selectedBuilding?.id && t.match_status === 'matched' && t.unit_id === ruleUnit)
+            .forEach(t => { const mm = t.month || monthKey; creditsByUnit[ruleUnit][mm] = (creditsByUnit[ruleUnit][mm] || 0) + (Number(t.credit) || 0) })
+        }
+        creditsByUnit[ruleUnit][m] = (creditsByUnit[ruleUnit][m] || 0) + (Number(tx.credit) || 0)
+        matched++
+        byRule++
+        continue
+      }
+
       let best = null
       for (const unit of units) {
         if (!residentMap[unit.id]) continue
@@ -395,7 +456,7 @@ export default function BankTransactions() {
       const high = best.nameHits >= 2 || (best.nameHits >= 1 && (best.amountMatch || best.numMatch))
       const medium = best.nameHits >= 1 || (best.numMatch && best.amountMatch)
       if (high) {
-        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'matched', month: monthKey })
+        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'matched', month: monthKey }, { silent: true })
         const m = tx.month || monthKey
         if (!creditsByUnit[best.unit.id]) {
           creditsByUnit[best.unit.id] = {}
@@ -405,7 +466,7 @@ export default function BankTransactions() {
         creditsByUnit[best.unit.id][m] = (creditsByUnit[best.unit.id][m] || 0) + (Number(tx.credit) || 0)
         matched++
       } else if (medium) {
-        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'suggested', month: monthKey })
+        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'suggested', month: monthKey }, { silent: true })
         suggested++
       }
     }
@@ -416,7 +477,7 @@ export default function BankTransactions() {
     }
 
     const msg = matched || suggested
-      ? `שויכו ${matched} אוטומטית${suggested ? `, ${suggested} הצעות לאישור` : ''}`
+      ? `שויכו ${matched} אוטומטית${byRule ? ` (${byRule} לפי כללים נלמדים)` : ''}${suggested ? `, ${suggested} הצעות לאישור` : ''}`
       : 'לא נמצאו התאמות'
     toast(msg, matched || suggested ? 'success' : 'warning')
   }
@@ -435,10 +496,9 @@ export default function BankTransactions() {
         t.description?.trim() === desc &&
         !t.category
       )
-      for (const m of matching) {
-        await updateTx(m.id, { category })
-      }
       if (matching.length > 0) {
+        // One request, one toast — a loop here used to stack a toast per row.
+        await bulkUpdateTx(matching.map(m => m.id), { category }, { silent: true })
         toast(`עודכנו ${matching.length} תנועות נוספות עם אותו תיאור`)
       }
     }
@@ -776,6 +836,61 @@ export default function BankTransactions() {
               <ChevronLeft className="h-4 w-4 text-[var(--primary)]" />
             </button>
           </div>
+
+          {/* Learned rules — what the system picked up from manual matches.
+              Visible so a wrong rule can be removed instead of quietly
+              mis-assigning a payment every month. */}
+          <div className="border-t border-[var(--border)]">
+              <div className="px-4 py-3 flex items-center gap-2">
+                <Repeat className="h-4 w-4 text-[var(--primary)]" />
+                <h3 className="text-[13px] font-bold text-[var(--text-primary)]">כללי שיוך נלמדים</h3>
+                <span className="mr-auto text-[11px] text-[var(--text-muted)]">{patterns.length}</span>
+              </div>
+              <div className="px-4 pb-4 space-y-2 max-h-72 overflow-y-auto">
+                <p className="text-[11px] text-[var(--text-muted)] leading-4">
+                  הכללים נוצרים כששייכת תנועה ידנית. הם מזהים הוראות קבע חוזרות לפי יום בחודש וסכום — גם כשאין שם בתנועה.
+                </p>
+                <button
+                  onClick={async () => {
+                    const res = await learnFromExisting({
+                      buildingId: selectedBuilding?.id,
+                      transactions: allTx.filter(t => t.building_id === selectedBuilding?.id && Number(t.credit) > 0),
+                      userId: user?.id || null,
+                    })
+                    await reloadPatterns()
+                    toast(res.created
+                      ? `נלמדו ${res.created} כללים מהשיוכים הקיימים${res.conflicts ? ` (${res.conflicts} דפוסים לא חד-משמעיים דולגו)` : ''}`
+                      : 'לא נמצאו דפוסים חוזרים חדשים ללמוד מהם', res.created ? 'success' : 'info')
+                  }}
+                  className="w-full h-[32px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-secondary)] text-[11px] font-semibold"
+                >
+                  למד כללים מהשיוכים הקיימים
+                </button>
+                {patterns.map(pt => {
+                  const label = directory.byId?.[pt.unit_id]?.label || 'דירה לא ידועה'
+                  return (
+                    <div key={pt.id} className="flex items-start gap-2 p-2 rounded-[var(--radius)] bg-[var(--bg)] border border-[var(--border)]">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] font-semibold text-[var(--text-primary)]">{label}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] num-tabular">{describePattern(pt)}</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm('לבטל את הכלל? תנועות קיימות יישארו משויכות, אבל תנועות עתידיות לא ישויכו אוטומטית.')) return
+                          await deactivatePattern(pt.id)
+                          await reloadPatterns()
+                          toast('הכלל בוטל')
+                        }}
+                        title="ביטול הכלל"
+                        className="p-1 rounded text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)] shrink-0"
+                      >
+                        <XIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
         </aside>
       </div>
 

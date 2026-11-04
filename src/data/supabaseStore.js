@@ -241,11 +241,12 @@ function createCollection(tableName) {
       return normalizeRow(data)
     },
 
-    async create(itemData) {
+    // opts.silent skips the success toast — same reason as update() below.
+    async create(itemData, opts = {}) {
       const row = toDbRow(itemData)
       const { data, error } = await supabase.from(table).insert(row).select().single()
       if (error) { emitError('create', tableName, error); return null }
-      emitSuccess('נשמר בהצלחה ✓')
+      if (!opts.silent) emitSuccess('נשמר בהצלחה ✓')
       return normalizeRow(data)
     },
 

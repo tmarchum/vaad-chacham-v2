@@ -10,13 +10,14 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { EmptyState } from '@/components/common/EmptyState'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Receipt, Plus, Pencil, Trash2, Landmark, Wallet, BarChart2, ChevronRight, ChevronLeft, CalendarDays, ArrowLeftRight, TrendingDown, AlertTriangle, PieChart, Download } from 'lucide-react'
+import { Receipt, Plus, Pencil, Trash2, Landmark, Wallet, BarChart2, ChevronRight, ChevronLeft, CalendarDays, ArrowLeftRight, TrendingDown, AlertTriangle, PieChart, Download, Split, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { TabGroup } from '@/components/ui/tabs'
 import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { EXPENSE_CATEGORIES, EXPENSE_GROUPS, findExpenseCategory, CATEGORY_BG_COLORS, CATEGORY_GRADIENTS, LEGACY_EXPENSE_MAP } from '@/lib/categories'
 import { HEBREW_MONTHS as MONTH_NAMES } from '@/lib/constants'
+import { toast } from '@/lib/toast'
 
 // Grouped categories for the select dropdown
 const CATEGORIES = EXPENSE_CATEGORIES.map(c => ({ value: c.value, label: c.label }))
@@ -31,6 +32,10 @@ function resolveCategory(val) {
   return { value: val, label: val, color: 'slate', icon: '📋' }
 }
 
+// The neighbouring building this one shares costs with. Free text (it is not
+// a managed building in this system), remembered from the last marked expense.
+const DEFAULT_SHARED_WITH = 'משורר ישעיהו 16'
+
 const EMPTY_FORM = {
   date: '',
   description: '',
@@ -39,13 +44,16 @@ const EMPTY_FORM = {
   vendor: '',
   buildingId: '',
   notes: '',
+  is_shared: false,
+  shared_with: '',
+  shared_percent: 50,
 }
 
 function Expenses() {
   const { buildings, selectedBuilding } = useBuildingContext()
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
-  const { data: allExpenses, create, update, remove, isSaving, isLoading } = useCollection('expenses', scope)
+  const { data: allExpenses, create, update, remove, bulkUpdate, isSaving, isLoading } = useCollection('expenses', scope)
 
   const now = new Date()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
@@ -79,6 +87,15 @@ function Expenses() {
 
   const datePrefix = viewMode === 'month' ? monthKey : selectedYear
 
+  // Whoever this building last shared a cost with — the sensible default for
+  // the next one, instead of retyping the neighbour's name every time.
+  const lastSharedWith = useMemo(() => {
+    const marked = allExpenses
+      .filter((e) => e.is_shared && e.shared_with)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    return marked[0]?.shared_with || DEFAULT_SHARED_WITH
+  }, [allExpenses])
+
   const filtered = useMemo(() => {
     let result = allExpenses
 
@@ -96,6 +113,7 @@ function Expenses() {
     if (sourceFilter === 'bank') result = result.filter((exp) => exp.source === 'bank' || exp.bank_transaction_id)
     else if (sourceFilter === 'manual') result = result.filter((exp) => !(exp.source === 'bank' || exp.bank_transaction_id))
     else if (sourceFilter === 'uncategorized') result = result.filter((exp) => !exp.category || exp.category === 'אחר')
+    else if (sourceFilter === 'shared') result = result.filter((exp) => exp.is_shared)
 
     // Search
     if (search) {
@@ -132,6 +150,7 @@ function Expenses() {
       ...EMPTY_FORM,
       date: new Date().toISOString().slice(0, 10),
       buildingId: buildingFilter !== 'all' ? buildingFilter : '',
+      shared_with: lastSharedWith,
     })
     setFormOpen(true)
   }
@@ -146,6 +165,9 @@ function Expenses() {
       vendor: exp.vendor || '',
       buildingId: exp.buildingId || '',
       notes: exp.notes || '',
+      is_shared: !!exp.is_shared,
+      shared_with: exp.shared_with || lastSharedWith,
+      shared_percent: exp.shared_percent ?? 50,
     })
     setFormOpen(true)
     setDetailExpense(null)
@@ -165,6 +187,10 @@ function Expenses() {
     const data = {
       ...form,
       amount: form.amount !== '' ? Number(form.amount) : null,
+      // A cost is only "shared" if it says with whom and in what proportion.
+      is_shared: !!form.is_shared,
+      shared_with: form.is_shared ? (form.shared_with?.trim() || DEFAULT_SHARED_WITH) : null,
+      shared_percent: form.is_shared ? Number(form.shared_percent) || 50 : 50,
     }
     if (editingId) {
       await update(editingId, data)
@@ -219,6 +245,21 @@ function Expenses() {
   const biggest = [...periodRows].sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))[0]
   const uncategorized = periodRows.filter((e) => !e.category || e.category === 'אחר')
   const uncategorizedSum = uncategorized.reduce((a, e) => a + (Number(e.amount) || 0), 0)
+  // ── Shared-cost settlement ──
+  // Costs this building paid in full but that serve the neighbour too. The
+  // figure that matters at year end is their share of them.
+  const sharedRows = periodRows.filter((e) => e.is_shared)
+  const sharedTotal = sharedRows.reduce((a, e) => a + (Number(e.amount) || 0), 0)
+  const theirShare = sharedRows.reduce((a, e) => a + (Number(e.amount) || 0) * ((Number(e.shared_percent) || 50) / 100), 0)
+  const openShare = sharedRows.filter((e) => !e.shared_settled)
+    .reduce((a, e) => a + (Number(e.amount) || 0) * ((Number(e.shared_percent) || 50) / 100), 0)
+  const sharedParty = sharedRows.find((e) => e.shared_with)?.shared_with || lastSharedWith
+  const toggleShared = async (exp) => {
+    await update(exp.id, exp.is_shared
+      ? { is_shared: false, shared_with: null }
+      : { is_shared: true, shared_with: lastSharedWith, shared_percent: 50 })
+  }
+
   const PALETTE = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#64748b']
   const byCat = Object.entries(periodRows.reduce((m, e) => {
     const k = resolveCategory(e.category)?.label || 'לא מסווג'
@@ -234,8 +275,14 @@ function Expenses() {
   const periodLabel = viewMode === 'month' ? `${MONTH_NAMES[monthIdx]} ${selectedYear}` : `שנת ${selectedYear}`
   const isBank = (e) => e.source === 'bank' || !!e.bank_transaction_id
   const exportCsv = () => {
-    const out = [['תאריך', 'תיאור', 'ספק', 'קטגוריה', 'סכום', 'מקור']]
-    filtered.forEach((e) => out.push([e.date, e.description, e.vendor, resolveCategory(e.category)?.label || '', e.amount, isBank(e) ? 'בנק' : 'ידני']))
+    const out = [['תאריך', 'תיאור', 'ספק', 'קטגוריה', 'סכום', 'מקור', 'משותפת עם', 'אחוז הצד השני', 'חלק הצד השני', 'הוסדר']]
+    filtered.forEach((e) => out.push([
+      e.date, e.description, e.vendor, resolveCategory(e.category)?.label || '', e.amount, isBank(e) ? 'בנק' : 'ידני',
+      e.is_shared ? (e.shared_with || '') : '',
+      e.is_shared ? `${Number(e.shared_percent) || 50}%` : '',
+      e.is_shared ? Math.round((Number(e.amount) || 0) * ((Number(e.shared_percent) || 50) / 100) * 100) / 100 : '',
+      e.is_shared ? (e.shared_settled ? 'כן' : 'לא') : '',
+    ]))
     const csv = '﻿' + out.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     Object.assign(document.createElement('a'), { href: url, download: `hotzaot-${datePrefix}.csv` }).click()
@@ -301,6 +348,7 @@ function Expenses() {
                 { key: 'bank', label: 'תנועות בנק', count: periodRows.filter(isBank).length },
                 { key: 'manual', label: 'הזנה ידנית', count: periodRows.filter((e) => !isBank(e)).length },
                 { key: 'uncategorized', label: '⚠ לא מסווגות', count: uncategorized.length },
+                { key: 'shared', label: 'משותפות', count: sharedRows.length },
               ]}
               activeTab={sourceFilter}
               onChange={setSourceFilter}
@@ -315,7 +363,7 @@ function Expenses() {
               <div className="overflow-x-auto">
                 <table className="ds-table">
                   <thead>
-                    <tr><th>תאריך</th><th>תיאור השירות</th><th>ספק</th><th>קטגוריה</th><th className="!text-left">סכום</th><th>מקור</th><th></th></tr>
+                    <tr><th>תאריך</th><th>תיאור השירות</th><th>ספק</th><th>קטגוריה</th><th className="!text-left">סכום</th><th>מקור</th><th>משותפת</th><th></th></tr>
                   </thead>
                   <tbody>
                     {filtered.map((exp) => {
@@ -346,6 +394,22 @@ function Expenses() {
                           <td className="whitespace-nowrap !text-left"><span className="text-[14px] font-bold num-tabular">{formatCurrency(exp.amount || 0)}</span></td>
                           <td className="whitespace-nowrap text-[11px] text-[var(--text-secondary)]">
                             {isBank(exp) ? <span className="inline-flex items-center gap-1"><Landmark className="h-3.5 w-3.5 text-[var(--primary)]" />בנק</span> : 'ידני'}
+                          </td>
+                          {/* Mark one expense at a time as shared with the
+                              neighbouring building — one click, no dialog. */}
+                          <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => toggleShared(exp)}
+                              title={exp.is_shared ? `משותפת עם ${exp.shared_with || ''} — לחץ לביטול` : 'סמן כהוצאה משותפת'}
+                              className={`inline-flex items-center gap-1 h-7 px-2 rounded-full border text-[11px] font-semibold transition-colors ${
+                                exp.is_shared
+                                  ? 'border-[var(--primary)]/30 bg-[var(--surface-container)] text-[var(--primary-dark)]'
+                                  : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--primary)] hover:border-[var(--primary)]/30'
+                              }`}
+                            >
+                              <Split className="h-3.5 w-3.5" />
+                              {exp.is_shared ? `${Number(exp.shared_percent) || 50}%` : 'סמן'}
+                            </button>
                           </td>
                           <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="flex gap-0.5">
@@ -401,6 +465,57 @@ function Expenses() {
               })}
             </div>
           )}
+          {/* Shared-cost settlement — what the neighbouring building owes for
+              costs this one paid in full. */}
+          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Split className="h-4 w-4 text-[var(--primary)]" />
+              <h3 className="text-[13px] font-bold text-[var(--text-primary)]">התחשבנות הוצאות משותפות</h3>
+            </div>
+            {sharedRows.length === 0 ? (
+              <p className="text-[11px] text-[var(--text-muted)] leading-4">
+                לא סומנו הוצאות משותפות ל{viewMode === 'month' ? 'חודש' : 'שנה'} זו. סמן הוצאה בטור "משותפת" בטבלה כדי שתיכנס להתחשבנות.
+              </p>
+            ) : (
+              <>
+                <p className="text-[11px] text-[var(--text-muted)]">מול {sharedParty} • {sharedRows.length} הוצאות</p>
+                <div className="space-y-1.5 text-[12px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--text-secondary)]">סך ההוצאות המשותפות</span>
+                    <strong className="num-tabular">{formatCurrency(sharedTotal)}</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--text-secondary)]">החלק שלהם</span>
+                    <strong className="num-tabular text-[var(--primary)]">{formatCurrency(Math.round(theirShare))}</strong>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-[var(--border)] pt-1.5">
+                    <span className="text-[var(--text-secondary)]">טרם הוסדר</span>
+                    <strong className={`num-tabular ${openShare > 0 ? 'text-[var(--warning)]' : 'text-[var(--success)]'}`}>{formatCurrency(Math.round(openShare))}</strong>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSourceFilter('shared')}
+                  className="w-full text-[11px] font-semibold text-[var(--primary)] hover:underline text-right"
+                >
+                  הצג את ההוצאות המשותפות ←
+                </button>
+                {openShare > 0 && (
+                  <button
+                    onClick={async () => {
+                      const open = sharedRows.filter((e) => !e.shared_settled)
+                      if (!window.confirm(`לסמן ${open.length} הוצאות משותפות כמוסדרות? הסכום ${formatCurrency(Math.round(openShare))} ייצא מ"טרם הוסדר".`)) return
+                      await bulkUpdate(open.map((e) => e.id), { shared_settled: true }, { silent: true })
+                      toast(`${open.length} הוצאות משותפות סומנו כמוסדרות`)
+                    }}
+                    className="w-full h-[34px] rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-secondary)] text-[12px] font-semibold inline-flex items-center justify-center gap-1.5"
+                  >
+                    <Check className="h-3.5 w-3.5" />סמן כהוסדר
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
           <Link to="/expense-analysis" className="flex items-center justify-between p-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] hover:bg-[var(--surface-secondary)] text-[12px]">
             <span className="font-semibold text-[var(--text-primary)]">ניתוח הוצאות מעמיק (AI)</span>
             <ChevronLeft className="h-4 w-4 text-[var(--primary)]" />
@@ -423,6 +538,16 @@ function Expenses() {
             <DetailRow label="סכום" value={formatCurrency(detailExpense.amount || 0)} />
             <DetailRow label="ספק" value={detailExpense.vendor} />
             <DetailRow label="בניין" value={buildingMap[detailExpense.buildingId]?.name} />
+            {detailExpense.is_shared && (
+              <>
+                <DetailRow label="משותפת עם" value={detailExpense.shared_with} />
+                <DetailRow
+                  label="חלק הצד השני"
+                  value={`${Number(detailExpense.shared_percent) || 50}% — ${formatCurrency(Math.round((Number(detailExpense.amount) || 0) * ((Number(detailExpense.shared_percent) || 50) / 100)))}`}
+                />
+                <DetailRow label="סטטוס התחשבנות" value={detailExpense.shared_settled ? 'הוסדר' : 'טרם הוסדר'} />
+              </>
+            )}
             <DetailRow label="הערות" value={detailExpense.notes} />
             <div className="flex gap-2 pt-4">
               <Button variant="outline" size="sm" onClick={() => openEdit(detailExpense)}>
@@ -500,6 +625,46 @@ function Expenses() {
               placeholder="בחר בניין"
               error={formErrors.buildingId}
             />
+            {/* Shared cost — marked per expense so year-end settlement is a
+                figure, not a reconstruction. */}
+            <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg)] p-3 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!form.is_shared}
+                  onChange={(e) => setForm((prev) => ({
+                    ...prev,
+                    is_shared: e.target.checked,
+                    shared_with: prev.shared_with || lastSharedWith,
+                  }))}
+                  className="h-4 w-4 accent-[var(--primary)]"
+                />
+                <span className="text-[13px] font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
+                  <Split className="h-4 w-4 text-[var(--primary)]" />הוצאה משותפת עם בניין שכן
+                </span>
+              </label>
+              {form.is_shared && (
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    label="משותפת עם"
+                    value={form.shared_with}
+                    onChange={setField('shared_with')}
+                  />
+                  <FormField
+                    label="אחוז הצד השני"
+                    type="number"
+                    value={form.shared_percent}
+                    onChange={setField('shared_percent')}
+                  />
+                  <p className="col-span-2 text-[11px] text-[var(--text-muted)]">
+                    מתוך {form.amount ? formatCurrency(Number(form.amount)) : 'הסכום'} —
+                    חלקם {form.amount ? formatCurrency(Math.round(Number(form.amount) * ((Number(form.shared_percent) || 50) / 100))) : '—'}.
+                    ההוצאה נשארת במלואה בספרי הבניין; רק ההתחשבנות מתעדכנת.
+                  </p>
+                </div>
+              )}
+            </div>
+
             <FormTextarea
               label="הערות"
               value={form.notes}

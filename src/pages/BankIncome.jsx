@@ -26,7 +26,7 @@ export default function BankIncome() {
   const { selectedBuilding } = useBuildingContext()
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
-  const { data: allTx, update, refresh, isLoading } = useCollection('bankTransactions', scope)
+  const { data: allTx, update, bulkUpdate, refresh, isLoading } = useCollection('bankTransactions', scope)
   const { byId: unitById } = useUnitDirectory(selectedBuilding?.id)
 
   const now = new Date()
@@ -100,10 +100,9 @@ export default function BankIncome() {
         t.description?.trim() === desc &&
         !t.category
       )
-      for (const m of matching) {
-        await update(m.id, { category })
-      }
       if (matching.length > 0) {
+        // One request, one toast — a loop here used to stack a toast per row.
+        await bulkUpdate(matching.map(m => m.id), { category }, { silent: true })
         toast(`עודכנו ${matching.length} תנועות נוספות עם אותו תיאור`)
       }
     }

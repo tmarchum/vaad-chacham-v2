@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Outlet, useLocation, Link } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { AlertsPanel } from './AlertsPanel'
@@ -8,6 +8,11 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { useBuildingPulse } from '@/hooks/useBuildingPulse'
 import { BrandLogo } from '@/components/common/BrandLogo'
+
+// Monotonic toast ids — Date.now() collides when a bulk flow fires several
+// toasts inside the same millisecond.
+let toastSeq = 0
+const nextToastId = () => ++toastSeq
 
 // ── Global toast system ──────────────────────────────────────────────────────
 // Modules call toast()/toastError() from src/lib/toast.js, which dispatches
@@ -33,6 +38,9 @@ function Toast({ toasts, onRemove }) {
             : <CheckCircle className="h-4 w-4 shrink-0" />
           }
           <span className="flex-1">{t.message}</span>
+          {t.count > 1 && (
+            <span className="shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 text-[11px] font-bold num-tabular">×{t.count}</span>
+          )}
           <button onClick={() => onRemove(t.id)} className="opacity-60 hover:opacity-100 transition-opacity">
             <X className="h-3.5 w-3.5" />
           </button>
@@ -53,10 +61,25 @@ function Layout() {
   // Shell vitals refresh on every page change — counts only, no rows.
   const pulse = useBuildingPulse(selectedBuilding?.id, location.pathname)
 
+  // A bulk flow fires one store toast per row, so the same line used to stack
+  // ten or fifteen times. An identical message that is still on screen only
+  // bumps a counter and restarts its timer — one line, "עודכן בהצלחה ✓ ×12".
+  const timers = useRef({})
   const addToast = (message, type = 'info') => {
-    const id = Date.now() + Math.random()
-    setToasts(prev => [...prev, { id, message, type }])
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000)
+    let reused = false
+    setToasts(prev => {
+      const existing = prev.find(t => t.message === message && t.type === type)
+      if (!existing) return [...prev, { id: nextToastId(), message, type, count: 1 }]
+      reused = true
+      return prev.map(t => (t === existing ? { ...t, count: (t.count || 1) + 1 } : t))
+    })
+    // The timer belongs to the message, not to this call: restart it either way.
+    const key = `${type}|${message}`
+    clearTimeout(timers.current[key])
+    timers.current[key] = setTimeout(() => {
+      delete timers.current[key]
+      setToasts(prev => prev.filter(t => !(t.message === message && t.type === type)))
+    }, reused ? 3000 : 5000)
   }
   const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id))
 

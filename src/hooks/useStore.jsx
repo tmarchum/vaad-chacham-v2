@@ -31,10 +31,10 @@ export function useCollection(collectionName, filters = {}) {
   // Mutations merge the returned row into local state instead of re-downloading
   // the entire table (the store already returns the normalized row). A null
   // result (store error) falls back to a full refresh to stay consistent.
-  const create = useCallback(async (itemData) => {
+  const create = useCallback(async (itemData, opts) => {
     setIsSaving(true)
     try {
-      const newItem = await collection.create(itemData)
+      const newItem = await collection.create(itemData, opts)
       if (newItem) setData((prev) => [newItem, ...prev])
       else await refresh()
       return newItem
@@ -43,10 +43,12 @@ export function useCollection(collectionName, filters = {}) {
     }
   }, [collection, refresh])
 
-  const update = useCallback(async (id, itemData) => {
+  // opts.silent suppresses the per-row success toast — pass it when updating
+  // rows in a loop and showing one summary toast instead.
+  const update = useCallback(async (id, itemData, opts) => {
     setIsSaving(true)
     try {
-      const updated = await collection.update(id, itemData)
+      const updated = await collection.update(id, itemData, opts)
       if (updated) setData((prev) => prev.map((it) => (it.id === id ? updated : it)))
       else await refresh()
       return updated
