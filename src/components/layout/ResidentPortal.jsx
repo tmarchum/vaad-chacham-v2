@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { hebrewMonthLabel, ISSUE_CATEGORIES } from '@/lib/constants'
+import { notifyIssueOpened } from '@/lib/notify'
 import { ResidentBooking } from './ResidentBooking'
 import { BrandLogo } from '@/components/common/BrandLogo'
 import {
@@ -796,7 +797,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
     if (!form.title.trim()) return
     setSaving(true); setError(null)
     const { url: photoUrl, failed: photoFailed } = await uploadPhoto()
-    const { error } = await supabase.from('issues').insert({
+    const { data: created, error } = await supabase.from('issues').insert({
       building_id: profile.building_id,
       unit_id: profile.unit_id,
       title: form.title.trim(),
@@ -806,9 +807,12 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
       reported_by: user?.id || null,
       status: 'reported',
       photo_url: photoUrl,
-    })
+    }).select('id').single()
     setSaving(false)
     if (error) { console.error('issue insert error', error); setError('שגיאה בשליחת התקלה. נסה שוב.'); return }
+    // Confirm to the resident and alert the responsible board member and the
+    // handler. Fire-and-forget: the report is already saved either way.
+    if (created?.id) notifyIssueOpened(created.id).catch(() => {})
     if (photoFailed) setError('התקלה נפתחה, אך העלאת התמונה נכשלה — אפשר להוסיף תמונה מאוחר יותר.')
     setForm({ title: '', description: '', category: '', priority: 'medium' })
     setPhoto(null)

@@ -20,7 +20,7 @@ import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
-import { notifyIssueStatus } from '@/lib/notify'
+import { notifyIssueStatus, notifyIssueOpened, describeIssueNotified } from '@/lib/notify'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
@@ -738,10 +738,17 @@ function Issues() {
     }
     if (editingId) {
       await update(editingId, data)
+      setFormOpen(false)
     } else {
-      await create(data)
+      const created = await create(data)
+      setFormOpen(false)
+      // Tell the reporter, the board member responsible for the category and
+      // the handler. Never blocks the save — the issue is already open.
+      if (created?.id) {
+        const line = describeIssueNotified(await notifyIssueOpened(created.id))
+        if (line) toast(line)
+      }
     }
-    setFormOpen(false)
   }
 
   // Committee photo management on the issue form — upload to the issue-photos

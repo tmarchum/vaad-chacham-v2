@@ -225,6 +225,188 @@ async function buildIssueStatusNotification(
   }
 }
 
+// ── Issue-opened fan-out (reporter + responsible board member + handler) ──
+//
+// Three people need to hear that a fault was opened, and each is reachable by a
+// different channel. Everything here is derived SERVER-side from the issue row
+// and the building's routing rule, so a resident JWT can never choose a
+// recipient or a body — it can only ask for the fan-out of its own report.
+//
+// `plan: true` returns the parties WITHOUT sending, so the caller can try
+// WhatsApp first and then ask for email only for whoever WhatsApp did not
+// reach (that is what `skip` is for — it can only reduce what is sent).
+
+type Party = {
+  id: string
+  role: string
+  name: string
+  phone: string
+  email: string
+  audience: 'resident' | 'vendor'
+  templateKey: string
+  variables: string[]
+  pushTo?: string | null
+}
+
+const fullName = (r: Record<string, unknown> | null | undefined) =>
+  `${r?.first_name || ''} ${r?.last_name || ''}`.trim()
+
+function issueOpenedHtml(
+  headline: string,
+  lead: string,
+  issue: Record<string, unknown>,
+  buildingName: string,
+  unitLabel: string,
+): string {
+  const row = (k: string, v: string) =>
+    v ? `<p style="margin:0 0 6px;color:#64748b;">${k}: <b style="color:#0f172a;">${esc(v)}</b></p>` : ''
+  return `
+    <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;padding:18px;border-radius:12px 12px 0 0;">
+        <h2 style="margin:0;">${esc(headline)}</h2>
+      </div>
+      <div style="background:#f8fafc;padding:18px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
+        <p style="margin:0 0 10px;"><b>${esc(issue.title)}</b></p>
+        ${issue.description ? `<p style="margin:0 0 10px;color:#334155;">${esc(issue.description)}</p>` : ''}
+        ${row('קטגוריה', String(issue.category || ''))}
+        ${row('דירה', unitLabel)}
+        ${row('בניין', buildingName)}
+        ${row('מספר פנייה', String(issue.ticket_no || ''))}
+        ${issue.photo_url ? `<p style="margin:10px 0 0;"><a href="${esc(issue.photo_url)}" style="color:#2563eb;">צפייה בתמונה</a></p>` : ''}
+        <p style="margin-top:14px;color:#475569;">${esc(lead)}</p>
+      </div>
+    </div>`
+}
+
+async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, issueId: string) {
+  const { data: issue } = await svc
+    .from('issues')
+    .select('id, building_id, unit_id, title, description, category, priority, vendor_id, vendor_name, assigned_to, reported_by, ticket_no, scheduled_date, photo_url')
+    .eq('id', issueId)
+    .maybeSingle()
+  if (!issue) return null
+
+  let buildingName = ''
+  if (issue.building_id) {
+    const { data: b } = await svc.from('buildings').select('name').eq('id', issue.building_id).maybeSingle()
+    buildingName = b?.name || ''
+  }
+
+  let unitLabel = ''
+  if (issue.unit_id) {
+    const { data: u } = await svc.from('units').select('number').eq('id', issue.unit_id).maybeSingle()
+    unitLabel = u?.number ? `דירה ${u.number}` : ''
+  }
+
+  const parties: Party[] = []
+  const ticket = String(issue.ticket_no || '').trim() || '—'
+
+  // 1. The resident who reported it.
+  if (issue.unit_id) {
+    const { data: residents } = await svc
+      .from('unit_residents')
+      .select('first_name, last_name, email, phone, is_primary')
+      .eq('unit_id', issue.unit_id)
+      .eq('archived', false)
+    const r = residents?.find((x) => x.is_primary) || residents?.[0]
+    if (r) {
+      parties.push({
+        id: 'reporter', role: 'דייר מדווח',
+        name: fullName(r) || 'דייר', phone: r.phone || '', email: r.email || '',
+        audience: 'resident', templateKey: 'resident_issue_opened',
+        variables: [fullName(r) || 'דייר', String(issue.title || ''), ticket, buildingName],
+        pushTo: (issue.reported_by as string) || null,
+      })
+    }
+  }
+
+  // 2. The board member responsible for this category. The BEFORE INSERT
+  //    trigger copies the routing rule onto the issue, so assigned_to is
+  //    normally already filled; the rule is the fallback and the source of the
+  //    extra notify_email.
+  let rule: Record<string, unknown> | null = null
+  if (issue.building_id && issue.category) {
+    const { data } = await svc.from('issue_routing_rules')
+      .select('assigned_to, notify_email')
+      .eq('building_id', issue.building_id).eq('category', issue.category).eq('active', true)
+      .maybeSingle()
+    rule = data || null
+  }
+  const memberId = String(issue.assigned_to || rule?.assigned_to || '').trim()
+  let memberName = ''
+  let memberPhone = ''
+  if (memberId) {
+    const { data: m } = await svc.from('unit_residents')
+      .select('first_name, last_name, email, phone, user_id')
+      .eq('id', memberId).maybeSingle()
+    if (m) {
+      memberName = fullName(m) || 'חבר ועד'
+      memberPhone = m.phone || ''
+      parties.push({
+        id: 'committee', role: 'חבר ועד אחראי',
+        name: memberName, phone: m.phone || '', email: m.email || '',
+        audience: 'resident', templateKey: 'committee_issue_opened',
+        variables: [memberName, buildingName, String(issue.category || 'כללי'),
+          String(issue.description || issue.title || ''), unitLabel || '—'],
+        pushTo: (m.user_id as string) || null,
+      })
+    }
+  }
+  // A standing address for the category (e.g. the management company) — email only.
+  if (rule?.notify_email) {
+    parties.push({
+      id: 'routing_email', role: 'כתובת עדכון לקטגוריה',
+      name: String(rule.notify_email), phone: '', email: String(rule.notify_email),
+      audience: 'resident', templateKey: '', variables: [],
+    })
+  }
+
+  // 3. Whoever is meant to fix it.
+  let vendor: Record<string, unknown> | null = null
+  if (issue.vendor_id) {
+    const { data } = await svc.from('vendors').select('id, name, phone, email').eq('id', issue.vendor_id).maybeSingle()
+    vendor = data || null
+  } else if (issue.vendor_name) {
+    const { data } = await svc.from('vendors').select('id, name, phone, email').eq('name', issue.vendor_name).maybeSingle()
+    vendor = data || null
+  }
+  if (vendor) {
+    const contact = [memberName, memberPhone].filter(Boolean).join(' ') || buildingName || 'ועד הבית'
+    parties.push({
+      id: 'handler', role: 'גורם מטפל',
+      name: String(vendor.name || 'ספק'), phone: String(vendor.phone || ''), email: String(vendor.email || ''),
+      audience: 'vendor', templateKey: 'vendor_issue_dispatch',
+      variables: [String(vendor.name || 'ספק'), buildingName,
+        String(issue.description || issue.title || ''), contact],
+    })
+  }
+
+  return { issue, buildingName, unitLabel, parties }
+}
+
+const ISSUE_OPENED_COPY: Record<string, { headline: string; lead: string; subject: (t: string) => string }> = {
+  reporter: {
+    headline: 'הפנייה שלך התקבלה',
+    lead: 'הפנייה נפתחה ונמצאת בטיפול הוועד. נעדכן אותך בהתקדמות.',
+    subject: (t) => `הפנייה שלך התקבלה — ${t}`,
+  },
+  committee: {
+    headline: 'פנייה חדשה לטיפולך',
+    lead: 'הפנייה שויכה אליך לפי קטגוריית הטיפול. אפשר לטפל בה באפליקציית ועדלי.',
+    subject: (t) => `פנייה חדשה לטיפולך — ${t}`,
+  },
+  routing_email: {
+    headline: 'פנייה חדשה בבניין',
+    lead: 'התקבלה פנייה חדשה בקטגוריה שבאחריותכם.',
+    subject: (t) => `פנייה חדשה — ${t}`,
+  },
+  handler: {
+    headline: 'קריאת שירות חדשה',
+    lead: 'התקבלה קריאה חדשה בבניין. נא ליצור קשר עם איש הקשר בבניין לתיאום.',
+    subject: (t) => `קריאת שירות — ${t}`,
+  },
+}
+
 // ── Edge Function ────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -284,6 +466,82 @@ Deno.serve(async (req) => {
         push: pushOut,
         error: delivered || skipped ? undefined : emailErr || 'push_failed',
       })
+    }
+
+    // ── Template: issue_opened — tell the reporter, the responsible board
+    // member and the handler that a fault was opened. A resident may trigger
+    // it only for their OWN report; content and recipients are server-built. ──
+    if (body.template === 'issue_opened' && body.issueId) {
+      const built = await buildIssueOpenedParties(supabase, String(body.issueId))
+      if (!built) return json({ error: 'issue_not_found' }, 404)
+      if (!isPrivileged(caller)) {
+        const own = caller.kind === 'user' && built.issue.reported_by === caller.uid
+        if (!own) return json({ error: 'forbidden' }, 403)
+      }
+
+      // Planning pass: say who should be told and how, send nothing.
+      if (body.plan === true) {
+        return json({
+          ok: true,
+          issue: {
+            id: built.issue.id, title: built.issue.title, category: built.issue.category,
+            ticket_no: built.issue.ticket_no, buildingName: built.buildingName, unitLabel: built.unitLabel,
+            buildingId: built.issue.building_id, unitId: built.issue.unit_id,
+          },
+          parties: built.parties.map((p) => ({
+            id: p.id, role: p.role, name: p.name, phone: p.phone,
+            hasEmail: !!p.email, audience: p.audience,
+            templateKey: p.templateKey, variables: p.variables,
+          })),
+        })
+      }
+
+      // Sending pass. `skip` holds the ids already reached on another channel.
+      const skip = new Set((Array.isArray(body.skip) ? body.skip : []).map(String))
+      const results: Array<Record<string, unknown>> = []
+      for (const p of built.parties) {
+        if (skip.has(p.id)) { results.push({ id: p.id, skipped: true }); continue }
+        const copy = ISSUE_OPENED_COPY[p.id] || ISSUE_OPENED_COPY.routing_email
+        const subject = copy.subject(String(built.issue.title || ''))
+        const html = issueOpenedHtml(copy.headline, copy.lead, built.issue, built.buildingName, built.unitLabel)
+
+        let emailOk = false, emailErr = ''
+        if (p.email && GMAIL_USER && GMAIL_APP_PASSWORD) {
+          try { await sendGmail(p.email, subject, html); emailOk = true } catch (err) {
+            emailErr = err instanceof Error ? err.message : String(err)
+          }
+        } else {
+          emailErr = p.email ? 'no_gmail_credentials' : 'no_email_on_file'
+        }
+
+        let pushed = 0
+        if (p.pushTo) {
+          const out = await sendPushToUser(supabase, p.pushTo, {
+            title: copy.headline,
+            body: String(built.issue.title || ''),
+            data: { type: 'issue_opened', issueId: String(built.issue.id) },
+          })
+          pushed = out.sent
+        }
+
+        try {
+          await supabase.from('notification_log').insert({
+            building_id: built.issue.building_id, unit_id: built.issue.unit_id,
+            channel: 'issue_opened', provider: emailOk ? 'gmail' : null, audience: p.audience,
+            recipient: p.email || p.phone || '(ללא פרטי קשר)',
+            subject: `${p.role}: ${subject}`, body: html,
+            status: (emailOk || pushed > 0) ? 'sent' : 'failed',
+            error_message: (emailOk || pushed > 0) ? null : (emailErr || null),
+            sent_by: caller?.kind === 'user' ? caller.uid : null,
+          })
+        } catch { /* logging must never block the fan-out */ }
+
+        results.push({
+          id: p.id, role: p.role, name: p.name, phone: p.phone,
+          email: emailOk, push: pushed, error: (emailOk || pushed > 0) ? undefined : (emailErr || undefined),
+        })
+      }
+      return json({ success: true, results })
     }
 
     // ── Template: announcement_push — push broadcast to all residents of the
