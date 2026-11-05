@@ -428,9 +428,17 @@ export default function BankTransactions() {
     const num = String(unit.number || unit.unit_number || '')
     const numMatch = !!num && new RegExp(`(^|\\D)${num}(\\D|$)`).test(desc)
     const amountMatch = fee > 0 && Math.abs(credit - fee) <= 1
-    const tooBig = fee > 0 && credit > fee * 2
-    const score = nameHits * 10 + (surnameHit ? 6 : 0) + (numMatch ? 5 : 0) + (amountMatch ? 4 : 0) - (tooBig ? 100 : 0)
-    return { score, nameHits, surnameHit, numMatch, amountMatch }
+    // A resident paying several months up front is not an outlier to discard —
+    // it is a clean whole multiple of the fee, and it was the only signal on
+    // the 4,120 ₪ credit (eight months at 515 ₪) that nothing would suggest.
+    const ratio = fee > 0 ? credit / fee : 0
+    const monthsAhead = Math.round(ratio)
+    const multipleMatch = fee > 0 && monthsAhead >= 2 && monthsAhead <= 14 &&
+      Math.abs(credit - monthsAhead * fee) <= 2
+    const tooBig = fee > 0 && credit > fee * 2 && !multipleMatch
+    const score = nameHits * 10 + (surnameHit ? 6 : 0) + (numMatch ? 5 : 0) +
+      (amountMatch ? 4 : 0) + (multipleMatch ? 4 : 0) - (tooBig ? 100 : 0)
+    return { score, nameHits, surnameHit, numMatch, amountMatch, multipleMatch, monthsAhead }
   }
 
   // What the reviewer needs to see to judge a suggestion without re-deriving it.
@@ -440,6 +448,7 @@ export default function BankTransactions() {
     else if (best.nameHits >= 1) bits.push('שם פרטי בלבד מופיע בתיאור')
     if (best.numMatch) bits.push('מספר הדירה מופיע בתיאור')
     if (best.amountMatch) bits.push('הסכום תואם בדיוק את דמי הוועד')
+    else if (best.multipleMatch) bits.push(`הסכום תואם בדיוק ${best.monthsAhead} חודשי ועד מראש`)
     if (!bits.length) bits.push('התאמה חלשה')
     if (runnerUp && runnerUp.score >= best.score - 4) {
       bits.push(`שים לב: דירה ${runnerUp.unit.number} מתאימה כמעט באותה מידה`)
@@ -486,7 +495,8 @@ export default function BankTransactions() {
       // one payment, it gets learned as a rule and repeats every month.
       const contested = !!runnerUp && runnerUp.score >= best.score - 4
       const high = best.surnameHit && (best.amountMatch || best.numMatch || best.nameHits >= 2) && !contested
-      const medium = best.nameHits >= 1 || best.numMatch || (best.amountMatch && best.score > 0)
+      const medium = best.nameHits >= 1 || best.numMatch ||
+        ((best.amountMatch || best.multipleMatch) && best.score > 0)
       if (high) {
         await updateTx(tx.id, {
           unit_id: best.unit.id, match_status: 'matched', month: monthKey,
