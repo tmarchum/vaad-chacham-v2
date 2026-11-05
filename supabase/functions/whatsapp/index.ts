@@ -41,6 +41,7 @@ type Integ = {
   verified_name: string | null
   status: string | null
   has_token: boolean | null
+  forward_webhook_url: string | null
 }
 
 const last9 = (s: string) => String(s || '').replace(/\D/g, '').slice(-9)
@@ -201,6 +202,39 @@ async function callerBuildings(svc: SupabaseClient, uid: string) {
   return ids
 }
 
+/**
+ * Meta allows one webhook URL per app, and this app is shared with "אות",
+ * whose incoming messages an Apps Script endpoint records to a sheet. Supabase
+ * is the single receiver, so it has to pass every event on verbatim or that
+ * sheet goes quiet.
+ *
+ * Verbatim means the raw bytes and the original signature header, so the
+ * receiver can verify it against the same app secret. Never throws and never
+ * delays the 200 past its own timeout: Meta retries anything slow, and a retry
+ * would be delivered to Apps Script twice.
+ */
+async function forwardWebhook(svc: SupabaseClient, url: string | null | undefined, raw: string, signature: string) {
+  if (!url) return
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': signature, 'X-Forwarded-By': 'vaadly' },
+      body: raw,
+      signal: AbortSignal.timeout(4000),
+    })
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  } catch (e) {
+    // A forward that quietly stops is the whole failure mode here, so make it
+    // visible in the same log the admin already reads.
+    await log(svc, {
+      channel: 'whatsapp_in', recipient: '-', status: 'failed',
+      subject: 'העברת אירוע webhook ל-Apps Script נכשלה',
+      body: String(url).slice(0, 200),
+      error_message: e instanceof Error ? e.message : 'forward_failed',
+    })
+  }
+}
+
 async function log(svc: SupabaseClient, row: Record<string, unknown>) {
   try { await svc.from('notification_log').insert({ channel: 'whatsapp', provider: PROVIDER, ...row }) } catch { /* */ }
 }
@@ -285,6 +319,10 @@ Deno.serve(async (req: Request) => {
       if (!sec?.app_secret || !sig || !timingSafeEqual(sig, await hmacHex(sec.app_secret, raw))) {
         return json({ error: 'bad_signature' }, 401)
       }
+      // Pass it on while we process our own copy — "אות" must not lose events
+      // because something in our handling was slow or threw.
+      const forwarded = forwardWebhook(svc, integ?.forward_webhook_url, raw,
+        req.headers.get('X-Hub-Signature-256') || '')
       for (const entry of (body.entry as Array<Record<string, unknown>>) || []) {
         for (const ch of (entry.changes as Array<Record<string, unknown>>) || []) {
           const v = (ch.value || {}) as Record<string, unknown>
@@ -313,6 +351,7 @@ Deno.serve(async (req: Request) => {
           }
         }
       }
+      await forwarded
       return json({ ok: true })
     }
 
@@ -337,6 +376,7 @@ Deno.serve(async (req: Request) => {
           phone_number_id: integ.phone_number_id, waba_id: integ.waba_id, graph_version: integ.graph_version,
           enabled: !!integ.enabled, sender_label: integ.sender_label, display_number: integ.display_number,
           verified_name: integ.verified_name, status: integ.status,
+          forward_webhook_url: integ.forward_webhook_url,
         } : null,
         has_token: !!sec?.api_token, has_app_secret: !!sec?.app_secret,
         ...(isAdmin ? { webhook_url: webhookUrl, verify_token: sec?.webhook_token || null } : {}),
@@ -353,6 +393,7 @@ Deno.serve(async (req: Request) => {
         provider: PROVIDER,
         phone_number_id: s('phone_number_id'), waba_id: s('waba_id'),
         graph_version: s('graph_version') || 'v21.0', sender_label: s('sender_label'),
+        forward_webhook_url: s('forward_webhook_url'),
         enabled: cfg.enabled === true,
         ...(token ? { has_token: true } : {}),
         updated_at: new Date().toISOString(),

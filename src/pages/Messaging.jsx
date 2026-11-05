@@ -614,6 +614,7 @@ function ConnectionPanel({ cfg, reload }) {
     setForm({
       phone_number_id: k.phone_number_id || '', waba_id: k.waba_id || '',
       graph_version: k.graph_version || 'v21.0', sender_label: k.sender_label || 'ועדלי', enabled: !!k.enabled,
+      forward_webhook_url: k.forward_webhook_url || '',
     })
   }, [cfg])
 
@@ -694,6 +695,17 @@ function ConnectionPanel({ cfg, reload }) {
               </div>
             ))}
             <p className="text-[11px] text-[var(--text-muted)]">שדות להרשמה: messages, message_template_status_update. אימות האירועים נעשה עם ה-App Secret — בלעדיו המערכת דוחה כל אירוע.</p>
+            <label className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5 block pt-1">
+              <span>העברת אירועים הלאה (Apps Script של "אות")</span>
+              <input dir="ltr" className={field} placeholder="https://script.google.com/macros/s/..."
+                value={form.forward_webhook_url || ''}
+                onChange={(e) => setForm({ ...form, forward_webhook_url: e.target.value })} />
+            </label>
+            <p className="text-[11px] text-[var(--text-muted)]">
+              ל-Meta יש כתובת webhook אחת בלבד לכל אפליקציה. המספר משותף עם "אות", והגיליון שלה מתעדכן מ-Apps Script.
+              אם תמלאו כאן את הכתובת שלה, ועדלי יקבל את האירועים ויעביר כל אחד מהם הלאה כמו שהוא — ושניהם ימשיכו לעבוד.
+              ריק = אין העברה, והגיליון יפסיק להתעדכן ברגע שה-webhook יוחלף.
+            </p>
           </div>
         </div>
       </SectionCard>
