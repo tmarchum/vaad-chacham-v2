@@ -109,7 +109,26 @@ export default function RoomBooking() {
   const dir = useUnitDirectory(selectedBuilding?.id)
   const buildingUnits = dir.units
   const residentMap = dir.byId
-  const membersByUnit = dir.membersByUnit || {}
+
+  // A booking belongs to a flat, not to a person: "דירה 26 — מתתיה". Guests are
+  // the only case with a free-text name, because they are not in the directory.
+  const bookerLabel = (bk) => {
+    if (!bk) return ''
+    if (bk.is_guest) return bk.booker_name || 'אורח חיצוני'
+    const u = bk.unit_id ? residentMap[bk.unit_id] : null
+    const parts = []
+    if (u?.number) parts.push(`דירה ${u.number}`)
+    const family = u?.name || bk.booker_name || ''
+    if (family) parts.push(family)
+    return parts.join(' — ') || 'דייר'
+  }
+  // Emails address the household, not a person.
+  const greetBooker = (bk) => {
+    if (!bk) return 'שלום'
+    if (bk.is_guest) return bk.booker_name || 'שלום'
+    const family = (bk.unit_id ? residentMap[bk.unit_id]?.name : '') || bk.booker_name || ''
+    return family ? `משפחת ${family}` : 'שלום'
+  }
 
   // Active bookings (not cancelled or rejected) — these block slots
   const activeBookings = useMemo(() => {
@@ -250,7 +269,7 @@ export default function RoomBooking() {
             <tr><td ${th}>בניין</td><td ${td}>${buildingName || ''}</td></tr>
             <tr><td ${th}>תאריך</td><td ${td}>יום ${dayName}, ${dateStr}</td></tr>
             <tr><td ${th}>משבצת</td><td ${td}>${slotLabel}</td></tr>
-            <tr><td ${th}>שם המזמין</td><td ${td}>${booking.booker_name || booking.bookerName || ''}</td></tr>
+            <tr><td ${th}>רשום על</td><td ${td}>${booking.booker_name || booking.bookerName || ''}</td></tr>
             ${unitNumber ? `<tr><td ${th}>דירה</td><td ${td}>${unitNumber}</td></tr>` : ''}
             ${booking.booker_phone || booking.bookerPhone ? `<tr><td ${th}>טלפון</td><td ${td}>${booking.booker_phone || booking.bookerPhone}</td></tr>` : ''}
             ${booking.is_guest || booking.isGuest ? `<tr><td ${th}>סוג</td><td ${td}>אורח חיצוני</td></tr>` : ''}
@@ -300,14 +319,17 @@ export default function RoomBooking() {
     if (!selectedResource || !bookingDialog) return
     const { slot, unitId, isGuest, bookerName, bookerPhone, bookerEmail, notes, answers, termsAccepted } = bookingForm
 
-    // Validation
+    // Validation. A flat's booking carries the family name from the directory;
+    // only a guest needs a typed name.
     let name = bookerName, email = bookerEmail, phone = bookerPhone
-    if (!isGuest && unitId) {
+    if (!isGuest) {
+      if (!unitId) { toastError('יש לבחור דירה'); return }
       const res = residentMap[unitId]
-      if (res) { name = name || res.name; email = email || res.email || ''; phone = phone || res.phone || '' }
-    }
-    if (!name) {
-      toastError('יש לבחור דירה או למלא שם')
+      name = res?.name || ''
+      email = email || res?.email || ''
+      phone = phone || res?.phone || ''
+    } else if (!name) {
+      toastError('יש למלא שם אורח')
       return
     }
     // Check rental terms
@@ -391,7 +413,7 @@ export default function RoomBooking() {
         const fixedMsg = selectedResource?.approval_message || ''
         const allNotes = [fixedMsg, notes].filter(Boolean).join('\n')
         const bldNameA = selectedBuilding?.name || ''
-        const html = buildEmailHtml(selectedResource, bk, `${bk.booker_name}, השריון שלך אושר! להלן פרטי ההשכרה הסופיים.`, { unitNumber: unitNum, approvalNotes: allNotes, buildingName: bldNameA })
+        const html = buildEmailHtml(selectedResource, bk, `${greetBooker(bk)}, השריון שלך אושר! להלן פרטי ההשכרה הסופיים.`, { unitNumber: unitNum, approvalNotes: allNotes, buildingName: bldNameA })
         sendEmail(bk.booker_email, `${bldNameA} — שריון מאושר: ${selectedResource?.name}`, html)
       }
       setApproveDialog(null)
@@ -411,12 +433,12 @@ export default function RoomBooking() {
       const bldNameR = selectedBuilding?.name || ''
       if (bk.booker_email) {
         sendEmail(bk.booker_email, `${bldNameR} — שריון נדחה: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `${bk.booker_name}, לצערנו השריון שלך נדחה על ידי נציג הוועד.`, { unitNumber: unitNumR, buildingName: bldNameR }))
+          buildEmailHtml(selectedResource, bk, `${greetBooker(bk)}, לצערנו השריון שלך נדחה על ידי נציג הוועד.`, { unitNumber: unitNumR, buildingName: bldNameR }))
       }
       // Notify vaad rep about rejection
       if (selectedResource?.notify_email) {
         sendEmail(selectedResource.notify_email, `${bldNameR} — שריון נדחה: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} נדחה.`, { unitNumber: unitNumR, buildingName: bldNameR }))
+          buildEmailHtml(selectedResource, bk, `השריון של ${bookerLabel(bk)} נדחה.`, { unitNumber: unitNumR, buildingName: bldNameR }))
       }
       toast('השריון נדחה — המשבצת שוחררה')
     } catch (err) {
@@ -434,12 +456,12 @@ export default function RoomBooking() {
       const bldNameC = selectedBuilding?.name || ''
       if (bk.booker_email) {
         sendEmail(bk.booker_email, `${bldNameC} — שריון בוטל: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `${bk.booker_name}, השריון בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
+          buildEmailHtml(selectedResource, bk, `${greetBooker(bk)}, השריון בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
       }
       // Notify vaad rep about cancellation
       if (selectedResource?.notify_email) {
         sendEmail(selectedResource.notify_email, `${bldNameC} — שריון בוטל: ${selectedResource?.name}`,
-          buildEmailHtml(selectedResource, bk, `השריון של ${bk.booker_name} בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
+          buildEmailHtml(selectedResource, bk, `השריון של ${bookerLabel(bk)} בוטל. המשבצת שוחררה.`, { unitNumber: unitNumC, buildingName: bldNameC }))
       }
       toast('השריון בוטל — המשבצת שוחררה')
     } catch (err) {
@@ -493,13 +515,13 @@ export default function RoomBooking() {
     const next = bk.payment_status === 'paid' ? 'pending' : 'paid'
     if (next === 'pending' && !await confirm({
       title: 'ביטול אישור התשלום',
-      description: `לסמן את השריון של ${bk.booker_name} כממתין לתשלום?`,
+      description: `לסמן את השריון של ${bookerLabel(bk)} כממתין לתשלום?`,
       confirmText: 'סמן כלא שולם',
     })) return
     try {
       await updateBooking(bk.id, { payment_status: next })
       await refreshBookings()
-      toast(next === 'paid' ? `התשלום של ${bk.booker_name} אושר` : 'סומן כממתין לתשלום')
+      toast(next === 'paid' ? `התשלום של ${bookerLabel(bk)} אושר` : 'סומן כממתין לתשלום')
     } catch (err) {
       console.error('Payment toggle failed:', err)
       toastError(`שגיאה בעדכון התשלום: ${err.message}`)
@@ -509,12 +531,17 @@ export default function RoomBooking() {
   const handleSaveEdit = async () => {
     const bk = detailBooking
     if (!bk) return
-    const name = (editForm.booker_name || '').trim()
+    // The name on a flat's booking is the family name from the directory —
+    // typed names exist for guests only.
+    const name = editForm.is_guest
+      ? (editForm.booker_name || '').trim()
+      : (residentMap[editForm.unit_id]?.name || editForm.booker_name || '').trim()
     if (!editForm.booking_date) { toastError('יש לבחור תאריך'); return }
-    if (!name) { toastError('יש למלא שם מזמין'); return }
+    if (editForm.is_guest && !name) { toastError('יש למלא שם אורח'); return }
+    if (!editForm.is_guest && !editForm.unit_id) { toastError('יש לבחור דירה'); return }
     const clash = slotConflict(editForm.booking_date, editForm.slot, bk.id)
     if (clash) {
-      toastError(`המשבצת תפוסה — ${clash.booker_name} (${SLOTS[clash.slot]?.short || clash.slot})`)
+      toastError(`המשבצת תפוסה — ${bookerLabel(clash)} (${SLOTS[clash.slot]?.short || clash.slot})`)
       return
     }
     setSaving(true)
@@ -538,7 +565,7 @@ export default function RoomBooking() {
         const unitNum = buildingUnits.find(u => u.id === patch.unit_id)?.number || ''
         const bldName = selectedBuilding?.name || ''
         const html = buildEmailHtml(selectedResource, { ...bk, ...patch },
-          `${name}, פרטי השריון שלך עודכנו על ידי נציג הוועד. אלו הפרטים המעודכנים.`,
+          `${greetBooker({ ...bk, ...patch })}, פרטי השריון שלך עודכנו על ידי נציג הוועד. אלו הפרטים המעודכנים.`,
           { unitNumber: unitNum, buildingName: bldName, approvalNotes: changedDateOrSlot ? 'שימו לב: התאריך או משבצת הזמן שונו.' : '' })
         sendEmail(patch.booker_email, `${bldName} — עדכון שריון: ${selectedResource?.name}`, html)
       }
@@ -555,7 +582,7 @@ export default function RoomBooking() {
   const handleReopen = async (bk) => {
     const clash = slotConflict(bk.booking_date, bk.slot, bk.id)
     if (clash) {
-      toastError(`המשבצת נתפסה בינתיים על ידי ${clash.booker_name} — יש לשנות תאריך או משבצת`)
+      toastError(`המשבצת נתפסה בינתיים על ידי ${bookerLabel(clash)} — יש לשנות תאריך או משבצת`)
       return
     }
     try {
@@ -571,7 +598,7 @@ export default function RoomBooking() {
   const handleDeleteBooking = async (bk) => {
     if (!await confirm({
       title: 'מחיקת שריון',
-      description: `למחוק לצמיתות את השריון של ${bk.booker_name} ל-${new Date(bk.booking_date).toLocaleDateString('he-IL')}? לביטול רגיל, שמשאיר תיעוד, יש להשתמש בכפתור "בטל שריון".`,
+      description: `למחוק לצמיתות את השריון של ${bookerLabel(bk)} ל-${new Date(bk.booking_date).toLocaleDateString('he-IL')}? לביטול רגיל, שמשאיר תיעוד, יש להשתמש בכפתור "בטל שריון".`,
       confirmText: 'מחק לצמיתות',
     })) return
     try {
@@ -702,7 +729,9 @@ export default function RoomBooking() {
   const takenSlots = monthDays.reduce((s, d) => s + (d.hasFullDay ? 2 : (d.hasMorning ? 1 : 0) + (d.hasEvening ? 1 : 0)), 0)
   const occupancy = bookableSlots ? Math.round((takenSlots / bookableSlots) * 100) : 0
   const goToday = () => { const n = new Date(); setCalMonth(n.getMonth()); setCalYear(n.getFullYear()) }
-  const firstName = (name) => (name || '').split(' ')[0]
+  // Calendar chips are a few characters wide, so they carry the flat number;
+  // the tooltip and every list carry "דירה 26 — מתתיה" in full.
+  const chipWho = (b) => (b.is_guest ? (b.booker_name || 'אורח') : `דירה ${residentMap[b.unit_id]?.number ?? '—'}`)
 
   return (
     <div className="space-y-6">
@@ -857,14 +886,14 @@ export default function RoomBooking() {
                               const slotWord = b.slot === 'morning' ? 'בוקר' : b.slot === 'full_day' ? 'יממה' : 'ערב'
                               return (
                                 <button key={b.id} type="button"
-                                  title={`${SLOTS[b.slot]?.label || ''} — ${b.booker_name} • לחצו לפתיחת ההזמנה`}
+                                  title={`${SLOTS[b.slot]?.label || ''} — ${bookerLabel(b)} • לחצו לפתיחת ההזמנה`}
                                   onClick={(e) => { e.stopPropagation(); openDetail(b) }}
                                   className={`flex w-full items-center gap-1 text-[10px] leading-4 px-1 rounded border truncate hover:brightness-95 ${
                                     pending ? 'bg-[var(--warning-light)] border-[var(--warning)]/30 text-[var(--warning)]'
                                     : 'bg-[var(--success-light)] border-[var(--success)]/25 text-[var(--success)]'
                                   }`}>
                                   <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${pending ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`} />
-                                  <span className="truncate">{slotWord}: {firstName(b.booker_name)}</span>
+                                  <span className="truncate">{slotWord}: {chipWho(b)}</span>
                                   {b.payment_status === 'paid' && <Check className="h-2.5 w-2.5 shrink-0" />}
                                 </button>
                               )
@@ -988,13 +1017,13 @@ export default function RoomBooking() {
                       return (
                         <div key={bk.id} className="p-4 space-y-3">
                           <div className="flex items-start gap-3">
-                            <span className="h-9 w-9 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)] text-[12px] font-bold flex items-center justify-center shrink-0">
-                              {(bk.booker_name || '?').split(' ').map(w => w[0]).join('').slice(0, 2)}
+                            <span className="h-9 w-9 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)] text-[12px] font-bold flex items-center justify-center shrink-0 num-tabular">
+                              {bk.is_guest ? 'אח' : (unit?.number ?? '?')}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-bold truncate">{bk.booker_name}</p>
+                              <p className="text-[14px] font-bold truncate">{bookerLabel(bk)}</p>
                               <p className="text-[12px] text-[var(--text-muted)]">
-                                {bk.is_guest ? 'אורח חיצוני' : unit ? `דירה ${unit.number}` : ''}{bk.booker_phone ? ` • ${bk.booker_phone}` : ''}
+                                {bk.is_guest ? 'אורח חיצוני' : ''}{bk.booker_phone ? `${bk.is_guest ? ' • ' : ''}${bk.booker_phone}` : ''}
                               </p>
                             </div>
                           </div>
@@ -1129,10 +1158,10 @@ export default function RoomBooking() {
                 </div>
               )}
 
-              {/* Resident selector — pulls primary resident name automatically */}
+              {/* Flat selector — every option carries the family name */}
               {!bookingForm.isGuest && (
                 <FormSelect
-                  label="בחר דירה (שם הדייר הראשי)"
+                  label="בחר דירה (מספר ושם משפחה)"
                   value={bookingForm.unitId}
                   onChange={(e) => {
                     const uid = e.target.value
@@ -1162,26 +1191,16 @@ export default function RoomBooking() {
                   </div>
                 </>
               ) : bookingForm.unitId && (
-                <>
-                  {(membersByUnit[bookingForm.unitId] || []).length > 1 && (
-                    <FormSelect label="השריון על שם" value={bookingForm.bookerName}
-                      onChange={(e) => {
-                        const name = e.target.value
-                        const m = (membersByUnit[bookingForm.unitId] || []).find(x => x.name === name)
-                        setBookingForm(f => ({ ...f, bookerName: name, bookerPhone: m?.phone || '', bookerEmail: m?.email || '' }))
-                      }}
-                      options={(membersByUnit[bookingForm.unitId] || []).map(m => ({
-                        value: m.name, label: m.isPrimary ? `${m.name} (בעל הדירה)` : m.name,
-                      }))} />
-                  )}
-                  <div className="p-3 rounded-[var(--radius)] bg-slate-50 border border-[var(--border)] text-sm">
-                    <p className="font-medium">{bookingForm.bookerName}</p>
-                    <div className="flex gap-4 text-xs text-[var(--text-muted)] mt-1">
-                      {bookingForm.bookerPhone && <span>{bookingForm.bookerPhone}</span>}
-                      {bookingForm.bookerEmail && <span>{bookingForm.bookerEmail}</span>}
-                    </div>
+                <div className="p-3 rounded-[var(--radius)] bg-slate-50 border border-[var(--border)] text-sm">
+                  <p className="font-medium">
+                    השריון יירשם על דירה {residentMap[bookingForm.unitId]?.number}
+                    {residentMap[bookingForm.unitId]?.name ? ` — ${residentMap[bookingForm.unitId].name}` : ''}
+                  </p>
+                  <div className="flex gap-4 text-xs text-[var(--text-muted)] mt-1">
+                    {bookingForm.bookerPhone && <span>{bookingForm.bookerPhone}</span>}
+                    {bookingForm.bookerEmail && <span>{bookingForm.bookerEmail}</span>}
                   </div>
-                </>
+                </div>
               )}
 
               {/* Custom questions */}
@@ -1382,7 +1401,7 @@ export default function RoomBooking() {
                   {editClash && (
                     <div className="flex items-start gap-2 p-2.5 rounded-[var(--radius)] bg-[var(--danger-light)] border border-[var(--danger)]/30">
                       <AlertCircle className="h-4 w-4 text-[var(--danger)] shrink-0 mt-0.5" />
-                      <p className="text-[12px] text-[var(--danger)]">המשבצת הזו תפוסה על ידי {editClash.booker_name} ({SLOTS[editClash.slot]?.short}). יש לבחור תאריך או משבצת אחרים.</p>
+                      <p className="text-[12px] text-[var(--danger)]">המשבצת הזו תפוסה על ידי {bookerLabel(editClash)} ({SLOTS[editClash.slot]?.short}). יש לבחור תאריך או משבצת אחרים.</p>
                     </div>
                   )}
 
@@ -1406,31 +1425,20 @@ export default function RoomBooking() {
                         ...buildingUnits.map(u => ({ value: u.id, label: u.name ? u.label : `דירה ${u.number} — ללא דייר` }))]} />
                   )}
 
-                  {/* A booking on a flat carries the name of someone registered to
-                      it — never a login handle. Free text is for guests only. */}
-                  {!editForm.is_guest && editForm.unit_id && (membersByUnit[editForm.unit_id] || []).length > 0 ? (
-                    <FormSelect label="השריון על שם" value={editForm.booker_name}
-                      onChange={(e) => {
-                        const name = e.target.value
-                        const m = (membersByUnit[editForm.unit_id] || []).find(x => x.name === name)
-                        setEditForm(f => ({
-                          ...f, booker_name: name,
-                          booker_phone: m?.phone || f.booker_phone,
-                          booker_email: m?.email || f.booker_email,
-                        }))
-                      }}
-                      options={(() => {
-                        const members = membersByUnit[editForm.unit_id] || []
-                        const opts = members.map(m => ({ value: m.name, label: m.isPrimary ? `${m.name} (בעל הדירה)` : m.name }))
-                        // Keep whatever is on the booking now, so an old name is
-                        // never silently swapped when the dialog merely opens.
-                        if (editForm.booker_name && !members.some(m => m.name === editForm.booker_name)) {
-                          opts.unshift({ value: editForm.booker_name, label: `${editForm.booker_name} (לא ברשימת הדיירים)` })
-                        }
-                        return opts
-                      })()} />
+                  {/* A booking on a flat is identified by flat + family name,
+                      taken from the directory. Free text is for guests only. */}
+                  {!editForm.is_guest ? (
+                    <div className="p-2.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)]">
+                      <p className="text-[11px] text-[var(--text-muted)]">השריון רשום על</p>
+                      <p className="text-[13px] font-semibold">
+                        {editForm.unit_id
+                          ? `דירה ${residentMap[editForm.unit_id]?.number || ''}${residentMap[editForm.unit_id]?.name ? ` — ${residentMap[editForm.unit_id].name}` : ''}`
+                          : 'ללא דירה'}
+                      </p>
+                      <p className="text-[11px] text-[var(--text-muted)] mt-0.5">השם נלקח מרשימת הדיירים — שינוי דירה מעדכן אותו אוטומטית.</p>
+                    </div>
                   ) : (
-                    <FormField label="שם המזמין" value={editForm.booker_name}
+                    <FormField label="שם האורח" value={editForm.booker_name}
                       onChange={(e) => setEditForm(f => ({ ...f, booker_name: e.target.value }))} />
                   )}
                   <div className="grid grid-cols-2 gap-3">
@@ -1482,7 +1490,7 @@ export default function RoomBooking() {
               <div className="space-y-4 mt-2">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="text-[16px] font-bold">{bk.booker_name}</span>
+                    <span className="text-[16px] font-bold">{bookerLabel(bk)}</span>
                     {bk.is_guest && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--warning-light)] text-[var(--warning)] font-semibold">אורח</span>}
                   </div>
                   <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold border ${cfg.bg}`}>
@@ -1565,7 +1573,7 @@ export default function RoomBooking() {
           {approveDialog && (
             <div className="space-y-4 mt-2">
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm">
-                <p><strong>{approveDialog.booker_name}</strong> — {new Date(approveDialog.booking_date).toLocaleDateString('he-IL')} — {SLOTS[approveDialog.slot]?.short || approveDialog.slot}</p>
+                <p><strong>{bookerLabel(approveDialog)}</strong> — {new Date(approveDialog.booking_date).toLocaleDateString('he-IL')} — {SLOTS[approveDialog.slot]?.short || approveDialog.slot}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1.5">הערות לדייר (יישלחו במייל האישור)</label>
@@ -1628,6 +1636,11 @@ function BookingCard({ bk, resource, residentMap, onCancel, onOpen, onTogglePaid
   const questions = resource?.custom_questions || []
   const answers = bk.answers || {}
   const muted = bk.status === 'cancelled' || bk.status === 'rejected'
+  // Flat + family name. A booking is a household's, so no first names here.
+  const who = bk.is_guest
+    ? (bk.booker_name || 'אורח חיצוני')
+    : [unit?.number ? `דירה ${unit.number}` : null, unit?.name || bk.booker_name || null]
+      .filter(Boolean).join(' — ') || 'דייר'
 
   return (
     <div
@@ -1641,14 +1654,13 @@ function BookingCard({ bk, resource, residentMap, onCancel, onOpen, onTogglePaid
         <span className="p-2 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><SlotIcon className="h-5 w-5" /></span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[14px] font-semibold">{bk.booker_name}</span>
+            <span className="text-[14px] font-semibold">{who}</span>
             {bk.is_guest && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--warning-light)] text-[var(--warning)] font-semibold">אורח</span>}
             <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full font-semibold border ${statusCfg.bg}`}>{statusCfg.label}</span>
           </div>
           <div className="flex items-center gap-x-3 flex-wrap text-[12px] text-[var(--text-muted)] num-tabular">
             <span>{new Date(bk.booking_date).toLocaleDateString('he-IL')}</span>
             <span>{slotInfo.short}</span>
-            {unit && <span>דירה {unit.number}</span>}
             {bk.booker_phone && <span>{bk.booker_phone}</span>}
           </div>
         </div>

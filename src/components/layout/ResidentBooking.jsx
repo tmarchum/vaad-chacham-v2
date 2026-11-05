@@ -40,7 +40,7 @@ function slotsForDow(dow) {
   return ['morning', 'evening']             // Sun–Thu
 }
 
-export function ResidentBooking({ resources, profile, user, ownerName, onCreated }) {
+export function ResidentBooking({ resources, profile, user, unitNumber, onCreated }) {
   const [resourceId, setResourceId] = useState(resources[0]?.id || '')
   const [bookings, setBookings] = useState([])
   const [calMonth, setCalMonth] = useState(new Date().getMonth())
@@ -52,9 +52,12 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
   const [error, setError] = useState(null)
   const [ok, setOk] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
-  // Who the flat is registered to. The signup profile holds a login handle
-  // ("dkuper100"), so the name on a booking comes from the building's resident
-  // directory instead — see migration 030, which enforces the same rule.
+  // Who the flat is registered to. A booking belongs to the flat, so it is
+  // recorded as "דירה 26 — מתתיה": the FAMILY NAME from the building's resident
+  // directory, never the signup profile (which holds a login handle such as
+  // "dkuper100") and never a first name. Migration 031 enforces the same rule
+  // server-side. The household list is loaded only to default the contact
+  // details of whoever is signed in.
   const [household, setHousehold] = useState([])
   const [bookerId, setBookerId] = useState('')
 
@@ -84,8 +87,7 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
         .eq('archived', false)
       if (!active) return
       const list = (data || [])
-        .map(r => ({ ...r, name: `${r.first_name || ''} ${r.last_name || ''}`.trim() }))
-        .filter(r => r.name)
+        .map(r => ({ ...r, family: (r.last_name || '').trim() }))
         .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
       setHousehold(list)
       // Default to whoever is signed in; otherwise the primary resident.
@@ -101,6 +103,9 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
   }, [profile?.unit_id, user?.id, user?.email])
 
   const booker = household.find(r => r.id === bookerId) || household[0] || null
+  // The flat's family name: the primary resident's, falling back to anyone registered.
+  const familyName = (household.find(r => r.is_primary)?.family || household.find(r => r.family)?.family || '').trim()
+  const flatLabel = [unitNumber && unitNumber !== '—' ? `דירה ${unitNumber}` : '', familyName].filter(Boolean).join(' — ')
 
   // Taken slots: "dk|slot" for bookings that are not cancelled/rejected
   const takenSlots = useMemo(() => {
@@ -199,9 +204,10 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       building_id: profile.building_id,
       resource_id: resource.id,
       unit_id: profile.unit_id,
-      // The directory is the source of truth; ownerName is only a fallback for
-      // a flat with no resident record yet.
-      booker_name: booker?.name || ownerName || 'דייר',
+      // The flat's family name from the directory. The server trigger rewrites
+      // it from unit_residents anyway, so a flat with no resident record yet
+      // simply shows as its number.
+      booker_name: familyName,
       booker_phone: phone || booker?.phone || '',
       booker_email: booker?.email || user?.email || '',
       booking_date: selectedDay.dk,
@@ -384,28 +390,10 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
             })}
           </div>
 
-          {/* The booking is on the name of a registered resident, never a login handle */}
-          {household.length > 1 ? (
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">השריון על שם</label>
-              <select
-                value={bookerId}
-                onChange={e => {
-                  const id = e.target.value
-                  setBookerId(id)
-                  const r = household.find(x => x.id === id)
-                  if (r?.phone) setPhone(r.phone)
-                }}
-                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400"
-              >
-                {household.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}{r.is_primary ? ' (בעל הדירה)' : ''}</option>
-                ))}
-              </select>
-            </div>
-          ) : booker ? (
-            <p className="text-xs text-slate-500">השריון יירשם על שם <span className="font-semibold text-slate-700">{booker.name}</span></p>
-          ) : null}
+          {/* The booking belongs to the flat: number + family name, no first names */}
+          {flatLabel && (
+            <p className="text-xs text-slate-500">השריון יירשם על <span className="font-semibold text-slate-700">{flatLabel}</span></p>
+          )}
 
           <input
             type="tel" inputMode="numeric" placeholder="טלפון ליצירת קשר (10 ספרות)"

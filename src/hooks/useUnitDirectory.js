@@ -6,8 +6,10 @@ import { sortByUnitNumber } from '@/lib/utils'
 // units column — they live in unit_residents — so any picker that reads
 // unit.ownerName silently shows nothing. Use this instead.
 //
-// Returns units sorted by running number, each with the primary resident's
-// name/phone, plus a byId map and a ready "דירה 12 — כהן" label.
+// A flat's occupants are identified by FLAT NUMBER + FAMILY NAME, never by a
+// first name: the committee screens are shared, printed and exported, and a
+// household is one payer, one debtor, one booking — not a person. So `name`
+// here is the family name, and `label` is the ready "דירה 12 — כהן".
 export function useUnitDirectory(buildingId) {
   const [units, setUnits] = useState([])
   const [residents, setResidents] = useState([])
@@ -25,7 +27,7 @@ export function useUnitDirectory(buildingId) {
       const { data: r } = ids.length
         ? await supabase
           .from('unit_residents')
-          .select('unit_id, first_name, last_name, phone, email, is_primary, resident_type')
+          .select('unit_id, last_name, phone, email, is_primary, resident_type')
           .in('unit_id', ids)
           .eq('archived', false)
         : { data: [] }
@@ -44,40 +46,23 @@ export function useUnitDirectory(buildingId) {
     }
     const list = [...units].sort(sortByUnitNumber).map((u) => {
       const r = primary[u.id]
-      const name = r ? `${r.first_name || ''} ${r.last_name || ''}`.trim() : ''
+      // Family name only. No first names anywhere in the committee UI.
+      const name = (r?.last_name || '').trim()
       return {
         id: u.id,
         number: u.number,
         floor: u.floor,
         type: u.custom_fields?.unit_type === 'rented' ? 'rented' : 'owned',
-        name,
-        lastName: r?.last_name || '',
+        name,            // family name — the household's display name
+        family: name,     // explicit alias, for call sites that read better
+        lastName: name,
         phone: r?.phone || '',
         email: r?.email || '',
         label: `דירה ${u.number}${name ? ` — ${name}` : ''}`,
+        household: name ? `משפחת ${name}` : `דירה ${u.number}`,
       }
     })
     const byId = Object.fromEntries(list.map((x) => [x.id, x]))
-    // Everyone registered to each flat, primary first — for the places that
-    // must offer a choice of person rather than assume the primary resident.
-    // Deduplicated by name: a re-import of the resident list can leave two
-    // identical rows for the same person, and offering the same name twice in
-    // a picker helps nobody.
-    const membersByUnit = {}
-    const seen = new Set()
-    for (const r of residents) {
-      const name = `${r.first_name || ''} ${r.last_name || ''}`.trim()
-      if (!name) continue
-      const key = `${r.unit_id}|${name.toLowerCase()}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      ;(membersByUnit[r.unit_id] ||= []).push({
-        name, phone: r.phone || '', email: r.email || '', isPrimary: !!r.is_primary,
-      })
-    }
-    for (const members of Object.values(membersByUnit)) {
-      members.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
-    }
-    return { units: list, byId, membersByUnit, loading }
+    return { units: list, byId, loading }
   }, [units, residents, loading])
 }

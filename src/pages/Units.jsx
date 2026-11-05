@@ -188,6 +188,13 @@ function fullName(p) {
   return [p?.first_name || p?.firstName, p?.last_name || p?.lastName].filter(Boolean).join(' ')
 }
 
+// How a flat is identified across the app: family name only, never a first
+// name. fullName stays for the household roster and the edit forms, where the
+// individual people are actually managed.
+function familyName(p) {
+  return (p?.last_name || p?.lastName || '').trim()
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 function Units() {
   const { buildings, selectedBuilding } = useBuildingContext()
@@ -739,7 +746,7 @@ function Units() {
                     const { parking, storage, gate } = unitFacts(u)
                     const ok = !!(u.details_confirmed_at || u.detailsConfirmedAt)
                     const isSel = selectedUnit?.id === u.id
-                    const initials = p ? [(p.first_name || '')[0], (p.last_name || '')[0]].filter(Boolean).join('') : ''
+                    const initials = p ? (familyName(p)[0] || '') : ''
                     return (
                       <tr key={u.id} onClick={() => pickUnit(u)} className={`cursor-pointer ${isSel ? '!bg-[var(--surface-secondary)] shadow-[inset_-3px_0_0_var(--primary)]' : ''}`}>
                         <td className="whitespace-nowrap">
@@ -757,7 +764,7 @@ function Units() {
                             <div className="flex items-center gap-2">
                               <span className="h-8 w-8 rounded-full bg-[var(--surface-secondary)] border border-[var(--border)] flex items-center justify-center text-[11px] font-bold text-[var(--text-secondary)]">{initials}</span>
                               <div>
-                                <span className="text-[13px] font-semibold">{fullName(p)}</span>
+                                <span className="text-[13px] font-semibold">{familyName(p) || 'ללא שם משפחה'}</span>
                                 {p.phone && <span className="block text-[11px] text-[var(--text-muted)] num-tabular" dir="ltr">{p.phone}</span>}
                               </div>
                             </div>
@@ -813,9 +820,9 @@ function Units() {
                     </div>
                   </div>
                   {primary?.phone && (
-                    <a href={waLink(primary.phone, `שלום ${primary.first_name || ''}, `) || '#'} target="_blank" rel="noopener noreferrer"
+                    <a href={waLink(primary.phone, familyName(primary) ? `שלום משפחת ${familyName(primary)}, ` : 'שלום, ') || '#'} target="_blank" rel="noopener noreferrer"
                       className="w-full h-10 rounded-[var(--radius)] bg-[var(--success)] hover:opacity-90 text-white text-[13px] font-semibold flex items-center justify-center gap-2">
-                      <MessageCircle className="h-4 w-4" />פתיחת צ׳אט וואטסאפ עם {fullName(primary)}
+                      <MessageCircle className="h-4 w-4" />פתיחת צ׳אט וואטסאפ עם דירה {u.number}
                     </a>
                   )}
                 </div>

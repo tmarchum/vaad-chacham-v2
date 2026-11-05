@@ -70,9 +70,14 @@ export function ResidentPortal({ profileOverride = null }) {
   const [openForm, setOpenForm] = useState(null)
 
   const unitNumber = unit?.unit_number || unit?.number || '—'
-  // Prefer the saved profile name; fall back to the Google account name
-  const ownerName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
-    || `${user?.user_metadata?.given_name || ''} ${user?.user_metadata?.family_name || ''}`.trim()
+  // A resident is identified by flat + family name. The signup profile holds a
+  // login handle, so the family name comes from the flat's resident records.
+  const familyName = (() => {
+    const active = (residents || []).filter(r => !r.archived)
+    const r = active.find(x => x.is_primary) || active.find(x => (x.last_name || '').trim())
+    return (r?.last_name || '').trim()
+  })()
+  const flatLabel = [unitNumber !== '—' ? `דירה ${unitNumber}` : '', familyName].filter(Boolean).join(' — ')
 
   // ── Data loading ──────────────────────────────────────────────
   const loadUnitScoped = useCallback(async () => {
@@ -130,7 +135,6 @@ export function ResidentPortal({ profileOverride = null }) {
   const gregDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
   const hour = now.getHours()
   const greeting = hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : 'ערב טוב'
-  const firstName = profile?.first_name || user?.user_metadata?.given_name || ''
   const [hebrewDate, setHebrewDate] = useState('')
   useEffect(() => {
     let timer
@@ -226,7 +230,7 @@ export function ResidentPortal({ profileOverride = null }) {
           <div className={`${card} p-5 space-y-4`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="text-[24px] leading-8 font-bold text-[var(--text-primary)]">{greeting}{firstName ? `, ${firstName}` : ''} 👋</h1>
+                <h1 className="text-[24px] leading-8 font-bold text-[var(--text-primary)]">{greeting}{familyName ? `, משפחת ${familyName}` : ''} 👋</h1>
                 <span className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-[var(--radius)] bg-[var(--surface-container)] border border-[var(--primary)]/15 text-[12px] font-semibold text-[var(--primary-dark)]">
                   <MapPin className="h-3.5 w-3.5" />
                   {[building?.name, unitNumber !== '—' ? `דירה ${unitNumber}` : '', floorLabel].filter(Boolean).join(' • ')}
@@ -331,7 +335,7 @@ export function ResidentPortal({ profileOverride = null }) {
               resources={resources}
               profile={profile}
               user={user}
-              ownerName={ownerName}
+              unitNumber={unitNumber}
               onCreated={() => loadBuildingScoped(building?.id || profile?.building_id)}
             />
           </div>
@@ -348,7 +352,7 @@ export function ResidentPortal({ profileOverride = null }) {
             <ProfileSection
               profile={profile}
               user={user}
-              ownerName={ownerName}
+              flatLabel={flatLabel}
               updateProfile={updateProfile}
             />
             {unit && (
@@ -646,7 +650,7 @@ function AppUpdateBanner() {
 /* ════════════════════════════════════════════════════════════════
    My profile
    ════════════════════════════════════════════════════════════════ */
-function ProfileSection({ profile, user, ownerName, updateProfile }) {
+function ProfileSection({ profile, user, flatLabel, updateProfile }) {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     first_name: profile?.first_name || user?.user_metadata?.given_name || '',
@@ -750,7 +754,7 @@ function ProfileSection({ profile, user, ownerName, updateProfile }) {
         <div className="space-y-2.5">
           <div className="flex items-center gap-2.5 text-sm">
             <UserCog className="h-4 w-4 text-slate-400 shrink-0" />
-            <span className="text-slate-700 font-medium">{ownerName || 'דייר'}</span>
+            <span className="text-slate-700 font-medium">{flatLabel || 'דייר'}</span>
           </div>
           <div className="flex items-center gap-2.5 text-sm">
             <Mail className="h-4 w-4 text-slate-400 shrink-0" />

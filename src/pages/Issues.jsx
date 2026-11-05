@@ -497,11 +497,13 @@ function Issues() {
     const units = form.buildingId
       ? allUnits.filter((u) => u.buildingId === form.buildingId)
       : allUnits
+    // Flat number + family name, from the resident directory (units.owner_name
+    // is almost always empty, which left the picker reading "דירה 26 - ").
     return [...units].sort(sortByUnitNumber).map((u) => ({
       value: u.id,
-      label: `דירה ${u.unit_number || u.number} - ${u.ownerName || ''}`,
+      label: dir.byId[u.id]?.label || `דירה ${u.unit_number || u.number}`,
     }))
-  }, [allUnits, form.buildingId])
+  }, [allUnits, form.buildingId, dir.byId])
 
   // Only vendors whose trade fits the issue (synonym-aware). Falls back to all
   // vendors when the issue has no category/title to match on.

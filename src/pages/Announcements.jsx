@@ -443,7 +443,7 @@ function Announcements() {
         const { data: residents } = unitIds.length
           ? await supabase
             .from('unit_residents')
-            .select('email, first_name, last_name')
+            .select('email')
             .in('unit_id', unitIds)
             .eq('archived', false)
             .not('email', 'is', null)

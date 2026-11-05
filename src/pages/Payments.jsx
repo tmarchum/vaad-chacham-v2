@@ -227,14 +227,12 @@ function Payments() {
   const getUnitDisplay = (unitId) => {
     const unit = unitMap[unitId]
     if (!unit) return ''
-    const name = residentMap[unitId] || unit.ownerName || ''
-    const familyName = name.split(' ').slice(-1)[0] || ''
-    return `דירה ${unit.unit_number || unit.number}${familyName ? ` - ${familyName}` : ''}`
+    // residentMap already holds the family name — no first names in payments.
+    const familyName = residentMap[unitId] || ''
+    return `דירה ${unit.unit_number || unit.number}${familyName ? ` — ${familyName}` : ''}`
   }
 
-  const getOwnerName = (unitId) => {
-    return residentMap[unitId] || unitMap[unitId]?.ownerName || ''
-  }
+  const getOwnerName = (unitId) => residentMap[unitId] || ''
 
   const getBuildingName = (unitId) => {
     const unit = unitMap[unitId]
@@ -354,10 +352,10 @@ function Payments() {
 
   const handleExport = () => {
     if (viewMode === 'yearly') {
-      const headers = ['דירה', 'בעלים', 'חיוב חודשי', 'צפי שנתי', 'נגבה', 'פער', 'חודשים ששולמו']
+      const headers = ['דירה', 'שם משפחה', 'חיוב חודשי', 'צפי שנתי', 'נגבה', 'פער', 'חודשים ששולמו']
       const rows = yearlySummary.map((r) => [
         `דירה ${r.unit.unit_number || r.unit.number}`,
-        r.unit.ownerName || '',
+        getOwnerName(r.unit.id),
         r.fee,
         r.expected,
         r.collected,

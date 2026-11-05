@@ -339,7 +339,7 @@ function Dashboard() {
                 <tbody>
                   {tableRows.slice(0, 8).map((r) => {
                     const st = PAY_STATUS[r.status] || PAY_STATUS.pending
-                    const msg = `שלום${r.u?.name ? ' ' + r.u.name : ''}, תזכורת ידידותית מוועד הבית: דמי הוועד לחודש ${monthName} (${formatCurrency(r.amount)}) טרם התקבלו. תודה רבה 🙏`
+                    const msg = `שלום ${r.u?.household || `דירה ${r.u?.number || ''}`.trim()}, תזכורת ידידותית מוועד הבית: דמי הוועד לחודש ${monthName} (${formatCurrency(r.amount)}) טרם התקבלו. תודה רבה 🙏`
                     return (
                       <tr key={r.id}>
                         <td className="whitespace-nowrap">

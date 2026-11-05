@@ -823,7 +823,8 @@ export default function SmartAgents() {
 
   // Resident names live in unit_residents (units has no owner_name column).
   const directory = useUnitDirectory(selectedBuilding?.id)
-  const nameOf = (unit) => directory.byId?.[unit.id]?.name || unit.tenant_name || ''
+  // Family name from the resident directory. units has no name column.
+  const nameOf = (unit) => directory.byId?.[unit.id]?.name || ''
 
   const [activeAgent, setActiveAgent] = useState(null)
   const [messageDialog, setMessageDialog] = useState({ open: false, title: '', content: '' })
@@ -1008,8 +1009,10 @@ export default function SmartAgents() {
   // Helper: generate reminder message
   // -------------------------------------------------------------------------
   function generateReminderMessage(debtor) {
-    const name = nameOf(debtor.unit) || `דירה ${debtor.unit.number}`
-    return `שלום ${name},\n\nאנו פונים אליך בנושא תשלום דמי ועד בית עבור דירה ${debtor.unit.number} בבניין ${selectedBuilding?.name}.\n\nנמצאו ${debtor.unpaidCount} חודשים שטרם שולמו בסכום כולל של ${formatCurrency(debtor.totalDebt)}.\n\nנבקשך להסדיר את התשלום בהקדם האפשרי.\n\nבברכה,\nועד הבית`
+    // Addressed to the household — flat + family name, never a first name.
+    const family = nameOf(debtor.unit)
+    const who = family ? `משפחת ${family}` : `דיירי דירה ${debtor.unit.number}`
+    return `שלום ${who},\n\nאנו פונים אליך בנושא תשלום דמי ועד בית עבור דירה ${debtor.unit.number} בבניין ${selectedBuilding?.name}.\n\nנמצאו ${debtor.unpaidCount} חודשים שטרם שולמו בסכום כולל של ${formatCurrency(debtor.totalDebt)}.\n\nנבקשך להסדיר את התשלום בהקדם האפשרי.\n\nבברכה,\nועד הבית`
   }
 
   // -------------------------------------------------------------------------

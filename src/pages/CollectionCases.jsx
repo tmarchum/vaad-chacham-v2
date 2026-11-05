@@ -147,7 +147,9 @@ export default function CollectionCases() {
           const payload = {
             building_id: selectedBuilding.id, unit_id: u.id,
             unit_number: u.number ?? null,
-            resident_name: r ? `${r.first_name || ''} ${r.last_name || ''}`.trim() || null : null,
+            // Family name only — a debt is the household's, and these cases are
+            // printed and exported.
+            resident_name: (r?.last_name || '').trim() || null,
             resident_email: r?.email || null,
             resident_phone: r?.phone || null,
             total_debt: debt, months_overdue: months,
@@ -215,7 +217,7 @@ export default function CollectionCases() {
       const r = primary[u.id]
       info[u.id] = {
         number: u.unit_number || u.number,
-        residentName: r ? `${r.first_name || ''} ${r.last_name || ''}`.trim() : '',
+        residentName: (r?.last_name || '').trim(),
         email: r?.email || '',
         phone: r?.phone || '',
       }
@@ -384,12 +386,13 @@ export default function CollectionCases() {
     // The debt belongs to the person on the case, not to whoever lives in
     // the unit today — prefer the case snapshot over the live resident.
     const phone = c.resident_phone || live.phone || ''
-    const name = c.resident_name || live.residentName || 'דייר'
+    const family = c.resident_name || live.residentName || ''
+    const who = family ? `משפחת ${family}` : `דיירי דירה ${live.number || c.unit_number || ''}`.trim()
     const amount = formatCurrency(c.total_debt || 0)
     const months = c.months_overdue || 1
     const building = selectedBuilding?.name || 'הבניין'
     const msg =
-      `שלום ${name},\n\nאנו פונים אליך בעניין יתרת חוב ועד בית לבניין "${building}".\n\n` +
+      `שלום ${who},\n\nאנו פונים אליך בעניין יתרת חוב ועד בית לבניין "${building}".\n\n` +
       `סה"כ חוב: ${amount}\nחודשים באיחור: ${months}\n\n` +
       `נבקשך להסדיר את התשלום בהקדם האפשרי.\n\nתודה, ועד הבניין`
     // Deliberately a MANUAL wa.me link (never the GreenAPI system gateway —
