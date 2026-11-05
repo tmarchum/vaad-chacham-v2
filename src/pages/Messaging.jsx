@@ -64,6 +64,8 @@ const ERRORS = {
   not_your_resident: 'המספר אינו של דייר פעיל בבניין שבניהולך',
   bad_number: 'מספר טלפון לא תקין',
   missing_variables: 'יש למלא את כל השדות',
+  waba_id_missing: 'חסר מזהה חשבון WhatsApp Business (WABA ID) בלשונית "חיבור"',
+  forbidden: 'הפעולה פתוחה למנהל בלבד',
 }
 
 const render = (body, vars) => String(body || '').replace(/\{\{(\d+)\}\}/g, (_, n) => vars[Number(n) - 1] || `[${n}]`)
@@ -316,6 +318,20 @@ function SendPanel({ templates, officialOn, dir, vendors, building, onSent }) {
 function TemplatesPanel({ templates, isAdmin, officialOn, reload }) {
   const [busy, setBusy] = useState('')
   const [edit, setEdit] = useState(null)
+  const [check, setCheck] = useState(null)
+
+  // Readiness check — works before the Meta keys exist, so a rejectable
+  // template is found here and not by Meta.
+  const runCheck = async () => {
+    setBusy('check-templates')
+    const res = await invokeWa({ action: 'check-templates' })
+    setBusy('')
+    if (!res.ok) { toastError(ERRORS[res.error] || res.error || 'הבדיקה נכשלה'); return }
+    setCheck(res)
+    toast(res.blocked?.length
+      ? `${res.ready} מתוך ${res.total} תבניות תקינות • ${res.blocked.length} ייפסלו אצל Meta`
+      : `כל ${res.total} התבניות עומדות בכללים של Meta ומוכנות להגשה`)
+  }
 
   const run = async (action) => {
     setBusy(action)
@@ -353,6 +369,9 @@ function TemplatesPanel({ templates, isAdmin, officialOn, reload }) {
             הודעה יזומה בוואטסאפ הרשמי חייבת לצאת מתבנית ש-Meta אישרה. המערכת מגישה את התבניות לאישור ומעדכנת סטטוס אוטומטית.
           </p>
           <div className="flex gap-2 shrink-0">
+            <Button variant="outline" onClick={runCheck} disabled={!!busy}>
+              <ShieldCheck className={cn('h-4 w-4', busy === 'check-templates' && 'animate-pulse')} />בדיקת תקינות
+            </Button>
             <Button variant="outline" onClick={() => run('refresh-templates')} disabled={!officialOn || !!busy}>
               <RefreshCw className={cn('h-4 w-4', busy === 'refresh-templates' && 'animate-spin')} />רענון סטטוס
             </Button>
@@ -360,6 +379,25 @@ function TemplatesPanel({ templates, isAdmin, officialOn, reload }) {
               <ShieldCheck className="h-4 w-4" />{busy === 'sync-templates' ? 'שולח...' : 'הגש לאישור Meta'}
             </Button>
           </div>
+        </div>
+      )}
+      {check && (
+        <div className={cn('p-3 sm:p-4 rounded-[var(--radius)] border text-[12px]',
+          check.blocked?.length
+            ? 'border-rose-500/40 bg-rose-500/5 text-rose-700'
+            : 'border-emerald-500/40 bg-emerald-500/5 text-emerald-700')}>
+          {check.blocked?.length ? (
+            <>
+              <p className="font-semibold mb-1.5">{check.blocked.length} תבניות ייפסלו אצל Meta — יש לתקן את הנוסח לפני הגשה:</p>
+              <ul className="space-y-1">
+                {check.blocked.map((b) => (
+                  <li key={b.key}><span className="font-semibold">{b.title}</span> — {b.problems.join(' • ')}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="font-semibold">כל {check.total} התבניות עומדות בכללי הנוסח של Meta ומוכנות להגשה.</p>
+          )}
         </div>
       )}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">

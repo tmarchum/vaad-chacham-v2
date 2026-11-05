@@ -6,6 +6,8 @@
 //   { action: 'status' }                          → phone number info from Graph
 //   { action: 'sync-templates' }                  → submit draft/rejected templates to Meta, then refresh (admin)
 //   { action: 'refresh-templates' }               → pull template statuses from Meta (admin)
+//   { action: 'check-templates' }                 → validate every template against Meta's
+//                                                   rules WITHOUT the Meta keys (admin)
 //   { action: 'send', audience, to, templateKey, variables[], buildingId?, unitId?, vendorId?, confirmManual? }
 //   { action: 'send-text', audience, to, text, … } → free text (only inside Meta's 24h service window)
 //
@@ -59,6 +61,46 @@ const cleanParam = (v: unknown) =>
 
 const render = (body: string, vars: string[]) =>
   body.replace(/\{\{(\d+)\}\}/g, (_, n) => vars[Number(n) - 1] ?? `{{${n}}}`)
+
+type Tpl = {
+  key: string; category: string; language: string | null; body: string
+  variables: unknown; example: unknown
+}
+
+/**
+ * Meta's template review rejects some bodies outright, before a human reads
+ * them, and the Graph error says nothing useful about why. Catch those here so
+ * a sync never spends a submission on a template that cannot pass.
+ *
+ * Reasons are Hebrew because they are shown to the admin as-is.
+ */
+function templateProblems(t: Tpl): string[] {
+  const out: string[] = []
+  const body = String(t.body || '')
+  const vars = Array.isArray(t.variables) ? t.variables : []
+  const ex = Array.isArray(t.example) ? t.example : []
+
+  if (!/^[a-z0-9_]{1,512}$/.test(t.key)) out.push('שם התבנית חייב להיות אותיות קטנות באנגלית, ספרות וקו תחתון')
+  if (!['AUTHENTICATION', 'MARKETING', 'UTILITY'].includes(t.category)) out.push(`קטגוריה לא חוקית: ${t.category}`)
+  if (!body.trim()) out.push('גוף ההודעה ריק')
+  if (body.length > 1024) out.push(`גוף ההודעה ${body.length} תווים, המקסימום 1024`)
+
+  const nums = [...body.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((m) => Number(m[1]))
+  const uniq = [...new Set(nums)].sort((a, b) => a - b)
+  if (uniq.length && uniq.some((n, i) => n !== i + 1)) out.push(`רצף המשתנים חייב להתחיל ב-1 וללא דילוגים (כרגע: ${uniq.join(',')})`)
+  if (/\}\}\s*\{\{/.test(body)) out.push('שני משתנים צמודים — חייב להיות טקסט ביניהם')
+  if (/^\s*\{\{/.test(body)) out.push('ההודעה לא יכולה להתחיל במשתנה')
+  if (/\}\}\s*$/.test(body)) out.push('ההודעה לא יכולה להסתיים במשתנה')
+
+  if (vars.length !== uniq.length) out.push(`${uniq.length} משתנים בגוף ההודעה אך ${vars.length} שמות משתנים`)
+  if (ex.length !== uniq.length) out.push(`${uniq.length} משתנים בגוף ההודעה אך ${ex.length} דוגמאות`)
+  ex.forEach((v, i) => {
+    const s = String(v ?? '')
+    if (!s.trim()) out.push(`דוגמה ריקה למשתנה {{${i + 1}}}`)
+    else if (/[\n\r\t]/.test(s)) out.push(`דוגמה למשתנה {{${i + 1}}} מכילה שורה חדשה או טאב`)
+  })
+  return out
+}
 
 async function loadConfig(svc: SupabaseClient) {
   const { data: integ } = await svc.from('messaging_integrations').select('*').eq('provider', PROVIDER).maybeSingle()
@@ -292,6 +334,22 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, has_token: !!sec?.api_token, has_app_secret: !!sec?.app_secret, webhook_url: webhookUrl, verify_token: verify })
     }
 
+    // Readiness check. Deliberately above the not_configured guard: the whole
+    // point is to find rejectable templates BEFORE the Meta keys are in place,
+    // so the first sync is not a wall of rejections.
+    if (action === 'check-templates') {
+      const { data: tpls } = await svc.from('message_templates').select('key, title, category, language, body, variables, example, active')
+      const checked = (tpls || []).filter((t) => t.active).map((t) => ({
+        key: t.key, title: t.title, problems: templateProblems(t as Tpl),
+      }))
+      return json({
+        ok: true,
+        total: checked.length,
+        ready: checked.filter((c) => !c.problems.length).length,
+        blocked: checked.filter((c) => c.problems.length),
+      })
+    }
+
     const token = sec?.api_token
     if (!integ?.phone_number_id || !token) return json({ ok: false, error: 'not_configured' })
 
@@ -314,6 +372,15 @@ Deno.serve(async (req: Request) => {
         const { data: tpls } = await svc.from('message_templates').select('*').eq('active', true)
         for (const t of tpls || []) {
           if (!['draft', 'REJECTED'].includes(t.meta_status)) continue
+          // Never spend a submission on a body Meta will reject on sight.
+          const bad = templateProblems(t as Tpl)
+          if (bad.length) {
+            submitted.push({ key: t.key, ok: false, error: bad.join(' • ') })
+            await svc.from('message_templates').update({
+              rejection_reason: bad.join(' • '), updated_at: new Date().toISOString(),
+            }).eq('key', t.key)
+            continue
+          }
           const ex = (t.example || []) as string[]
           const component: Record<string, unknown> = { type: 'BODY', text: t.body }
           if (ex.length) component.example = { body_text: [ex.map(cleanParam)] }
