@@ -662,6 +662,21 @@ function ConnectionPanel({ cfg, reload }) {
             <Button onClick={save} disabled={!!busy}>{busy === 'save' ? 'שומר...' : 'שמירה'}</Button>
             <Button variant="outline" onClick={test} disabled={!!busy}><RefreshCw className={cn('h-4 w-4', busy === 'test' && 'animate-spin')} />בדיקת חיבור</Button>
           </div>
+          {info?.token && (
+            <div className={cn('p-3 rounded-[var(--radius)] text-[12px] border',
+              info.token.permanent
+                ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-700'
+                : 'border-amber-500/50 bg-amber-500/5 text-amber-800')}>
+              {info.token.permanent ? (
+                <p><b>טוקן קבוע ✓</b> — לא יפוג. אפליקציית Meta: {info.token.appName || '—'}</p>
+              ) : (
+                <>
+                  <p><b>זהו טוקן זמני</b> — הוא יפוג ב-{fmtTime(info.token.expiresAt)} והשליחה תפסיק לעבוד.</p>
+                  <p className="mt-1">זה הטוקן שמסך API Setup נותן לבדיקות. לטוקן קבוע: Business Settings → System Users → הוספת משתמש מערכת → Generate New Token עם ההרשאות whatsapp_business_messaging ו-whatsapp_business_management.</p>
+                </>
+              )}
+            </div>
+          )}
           {(info?.info || c.display_number) && (
             <div className="p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[12px] space-y-0.5 num-tabular">
               <p>מספר: <b dir="ltr">{info?.info?.display_phone_number || c.display_number}</b></p>

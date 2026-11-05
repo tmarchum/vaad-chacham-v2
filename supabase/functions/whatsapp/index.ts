@@ -123,6 +123,41 @@ async function graph(integ: Integ | null, token: string, path: string, init: Req
   return { ok: r.ok, status: r.status, data: j as Record<string, unknown> }
 }
 
+/**
+ * Is this token the permanent one, or the 24-hour token from the API Setup
+ * page? Pasting the temporary one is the most common way this integration
+ * "works" on the day it is set up and is silently dead the next morning, and
+ * nothing in the token string says which it is — only Meta knows.
+ *
+ * debug_token needs an app access token (app_id|app_secret). We hold the
+ * secret but not the id, so ask the token which app it belongs to first.
+ * Best-effort: any failure returns null and the connection check is unaffected.
+ */
+async function inspectToken(integ: Integ | null, token: string, appSecret?: string | null) {
+  if (!appSecret) return null
+  try {
+    const app = await graph(integ, token, 'app?fields=id,name')
+    const appId = app.ok ? String(app.data.id || '') : ''
+    if (!appId) return null
+    const d = await graph(integ, token,
+      `debug_token?input_token=${encodeURIComponent(token)}&access_token=${encodeURIComponent(`${appId}|${appSecret}`)}`)
+    if (!d.ok) return null
+    const info = (d.data.data || {}) as Record<string, unknown>
+    const expiresAt = Number(info.expires_at || 0)
+    return {
+      appName: String(app.data.name || ''),
+      type: String(info.type || ''),
+      valid: info.is_valid === true,
+      // Meta reports 0 for a token that never expires — that is the one we want.
+      permanent: expiresAt === 0,
+      expiresAt: expiresAt ? new Date(expiresAt * 1000).toISOString() : null,
+      scopes: Array.isArray(info.scopes) ? (info.scopes as string[]) : [],
+    }
+  } catch {
+    return null
+  }
+}
+
 const graphError = (d: Record<string, unknown>) => {
   const e = (d?.error || {}) as Record<string, unknown>
   return [e.code, e.error_user_msg || e.message].filter(Boolean).join(' — ') || 'graph_error'
@@ -361,7 +396,10 @@ Deno.serve(async (req: Request) => {
         verified_name: r.ok ? String(r.data.verified_name || '') : integ.verified_name,
         last_checked_at: new Date().toISOString(),
       }).eq('provider', PROVIDER)
-      return json({ ok: r.ok, info: r.data, error: r.ok ? undefined : graphError(r.data) })
+      return json({
+        ok: r.ok, info: r.data, token: await inspectToken(integ, token, sec?.app_secret),
+        error: r.ok ? undefined : graphError(r.data),
+      })
     }
 
     if (action === 'refresh-templates' || action === 'sync-templates') {
