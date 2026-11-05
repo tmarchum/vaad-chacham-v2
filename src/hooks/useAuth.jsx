@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Browser } from '@capacitor/browser'
 import { App } from '@capacitor/app'
@@ -19,9 +19,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
 
-  const fetchProfile = useCallback(async (userId, userEmail) => {
-    if (!userId) { setProfile(null); setOnboardingChecked(false); return }
+  // getSession() and onAuthStateChange both fire on boot (INITIAL_SESSION, and
+  // again on a token refresh), so fetchProfile used to run three times with the
+  // same id — three identical round trips that the whole app blocks on before
+  // any page data starts loading. inFlight coalesces them; loadedFor lets a
+  // later event skip the fetch entirely when the user has not changed.
+  const inFlight = useRef(new Map())
+  const loadedFor = useRef(null)
 
+  const loadProfile = useCallback(async (userId, userEmail) => {
     const { data } = await supabase
       .from('profiles')
       .select('*')
@@ -54,7 +60,21 @@ export function AuthProvider({ children }) {
 
     setProfile(resolved)
     setOnboardingChecked(true)
+    loadedFor.current = userId
   }, [])
+
+  const fetchProfile = useCallback(async (userId, userEmail) => {
+    if (!userId) {
+      setProfile(null); setOnboardingChecked(false)
+      loadedFor.current = null; inFlight.current.clear()
+      return
+    }
+    const pending = inFlight.current.get(userId)
+    if (pending) return pending
+    const run = loadProfile(userId, userEmail).finally(() => inFlight.current.delete(userId))
+    inFlight.current.set(userId, run)
+    return run
+  }, [loadProfile])
 
   useEffect(() => {
     // Get initial session
@@ -66,9 +86,13 @@ export function AuthProvider({ children }) {
     })
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null
       setUser(u)
+      // A token refresh re-fires this with the same user. The profile has not
+      // changed, so re-reading it only delays every page behind another round
+      // trip. USER_UPDATED is the one event that really did change it.
+      if (u?.id && loadedFor.current === u.id && event !== 'USER_UPDATED') return
       fetchProfile(u?.id, u?.email)
       if (u?.id) registerPush(u.id)
     })

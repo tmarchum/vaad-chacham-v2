@@ -47,6 +47,20 @@ const ORDER_COLUMN = {
   settings_audit: 'changed_at',
 }
 
+// Several components mount at once and ask for the same rows (buildings and
+// units get requested two or three times on a single page load). Each was a
+// separate round trip on a connection the rest of the page is queued behind.
+// Coalesce only requests that are identical AND still in flight — nothing is
+// cached, so the next render still reads fresh data.
+const inFlight = new Map()
+function coalesce(key, run) {
+  const pending = inFlight.get(key)
+  if (pending) return pending
+  const p = run().finally(() => inFlight.delete(key))
+  inFlight.set(key, p)
+  return p
+}
+
 // Normalize a DB row to app format (snake_case → app fields)
 // Keep snake_case but also add camelCase aliases for backward compat
 function normalizeRow(row) {
@@ -246,10 +260,14 @@ function createCollection(tableName) {
         if (_limit) q = q.limit(_limit)
         return q
       }
-      let { data, error } = await build(ORDER_COLUMN[table] || 'created_at')
-      // A table with no such column should still load, just unsorted, rather
-      // than take the whole page down with it (42703 = undefined_column).
-      if (error?.code === '42703') ({ data, error } = await build(null))
+      const key = `${table}|${JSON.stringify(filters)}`
+      const { data, error } = await coalesce(key, async () => {
+        let res = await build(ORDER_COLUMN[table] || 'created_at')
+        // A table with no such column should still load, just unsorted, rather
+        // than take the whole page down with it (42703 = undefined_column).
+        if (res.error?.code === '42703') res = await build(null)
+        return res
+      })
       if (error) { emitError('list', tableName, error); return [] }
       return (data || []).map(normalizeRow)
     },
