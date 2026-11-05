@@ -23,3 +23,6 @@ verify_jwt = false # GitHub Actions cron authenticates with CRON_SECRET, fail cl
 
 [functions.whatsapp]
 verify_jwt = false # Meta webhook: GET verify_token handshake + X-Hub-Signature-256 (app secret), fail closed; app actions check user JWT
+
+[functions.committee-digest]
+verify_jwt = false # GitHub Actions cron authenticates with CRON_SECRET, fail closed; admin calls still check the JWT in code
