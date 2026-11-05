@@ -109,6 +109,7 @@ export default function RoomBooking() {
   const dir = useUnitDirectory(selectedBuilding?.id)
   const buildingUnits = dir.units
   const residentMap = dir.byId
+  const membersByUnit = dir.membersByUnit || {}
 
   // Active bookings (not cancelled or rejected) — these block slots
   const activeBookings = useMemo(() => {
@@ -1161,13 +1162,26 @@ export default function RoomBooking() {
                   </div>
                 </>
               ) : bookingForm.unitId && (
-                <div className="p-3 rounded-[var(--radius)] bg-slate-50 border border-[var(--border)] text-sm">
-                  <p className="font-medium">{bookingForm.bookerName}</p>
-                  <div className="flex gap-4 text-xs text-[var(--text-muted)] mt-1">
-                    {bookingForm.bookerPhone && <span>{bookingForm.bookerPhone}</span>}
-                    {bookingForm.bookerEmail && <span>{bookingForm.bookerEmail}</span>}
+                <>
+                  {(membersByUnit[bookingForm.unitId] || []).length > 1 && (
+                    <FormSelect label="השריון על שם" value={bookingForm.bookerName}
+                      onChange={(e) => {
+                        const name = e.target.value
+                        const m = (membersByUnit[bookingForm.unitId] || []).find(x => x.name === name)
+                        setBookingForm(f => ({ ...f, bookerName: name, bookerPhone: m?.phone || '', bookerEmail: m?.email || '' }))
+                      }}
+                      options={(membersByUnit[bookingForm.unitId] || []).map(m => ({
+                        value: m.name, label: m.isPrimary ? `${m.name} (בעל הדירה)` : m.name,
+                      }))} />
+                  )}
+                  <div className="p-3 rounded-[var(--radius)] bg-slate-50 border border-[var(--border)] text-sm">
+                    <p className="font-medium">{bookingForm.bookerName}</p>
+                    <div className="flex gap-4 text-xs text-[var(--text-muted)] mt-1">
+                      {bookingForm.bookerPhone && <span>{bookingForm.bookerPhone}</span>}
+                      {bookingForm.bookerEmail && <span>{bookingForm.bookerEmail}</span>}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
 
               {/* Custom questions */}
@@ -1392,8 +1406,33 @@ export default function RoomBooking() {
                         ...buildingUnits.map(u => ({ value: u.id, label: u.name ? u.label : `דירה ${u.number} — ללא דייר` }))]} />
                   )}
 
-                  <FormField label="שם המזמין" value={editForm.booker_name}
-                    onChange={(e) => setEditForm(f => ({ ...f, booker_name: e.target.value }))} />
+                  {/* A booking on a flat carries the name of someone registered to
+                      it — never a login handle. Free text is for guests only. */}
+                  {!editForm.is_guest && editForm.unit_id && (membersByUnit[editForm.unit_id] || []).length > 0 ? (
+                    <FormSelect label="השריון על שם" value={editForm.booker_name}
+                      onChange={(e) => {
+                        const name = e.target.value
+                        const m = (membersByUnit[editForm.unit_id] || []).find(x => x.name === name)
+                        setEditForm(f => ({
+                          ...f, booker_name: name,
+                          booker_phone: m?.phone || f.booker_phone,
+                          booker_email: m?.email || f.booker_email,
+                        }))
+                      }}
+                      options={(() => {
+                        const members = membersByUnit[editForm.unit_id] || []
+                        const opts = members.map(m => ({ value: m.name, label: m.isPrimary ? `${m.name} (בעל הדירה)` : m.name }))
+                        // Keep whatever is on the booking now, so an old name is
+                        // never silently swapped when the dialog merely opens.
+                        if (editForm.booker_name && !members.some(m => m.name === editForm.booker_name)) {
+                          opts.unshift({ value: editForm.booker_name, label: `${editForm.booker_name} (לא ברשימת הדיירים)` })
+                        }
+                        return opts
+                      })()} />
+                  ) : (
+                    <FormField label="שם המזמין" value={editForm.booker_name}
+                      onChange={(e) => setEditForm(f => ({ ...f, booker_name: e.target.value }))} />
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <FormField label="טלפון" value={editForm.booker_phone}
                       onChange={(e) => setEditForm(f => ({ ...f, booker_phone: e.target.value }))} placeholder="050-1234567" />

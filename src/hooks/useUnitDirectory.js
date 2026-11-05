@@ -58,6 +58,19 @@ export function useUnitDirectory(buildingId) {
       }
     })
     const byId = Object.fromEntries(list.map((x) => [x.id, x]))
-    return { units: list, byId, loading }
+    // Everyone registered to each flat, primary first — for the places that
+    // must offer a choice of person rather than assume the primary resident.
+    const membersByUnit = {}
+    for (const r of residents) {
+      const name = `${r.first_name || ''} ${r.last_name || ''}`.trim()
+      if (!name) continue
+      ;(membersByUnit[r.unit_id] ||= []).push({
+        name, phone: r.phone || '', email: r.email || '', isPrimary: !!r.is_primary,
+      })
+    }
+    for (const members of Object.values(membersByUnit)) {
+      members.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0))
+    }
+    return { units: list, byId, membersByUnit, loading }
   }, [units, residents, loading])
 }

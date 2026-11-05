@@ -52,6 +52,11 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
   const [error, setError] = useState(null)
   const [ok, setOk] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
+  // Who the flat is registered to. The signup profile holds a login handle
+  // ("dkuper100"), so the name on a booking comes from the building's resident
+  // directory instead — see migration 030, which enforces the same rule.
+  const [household, setHousehold] = useState([])
+  const [bookerId, setBookerId] = useState('')
 
   const resource = resources.find(r => r.id === resourceId) || resources[0] || null
 
@@ -66,6 +71,36 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
   }, [resource])
 
   useEffect(() => { loadBookings() }, [loadBookings])
+
+  // ── Who lives in this flat ──
+  useEffect(() => {
+    if (!profile?.unit_id) { setHousehold([]); return }
+    let active = true
+    ;(async () => {
+      const { data } = await supabase
+        .from('unit_residents')
+        .select('id, first_name, last_name, phone, email, is_primary, user_id')
+        .eq('unit_id', profile.unit_id)
+        .eq('archived', false)
+      if (!active) return
+      const list = (data || [])
+        .map(r => ({ ...r, name: `${r.first_name || ''} ${r.last_name || ''}`.trim() }))
+        .filter(r => r.name)
+        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+      setHousehold(list)
+      // Default to whoever is signed in; otherwise the primary resident.
+      const me = list.find(r => r.user_id && r.user_id === user?.id)
+        || list.find(r => r.email && user?.email && r.email.toLowerCase() === user.email.toLowerCase())
+      const pick = me || list[0]
+      if (pick) {
+        setBookerId(pick.id)
+        setPhone(p => p || pick.phone || '')
+      }
+    })()
+    return () => { active = false }
+  }, [profile?.unit_id, user?.id, user?.email])
+
+  const booker = household.find(r => r.id === bookerId) || household[0] || null
 
   // Taken slots: "dk|slot" for bookings that are not cancelled/rejected
   const takenSlots = useMemo(() => {
@@ -164,9 +199,11 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
       building_id: profile.building_id,
       resource_id: resource.id,
       unit_id: profile.unit_id,
-      booker_name: ownerName || 'דייר',
-      booker_phone: phone,
-      booker_email: user?.email || '',
+      // The directory is the source of truth; ownerName is only a fallback for
+      // a flat with no resident record yet.
+      booker_name: booker?.name || ownerName || 'דייר',
+      booker_phone: phone || booker?.phone || '',
+      booker_email: booker?.email || user?.email || '',
       booking_date: selectedDay.dk,
       slot,
       status: 'pending',
@@ -346,6 +383,29 @@ export function ResidentBooking({ resources, profile, user, ownerName, onCreated
               )
             })}
           </div>
+
+          {/* The booking is on the name of a registered resident, never a login handle */}
+          {household.length > 1 ? (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">השריון על שם</label>
+              <select
+                value={bookerId}
+                onChange={e => {
+                  const id = e.target.value
+                  setBookerId(id)
+                  const r = household.find(x => x.id === id)
+                  if (r?.phone) setPhone(r.phone)
+                }}
+                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400"
+              >
+                {household.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}{r.is_primary ? ' (בעל הדירה)' : ''}</option>
+                ))}
+              </select>
+            </div>
+          ) : booker ? (
+            <p className="text-xs text-slate-500">השריון יירשם על שם <span className="font-semibold text-slate-700">{booker.name}</span></p>
+          ) : null}
 
           <input
             type="tel" inputMode="numeric" placeholder="טלפון ליצירת קשר (10 ספרות)"
