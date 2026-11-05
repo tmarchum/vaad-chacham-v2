@@ -221,9 +221,16 @@ async function forwardWebhook(svc: SupabaseClient, url: string | null | undefine
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': signature, 'X-Forwarded-By': 'vaadly' },
       body: raw,
+      // An Apps Script /exec endpoint runs the script and THEN answers 302 to
+      // script.googleusercontent.com. Following that redirect turns the POST
+      // into a GET with no body, costs a second round trip inside our 4s
+      // budget, and can fail long after the script already did its work —
+      // which would fill the log with failures that never happened. The 3xx
+      // is the success signal, so stop there.
+      redirect: 'manual',
       signal: AbortSignal.timeout(4000),
     })
-    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    if (r.status >= 400) throw new Error(`HTTP ${r.status}`)
   } catch (e) {
     // A forward that quietly stops is the whole failure mode here, so make it
     // visible in the same log the admin already reads.
