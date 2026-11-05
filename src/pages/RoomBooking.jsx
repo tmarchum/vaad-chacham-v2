@@ -9,12 +9,14 @@ import { StatCard } from '@/components/common/StatCard'
 import { TabGroup } from '@/components/ui/tabs'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
+import { useConfirm } from '@/lib/confirm'
 import {
   CalendarDays, Plus, Trash2, Pencil, Sun, Moon, SunMoon,
   ChevronRight, ChevronLeft, ExternalLink, Check, X as XIcon,
   Users, UserPlus, Ban, Star, Settings, PieChart,
   DoorOpen, CreditCard, List, Clock, CheckCircle2,
   AlertCircle, HelpCircle, FileText, ShieldCheck,
+  Banknote, RotateCcw, Phone, Mail, Home,
 } from 'lucide-react'
 
 // ── Slot definitions ─────────────────────────────────────────────
@@ -56,7 +58,8 @@ export default function RoomBooking() {
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
   const { data: resources, create: createResource, update: updateResource, remove: removeResource, refresh: refreshResources, isLoading } = useCollection('bookingResources', scope)
-  const { data: allBookings, create: createBooking, update: updateBooking, refresh: refreshBookings } = useCollection('bookings', scope)
+  const { data: allBookings, create: createBooking, update: updateBooking, remove: removeBooking, refresh: refreshBookings } = useCollection('bookings', scope)
+  const confirm = useConfirm()
 
   // ── State ────────────────────────────────────────────────────
   const [tab, setTab] = useState('calendar')
@@ -77,6 +80,10 @@ export default function RoomBooking() {
   const [paymentRedirect, setPaymentRedirect] = useState(null)
   const [approveDialog, setApproveDialog] = useState(null) // { bk } — booking being approved
   const [approveNotes, setApproveNotes] = useState('')
+  // Booking detail / edit — a booking is a thing the committee opens, not just a row
+  const [detailId, setDetailId] = useState(null)
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState({})
   // Custom questions editor
   const [questionText, setQuestionText] = useState('')
   const [questionType, setQuestionType] = useState('text')
@@ -440,6 +447,143 @@ export default function RoomBooking() {
     }
   }
 
+  // ── Booking detail / edit / payment ──────────────────────────
+  // Read the booking out of the live collection rather than holding a copy, so
+  // approving or marking paid is reflected in the open dialog immediately.
+  const detailBooking = useMemo(
+    () => (detailId ? allBookings.find(b => b.id === detailId) || null : null),
+    [detailId, allBookings]
+  )
+
+  const openDetail = (bk) => {
+    if (!bk) return
+    setDetailId(bk.id)
+    setEditMode(false)
+    setEditForm({
+      booking_date: bk.booking_date || '',
+      slot: bk.slot || 'evening',
+      unit_id: bk.unit_id || '',
+      is_guest: !!bk.is_guest,
+      booker_name: bk.booker_name || '',
+      booker_phone: bk.booker_phone || '',
+      booker_email: bk.booker_email || '',
+      price: bk.price ?? 0,
+      notes: bk.notes || '',
+      answers: bk.answers || {},
+      // Moving someone's date behind their back is worse than an extra email.
+      notifyBooker: bk.status === 'approved' && !!bk.booker_email,
+    })
+  }
+  const closeDetail = () => { setDetailId(null); setEditMode(false) }
+
+  /** The booking already holding this date+slot, if any. Mirrors isSlotAvailable. */
+  const slotConflict = (dateStr, slot, excludeId) => {
+    const sameDay = activeBookings.filter(b => b.booking_date === dateStr && b.id !== excludeId)
+    if (!sameDay.length) return null
+    const full = sameDay.find(b => b.slot === 'full_day')
+    if (slot === 'full_day') return sameDay[0]
+    if (full) return full
+    return sameDay.find(b => b.slot === slot) || null
+  }
+
+  // Payment is a fact the committee records — the money arrives by PayBox, Bit
+  // or cash, outside the app, so someone has to confirm it here.
+  const handleTogglePaid = async (bk) => {
+    const next = bk.payment_status === 'paid' ? 'pending' : 'paid'
+    if (next === 'pending' && !await confirm({
+      title: 'ביטול אישור התשלום',
+      description: `לסמן את השריון של ${bk.booker_name} כממתין לתשלום?`,
+      confirmText: 'סמן כלא שולם',
+    })) return
+    try {
+      await updateBooking(bk.id, { payment_status: next })
+      await refreshBookings()
+      toast(next === 'paid' ? `התשלום של ${bk.booker_name} אושר` : 'סומן כממתין לתשלום')
+    } catch (err) {
+      console.error('Payment toggle failed:', err)
+      toastError(`שגיאה בעדכון התשלום: ${err.message}`)
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    const bk = detailBooking
+    if (!bk) return
+    const name = (editForm.booker_name || '').trim()
+    if (!editForm.booking_date) { toastError('יש לבחור תאריך'); return }
+    if (!name) { toastError('יש למלא שם מזמין'); return }
+    const clash = slotConflict(editForm.booking_date, editForm.slot, bk.id)
+    if (clash) {
+      toastError(`המשבצת תפוסה — ${clash.booker_name} (${SLOTS[clash.slot]?.short || clash.slot})`)
+      return
+    }
+    setSaving(true)
+    try {
+      const patch = {
+        booking_date: editForm.booking_date,
+        slot: editForm.slot,
+        unit_id: editForm.is_guest ? null : (editForm.unit_id || null),
+        is_guest: !!editForm.is_guest,
+        booker_name: name,
+        booker_phone: editForm.booker_phone || '',
+        booker_email: editForm.booker_email || '',
+        price: Number(editForm.price) || 0,
+        notes: editForm.notes || '',
+        answers: editForm.answers || {},
+      }
+      await updateBooking(bk.id, patch)
+      await refreshBookings()
+      const changedDateOrSlot = patch.booking_date !== bk.booking_date || patch.slot !== bk.slot
+      if (editForm.notifyBooker && patch.booker_email) {
+        const unitNum = buildingUnits.find(u => u.id === patch.unit_id)?.number || ''
+        const bldName = selectedBuilding?.name || ''
+        const html = buildEmailHtml(selectedResource, { ...bk, ...patch },
+          `${name}, פרטי השריון שלך עודכנו על ידי נציג הוועד. אלו הפרטים המעודכנים.`,
+          { unitNumber: unitNum, buildingName: bldName, approvalNotes: changedDateOrSlot ? 'שימו לב: התאריך או משבצת הזמן שונו.' : '' })
+        sendEmail(patch.booker_email, `${bldName} — עדכון שריון: ${selectedResource?.name}`, html)
+      }
+      setEditMode(false)
+      toast('פרטי השריון עודכנו')
+    } catch (err) {
+      console.error('Edit failed:', err)
+      toastError(`שגיאה בעדכון: ${err.message}`)
+    } finally { setSaving(false) }
+  }
+
+  // A booking that was rejected or cancelled released its slot; it can come
+  // back only if nobody took that slot meanwhile.
+  const handleReopen = async (bk) => {
+    const clash = slotConflict(bk.booking_date, bk.slot, bk.id)
+    if (clash) {
+      toastError(`המשבצת נתפסה בינתיים על ידי ${clash.booker_name} — יש לשנות תאריך או משבצת`)
+      return
+    }
+    try {
+      await updateBooking(bk.id, { status: 'pending' })
+      await refreshBookings()
+      toast('השריון הוחזר לתור ההמתנה לאישור')
+    } catch (err) {
+      console.error('Reopen failed:', err)
+      toastError(`שגיאה בהחזרה לתור: ${err.message}`)
+    }
+  }
+
+  const handleDeleteBooking = async (bk) => {
+    if (!await confirm({
+      title: 'מחיקת שריון',
+      description: `למחוק לצמיתות את השריון של ${bk.booker_name} ל-${new Date(bk.booking_date).toLocaleDateString('he-IL')}? לביטול רגיל, שמשאיר תיעוד, יש להשתמש בכפתור "בטל שריון".`,
+      confirmText: 'מחק לצמיתות',
+    })) return
+    try {
+      await removeBooking(bk.id)
+      await refreshBookings()
+      closeDetail()
+      toast('השריון נמחק')
+    } catch (err) {
+      console.error('Delete booking failed:', err)
+      toastError(`שגיאה במחיקה: ${err.message}`)
+    }
+  }
+
   // ── Resource CRUD ────────────────────────────────────────────
   const openResourceForm = (resource) => {
     if (resource === 'new') {
@@ -487,7 +631,11 @@ export default function RoomBooking() {
   }
 
   const handleDeleteResource = async (id) => {
-    if (!window.confirm('האם אתה בטוח שברצונך למחוק משאב זה?')) return
+    if (!await confirm({
+      title: 'מחיקת חדר',
+      description: 'למחוק את החדר? כל השריונים שלו יימחקו גם הם ולא ניתן לשחזר.',
+      confirmText: 'מחק חדר',
+    })) return
     try {
       await removeResource(id); refreshResources()
       if (selectedResourceId === id) setSelectedResourceId(null)
@@ -707,14 +855,17 @@ export default function RoomBooking() {
                               const pending = b.status === 'pending'
                               const slotWord = b.slot === 'morning' ? 'בוקר' : b.slot === 'full_day' ? 'יממה' : 'ערב'
                               return (
-                                <span key={b.id} title={`${SLOTS[b.slot]?.label || ''} — ${b.booker_name}`}
-                                  className={`flex items-center gap-1 text-[10px] leading-4 px-1 rounded border truncate ${
+                                <button key={b.id} type="button"
+                                  title={`${SLOTS[b.slot]?.label || ''} — ${b.booker_name} • לחצו לפתיחת ההזמנה`}
+                                  onClick={(e) => { e.stopPropagation(); openDetail(b) }}
+                                  className={`flex w-full items-center gap-1 text-[10px] leading-4 px-1 rounded border truncate hover:brightness-95 ${
                                     pending ? 'bg-[var(--warning-light)] border-[var(--warning)]/30 text-[var(--warning)]'
                                     : 'bg-[var(--success-light)] border-[var(--success)]/25 text-[var(--success)]'
                                   }`}>
                                   <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${pending ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`} />
                                   <span className="truncate">{slotWord}: {firstName(b.booker_name)}</span>
-                                </span>
+                                  {b.payment_status === 'paid' && <Check className="h-2.5 w-2.5 shrink-0" />}
+                                </button>
                               )
                             })}
                             {free && !day.isPast && (
@@ -731,12 +882,24 @@ export default function RoomBooking() {
 
               {tab === 'bookings' && (
                 <div className="space-y-4">
+                  <p className="text-[12px] text-[var(--text-muted)]">לחיצה על שריון פותחת את ההזמנה — שם, פרטי קשר, תאריך, משבצת ותשלום — וניתן לערוך הכול.</p>
+                  {pendingList.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-[14px] font-bold flex items-center gap-2"><Clock className="h-4 w-4 text-[var(--warning)]" />ממתינים לאישור ({pendingList.length})</h3>
+                      {pendingList.map(bk => (
+                        <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap}
+                          onOpen={() => openDetail(bk)} onTogglePaid={() => handleTogglePaid(bk)} showActions="cancel"
+                          onCancel={() => handleCancel(bk)} />
+                      ))}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <h3 className="text-[14px] font-bold flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[var(--success)]" />שריונים מאושרים ({approvedList.length})</h3>
                     {approvedList.length === 0
                       ? <p className="text-[13px] text-[var(--text-muted)]">אין שריונים מאושרים</p>
                       : approvedList.map(bk => (
                         <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap}
+                          onOpen={() => openDetail(bk)} onTogglePaid={() => handleTogglePaid(bk)}
                           onCancel={() => handleCancel(bk)} showActions="cancel" />
                       ))}
                   </div>
@@ -744,7 +907,8 @@ export default function RoomBooking() {
                     <div className="space-y-2">
                       <h3 className="text-[14px] font-bold text-[var(--text-secondary)] flex items-center gap-2"><List className="h-4 w-4" />היסטוריה ({historyList.length})</h3>
                       {historyList.map(bk => (
-                        <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap} showActions="none" />
+                        <BookingCard key={bk.id} bk={bk} resource={selectedResource} residentMap={residentMap}
+                          onOpen={() => openDetail(bk)} showActions="none" />
                       ))}
                     </div>
                   )}
@@ -844,14 +1008,18 @@ export default function RoomBooking() {
                             {bk.notes && <p className="text-[var(--text-muted)]">"{bk.notes}"</p>}
                             <div className="flex items-center justify-between pt-1 num-tabular">
                               <span className="text-[var(--text-secondary)]">דמי שימוש: <b>{formatCurrency(bk.price || 0)}</b></span>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${bk.payment_status === 'paid' ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--warning-light)] text-[var(--warning)]'}`}>
-                                {bk.payment_status === 'paid' ? 'שולם' : 'ממתין לתשלום'}
-                              </span>
+                              <button
+                                onClick={() => handleTogglePaid(bk)}
+                                title={bk.payment_status === 'paid' ? 'לחצו כדי לבטל את אישור התשלום' : 'לחצו כדי לאשר שהתשלום התקבל'}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold hover:brightness-95 ${bk.payment_status === 'paid' ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--warning-light)] text-[var(--warning)]'}`}>
+                                {bk.payment_status === 'paid' ? 'שולם ✓' : 'אשר קבלת תשלום'}
+                              </button>
                             </div>
                           </div>
                           <div className="flex gap-2">
                             <Button onClick={() => openApproveDialog(bk)} className="flex-1 bg-[var(--success)] hover:opacity-90"><Check className="h-4 w-4" />אשר שריון</Button>
                             <Button onClick={() => handleReject(bk)} variant="outline" className="text-[var(--danger)] border-[var(--danger)]/30 hover:bg-[var(--danger-light)]"><XIcon className="h-4 w-4" />דחה</Button>
+                            <Button onClick={() => openDetail(bk)} variant="outline" aria-label="פתיחה ועריכה"><Pencil className="h-4 w-4" /></Button>
                           </div>
                         </div>
                       )
@@ -1154,6 +1322,200 @@ export default function RoomBooking() {
       </Dialog>
 
       {/* ══════════════════════════════════════════════════════════ */}
+      {/* BOOKING DETAIL / EDIT DIALOG                              */}
+      {/* ══════════════════════════════════════════════════════════ */}
+      <Dialog open={!!detailBooking} onOpenChange={(open) => { if (!open) closeDetail() }}>
+        <DialogContent className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-[var(--primary)]" />
+              {editMode ? 'עריכת שריון' : 'פרטי השריון'}
+            </DialogTitle>
+          </DialogHeader>
+          {detailBooking && (() => {
+            const bk = detailBooking
+            const cfg = STATUS_CONFIG[bk.status] || STATUS_CONFIG.pending
+            const bkDate = new Date(bk.booking_date)
+            const unit = bk.unit_id ? residentMap[bk.unit_id] : null
+            const paid = bk.payment_status === 'paid'
+            const questions = selectedResource?.custom_questions || []
+            const answers = bk.answers || {}
+            const isPast = bkDate < new Date(new Date().setHours(0, 0, 0, 0))
+            const row = (Icon, label, value) => value ? (
+              <div className="flex items-start gap-2 text-[13px]">
+                <Icon className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0 mt-0.5" />
+                <span className="text-[var(--text-muted)] w-20 shrink-0">{label}</span>
+                <span className="font-semibold text-[var(--text-primary)] break-words">{value}</span>
+              </div>
+            ) : null
+
+            if (editMode) {
+              const editClash = slotConflict(editForm.booking_date, editForm.slot, bk.id)
+              return (
+                <div className="space-y-4 mt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField label="תאריך" type="date" value={editForm.booking_date}
+                      onChange={(e) => setEditForm(f => ({ ...f, booking_date: e.target.value }))} />
+                    <FormSelect label="משבצת זמן" value={editForm.slot}
+                      onChange={(e) => {
+                        const slot = e.target.value
+                        // Keep the price in step with the slot unless it was set by hand.
+                        const wasSlotPrice = Number(editForm.price) === getSlotPrice(editForm.slot)
+                        setEditForm(f => ({ ...f, slot, price: wasSlotPrice ? getSlotPrice(slot) : f.price }))
+                      }}
+                      options={Object.entries(SLOTS).map(([k, s]) => ({ value: k, label: s.label }))} />
+                  </div>
+                  {editClash && (
+                    <div className="flex items-start gap-2 p-2.5 rounded-[var(--radius)] bg-[var(--danger-light)] border border-[var(--danger)]/30">
+                      <AlertCircle className="h-4 w-4 text-[var(--danger)] shrink-0 mt-0.5" />
+                      <p className="text-[12px] text-[var(--danger)]">המשבצת הזו תפוסה על ידי {editClash.booker_name} ({SLOTS[editClash.slot]?.short}). יש לבחור תאריך או משבצת אחרים.</p>
+                    </div>
+                  )}
+
+                  {!selectedResource?.residents_only && (
+                    <FormBool label="אורח חיצוני?" value={editForm.is_guest}
+                      onChange={(e) => setEditForm(f => ({ ...f, is_guest: e.target.value, unit_id: e.target.value ? '' : f.unit_id }))} />
+                  )}
+                  {!editForm.is_guest && (
+                    <FormSelect label="דירה" value={editForm.unit_id}
+                      onChange={(e) => {
+                        const uid = e.target.value
+                        const res = residentMap[uid]
+                        setEditForm(f => ({
+                          ...f, unit_id: uid,
+                          booker_name: res?.name || f.booker_name,
+                          booker_phone: res?.phone || f.booker_phone,
+                          booker_email: res?.email || f.booker_email,
+                        }))
+                      }}
+                      options={[{ value: '', label: 'ללא דירה' },
+                        ...buildingUnits.map(u => ({ value: u.id, label: u.name ? u.label : `דירה ${u.number} — ללא דייר` }))]} />
+                  )}
+
+                  <FormField label="שם המזמין" value={editForm.booker_name}
+                    onChange={(e) => setEditForm(f => ({ ...f, booker_name: e.target.value }))} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField label="טלפון" value={editForm.booker_phone}
+                      onChange={(e) => setEditForm(f => ({ ...f, booker_phone: e.target.value }))} placeholder="050-1234567" />
+                    <FormField label="אימייל" value={editForm.booker_email}
+                      onChange={(e) => setEditForm(f => ({ ...f, booker_email: e.target.value }))} placeholder="email@example.com" />
+                  </div>
+                  <FormField label="דמי שימוש (₪)" type="number" value={editForm.price}
+                    onChange={(e) => setEditForm(f => ({ ...f, price: e.target.value }))} />
+
+                  {questions.length > 0 && (
+                    <div className="space-y-3 p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)]">
+                      <p className="text-[12px] font-bold text-[var(--text-secondary)] flex items-center gap-1"><HelpCircle className="h-3.5 w-3.5" />תשובות הדייר</p>
+                      {questions.map(q => q.type === 'boolean' ? (
+                        <FormBool key={q.id} label={q.text} value={editForm.answers?.[q.id] || false}
+                          onChange={(e) => setEditForm(f => ({ ...f, answers: { ...f.answers, [q.id]: e.target.value } }))} />
+                      ) : (
+                        <FormField key={q.id} label={q.text} type={q.type === 'number' ? 'number' : 'text'}
+                          value={editForm.answers?.[q.id] ?? ''}
+                          onChange={(e) => setEditForm(f => ({ ...f, answers: { ...f.answers, [q.id]: e.target.value } }))} />
+                      ))}
+                    </div>
+                  )}
+
+                  <FormTextarea label="הערות" value={editForm.notes}
+                    onChange={(e) => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+
+                  {editForm.booker_email && (
+                    <label className="flex items-center gap-2 cursor-pointer p-2.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)]">
+                      <input type="checkbox" checked={!!editForm.notifyBooker}
+                        onChange={(e) => setEditForm(f => ({ ...f, notifyBooker: e.target.checked }))}
+                        className="w-4 h-4 rounded border-[var(--border)] text-[var(--primary)]" />
+                      <span className="text-[13px] font-medium">שלח לדייר מייל עם הפרטים המעודכנים</span>
+                    </label>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <Button onClick={handleSaveEdit} disabled={saving || !!editClash} className="flex-1 gap-1.5">
+                      <Check className="h-4 w-4" />{saving ? 'שומר...' : 'שמור שינויים'}
+                    </Button>
+                    <Button variant="outline" onClick={() => { setEditMode(false); openDetail(bk) }}>ביטול</Button>
+                  </div>
+                </div>
+              )
+            }
+
+            return (
+              <div className="space-y-4 mt-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[16px] font-bold">{bk.booker_name}</span>
+                    {bk.is_guest && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--warning-light)] text-[var(--warning)] font-semibold">אורח</span>}
+                  </div>
+                  <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-semibold border ${cfg.bg}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />{cfg.label}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)] space-y-2">
+                  {row(CalendarDays, 'תאריך', `יום ${HEBREW_DAYS[bkDate.getDay()]}, ${bkDate.toLocaleDateString('he-IL')}`)}
+                  {row(Clock, 'משבצת', SLOTS[bk.slot]?.label || bk.slot)}
+                  {row(Home, 'דירה', unit ? `${unit.number}${unit.name ? ` — ${unit.name}` : ''}` : (bk.is_guest ? 'אורח חיצוני' : null))}
+                  {row(Phone, 'טלפון', bk.booker_phone)}
+                  {row(Mail, 'אימייל', bk.booker_email)}
+                  {row(FileText, 'תקנון', bk.terms_accepted ? 'אושר על ידי הדייר' : 'לא אושר')}
+                  {questions.map(q => answers[q.id] != null && answers[q.id] !== ''
+                    ? row(HelpCircle, q.text, typeof answers[q.id] === 'boolean' ? (answers[q.id] ? 'כן' : 'לא') : String(answers[q.id]))
+                    : null)}
+                  {bk.notes && <p className="text-[12px] text-[var(--text-muted)] pt-1 border-t border-[var(--border-light)]">"{bk.notes}"</p>}
+                </div>
+
+                {/* Payment — the money arrives outside the app, so it is confirmed here */}
+                <div className={`p-3 rounded-[var(--radius)] border ${paid ? 'bg-[var(--success-light)] border-[var(--success)]/30' : 'bg-[var(--warning-light)] border-[var(--warning)]/30'}`}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="num-tabular">
+                      <p className="text-[12px] text-[var(--text-secondary)]">דמי שימוש</p>
+                      <p className="text-[18px] font-bold">{formatCurrency(bk.price || 0)}</p>
+                      <p className={`text-[12px] font-semibold ${paid ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
+                        {paid ? 'התשלום אושר' : 'ממתין לתשלום'}
+                      </p>
+                    </div>
+                    <Button onClick={() => handleTogglePaid(bk)} variant={paid ? 'outline' : 'default'}
+                      className={paid ? '' : 'bg-[var(--success)] hover:opacity-90'}>
+                      {paid ? <><RotateCcw className="h-4 w-4" />בטל אישור תשלום</> : <><Banknote className="h-4 w-4" />אשר קבלת תשלום</>}
+                    </Button>
+                  </div>
+                  {selectedResource?.payment_url && !paid && (
+                    <a href={selectedResource.payment_url} target="_blank" rel="noreferrer"
+                      className="inline-flex items-center gap-1 mt-2 text-[12px] font-semibold text-[var(--primary)] hover:underline">
+                      <ExternalLink className="h-3.5 w-3.5" />קישור התשלום שנשלח לדייר
+                    </a>
+                  )}
+                </div>
+
+                {/* Status actions */}
+                <div className="flex flex-wrap gap-2">
+                  {bk.status === 'pending' && (
+                    <>
+                      <Button onClick={() => { closeDetail(); openApproveDialog(bk) }} className="flex-1 bg-[var(--success)] hover:opacity-90"><Check className="h-4 w-4" />אשר שריון</Button>
+                      <Button onClick={() => handleReject(bk)} variant="outline" className="text-[var(--danger)] border-[var(--danger)]/30"><XIcon className="h-4 w-4" />דחה</Button>
+                    </>
+                  )}
+                  {bk.status === 'approved' && !isPast && (
+                    <Button onClick={() => handleCancel(bk)} variant="outline" className="text-[var(--danger)] border-[var(--danger)]/30"><XIcon className="h-4 w-4" />בטל שריון</Button>
+                  )}
+                  {(bk.status === 'rejected' || bk.status === 'cancelled') && (
+                    <Button onClick={() => handleReopen(bk)} variant="outline"><RotateCcw className="h-4 w-4" />החזר לתור לאישור</Button>
+                  )}
+                  <Button onClick={() => setEditMode(true)} variant="outline"><Pencil className="h-4 w-4" />ערוך פרטים</Button>
+                  <Button onClick={() => handleDeleteBooking(bk)} variant="ghost" size="icon" aria-label="מחיקת השריון">
+                    <Trash2 className="h-4 w-4 text-[var(--danger)]" />
+                  </Button>
+                </div>
+                {bk.created_at && (
+                  <p className="text-[11px] text-[var(--text-muted)]">נשלח ב-{new Date(bk.created_at).toLocaleString('he-IL')}</p>
+                )}
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════════════════════════════════════════════════════════ */}
       {/* APPROVE WITH NOTES DIALOG                                 */}
       {/* ══════════════════════════════════════════════════════════ */}
       <Dialog open={!!approveDialog} onOpenChange={() => setApproveDialog(null)}>
@@ -1218,7 +1580,7 @@ export default function RoomBooking() {
 // ═════════════════════════════════════════════════════════════════
 // Booking Card Component
 // ═════════════════════════════════════════════════════════════════
-function BookingCard({ bk, resource, residentMap, onCancel, showActions }) {
+function BookingCard({ bk, resource, residentMap, onCancel, onOpen, onTogglePaid, showActions }) {
   const slotInfo = SLOTS[bk.slot] || SLOTS.evening
   const SlotIcon = slotInfo.icon
   const statusCfg = STATUS_CONFIG[bk.status] || STATUS_CONFIG.pending
@@ -1229,7 +1591,13 @@ function BookingCard({ bk, resource, residentMap, onCancel, showActions }) {
   const muted = bk.status === 'cancelled' || bk.status === 'rejected'
 
   return (
-    <div className={`flex flex-col gap-2 p-3.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] ${muted ? 'opacity-60' : ''}`}>
+    <div
+      onClick={onOpen}
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={onOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } } : undefined}
+      className={`flex flex-col gap-2 p-3.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] ${muted ? 'opacity-60' : ''} ${onOpen ? 'cursor-pointer hover:border-[var(--primary)]/50 hover:bg-[var(--surface-secondary)]/40 transition-colors' : ''}`}
+    >
       <div className="flex items-center gap-3">
         <span className="p-2 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><SlotIcon className="h-5 w-5" /></span>
         <div className="flex-1 min-w-0">
@@ -1247,12 +1615,21 @@ function BookingCard({ bk, resource, residentMap, onCancel, showActions }) {
         </div>
         <div className="text-left shrink-0 num-tabular">
           {bk.price > 0 && <p className="text-[14px] font-bold">{formatCurrency(bk.price)}</p>}
-          <p className={`text-[11px] font-semibold ${bk.payment_status === 'paid' ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
-            {bk.payment_status === 'paid' ? 'שולם' : 'ממתין לתשלום'}
-          </p>
+          {onTogglePaid ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onTogglePaid() }}
+              title={bk.payment_status === 'paid' ? 'לחצו כדי לבטל את אישור התשלום' : 'לחצו כדי לאשר שהתשלום התקבל'}
+              className={`text-[11px] font-semibold px-1.5 py-0.5 rounded hover:brightness-95 ${bk.payment_status === 'paid' ? 'bg-[var(--success-light)] text-[var(--success)]' : 'bg-[var(--warning-light)] text-[var(--warning)]'}`}>
+              {bk.payment_status === 'paid' ? 'שולם ✓' : 'אשר תשלום'}
+            </button>
+          ) : (
+            <p className={`text-[11px] font-semibold ${bk.payment_status === 'paid' ? 'text-[var(--success)]' : 'text-[var(--warning)]'}`}>
+              {bk.payment_status === 'paid' ? 'שולם' : 'ממתין לתשלום'}
+            </p>
+          )}
         </div>
         {showActions === 'cancel' && !isPast && (
-          <Button onClick={onCancel} size="sm" variant="outline" className="text-[var(--danger)] border-[var(--danger)]/30 hover:bg-[var(--danger-light)] shrink-0">
+          <Button onClick={(e) => { e.stopPropagation(); onCancel?.() }} size="sm" variant="outline" className="text-[var(--danger)] border-[var(--danger)]/30 hover:bg-[var(--danger-light)] shrink-0">
             <XIcon className="h-3.5 w-3.5" />בטל
           </Button>
         )}
