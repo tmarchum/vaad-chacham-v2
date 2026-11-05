@@ -411,16 +411,21 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
   // 3. Whoever is meant to fix it.
   let vendor: Record<string, unknown> | null = null
   if (issue.vendor_id) {
-    const { data } = await svc.from('vendors').select('id, name, phone, email').eq('id', issue.vendor_id).maybeSingle()
+    const { data } = await svc.from('vendors').select('id, name, phone, email, contact_channel').eq('id', issue.vendor_id).maybeSingle()
     vendor = data || null
   } else if (issue.vendor_name) {
-    const { data } = await svc.from('vendors').select('id, name, phone, email').eq('name', issue.vendor_name).maybeSingle()
+    const { data } = await svc.from('vendors').select('id, name, phone, email, contact_channel').eq('name', issue.vendor_name).maybeSingle()
     vendor = data || null
   }
   if (vendor) {
+    // How this vendor asked to be reached. 'phone' means do not message them
+    // at all — say so, so the committee calls instead of assuming it was sent.
+    const channel = String(vendor.contact_channel || 'auto')
     parties.push({
-      id: 'handler', role: 'גורם מטפל',
-      name: String(vendor.name || 'ספק'), phone: String(vendor.phone || ''), email: String(vendor.email || ''),
+      id: 'handler', role: 'גורם מטפל', channel,
+      name: String(vendor.name || 'ספק'),
+      phone: String(vendor.phone || ''),
+      email: channel === 'whatsapp' || channel === 'phone' ? '' : String(vendor.email || ''),
       audience: 'vendor', templateKey: 'vendor_issue_dispatch',
       variables: [String(vendor.name || 'ספק'), buildingName,
         String(issue.description || issue.title || ''), contact],

@@ -90,6 +90,7 @@ const EMPTY_FORM = {
   category: '',
   phone: '',
   email: '',
+  contact_channel: 'auto',
   address: '',
   license_number: '',
   insurance_expiry: '',
@@ -475,6 +476,7 @@ function Vendors() {
       category: vendor.category || '',
       phone: vendor.phone || '',
       email: vendor.email || '',
+      contact_channel: vendor.contact_channel || 'auto',
       address: vendor.address || '',
       license_number: vendor.license_number || '',
       insurance_expiry: vendor.insurance_expiry || '',
@@ -1210,6 +1212,22 @@ function Vendors() {
                 value={form.email}
                 onChange={setField('email')}
               />
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <label className="text-[12px] font-semibold text-[var(--text-secondary)]">איך הספק מקבל פניות?</label>
+              <Select
+                value={form.contact_channel}
+                onChange={setField('contact_channel')}
+                options={[
+                  { value: 'auto', label: 'אוטומטי — וואטסאפ, ואם אין אז מייל' },
+                  { value: 'whatsapp', label: 'וואטסאפ בלבד' },
+                  { value: 'email', label: 'מייל בלבד' },
+                  { value: 'phone', label: 'טלפון בלבד — לא לשלוח הודעות' },
+                ]}
+              />
+              <p className="text-[11px] text-[var(--text-muted)]">
+                ספק שמסומן "טלפון בלבד" לא יקבל הודעה אוטומטית. בפתיחת תקלה תוצג התראה לוועד להתקשר אליו.
+              </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField

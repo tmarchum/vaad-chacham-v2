@@ -72,6 +72,9 @@ export async function notifyIssueOpened(issueId) {
       for (const p of plan.parties) {
         if (!p.phone || !p.templateKey) continue
         if (provider !== 'whatsapp_cloud' && p.audience !== 'vendor') continue
+        // A vendor who asked for email only, or for a phone call, does not get
+        // a WhatsApp message because we happen to hold their mobile number.
+        if (p.channel === 'email' || p.channel === 'phone') continue
         const res = await systemSendWhatsapp(p.phone, `${p.role}: ${plan.issue?.title || ''}`, {
           audience: p.audience,
           template: { key: p.templateKey, variables: p.variables },
@@ -107,10 +110,16 @@ export function describeIssueNotified({ reached = [], unreachable = [] } = {}) {
   const label = { whatsapp: 'וואטסאפ', email: 'מייל', push: 'התראה' }
   const parts = reached.map((r) => `${r.role} (${label[r.channel] || r.channel})`)
   let msg = parts.length ? `נשלחה הודעה ל: ${parts.join(', ')}` : ''
+  // Someone who asked to be phoned is not a delivery failure — but the
+  // committee still has to know the message did not go anywhere by itself.
   const callable = unreachable.filter((u) => u.phone)
   if (callable.length) {
     const who = callable.map((u) => `${u.role} — ${u.phone}`).join(', ')
-    msg = msg ? `${msg}. צריך טלפון: ${who}` : `אין מייל או וואטסאפ — צריך טלפון: ${who}`
+    msg = msg ? `${msg}. צריך טלפון: ${who}` : `צריך טלפון: ${who}`
+  }
+  const silent = unreachable.filter((u) => !u.phone).map((u) => u.role)
+  if (silent.length) {
+    msg = `${msg ? `${msg}. ` : ''}לא נשלח ל: ${silent.join(', ')} — חסרים פרטי קשר`
   }
   return msg
 }
