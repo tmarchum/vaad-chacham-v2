@@ -38,6 +38,15 @@ export const TABLE_MAP = {
   bookings: 'bookings',
 }
 
+// list() sorts newest-first, which assumes a created_at. settings_audit is
+// written by a trigger and timestamps its rows with changed_at instead, so
+// ordering it by created_at made every load of the collection page fail with
+// "column settings_audit.created_at does not exist". Any table whose
+// newest-first column is not created_at belongs here.
+const ORDER_COLUMN = {
+  settings_audit: 'changed_at',
+}
+
 // Normalize a DB row to app format (snake_case → app fields)
 // Keep snake_case but also add camelCase aliases for backward compat
 function normalizeRow(row) {
@@ -196,8 +205,11 @@ function toDbRow(data) {
 function emitError(operation, tableName, error) {
   const msg = error?.message || String(error)
   console.error(`[store.${tableName}.${operation}]`, error)
-  // Map common Postgres/Supabase error codes to Hebrew
-  let friendly = `שגיאה בשמירת נתונים: ${msg}`
+  // Map common Postgres/Supabase error codes to Hebrew. A failed read was
+  // reported as "שגיאה בשמירת נתונים", which sends you hunting for a save that
+  // never happened — say which way the data was going.
+  const reading = operation === 'list' || operation === 'get'
+  let friendly = `שגיאה ב${reading ? 'טעינת' : 'שמירת'} נתונים: ${msg}`
   if (msg.includes('violates row-level security')) {
     friendly = 'אין הרשאה לבצע פעולה זו (RLS). נסה להתנתק ולהתחבר מחדש.'
   } else if (msg.includes('violates foreign key')) {
@@ -227,10 +239,17 @@ function createCollection(tableName) {
     async list(filters = {}) {
       const { _limit, ...eqFilters } = filters
       if (Object.values(eqFilters).some((v) => v === undefined)) return []
-      let q = supabase.from(table).select('*').order('created_at', { ascending: false })
-      Object.entries(eqFilters).forEach(([col, val]) => { q = q.eq(col, val) })
-      if (_limit) q = q.limit(_limit)
-      const { data, error } = await q
+      const build = (orderBy) => {
+        let q = supabase.from(table).select('*')
+        if (orderBy) q = q.order(orderBy, { ascending: false })
+        Object.entries(eqFilters).forEach(([col, val]) => { q = q.eq(col, val) })
+        if (_limit) q = q.limit(_limit)
+        return q
+      }
+      let { data, error } = await build(ORDER_COLUMN[table] || 'created_at')
+      // A table with no such column should still load, just unsorted, rather
+      // than take the whole page down with it (42703 = undefined_column).
+      if (error?.code === '42703') ({ data, error } = await build(null))
       if (error) { emitError('list', tableName, error); return [] }
       return (data || []).map(normalizeRow)
     },
