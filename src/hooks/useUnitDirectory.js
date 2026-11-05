@@ -60,10 +60,17 @@ export function useUnitDirectory(buildingId) {
     const byId = Object.fromEntries(list.map((x) => [x.id, x]))
     // Everyone registered to each flat, primary first — for the places that
     // must offer a choice of person rather than assume the primary resident.
+    // Deduplicated by name: a re-import of the resident list can leave two
+    // identical rows for the same person, and offering the same name twice in
+    // a picker helps nobody.
     const membersByUnit = {}
+    const seen = new Set()
     for (const r of residents) {
       const name = `${r.first_name || ''} ${r.last_name || ''}`.trim()
       if (!name) continue
+      const key = `${r.unit_id}|${name.toLowerCase()}`
+      if (seen.has(key)) continue
+      seen.add(key)
       ;(membersByUnit[r.unit_id] ||= []).push({
         name, phone: r.phone || '', email: r.email || '', isPrimary: !!r.is_primary,
       })
