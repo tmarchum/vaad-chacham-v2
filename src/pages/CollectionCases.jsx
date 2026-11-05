@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { HEBREW_MONTHS } from '@/lib/constants'
 import { toast, toastError } from '@/lib/toast'
+import { useConfirm } from '@/lib/confirm'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -99,13 +100,18 @@ export default function CollectionCases() {
   const { update: updateBuilding } = useCollection('buildings')
   // Audit trail of the kill switch (written by a DB trigger, admin-readable).
   const { data: toggleAudit } = useCollection('settingsAudit')
+  const confirm = useConfirm()
   const [recomputing, setRecomputing] = useState(false)
 
   // ── Deterministic collection: debt comes ONLY from real unpaid/partial/overdue
   // payment records (never from a guessed flat amount). Closes stale cases. ──
   const recomputeCases = useCallback(async () => {
     if (!selectedBuilding) return
-    if (!window.confirm('לחשב מחדש את תיקי הגבייה לפי התשלומים בפועל? תיקים ללא חוב אמיתי ייסגרו.')) return
+    if (!await confirm({
+      title: 'חישוב מחדש של תיקי הגבייה',
+      description: 'התיקים יחושבו מחדש לפי התשלומים בפועל. תיקים ללא חוב אמיתי ייסגרו.',
+      confirmText: 'חשב מחדש',
+    })) return
     setRecomputing(true)
     try {
       const payByUnit = {}
@@ -145,7 +151,7 @@ export default function CollectionCases() {
     } finally {
       setRecomputing(false)
     }
-  }, [selectedBuilding, allUnits, allPayments, allCases, create, update])
+  }, [selectedBuilding, allUnits, allPayments, allCases, create, update, confirm])
 
   // ── Notifications toggle ──────────────────────────────────────────────────
   // Source of truth: selectedBuilding.collection_notifications_enabled (Supabase)

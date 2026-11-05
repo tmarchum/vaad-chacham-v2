@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { HEBREW_MONTH_OPTIONS as HEBREW_MONTHS } from '@/lib/constants'
 import { toast } from '@/lib/toast'
+import { useConfirm } from '@/lib/confirm'
 import { loadPatterns, learnPattern, learnFromExisting, unitForTransaction, describePattern, deactivatePattern } from '@/lib/incomePatterns'
 
 const MATCH_STATUS = {
@@ -60,6 +61,7 @@ export default function BankTransactions() {
   const { data: allPayments, create: createPayment, update: updatePayment, refresh: refreshPayments } = useCollection('payments', scope)
 
   const now = new Date()
+  const confirm = useConfirm()
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'))
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()))
   const [statusFilter, setStatusFilter] = useState('all')
@@ -350,7 +352,11 @@ export default function BankTransactions() {
       toast('אין הצעות ממתינות', 'info')
       return
     }
-    if (!window.confirm(`לאשר ${pending.length} שיוכים מוצעים? תשלומים יעודכנו בהתאם.`)) return
+    if (!await confirm({
+      title: 'אישור כל ההצעות',
+      description: `${pending.length} שיוכים מוצעים יאושרו, והתשלומים יעודכנו בהתאם.`,
+      confirmText: 'אשר הכל',
+    })) return
 
     // One request, one toast — the per-row loop here flooded the screen.
     await bulkUpdateTx(pending.map(t => t.id), { match_status: 'matched' }, { silent: true })

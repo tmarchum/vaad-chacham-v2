@@ -58,6 +58,7 @@ class ErrorBoundary extends Component {
 }
 
 import { AuthProvider } from '@/hooks/useAuth'
+import { ConfirmProvider } from '@/components/ui/confirm'
 import { BuildingProvider } from '@/hooks/useStore'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { Layout } from '@/components/layout/Layout'
@@ -116,6 +117,7 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
     <BrowserRouter>
       <AuthProvider>
+        <ConfirmProvider>
         <Routes>
           {/* Public route */}
           <Route path="/login" element={<Login />} />
@@ -160,6 +162,7 @@ createRoot(document.getElementById('root')).render(
           {/* 404 catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </ConfirmProvider>
       </AuthProvider>
     </BrowserRouter>
     </ErrorBoundary>
