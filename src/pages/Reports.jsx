@@ -9,7 +9,10 @@ import { SectionCard } from '@/components/common/SectionCard'
 import { SearchBar } from '@/components/common/SearchBar'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { HEBREW_MONTHS } from '@/lib/constants'
-import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank, Download, Printer, Scale, CalendarDays, Wallet, Timer, CheckCircle2, Building2, Gauge } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { toast, toastError } from '@/lib/toast'
+import { useAuth } from '@/hooks/useAuth'
+import { TrendingUp, TrendingDown, BarChart2, Users, Wrench, PiggyBank, Download, Printer, Scale, CalendarDays, Wallet, Timer, CheckCircle2, Building2, Gauge, MailCheck } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -747,11 +750,27 @@ function BudgetTab({ units, expenses, buildingId }) {
 
 export default function Reports() {
   const [activeTab, setActiveTab] = useState('financial')
+  const [digestBusy, setDigestBusy] = useState(false)
   const [period, setPeriod] = useState('this_month')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 
+  const { isAdmin } = useAuth()
   const { selectedBuilding } = useBuildingContext()
+
+  // The weekly digest runs on its own on Sunday; this is for when you want to
+  // see what is stuck right now rather than wait for it.
+  const sendDigest = async () => {
+    setDigestBusy(true)
+    const { data, error } = await supabase.functions.invoke('committee-digest', { body: {} })
+    setDigestBusy(false)
+    if (error) { toastError('שליחת הסיכום נכשלה'); return }
+    const sent = (data?.buildings || []).reduce((n, b) => n + (b.sentTo || 0), 0)
+    toast(sent
+      ? `הסיכום נשלח לחברי הוועד (${sent} נמענים)`
+      : 'אין כרגע שום דבר שדורש טיפול — לא נשלח מייל')
+  }
+
   // Data is scoped server-side to the sidebar's building.
   const buildingFilter = 'all'
   const scope = { building_id: selectedBuilding?.id }
@@ -902,6 +921,12 @@ export default function Reports() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <TabGroup tabs={PERIODS} activeTab={period} onChange={setPeriod} />
+          {isAdmin && (
+            <Button variant="outline" onClick={sendDigest} disabled={digestBusy}>
+              <MailCheck className={cn('h-4 w-4', digestBusy && 'animate-pulse')} />
+              {digestBusy ? 'בודק...' : 'סיכום לוועד'}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />הדפסה</Button>
           <Button onClick={handleExport}><Download className="h-4 w-4" />ייצוא CSV</Button>
         </div>

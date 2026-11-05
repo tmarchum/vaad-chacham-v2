@@ -1,0 +1,25 @@
+name: Weekly committee digest
+
+# Sunday morning, before the working week — the committee sees what is stuck
+# while there is still a week to do something about it. Also runnable
+# manually (Actions → Run workflow).
+#
+# The function sends NOTHING when nothing is overdue, so a quiet week
+# produces no email. That is deliberate: a digest that arrives regardless of
+# content is a digest nobody opens.
+on:
+  schedule:
+    - cron: "0 5 * * 0" # 05:00 UTC Sunday = 07:00 Israel
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger committee-digest function
+        run: |
+          curl -fsS -X POST \
+            "https://stncskqjrmecjckxldvi.supabase.co/functions/v1/committee-digest" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'
