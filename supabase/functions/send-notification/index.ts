@@ -278,12 +278,18 @@ type Party = {
 const fullName = (r: Record<string, unknown> | null | undefined) =>
   `${r?.first_name || ''} ${r?.last_name || ''}`.trim()
 
+// priority is stored in English; an email to a contractor should not be.
+const PRIORITY_HE: Record<string, string> = {
+  low: 'נמוכה', normal: 'רגילה', medium: 'רגילה', high: 'גבוהה', urgent: 'דחופה', critical: 'דחופה',
+}
+
 function issueOpenedHtml(
   headline: string,
   lead: string,
   issue: Record<string, unknown>,
   buildingName: string,
   unitLabel: string,
+  extra: { address?: string; contact?: string } = {},
 ): string {
   const row = (k: string, v: string) =>
     v ? `<p style="margin:0 0 6px;color:#64748b;">${k}: <b style="color:#0f172a;">${esc(v)}</b></p>` : ''
@@ -298,7 +304,10 @@ function issueOpenedHtml(
         ${row('קטגוריה', String(issue.category || ''))}
         ${row('דירה', unitLabel)}
         ${row('בניין', buildingName)}
+        ${row('כתובת', extra.address || '')}
+        ${row('דחיפות', PRIORITY_HE[String(issue.priority || '')] || '')}
         ${row('מספר פנייה', String(issue.ticket_no || ''))}
+        ${row('איש קשר בבניין', extra.contact || '')}
         ${issue.photo_url ? `<p style="margin:10px 0 0;"><a href="${esc(issue.photo_url)}" style="color:#2563eb;">צפייה בתמונה</a></p>` : ''}
         <p style="margin-top:14px;color:#475569;">${esc(lead)}</p>
       </div>
@@ -314,9 +323,16 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
   if (!issue) return null
 
   let buildingName = ''
+  let buildingAddress = ''
   if (issue.building_id) {
-    const { data: b } = await svc.from('buildings').select('name').eq('id', issue.building_id).maybeSingle()
+    const { data: b } = await svc.from('buildings')
+      .select('name, street, house_number, city').eq('id', issue.building_id).maybeSingle()
     buildingName = b?.name || ''
+    // A contractor needs somewhere to drive to. The building's display name
+    // usually carries the street and number but never the city, and a service
+    // call without a city is a phone call back to the committee.
+    buildingAddress = [[b?.street, b?.house_number].filter(Boolean).join(' '), b?.city]
+      .filter(Boolean).join(', ') || buildingName
   }
 
   let unitLabel = ''
@@ -388,6 +404,10 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
     })
   }
 
+  // Who the contractor calls to get in. Needed by the vendor template and by
+  // any standing routing address, so it is built once, outside the branch.
+  const contact = [memberName, memberPhone].filter(Boolean).join(' ') || buildingName || 'ועד הבית'
+
   // 3. Whoever is meant to fix it.
   let vendor: Record<string, unknown> | null = null
   if (issue.vendor_id) {
@@ -398,7 +418,6 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
     vendor = data || null
   }
   if (vendor) {
-    const contact = [memberName, memberPhone].filter(Boolean).join(' ') || buildingName || 'ועד הבית'
     parties.push({
       id: 'handler', role: 'גורם מטפל',
       name: String(vendor.name || 'ספק'), phone: String(vendor.phone || ''), email: String(vendor.email || ''),
@@ -408,7 +427,20 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
     })
   }
 
-  return { issue, buildingName, unitLabel, parties }
+  // The same address can arrive twice — a category's standing routing address
+  // is often the contractor that the category also dispatches to. Two
+  // identical emails about one fault reads as a system with a stutter, and
+  // the second one trains people to ignore the first.
+  const seenEmail = new Set<string>()
+  const deduped = parties.filter((p) => {
+    const e = (p.email || '').trim().toLowerCase()
+    if (!e) return true
+    if (seenEmail.has(e)) return false
+    seenEmail.add(e)
+    return true
+  })
+
+  return { issue, buildingName, buildingAddress, unitLabel, contact, parties: deduped }
 }
 
 const ISSUE_OPENED_COPY: Record<string, { headline: string; lead: string; subject: (t: string) => string }> = {
@@ -423,9 +455,9 @@ const ISSUE_OPENED_COPY: Record<string, { headline: string; lead: string; subjec
     subject: (t) => `פנייה חדשה לטיפולך — ${t}`,
   },
   routing_email: {
-    headline: 'פנייה חדשה בבניין',
-    lead: 'התקבלה פנייה חדשה בקטגוריה שבאחריותכם.',
-    subject: (t) => `פנייה חדשה — ${t}`,
+    headline: 'קריאת שירות חדשה',
+    lead: 'התקבלה קריאה חדשה בבניין בקטגוריה שבאחריותכם. נא ליצור קשר עם איש הקשר בבניין לתיאום הגעה.',
+    subject: (t) => `קריאת שירות — ${t}`,
   },
   handler: {
     headline: 'קריאת שירות חדשה',
@@ -530,7 +562,13 @@ Deno.serve(async (req) => {
         if (skip.has(p.id)) { results.push({ id: p.id, skipped: true }); continue }
         const copy = ISSUE_OPENED_COPY[p.id] || ISSUE_OPENED_COPY.routing_email
         const subject = copy.subject(String(built.issue.title || ''))
-        const html = issueOpenedHtml(copy.headline, copy.lead, built.issue, built.buildingName, built.unitLabel)
+        // The address and a committee contact only matter to whoever has to
+        // drive over; residents already know where they live.
+        const external = p.id === 'routing_email' || p.id === 'handler'
+        const html = issueOpenedHtml(
+          copy.headline, copy.lead, built.issue, built.buildingName, built.unitLabel,
+          external ? { address: built.buildingAddress, contact: built.contact } : {},
+        )
 
         let emailOk = false, emailErr = ''
         if (p.email && GMAIL_USER && GMAIL_APP_PASSWORD) {
