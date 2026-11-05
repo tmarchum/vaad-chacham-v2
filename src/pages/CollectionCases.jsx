@@ -120,6 +120,17 @@ export default function CollectionCases() {
         if (!uid) return
         ;(payByUnit[uid] ||= []).push(p)
       })
+      // Who to contact, per unit. A case created without these is a debt with
+      // nobody attached to it — the dunning views and every reminder read
+      // these denormalised columns, not the units table.
+      const primaryByUnit = {}
+      for (const r of allResidents || []) {
+        if (r.archived) continue
+        const uid = r.unit_id || r.unitId
+        if (!uid) continue
+        if (r.is_primary || !primaryByUnit[uid]) primaryByUnit[uid] = r
+      }
+
       let opened = 0, closed = 0
       for (const u of allUnits) {
         const ups = payByUnit[u.id] || []
@@ -132,8 +143,13 @@ export default function CollectionCases() {
         const existing = allCases.find(c => (c.unit_id || c.unitId) === u.id && c.status !== 'closed')
 
         if (months > 0 && debt > 0) {
+          const r = primaryByUnit[u.id]
           const payload = {
             building_id: selectedBuilding.id, unit_id: u.id,
+            unit_number: u.number ?? null,
+            resident_name: r ? `${r.first_name || ''} ${r.last_name || ''}`.trim() || null : null,
+            resident_email: r?.email || null,
+            resident_phone: r?.phone || null,
             total_debt: debt, months_overdue: months,
             escalation_level: escalationForMonths(months), status: 'open',
           }
@@ -151,7 +167,7 @@ export default function CollectionCases() {
     } finally {
       setRecomputing(false)
     }
-  }, [selectedBuilding, allUnits, allPayments, allCases, create, update, confirm])
+  }, [selectedBuilding, allUnits, allPayments, allCases, allResidents, create, update, confirm])
 
   // ── Notifications toggle ──────────────────────────────────────────────────
   // Source of truth: selectedBuilding.collection_notifications_enabled (Supabase)

@@ -542,6 +542,11 @@ Deno.serve(async (req: Request) => {
         for (const t of (r.data.data as Array<Record<string, unknown>>) || []) {
           await svc.from('message_templates').update({
             meta_status: String(t.status || ''), meta_id: String(t.id || ''),
+            // Meta re-categorises during review (several of ours went
+            // UTILITY → MARKETING, which costs more and is subject to
+            // marketing opt-outs). We already asked for the field; store it,
+            // so the app shows what Meta decided rather than what we asked for.
+            ...(t.category ? { category: String(t.category) } : {}),
             rejection_reason: t.rejected_reason && t.rejected_reason !== 'NONE' ? String(t.rejected_reason) : null,
             updated_at: new Date().toISOString(),
             // Only ours: the listing includes every template on the shared WABA.
