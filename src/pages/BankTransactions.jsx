@@ -381,14 +381,14 @@ export default function BankTransactions() {
 
   // Reject a suggestion — revert to unmatched
   const handleRejectSuggestion = async (tx) => {
-    await updateTx(tx.id, { match_status: 'unmatched', unit_id: null })
+    await updateTx(tx.id, { match_status: 'unmatched', unit_id: null, match_reason: null })
     await refresh()
   }
 
   // Unmatch a transaction
   const handleUnmatch = async (tx) => {
     const unitId = tx.unit_id
-    await updateTx(tx.id, { unit_id: null, match_status: 'unmatched' })
+    await updateTx(tx.id, { unit_id: null, match_status: 'unmatched', match_reason: null })
 
     // Recalculate total for this unit, minus the unmatched tx
     if (unitId) {
@@ -414,17 +414,37 @@ export default function BankTransactions() {
     const txParts = extractNameParts(tx.description).map(p => p.toLowerCase())
     const name = residentMap[unit.id] || ''
     const nameParts = name.split(/\s+/).filter(p => p.length >= 3).map(p => p.toLowerCase())
-    const nameHits = nameParts.filter(np =>
-      desc.includes(np) || txParts.some(tp => tp.includes(np) || np.includes(tp))
-    ).length
+    const hit = (np) => desc.includes(np) || txParts.some(tp => tp.includes(np) || np.includes(tp))
+    const nameHits = nameParts.filter(hit).length
+    // A surname is evidence; a given name on its own is barely a hint — "רחל"
+    // or "משה" matches half the building. Keeping them apart is what stops a
+    // first-name coincidence from being auto-matched and then learned as a
+    // rule, which is how three residents' payments landed on the wrong
+    // apartments for ten months.
+    const surname = nameParts[nameParts.length - 1]
+    const surnameHit = nameParts.length > 1 && !!surname && hit(surname)
     const credit = Number(tx.credit) || 0
     const fee = calcUnitFee(unit, selectedBuilding)
     const num = String(unit.number || unit.unit_number || '')
     const numMatch = !!num && new RegExp(`(^|\\D)${num}(\\D|$)`).test(desc)
     const amountMatch = fee > 0 && Math.abs(credit - fee) <= 1
     const tooBig = fee > 0 && credit > fee * 2
-    const score = nameHits * 10 + (numMatch ? 5 : 0) + (amountMatch ? 4 : 0) - (tooBig ? 100 : 0)
-    return { score, nameHits, numMatch, amountMatch }
+    const score = nameHits * 10 + (surnameHit ? 6 : 0) + (numMatch ? 5 : 0) + (amountMatch ? 4 : 0) - (tooBig ? 100 : 0)
+    return { score, nameHits, surnameHit, numMatch, amountMatch }
+  }
+
+  // What the reviewer needs to see to judge a suggestion without re-deriving it.
+  const explainMatch = (best, runnerUp) => {
+    const bits = []
+    if (best.surnameHit) bits.push('שם המשפחה מופיע בתיאור')
+    else if (best.nameHits >= 1) bits.push('שם פרטי בלבד מופיע בתיאור')
+    if (best.numMatch) bits.push('מספר הדירה מופיע בתיאור')
+    if (best.amountMatch) bits.push('הסכום תואם בדיוק את דמי הוועד')
+    if (!bits.length) bits.push('התאמה חלשה')
+    if (runnerUp && runnerUp.score >= best.score - 4) {
+      bits.push(`שים לב: דירה ${runnerUp.unit.number} מתאימה כמעט באותה מידה`)
+    }
+    return bits.join(' • ')
   }
 
   const handleAutoMatch = async () => {
@@ -451,18 +471,27 @@ export default function BankTransactions() {
         continue
       }
 
-      let best = null
-      for (const unit of units) {
-        if (!residentMap[unit.id]) continue
-        const s = scoreTxUnit(tx, unit)
-        if (!best || s.score > best.score) best = { unit, ...s }
-      }
+      const scored = units
+        .filter((unit) => residentMap[unit.id])
+        .map((unit) => ({ unit, ...scoreTxUnit(tx, unit) }))
+        .sort((a, b) => b.score - a.score)
+      const best = scored[0]
+      const runnerUp = scored[1]
       if (!best || best.score <= 0) continue
-      // High confidence → auto-match. Otherwise → suggest for human approval.
-      const high = best.nameHits >= 2 || (best.nameHits >= 1 && (best.amountMatch || best.numMatch))
-      const medium = best.nameHits >= 1 || (best.numMatch && best.amountMatch)
+
+      // Auto-match only where there is nothing left to judge: the surname is
+      // in the description, a second signal agrees, and no other apartment is
+      // anywhere near as good. Anything short of that becomes a suggestion
+      // with its evidence attached — a wrong auto-match does not just mis-file
+      // one payment, it gets learned as a rule and repeats every month.
+      const contested = !!runnerUp && runnerUp.score >= best.score - 4
+      const high = best.surnameHit && (best.amountMatch || best.numMatch || best.nameHits >= 2) && !contested
+      const medium = best.nameHits >= 1 || best.numMatch || (best.amountMatch && best.score > 0)
       if (high) {
-        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'matched', month: monthKey }, { silent: true })
+        await updateTx(tx.id, {
+          unit_id: best.unit.id, match_status: 'matched', month: monthKey,
+          match_reason: explainMatch(best, runnerUp),
+        }, { silent: true })
         const m = tx.month || monthKey
         if (!creditsByUnit[best.unit.id]) {
           creditsByUnit[best.unit.id] = {}
@@ -472,7 +501,10 @@ export default function BankTransactions() {
         creditsByUnit[best.unit.id][m] = (creditsByUnit[best.unit.id][m] || 0) + (Number(tx.credit) || 0)
         matched++
       } else if (medium) {
-        await updateTx(tx.id, { unit_id: best.unit.id, match_status: 'suggested', month: monthKey }, { silent: true })
+        await updateTx(tx.id, {
+          unit_id: best.unit.id, match_status: 'suggested', month: monthKey,
+          match_reason: explainMatch(best, runnerUp),
+        }, { silent: true })
         suggested++
       }
     }
@@ -726,6 +758,9 @@ export default function BankTransactions() {
                               <span>
                                 <span className="font-semibold num-tabular">דירה {matchedUnit.number}</span>
                                 {matchedResident && <span className="block text-[11px] text-[var(--text-muted)]">{matchedResident}</span>}
+                                {tx.match_status === 'suggested' && tx.match_reason && (
+                                  <span className="block text-[11px] text-[var(--warning,#b45309)] mt-0.5 whitespace-normal">{tx.match_reason}</span>
+                                )}
                               </span>
                             ) : <span className="text-[var(--text-muted)]">—</span>}
                           </td>
@@ -765,6 +800,9 @@ export default function BankTransactions() {
                         <Badge variant={status.variant}>{status.label}</Badge>
                         {matchedUnit && (
                           <span className="text-[11px] text-[var(--text-secondary)] num-tabular">דירה {matchedUnit.number}{matchedResident ? ` — ${matchedResident}` : ''}</span>
+                        )}
+                        {tx.match_status === 'suggested' && tx.match_reason && (
+                          <span className="text-[11px] text-[var(--warning,#b45309)] w-full">{tx.match_reason}</span>
                         )}
                         {renderCategory(tx, isCredit)}
                         <div className="mr-auto">{renderActions(tx)}</div>
