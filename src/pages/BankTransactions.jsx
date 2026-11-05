@@ -435,10 +435,17 @@ export default function BankTransactions() {
     const monthsAhead = Math.round(ratio)
     const multipleMatch = fee > 0 && monthsAhead >= 2 && monthsAhead <= 14 &&
       Math.abs(credit - monthsAhead * fee) <= 2
+    // An unexplained large amount used to carry -100, which silently vetoed
+    // even a full name match: the 4,120 ₪ from the ערמון family names them
+    // twice in the description, and nothing was ever offered for it because
+    // 4,120 is not a whole multiple of the fee this unit is configured with
+    // (they actually pay 515 — their April payment was 1,545, three months).
+    // An amount heuristic should not be able to overrule a name; it should
+    // only stop the match from being automatic.
     const tooBig = fee > 0 && credit > fee * 2 && !multipleMatch
     const score = nameHits * 10 + (surnameHit ? 6 : 0) + (numMatch ? 5 : 0) +
-      (amountMatch ? 4 : 0) + (multipleMatch ? 4 : 0) - (tooBig ? 100 : 0)
-    return { score, nameHits, surnameHit, numMatch, amountMatch, multipleMatch, monthsAhead }
+      (amountMatch ? 4 : 0) + (multipleMatch ? 4 : 0) - (tooBig ? 8 : 0)
+    return { score, nameHits, surnameHit, numMatch, amountMatch, multipleMatch, monthsAhead, tooBig }
   }
 
   // What the reviewer needs to see to judge a suggestion without re-deriving it.
@@ -449,6 +456,7 @@ export default function BankTransactions() {
     if (best.numMatch) bits.push('מספר הדירה מופיע בתיאור')
     if (best.amountMatch) bits.push('הסכום תואם בדיוק את דמי הוועד')
     else if (best.multipleMatch) bits.push(`הסכום תואם בדיוק ${best.monthsAhead} חודשי ועד מראש`)
+    else if (best.tooBig) bits.push('הסכום גבוה מדמי הוועד החודשיים — ייתכן תשלום מראש או חוב שנסגר')
     if (!bits.length) bits.push('התאמה חלשה')
     if (runnerUp && runnerUp.score >= best.score - 4) {
       bits.push(`שים לב: דירה ${runnerUp.unit.number} מתאימה כמעט באותה מידה`)
@@ -494,7 +502,9 @@ export default function BankTransactions() {
       // with its evidence attached — a wrong auto-match does not just mis-file
       // one payment, it gets learned as a rule and repeats every month.
       const contested = !!runnerUp && runnerUp.score >= best.score - 4
-      const high = best.surnameHit && (best.amountMatch || best.numMatch || best.nameHits >= 2) && !contested
+      // The amount must also make sense. A name can be a coincidence, and an
+      // amount nobody can explain is exactly when a human should look.
+      const high = best.surnameHit && (best.amountMatch || best.multipleMatch || best.numMatch) && !contested
       const medium = best.nameHits >= 1 || best.numMatch ||
         ((best.amountMatch || best.multipleMatch) && best.score > 0)
       if (high) {
