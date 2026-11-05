@@ -64,7 +64,7 @@ const render = (body: string, vars: string[]) =>
   body.replace(/\{\{(\d+)\}\}/g, (_, n) => vars[Number(n) - 1] ?? `{{${n}}}`)
 
 type Tpl = {
-  key: string; category: string; language: string | null; body: string
+  key: string; meta_name: string; category: string; language: string | null; body: string
   variables: unknown; example: unknown
 }
 
@@ -81,7 +81,8 @@ function templateProblems(t: Tpl): string[] {
   const vars = Array.isArray(t.variables) ? t.variables : []
   const ex = Array.isArray(t.example) ? t.example : []
 
-  if (!/^[a-z0-9_]{1,512}$/.test(t.key)) out.push('שם התבנית חייב להיות אותיות קטנות באנגלית, ספרות וקו תחתון')
+  // meta_name is what Meta registers, not key — the WABA is shared with אות.
+  if (!/^[a-z0-9_]{1,512}$/.test(t.meta_name || '')) out.push('שם התבנית חייב להיות אותיות קטנות באנגלית, ספרות וקו תחתון')
   if (!['AUTHENTICATION', 'MARKETING', 'UTILITY'].includes(t.category)) out.push(`קטגוריה לא חוקית: ${t.category}`)
   if (!body.trim()) out.push('גוף ההודעה ריק')
   if (body.length > 1024) out.push(`גוף ההודעה ${body.length} תווים, המקסימום 1024`)
@@ -334,7 +335,9 @@ Deno.serve(async (req: Request) => {
                 meta_id: v.message_template_id ? String(v.message_template_id) : undefined,
                 rejection_reason: v.reason && v.reason !== 'NONE' ? String(v.reason) : null,
                 updated_at: new Date().toISOString(),
-              }).eq('key', name)
+                // Matched on meta_name: the WABA carries אות's templates too,
+                // and one of theirs may share our bare key.
+              }).eq('meta_name', name)
             }
             continue
           }
@@ -414,7 +417,7 @@ Deno.serve(async (req: Request) => {
     // point is to find rejectable templates BEFORE the Meta keys are in place,
     // so the first sync is not a wall of rejections.
     if (action === 'check-templates') {
-      const { data: tpls } = await svc.from('message_templates').select('key, title, category, language, body, variables, example, active')
+      const { data: tpls } = await svc.from('message_templates').select('key, meta_name, title, category, language, body, variables, example, active')
       const checked = (tpls || []).filter((t) => t.active).map((t) => ({
         key: t.key, title: t.title, problems: templateProblems(t as Tpl),
       }))
@@ -465,7 +468,7 @@ Deno.serve(async (req: Request) => {
           if (ex.length) component.example = { body_text: [ex.map(cleanParam)] }
           const r = await graph(integ, token, `${integ.waba_id}/message_templates`, {
             method: 'POST',
-            body: JSON.stringify({ name: t.key, language: t.language || 'he', category: t.category, components: [component] }),
+            body: JSON.stringify({ name: t.meta_name, language: t.language || 'he', category: t.category, components: [component] }),
           })
           submitted.push({ key: t.key, ok: r.ok, error: r.ok ? undefined : graphError(r.data) })
           if (r.ok) {
@@ -484,7 +487,8 @@ Deno.serve(async (req: Request) => {
             meta_status: String(t.status || ''), meta_id: String(t.id || ''),
             rejection_reason: t.rejected_reason && t.rejected_reason !== 'NONE' ? String(t.rejected_reason) : null,
             updated_at: new Date().toISOString(),
-          }).eq('key', String(t.name || ''))
+            // Only ours: the listing includes every template on the shared WABA.
+          }).eq('meta_name', String(t.name || ''))
         }
       }
       return json({ ok: r.ok, submitted, error: r.ok ? undefined : graphError(r.data) })
@@ -534,7 +538,7 @@ Deno.serve(async (req: Request) => {
         payload = {
           messaging_product: 'whatsapp', to, type: 'template',
           template: {
-            name: t.key, language: { code: t.language || 'he' },
+            name: t.meta_name, language: { code: t.language || 'he' },
             components: needed ? [{ type: 'body', parameters: vars.slice(0, needed).map((text) => ({ type: 'text', text })) }] : [],
           },
         }
