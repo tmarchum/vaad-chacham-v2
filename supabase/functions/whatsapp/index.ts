@@ -365,6 +365,56 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true })
     }
 
+    // ── Enrollment: the credential holder posts the token itself ──────────
+    // No JWT, by design. The token for this number already exists on the
+    // machine that runs אות's automation; this lets that machine hand it over
+    // directly instead of routing a secret through a chat log, a clipboard or
+    // an assistant. The code is single-use, short-lived, and only ever stored
+    // hashed — and it can only write a credential, never read one back.
+    if (body.action === 'enroll') {
+      const code = String(body.code || '')
+      if (code.length < 20) return json({ error: 'bad_code' }, 400)
+      const hash = Array.from(new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code)),
+      )).map((b) => b.toString(16).padStart(2, '0')).join('')
+
+      const { data: row } = await svc.from('messaging_enrollment')
+        .select('id, provider, expires_at, used_at')
+        .eq('code_hash', hash).is('used_at', null).maybeSingle()
+      if (!row || new Date(row.expires_at) < new Date()) return json({ error: 'code_invalid_or_expired' }, 403)
+
+      const accessToken = typeof body.access_token === 'string' ? body.access_token.trim() : ''
+      const appSecret = typeof body.app_secret === 'string' ? body.app_secret.trim() : ''
+      if (!accessToken && !appSecret) return json({ error: 'nothing_to_store' }, 400)
+
+      // Burn the code first: a retry must not get a second write.
+      await svc.from('messaging_enrollment').update({ used_at: new Date().toISOString() }).eq('id', row.id)
+
+      const { sec: cur } = await loadConfig(svc)
+      await svc.from('messaging_secrets').upsert({
+        provider: row.provider,
+        webhook_token: cur?.webhook_token || crypto.randomUUID().replace(/-/g, ''),
+        ...(accessToken ? { api_token: accessToken } : {}),
+        ...(appSecret ? { app_secret: appSecret } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      if (accessToken) {
+        await svc.from('messaging_integrations')
+          .update({ has_token: true, updated_at: new Date().toISOString() })
+          .eq('provider', row.provider)
+      }
+
+      // Say whether it actually works, so the sender learns the answer now
+      // rather than from a silent failure later. Never echo the value.
+      const { integ: i2 } = await loadConfig(svc)
+      let works: boolean | null = null
+      if (accessToken && i2?.phone_number_id) {
+        const r = await graph(i2, accessToken, `${i2.phone_number_id}?fields=display_phone_number,verified_name`)
+        works = r.ok
+      }
+      return json({ ok: true, stored: { access_token: !!accessToken, app_secret: !!appSecret }, token_works: works })
+    }
+
     // ── App actions: signed-in admin / committee only ─────────────────────
     const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
     const { data: userData } = await svc.auth.getUser(jwt)
