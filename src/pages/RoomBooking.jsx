@@ -8,10 +8,11 @@ import { FormField, FormSelect, FormBool, FormTextarea } from '@/components/comm
 import { StatCard } from '@/components/common/StatCard'
 import { TabGroup } from '@/components/ui/tabs'
 import { formatCurrency } from '@/lib/utils'
+import { isMotzashSlotOpen, MOTZASH_HOURS } from '@/lib/israelTime'
 import { supabase } from '@/lib/supabase'
 import { useConfirm } from '@/lib/confirm'
 import {
-  CalendarDays, Plus, Trash2, Pencil, Sun, Moon, SunMoon,
+  CalendarDays, Plus, Trash2, Pencil, Sun, Moon, SunMoon, Stars,
   ChevronRight, ChevronLeft, ExternalLink, Check, X as XIcon,
   Users, UserPlus, Ban, Star, Settings, PieChart,
   DoorOpen, CreditCard, List, Clock, CheckCircle2,
@@ -29,8 +30,17 @@ const SLOT_GRADIENTS = {
 const SLOTS = {
   morning:  { label: 'בוקר (08:00-14:00)',    short: 'בוקר 08-14',  icon: Sun,     color: 'amber' },
   evening:  { label: 'ערב (16:00-23:00)',     short: 'ערב 16-23',   icon: Moon,    color: 'indigo' },
-  full_day: { label: 'יממה — שבת/חג (24 שעות)', short: 'יממה 24שע',  icon: SunMoon, color: 'purple' },
+  full_day: { label: 'יממה — שבת/חג (24 שעות)', short: 'שבת/חג',      icon: SunMoon, color: 'purple' },
+  motzash:  { label: `מוצ"ש (${MOTZASH_HOURS})`, short: 'מוצ"ש 19-23', icon: Stars, color: 'teal' },
 }
+
+// In winter time the Shabbat slot no longer runs a full 24 hours: Saturday
+// evening is sold separately, so every label printed for a resident has to say
+// so — in an email above all, where the hours are all they have to go by.
+const slotLabel = (slot, dateish) =>
+  slot === 'full_day' && isMotzashSlotOpen(dateish)
+    ? 'שבת/חג — משישי בערב עד צאת השבת'
+    : (SLOTS[slot]?.label || slot)
 
 import { HEBREW_MONTHS } from '@/lib/constants'
 import { toast, toastError } from '@/lib/toast'
@@ -214,10 +224,14 @@ export default function RoomBooking() {
 
       days.push({
         day: d, date, dk, isSaturday, isFriday, isYomTov, isShabbatOrChag,
+        // Saturday night, 19:00-23:00, in winter time only — its own booking,
+        // which is why hasFullDay does not make it unavailable.
+        motzashOpen: isMotzashSlotOpen(dk),
         holidays: dayHolidays, bookings: dayBookings, isBlocked, isPast, isTooFar,
         hasMorning: dayBookings.some(b => b.slot === 'morning' || b.slot === 'full_day'),
         hasEvening: dayBookings.some(b => b.slot === 'evening' || b.slot === 'full_day'),
         hasFullDay: dayBookings.some(b => b.slot === 'full_day'),
+        hasMotzash: dayBookings.some(b => b.slot === 'motzash'),
       })
     }
     return days
@@ -254,7 +268,9 @@ export default function RoomBooking() {
     const bookingDate = new Date(booking.booking_date || booking.dk)
     const dateStr = bookingDate.toLocaleDateString('he-IL')
     const dayName = HEBREW_DAYS[bookingDate.getDay()]
-    const slotLabel = SLOTS[booking.slot]?.label || booking.slot
+    // The hours are all the recipient has to go by, so they must match the
+    // season: in winter the Shabbat slot stops at צאת השבת.
+    const slotText = slotLabel(booking.slot, booking.booking_date || booking.dk)
     const td = `style="padding:10px;border-bottom:1px solid #e2e8f0;"`
     const th = `style="padding:10px;border-bottom:1px solid #e2e8f0;font-weight:bold;width:120px;"`
     return `
@@ -268,7 +284,7 @@ export default function RoomBooking() {
           <table style="width:100%;border-collapse:collapse;">
             <tr><td ${th}>בניין</td><td ${td}>${buildingName || ''}</td></tr>
             <tr><td ${th}>תאריך</td><td ${td}>יום ${dayName}, ${dateStr}</td></tr>
-            <tr><td ${th}>משבצת</td><td ${td}>${slotLabel}</td></tr>
+            <tr><td ${th}>משבצת</td><td ${td}>${slotText}</td></tr>
             <tr><td ${th}>רשום על</td><td ${td}>${booking.booker_name || booking.bookerName || ''}</td></tr>
             ${unitNumber ? `<tr><td ${th}>דירה</td><td ${td}>${unitNumber}</td></tr>` : ''}
             ${booking.booker_phone || booking.bookerPhone ? `<tr><td ${th}>טלפון</td><td ${td}>${booking.booker_phone || booking.bookerPhone}</td></tr>` : ''}
@@ -287,8 +303,11 @@ export default function RoomBooking() {
   // ── Handlers ─────────────────────────────────────────────────
   const handleOpenBooking = (dayObj) => {
     if (!dayObj || dayObj.isPast || dayObj.isBlocked || dayObj.isTooFar) return
-    // Default slot: if Shabbat/holiday, default to full_day; otherwise evening
-    const defaultSlot = dayObj.isShabbatOrChag ? 'full_day' : 'evening'
+    // Default slot: on Shabbat/holiday the day itself, otherwise the evening —
+    // but never a slot that is already taken, which on a winter Saturday with
+    // the Shabbat let out means landing on מוצ"ש.
+    const preference = dayObj.isShabbatOrChag ? ['full_day', 'motzash', 'morning', 'evening'] : ['evening', 'morning']
+    const defaultSlot = preference.find(s => isSlotAvailable(dayObj, s)) || preference[0]
     setBookingForm({
       slot: defaultSlot, unitId: '', isGuest: false,
       bookerName: '', bookerPhone: '', bookerEmail: '',
@@ -302,11 +321,17 @@ export default function RoomBooking() {
     if (slot === 'morning') return Number(selectedResource.price_morning) || 0
     if (slot === 'evening') return Number(selectedResource.price_evening) || 0
     if (slot === 'full_day') return Number(selectedResource.price_full_day) || 0
+    // Until the committee sets a מוצ"ש price the evening price stands in, so a
+    // new slot is never sold for nothing by accident.
+    if (slot === 'motzash') return Number(selectedResource.price_motzash) || Number(selectedResource.price_evening) || 0
     return 0
   }
 
   const isSlotAvailable = (dayObj, slot) => {
     if (!dayObj) return false
+    // מוצ"ש stands apart: Shabbat is already out by 19:00 in winter time, so it
+    // is free even when the Shabbat itself is let to another flat.
+    if (slot === 'motzash') return dayObj.motzashOpen && !dayObj.hasMotzash
     // Full day only on Shabbat/Chag
     if (slot === 'full_day' && !dayObj.isShabbatOrChag) return false
     if (slot === 'full_day') return !dayObj.hasMorning && !dayObj.hasEvening && !dayObj.hasFullDay
@@ -503,10 +528,15 @@ export default function RoomBooking() {
   const slotConflict = (dateStr, slot, excludeId) => {
     const sameDay = activeBookings.filter(b => b.booking_date === dateStr && b.id !== excludeId)
     if (!sameDay.length) return null
-    const full = sameDay.find(b => b.slot === 'full_day')
-    if (slot === 'full_day') return sameDay[0]
+    // מוצ"ש is its own window and collides with nothing else — and nothing else
+    // collides with it, which is why it is filtered out of the day first.
+    if (slot === 'motzash') return sameDay.find(b => b.slot === 'motzash') || null
+    const daySlots = sameDay.filter(b => b.slot !== 'motzash')
+    if (!daySlots.length) return null
+    const full = daySlots.find(b => b.slot === 'full_day')
+    if (slot === 'full_day') return daySlots[0]
     if (full) return full
-    return sameDay.find(b => b.slot === slot) || null
+    return daySlots.find(b => b.slot === slot) || null
   }
 
   // Payment is a fact the committee records — the money arrives by PayBox, Bit
@@ -616,7 +646,7 @@ export default function RoomBooking() {
   const openResourceForm = (resource) => {
     if (resource === 'new') {
       setResourceForm({
-        name: '', description: '', price_morning: 0, price_evening: 0, price_full_day: 0,
+        name: '', description: '', price_morning: 0, price_evening: 0, price_full_day: 0, price_motzash: 0,
         payment_url: '', max_advance_days: 30, residents_only: true, notify_email: '',
         custom_questions: [], rental_terms: '', approval_message: '',
       })
@@ -636,6 +666,7 @@ export default function RoomBooking() {
         price_morning: Number(resourceForm.price_morning) || 0,
         price_evening: Number(resourceForm.price_evening) || 0,
         price_full_day: Number(resourceForm.price_full_day) || 0,
+        price_motzash: Number(resourceForm.price_motzash) || 0,
         payment_url: resourceForm.payment_url || '',
         max_advance_days: Number(resourceForm.max_advance_days) || 30,
         residents_only: resourceForm.residents_only !== false,
@@ -799,7 +830,7 @@ export default function RoomBooking() {
               progress={occupancy} />
             <StatCard label="הכנסות משימוש החודש" icon={CreditCard} color="emerald"
               value={formatCurrency(stats.revenue)}
-              footer={<span>בוקר {formatCurrency(selectedResource.price_morning)} • ערב {formatCurrency(selectedResource.price_evening)} • יממה {formatCurrency(selectedResource.price_full_day)}</span>} />
+              footer={<span>בוקר {formatCurrency(selectedResource.price_morning)} • ערב {formatCurrency(selectedResource.price_evening)} • שבת/חג {formatCurrency(selectedResource.price_full_day)} • מוצ"ש {formatCurrency(getSlotPrice('motzash'))}</span>} />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
@@ -832,6 +863,7 @@ export default function RoomBooking() {
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><span className="h-2 w-2 rounded-full bg-[var(--warning)]" />ממתין לאישור</span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><Sun className="h-3 w-3" />בוקר 08-14</span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><Moon className="h-3 w-3" />ערב 16-23</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><Stars className="h-3 w-3" />מוצ"ש 19-23 (שעון חורף)</span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-[var(--border)]"><Ban className="h-3 w-3" />חסום</span>
                   </div>
                 )}
@@ -850,7 +882,10 @@ export default function RoomBooking() {
                     {calendarDays.map((day, i) => {
                       if (!day) return <div key={`e${i}`} className="min-h-[96px] border-b border-l border-[var(--border-light)] bg-[var(--bg)]" />
                       const isToday = isSameDay(day.date, new Date())
-                      const canBook = !day.isPast && !day.isBlocked && !day.isTooFar && !day.hasFullDay
+                      // A let Shabbat used to close the day outright. In winter
+                      // the מוצ"ש window is still for sale, so the day stays open.
+                      const dayFree = !day.hasFullDay || (day.motzashOpen && !day.hasMotzash)
+                      const canBook = !day.isPast && !day.isBlocked && !day.isTooFar && dayFree
                       const holidayName = day.holidays[0]?.hebrew
                       const free = canBook && day.bookings.length === 0
                       return (
@@ -883,10 +918,10 @@ export default function RoomBooking() {
                           <div className="flex flex-col gap-0.5">
                             {day.bookings.map(b => {
                               const pending = b.status === 'pending'
-                              const slotWord = b.slot === 'morning' ? 'בוקר' : b.slot === 'full_day' ? 'יממה' : 'ערב'
+                              const slotWord = b.slot === 'morning' ? 'בוקר' : b.slot === 'full_day' ? 'שבת' : b.slot === 'motzash' ? 'מוצ"ש' : 'ערב'
                               return (
                                 <button key={b.id} type="button"
-                                  title={`${SLOTS[b.slot]?.label || ''} — ${bookerLabel(b)} • לחצו לפתיחת ההזמנה`}
+                                  title={`${slotLabel(b.slot, b.booking_date)} — ${bookerLabel(b)} • לחצו לפתיחת ההזמנה`}
                                   onClick={(e) => { e.stopPropagation(); openDetail(b) }}
                                   className={`flex w-full items-center gap-1 text-[10px] leading-4 px-1 rounded border truncate hover:brightness-95 ${
                                     pending ? 'bg-[var(--warning-light)] border-[var(--warning)]/30 text-[var(--warning)]'
@@ -961,7 +996,8 @@ export default function RoomBooking() {
                             <div className="flex flex-wrap gap-x-3 text-[12px] text-[var(--text-muted)] mt-0.5 num-tabular">
                               <span>בוקר {formatCurrency(r.price_morning)}</span>
                               <span>ערב {formatCurrency(r.price_evening)}</span>
-                              <span>יממה {formatCurrency(r.price_full_day)}</span>
+                              <span>שבת/חג {formatCurrency(r.price_full_day)}</span>
+                              <span>מוצ"ש {formatCurrency(Number(r.price_motzash) || Number(r.price_evening) || 0)}</span>
                               <span>{r.residents_only ? 'דיירים בלבד' : 'דיירים + אורחים'}</span>
                               {(r.custom_questions || []).length > 0 && <span>{(r.custom_questions || []).length} שאלות בטופס</span>}
                             </div>
@@ -1030,7 +1066,7 @@ export default function RoomBooking() {
                           <div className="p-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface-secondary)]/60 space-y-1.5 text-[12px]">
                             <p className="flex items-center gap-1.5 font-semibold text-[var(--text-primary)] num-tabular">
                               <CalendarDays className="h-3.5 w-3.5 text-[var(--primary)]" />
-                              יום {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][d.getDay()]}, {d.toLocaleDateString('he-IL')} | {SLOTS[bk.slot]?.label || bk.slot}
+                              יום {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'][d.getDay()]}, {d.toLocaleDateString('he-IL')} | {slotLabel(bk.slot, bk.booking_date)}
                             </p>
                             {qs.map(q => (
                               <p key={q.id} className="text-[var(--text-secondary)]">{q.text}: <b>{typeof answers[q.id] === 'boolean' ? (answers[q.id] ? 'כן' : 'לא') : answers[q.id]}</b></p>
@@ -1117,12 +1153,19 @@ export default function RoomBooking() {
               {/* Slot selection */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-[var(--text-secondary)]">משבצת זמן</label>
-                <div className="grid grid-cols-3 gap-2">
+                {/* Four tiles on a Saturday sit as 2×2; three fit one row. */}
+                <div className={`grid gap-2 ${bookingDialog.isSaturday ? 'grid-cols-2' : 'grid-cols-3'}`}>
                   {Object.entries(SLOTS).map(([key, slot]) => {
+                    // מוצ"ש belongs to Saturday alone — on a Tuesday it is noise,
+                    // so it is left out rather than shown greyed.
+                    if (key === 'motzash' && !bookingDialog.isSaturday) return null
                     const available = isSlotAvailable(bookingDialog, key)
                     const isSelected = bookingForm.slot === key
                     const SlotIcon = slot.icon
                     const isFullDayRestricted = key === 'full_day' && !bookingDialog.isShabbatOrChag
+                    // A summer Saturday: Shabbat ends past 20:00, so there is no
+                    // window — say that instead of just "תפוס".
+                    const isSummerMotzash = key === 'motzash' && !bookingDialog.motzashOpen
                     return (
                       <button
                         key={key} disabled={!available}
@@ -1137,7 +1180,9 @@ export default function RoomBooking() {
                         <p className="text-xs font-medium">{slot.short}</p>
                         <p className="text-[10px] mt-0.5">{formatCurrency(getSlotPrice(key))}</p>
                         {isFullDayRestricted && <p className="text-[9px] text-blue-400">שבת/חג בלבד</p>}
-                        {!available && !isFullDayRestricted && <p className="text-[9px] text-red-400">תפוס</p>}
+                        {isSummerMotzash && <p className="text-[9px] text-blue-400">בשעון חורף בלבד</p>}
+                        {key === 'full_day' && bookingDialog.motzashOpen && <p className="text-[9px] text-blue-400">עד צאת השבת</p>}
+                        {!available && !isFullDayRestricted && !isSummerMotzash && <p className="text-[9px] text-red-400">תפוס</p>}
                       </button>
                     )
                   })}
@@ -1288,11 +1333,15 @@ export default function RoomBooking() {
             <FormField label="שם החדר / מתקן" value={resourceForm.name || ''} onChange={(e) => setResourceForm(f => ({ ...f, name: e.target.value }))} placeholder='למשל: חדר דיירים, גג, מועדון' />
             <FormTextarea label="תיאור" value={resourceForm.description || ''} onChange={(e) => setResourceForm(f => ({ ...f, description: e.target.value }))} placeholder="תיאור המקום, כללי שימוש..." />
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <FormField label="מחיר בוקר" type="number" value={resourceForm.price_morning ?? 0} onChange={(e) => setResourceForm(f => ({ ...f, price_morning: e.target.value }))} />
               <FormField label="מחיר ערב" type="number" value={resourceForm.price_evening ?? 0} onChange={(e) => setResourceForm(f => ({ ...f, price_evening: e.target.value }))} />
-              <FormField label="מחיר יממה" type="number" value={resourceForm.price_full_day ?? 0} onChange={(e) => setResourceForm(f => ({ ...f, price_full_day: e.target.value }))} />
+              <FormField label="מחיר שבת/חג" type="number" value={resourceForm.price_full_day ?? 0} onChange={(e) => setResourceForm(f => ({ ...f, price_full_day: e.target.value }))} />
+              <FormField label='מחיר מוצ"ש (19:00-23:00)' type="number" value={resourceForm.price_motzash ?? 0} onChange={(e) => setResourceForm(f => ({ ...f, price_motzash: e.target.value }))} />
             </div>
+            <p className="text-[11px] text-[var(--text-muted)] -mt-2">
+              מוצ"ש נפתח להזמנה בשעון חורף בלבד, בנפרד מהשבת עצמה. אם המחיר 0 — נגבה מחיר הערב.
+            </p>
 
             <FormField label="קישור לתשלום (PayBox / Bit)" value={resourceForm.payment_url || ''} onChange={(e) => setResourceForm(f => ({ ...f, payment_url: e.target.value }))} placeholder="https://paybox.co/..." />
 
@@ -1384,6 +1433,12 @@ export default function RoomBooking() {
 
             if (editMode) {
               const editClash = slotConflict(editForm.booking_date, editForm.slot, bk.id)
+              // מוצ"ש is offered only where it exists: a Saturday in winter time.
+              // On any other date it is listed only when it is already this
+              // booking's slot, so an existing row stays editable.
+              const slotOptions = Object.entries(SLOTS)
+                .filter(([k]) => k !== 'motzash' || isMotzashSlotOpen(editForm.booking_date) || editForm.slot === 'motzash')
+                .map(([k]) => ({ value: k, label: slotLabel(k, editForm.booking_date) }))
               return (
                 <div className="space-y-4 mt-2">
                   <div className="grid grid-cols-2 gap-3">
@@ -1396,7 +1451,7 @@ export default function RoomBooking() {
                         const wasSlotPrice = Number(editForm.price) === getSlotPrice(editForm.slot)
                         setEditForm(f => ({ ...f, slot, price: wasSlotPrice ? getSlotPrice(slot) : f.price }))
                       }}
-                      options={Object.entries(SLOTS).map(([k, s]) => ({ value: k, label: s.label }))} />
+                      options={slotOptions} />
                   </div>
                   {editClash && (
                     <div className="flex items-start gap-2 p-2.5 rounded-[var(--radius)] bg-[var(--danger-light)] border border-[var(--danger)]/30">
@@ -1500,7 +1555,7 @@ export default function RoomBooking() {
 
                 <div className="p-3 rounded-[var(--radius)] bg-[var(--surface-secondary)] border border-[var(--border)] space-y-2">
                   {row(CalendarDays, 'תאריך', `יום ${HEBREW_DAYS[bkDate.getDay()]}, ${bkDate.toLocaleDateString('he-IL')}`)}
-                  {row(Clock, 'משבצת', SLOTS[bk.slot]?.label || bk.slot)}
+                  {row(Clock, 'משבצת', slotLabel(bk.slot, bk.booking_date))}
                   {row(Home, 'דירה', unit ? `${unit.number}${unit.name ? ` — ${unit.name}` : ''}` : (bk.is_guest ? 'אורח חיצוני' : null))}
                   {row(Phone, 'טלפון', bk.booker_phone)}
                   {row(Mail, 'אימייל', bk.booker_email)}

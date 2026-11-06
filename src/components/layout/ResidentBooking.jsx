@@ -4,18 +4,29 @@ import { formatCurrency, sanitizePhone, isValidPhone } from '@/lib/utils'
 
 const SUPABASE_URL = 'https://stncskqjrmecjckxldvi.supabase.co'
 import {
-  CalendarDays, ChevronRight, ChevronLeft, Sun, Moon, Sparkles,
+  CalendarDays, ChevronRight, ChevronLeft, Sun, Moon, Sparkles, Stars,
   X, Send, Loader2, DoorOpen, Clock, CheckCircle2, Ban,
 } from 'lucide-react'
+import { isMotzashSlotOpen, MOTZASH_HOURS } from '@/lib/israelTime'
 
 // ── Slot model (resident portal) ──────────────────────────────────
 //  Sun–Thu : morning + evening
 //  Friday  : morning only (no Friday evening)
-//  Saturday: "full Shabbat" = Friday eve + Saturday morning + Saturday eve (one slot)
+//  Saturday: "full Shabbat" — plus, in WINTER time, a מוצ"ש slot of its own.
+//            Shabbat is out by about 17:00 in winter, so Saturday evening is a
+//            separate booking and may go to a different flat. In summer Shabbat
+//            ends past 20:00 and the Shabbat slot runs to the end of the day.
 const SLOTS = {
   morning:  { label: 'בוקר',     sub: '08:00–14:00',     priceKey: 'price_morning',  icon: Sun,      color: 'text-amber-600',  badge: 'bg-amber-100 text-amber-700' },
   evening:  { label: 'ערב',      sub: '16:00–23:00',     priceKey: 'price_evening',  icon: Moon,     color: 'text-blue-600', badge: 'bg-blue-100 text-blue-700' },
   full_day: { label: 'שבת מלאה', sub: 'שישי ערב – מוצ״ש', priceKey: 'price_full_day', icon: Sparkles, color: 'text-purple-600', badge: 'bg-purple-100 text-purple-700' },
+  motzash:  { label: 'מוצ״ש',    sub: MOTZASH_HOURS.replace('-', '–'), priceKey: 'price_motzash', fallbackKey: 'price_evening', icon: Stars, color: 'text-teal-600', badge: 'bg-teal-100 text-teal-700' },
+}
+
+/** What a slot's hours really are on a given date. */
+function slotSub(sl, dk) {
+  if (sl === 'full_day') return isMotzashSlotOpen(dk) ? 'שישי ערב – צאת השבת' : 'שישי ערב – מוצ״ש'
+  return SLOTS[sl].sub
 }
 
 const WEEKDAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
@@ -33,9 +44,11 @@ function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// Which slots are offered on a given day-of-week (0=Sun … 6=Sat)
-function slotsForDow(dow) {
-  if (dow === 6) return ['full_day']        // Saturday → full Shabbat
+// Which slots are offered on a given calendar date ('YYYY-MM-DD').
+// Saturday carries מוצ"ש as a second, independent slot — but only in winter
+// time, when Shabbat is actually out before 19:00.
+function slotsForDate(dk, dow) {
+  if (dow === 6) return isMotzashSlotOpen(dk) ? ['full_day', 'motzash'] : ['full_day']
   if (dow === 5) return ['morning']         // Friday → morning only
   return ['morning', 'evening']             // Sun–Thu
 }
@@ -133,7 +146,7 @@ export function ResidentBooking({ resources, profile, user, unitNumber, onCreate
       const date = new Date(calYear, calMonth, d)
       const dk = dateKey(date)
       const dow = date.getDay()
-      const offered = slotsForDow(dow)
+      const offered = slotsForDate(dk, dow)
       const available = offered.filter(sl => !takenSlots.has(`${dk}|${sl}`))
       const isPast = date < today
       const isTooFar = date > maxDate
@@ -158,7 +171,13 @@ export function ResidentBooking({ resources, profile, user, unitNumber, onCreate
     [bookings, profile?.unit_id]
   )
 
-  const slotPrice = (sl) => resource ? Number(resource[SLOTS[sl].priceKey] || 0) : 0
+  // מוצ"ש falls back to the evening price while the committee has not set one,
+  // so the slot is never offered free by accident.
+  const slotPrice = (sl) => {
+    if (!resource) return 0
+    const s = SLOTS[sl]
+    return Number(resource[s.priceKey] || 0) || Number(s.fallbackKey ? resource[s.fallbackKey] || 0 : 0) || 0
+  }
 
   const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) } else setCalMonth(m => m - 1) }
   const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) } else setCalMonth(m => m + 1) }
@@ -291,7 +310,7 @@ export function ResidentBooking({ resources, profile, user, unitNumber, onCreate
           if (p <= 0) return null
           return (
             <span key={k} className={`text-[11px] px-2 py-1 rounded-full ${s.badge}`}>
-              {s.label}: {formatCurrency(p)}
+              {s.label}: {formatCurrency(p)}{k === 'motzash' ? ' (שעון חורף)' : ''}
             </span>
           )
         })}
@@ -335,7 +354,8 @@ export function ResidentBooking({ resources, profile, user, unitNumber, onCreate
                   <div className="flex gap-0.5 h-1.5">
                     {day.offered.map(sl => {
                       const free = day.available.includes(sl)
-                      return <span key={sl} className={`w-1.5 h-1.5 rounded-full ${free ? (sl === 'morning' ? 'bg-amber-400' : sl === 'evening' ? 'bg-blue-400' : 'bg-purple-400') : 'bg-slate-200'}`} />
+                      const dot = sl === 'morning' ? 'bg-amber-400' : sl === 'evening' ? 'bg-blue-400' : sl === 'motzash' ? 'bg-teal-400' : 'bg-purple-400'
+                      return <span key={sl} className={`w-1.5 h-1.5 rounded-full ${free ? dot : 'bg-slate-200'}`} />
                     })}
                   </div>
                 )}
@@ -350,6 +370,7 @@ export function ResidentBooking({ resources, profile, user, unitNumber, onCreate
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" /> בוקר</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400" /> ערב</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400" /> שבת מלאה</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-400" /> מוצ״ש</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-200" /> תפוס</span>
       </div>
 
@@ -383,7 +404,7 @@ export function ResidentBooking({ resources, profile, user, unitNumber, onCreate
                 >
                   <Icon className={`h-5 w-5 mx-auto mb-1 ${active ? 'text-violet-600' : s.color}`} />
                   <p className="text-xs font-semibold text-slate-700">{s.label}</p>
-                  <p className="text-[10px] text-slate-400">{s.sub}</p>
+                  <p className="text-[10px] text-slate-400">{slotSub(sl, selectedDay.dk)}</p>
                   {slotPrice(sl) > 0 && <p className="text-[11px] font-bold text-slate-700 mt-0.5">{formatCurrency(slotPrice(sl))}</p>}
                 </button>
               )
