@@ -94,6 +94,79 @@ function grokBrief(webhookUrl, verifyToken) {
 }
 
 // ---------------------------------------------------------------------------
+// Category appeals
+//
+// Meta re-categorises during review, and six of ours came back MARKETING
+// instead of UTILITY. That is not only a higher price per message: marketing
+// templates are subject to marketing opt-out, so a resident who opted out
+// stops receiving the result of a booking THEY requested and updates on a
+// fault THEY reported.
+//
+// A category review "can only be requested via WhatsApp Manager" (Meta's
+// template-categorization doc) — there is no Graph endpoint for it, so the app
+// cannot do this and neither can Claude. What the app can do is say exactly
+// which templates qualify and why, in a form that can be pasted straight in.
+// ---------------------------------------------------------------------------
+
+/** MARKETING is correct here by design — appealing it would be dishonest. */
+const TRULY_MARKETING = new Set(['vendor_invite'])
+
+/**
+ * Why each one is transactional, in Meta's own terms: tied to something the
+ * recipient did or to their account, with no offer and no promotion.
+ * English on purpose — Meta reviews these in English.
+ */
+const APPEAL_GROUNDS = {
+  resident_booking_status:
+    'Sent only to the resident who submitted that room-booking request, and carries nothing but the outcome of their own request.',
+  resident_issue_update:
+    'Sent only to the resident who reported that maintenance issue, and carries nothing but the progress of their own report.',
+  resident_meeting_invite:
+    'A notice of a residents\' general meeting for the building the recipient lives in. Attendance is a right of ownership, not an offer.',
+  resident_announcement:
+    'An operational notice from the building committee to residents of that same building, about the building they live in.',
+  resident_payment_reminder:
+    'A reminder of committee dues already owed on the recipient\'s own unit. It sells nothing.',
+  vendor_quote_request:
+    'Sent only to a service provider already registered in this account\'s vendor directory, about one specific job.',
+}
+
+function appealable(templates) {
+  return (templates || []).filter(
+    (t) => t.category === 'MARKETING' && t.meta_status === 'APPROVED' && !TRULY_MARKETING.has(t.key),
+  )
+}
+
+function categoryAppealBrief(templates, wabaId) {
+  const rows = appealable(templates)
+  if (!rows.length) return null
+  const list = rows
+    .map((t) => `• ${t.meta_name} — ${t.title}\n  ${APPEAL_GROUNDS[t.key] || 'Transactional message tied to the recipient\'s own account.'}`)
+    .join('\n')
+  return `Meta סיווגה ${rows.length} מהתבניות של ועדלי כ-MARKETING במקום UTILITY. אני צריך שתגיש בקשת ביקורת קטגוריה (Request category review) ב-WhatsApp Manager.
+
+חשוב: אי אפשר לעשות את זה דרך ה-API. מטא מאפשרת את זה רק מ-WhatsApp Manager, ולכן רק מי שיש לו גישה לחשבון יכול.
+
+חשבון הוואטסאפ: ${wabaId || '(ה-WABA של אות)'}
+חלון הזמן: 60 יום ממועד הסיווג — התבניות הוגשו ב-5.11.2026, כלומר עד 4.1.2027.
+
+לכל תבנית:
+1. WhatsApp Manager → Account tools → Message templates → לבחור את התבנית.
+2. ליד הקטגוריה MARKETING לבחור את בקשת ביקורת הקטגוריה. אם האפשרות לא מופיעה — דרך Business Support Home.
+3. לבקש UTILITY, ולהדביק את ההצדקה של אותה תבנית (באנגלית — מטא בודקת באנגלית).
+
+התבניות וההצדקות:
+
+${list}
+
+אל תיגע ב-vaadly_vendor_invite — היא שיווקית במכוון, וזה הסיווג הנכון לה.
+
+אין צורך להגיש תבניות מחדש: המערכת מגישה בעצמה דרך ה-API, והתבנית היחידה שנדחתה (vaadly_vendor_job_reminder) כבר תוקנה והוגשה מחדש והיא ממתינה לביקורת.
+
+בסוף נא לדווח לי לכל תבנית: אושרה / נדחתה / ממתינה.`
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -175,7 +248,7 @@ export default function Messaging() {
           building={selectedBuilding} onSent={loadStats} />
       )}
       {tab === 'templates' && (
-        <TemplatesPanel templates={templates} isAdmin={isAdmin} officialOn={!!official?.waba_id && cfg?.has_token}
+        <TemplatesPanel templates={templates} isAdmin={isAdmin} wabaId={official?.waba_id} officialOn={!!official?.waba_id && cfg?.has_token}
           reload={loadTemplates} />
       )}
       {tab === 'log' && isAdmin && <LogPanel />}
@@ -315,10 +388,12 @@ function SendPanel({ templates, officialOn, dir, vendors, building, onSent }) {
 // Templates
 // ---------------------------------------------------------------------------
 
-function TemplatesPanel({ templates, isAdmin, officialOn, reload }) {
+function TemplatesPanel({ templates, isAdmin, officialOn, wabaId, reload }) {
   const [busy, setBusy] = useState('')
   const [edit, setEdit] = useState(null)
   const [check, setCheck] = useState(null)
+  const appeals = appealable(templates)
+  const appealBrief = categoryAppealBrief(templates, wabaId)
 
   // Readiness check — works before the Meta keys exist, so a rejectable
   // template is found here and not by Meta.
@@ -399,6 +474,21 @@ function TemplatesPanel({ templates, isAdmin, officialOn, reload }) {
             <p className="font-semibold">כל {check.total} התבניות עומדות בכללי הנוסח של Meta ומוכנות להגשה.</p>
           )}
         </div>
+      )}
+      {isAdmin && appealBrief && (
+        <SectionCard icon={Bot} title={`${appeals.length} תבניות סווגו כשיווקיות במקום שירות`}
+          subtitle="Meta משנה סיווג בזמן הביקורת. שיווקי = עלות גבוהה יותר, ובעיקר כפוף לביטול הסכמה — דייר שביטל לא יקבל את תוצאת השריון שהוא עצמו ביקש"
+          actions={<Button variant="outline" size="sm" onClick={() => { navigator.clipboard?.writeText(appealBrief); toast('הועתק') }}>
+            <Copy className="h-4 w-4" />העתקה לבוט
+          </Button>}>
+          <div className="p-4 space-y-3">
+            <p className="text-[12px] text-[var(--text-secondary)]">
+              בקשת ביקורת קטגוריה אפשרית <b>רק מ-WhatsApp Manager</b> — ל-Meta אין לכך API, ולכן המערכת לא יכולה לעשות זאת בעצמה.
+              החלון הוא 60 יום ממועד הסיווג. ההוראות למטה מוכנות להעתקה לבוט הוואטסאפ.
+            </p>
+            <p className="text-[12px] leading-6 whitespace-pre-wrap text-[var(--text-secondary)] rounded-[var(--radius)] bg-[var(--surface-secondary)] p-3 max-h-[320px] overflow-y-auto">{appealBrief}</p>
+          </div>
+        </SectionCard>
       )}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
         {groups.map((g) => (
