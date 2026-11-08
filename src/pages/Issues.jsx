@@ -1055,6 +1055,31 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setQuoteDescription(iss.description || '')
   }, [])
 
+  // Who the quote dialog may offer.
+  //
+  // This used to be `v.category === issue.category`, and that could never
+  // match anything: issue categories and vendor categories are two separate
+  // vocabularies — "שערים, דלתות וחניה" vs "שערים ודלתות אוטומטיות",
+  // "חשמל ותאורה" vs "חשמל", "ניקיון ותחזוקה" vs "ניקיון". Every vendor row
+  // has a category, so the `!v.category` escape hatch never fired either and
+  // the list came out empty for EVERY issue: no checkboxes, "שלח בקשה"
+  // permanently disabled, the dialog unusable.
+  //
+  // Same ladder the AI workflow panel already uses — exact category, then the
+  // synonym matcher in vendorMatch.js — with one addition: fall back to every
+  // vendor. An issue filed under "אחר" has no trade to match on, and the
+  // committee still has to be able to pick somebody.
+  const quoteVendors = useMemo(() => {
+    if (!quoteDialogIssue) return { list: [], fallback: false }
+    const usable = allVendors.filter((v) => !v.is_blacklisted && !v.sanctions)
+    const cat = quoteDialogIssue.category
+    const exact = cat ? usable.filter((v) => v.category === cat) : []
+    if (exact.length) return { list: exact, fallback: false }
+    const ranked = rankVendorsForIssue(quoteDialogIssue, usable).map((r) => r.vendor)
+    if (ranked.length) return { list: ranked, fallback: false }
+    return { list: usable, fallback: true }
+  }, [quoteDialogIssue, allVendors])
+
   const handleSendQuoteRequests = async () => {
     if (!quoteDialogIssue || quoteSelectedVendors.length === 0) return
     try {
@@ -1074,6 +1099,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       if (idx < STATUSES.indexOf('quoted')) {
         await update(quoteDialogIssue.id, { status: 'quoted' })
       }
+      // One message for the action, not one per vendor.
+      toast(`נרשמה בקשת הצעת מחיר ל-${quoteSelectedVendors.length} ספקים`)
     } catch (err) {
       console.error('Failed to send quote requests:', err)
       toastError('שגיאה בשליחת בקשות הצעות מחיר')
@@ -2032,29 +2059,35 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               </p>
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-[var(--text-secondary)]">בחר ספקים</label>
+                {quoteVendors.fallback && (
+                  <p className="text-xs text-[var(--warning, #b45309)]">
+                    אין ספק שתחום העיסוק שלו מתאים ל„{quoteDialogIssue.category}” — מוצגים כל הספקים.
+                  </p>
+                )}
                 <div className="space-y-2 max-h-48 overflow-y-auto border border-[var(--border)] rounded-lg p-2">
-                  {allVendors
-                    .filter((v) => !quoteDialogIssue.category || !v.category || v.category === quoteDialogIssue.category)
-                    .map((v) => (
-                      <label key={v.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[var(--surface-hover)] p-1 rounded">
-                        <input
-                          type="checkbox"
-                          checked={quoteSelectedVendors.includes(v.name)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setQuoteSelectedVendors((prev) => [...prev, v.name])
-                            } else {
-                              setQuoteSelectedVendors((prev) => prev.filter((n) => n !== v.name))
-                            }
-                          }}
-                          className="rounded"
-                        />
-                        <span className="text-[var(--text-primary)]">{v.name}</span>
-                        {v.category && <span className="text-xs text-[var(--text-muted)]">({v.category})</span>}
-                      </label>
-                    ))}
-                  {allVendors.filter((v) => !quoteDialogIssue.category || !v.category || v.category === quoteDialogIssue.category).length === 0 && (
-                    <p className="text-xs text-[var(--text-muted)] text-center py-2">אין ספקים מתאימים</p>
+                  {quoteVendors.list.map((v) => (
+                    <label key={v.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[var(--surface-hover)] p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={quoteSelectedVendors.includes(v.name)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setQuoteSelectedVendors((prev) => [...prev, v.name])
+                          } else {
+                            setQuoteSelectedVendors((prev) => prev.filter((n) => n !== v.name))
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <span className="text-[var(--text-primary)]">{v.name}</span>
+                      {v.category && <span className="text-xs text-[var(--text-muted)]">({v.category})</span>}
+                      {v.membership_status !== 'agreed' && (
+                        <span className="text-[10px] text-[var(--text-muted)]">· טרם אישר הצטרפות</span>
+                      )}
+                    </label>
+                  ))}
+                  {quoteVendors.list.length === 0 && (
+                    <p className="text-xs text-[var(--text-muted)] text-center py-2">אין ספקים במאגר</p>
                   )}
                 </div>
               </div>

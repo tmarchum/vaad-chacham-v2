@@ -269,14 +269,24 @@ function SendPanel({ templates, officialOn, dir, vendors, building, onSent }) {
   const [sending, setSending] = useState(false)
 
   const residentOptions = useMemo(() => dir.units.filter((u) => u.phone), [dir.units])
-  const recipients = audience === 'resident'
+  const recipients = useMemo(() => (audience === 'resident'
     ? residentOptions.map((u) => ({ id: u.id, label: `${u.label}${u.phone ? ` • ${u.phone}` : ''}`, name: u.name, phone: u.phone, unitId: u.id }))
     : vendors.map((v) => ({ id: v.id, label: `${v.name}${v.category ? ` — ${v.category}` : ''} • ${v.phone}`, name: v.name, phone: v.phone }))
+  ), [audience, residentOptions, vendors])
   const recipient = recipients.find((r) => r.id === recipientId) || null
   const tplList = templates.filter((t) => t.audience === audience && t.active)
   const tpl = tplList.find((t) => t.key === templateKey) || null
 
-  // Prefill sensible defaults when the template or recipient changes.
+  // Prefill sensible defaults when the TEMPLATE or the RECIPIENT changes.
+  //
+  // The dependency list is primitives on purpose. It used to be
+  // [tpl, recipient, building], and `recipient` is rebuilt by .map() on every
+  // render, so its identity changed every time — the effect re-ran after each
+  // render and setVars() wiped the fields back to their defaults. Nothing
+  // could be typed into a variable field, and because `ready` requires every
+  // variable to be non-empty, the send button stayed disabled for good. It was
+  // also an unbounded render loop: setState in an effect that re-fires on each
+  // render it causes.
   useEffect(() => {
     if (!tpl) { setVars([]); return }
     const labels = tpl.variables || []
@@ -285,7 +295,7 @@ function SendPanel({ templates, officialOn, dir, vendors, building, onSent }) {
       if (/כתובת|בניין|מקום/.test(label) && building) return [building.name, building.address].filter(Boolean).join(', ')
       return ''
     }))
-  }, [tpl, recipient, building])
+  }, [templateKey, recipientId, building?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const preview = tpl ? render(tpl.body, vars) : ''
   const ready = recipient && tpl && vars.every((v) => String(v).trim())
