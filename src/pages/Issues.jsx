@@ -39,6 +39,24 @@ import { isOpenIssueStatus } from '@/lib/issueStatus'
 // Constants
 // ---------------------------------------------------------------------------
 
+/**
+ * The analysis really does take 40–60s (measured: 46s against the model the
+ * vaad-agent function uses). A bare spinner with no clock reads as "broken",
+ * and people close the dialog before it ever answers — so show the seconds and
+ * say up front how long it takes.
+ */
+const AiWaiting = ({ secs }) => (
+  <div className="flex flex-col items-center gap-2 py-8">
+    <div className="flex items-center gap-3">
+      <RefreshCw className="h-5 w-5 animate-spin text-[var(--primary)]" />
+      <span className="text-[var(--text-secondary)]">Claude מנתח את התקלה... {secs} שנ׳</span>
+    </div>
+    <span className="text-[11px] text-[var(--text-muted)]">
+      הניתוח לוקח בדרך כלל 40–60 שניות. התוצאה נשמרת ל-24 שעות, כך שפתיחה חוזרת תהיה מיידית.
+    </span>
+  </div>
+)
+
 const STATUSES = ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes', 'quoted', 'approved', 'scheduled', 'in_progress', 'completed', 'closed']
 
 // Five committee-facing statuses. Internally an issue still carries a
@@ -447,6 +465,7 @@ function Issues() {
   const [showTemplates, setShowTemplates] = useState(false)
 
   // AI issue analysis
+  const [aiElapsed, setAiElapsed] = useState(0)
   const [aiAnalysisIssue, setAiAnalysisIssue] = useState(null)
   const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false)
   const [aiAnalysisResult, setAiAnalysisResult] = useState(null)
@@ -795,6 +814,14 @@ function Issues() {
       setDeleteTarget(null)
     }
   }
+
+  // Tick a visible clock for as long as the analysis is running.
+  useEffect(() => {
+    if (!aiAnalysisLoading) return
+    setAiElapsed(0)
+    const t = setInterval(() => setAiElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [aiAnalysisLoading])
 
   // AI issue analysis
   const openAiAnalysis = async (iss) => {
@@ -1619,12 +1646,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           {/* STEP 1: Analysis */}
           {workflowStep === 1 && (
             <div className="space-y-4">
-              {(aiAnalysisLoading || (!aiAnalysisResult && !aiAnalysisError)) && (
-                <div className="flex items-center gap-3 py-8 justify-center">
-                  <RefreshCw className="h-5 w-5 animate-spin text-[var(--primary)]" />
-                  <span className="text-[var(--text-secondary)]">Claude מנתח את התקלה...</span>
-                </div>
-              )}
+              {(aiAnalysisLoading || (!aiAnalysisResult && !aiAnalysisError)) && <AiWaiting secs={aiElapsed} />}
               {aiAnalysisError && (
                 <p className="text-sm text-[var(--danger)] py-4">{aiAnalysisError}</p>
               )}
@@ -1899,12 +1921,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             </DialogTitle>
           </DialogHeader>
 
-          {aiAnalysisLoading && (
-            <div className="flex items-center gap-3 py-8 justify-center">
-              <RefreshCw className="h-5 w-5 animate-spin text-[var(--primary)]" />
-              <span className="text-[var(--text-secondary)]">Claude מנתח את התקלה...</span>
-            </div>
-          )}
+          {aiAnalysisLoading && <AiWaiting secs={aiElapsed} />}
 
           {aiAnalysisError && (
             <div className="py-4">
