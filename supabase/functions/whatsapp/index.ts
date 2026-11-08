@@ -523,14 +523,29 @@ Deno.serve(async (req: Request) => {
           const ex = (t.example || []) as string[]
           const component: Record<string, unknown> = { type: 'BODY', text: t.body }
           if (ex.length) component.example = { body_text: [ex.map(cleanParam)] }
-          const r = await graph(integ, token, `${integ.waba_id}/message_templates`, {
-            method: 'POST',
-            body: JSON.stringify({ name: t.meta_name, language: t.language || 'he', category: t.category, components: [component] }),
-          })
+
+          // A template name exists only once per WABA, so one Meta already
+          // knows has to be EDITED, not created again. Creating it a second
+          // time comes back "template name already exists", which is how a
+          // REJECTED template used to become unrecoverable from the app: the
+          // only route left was WhatsApp Manager by hand.
+          const r = t.meta_id
+            ? await graph(integ, token, String(t.meta_id), {
+              method: 'POST',
+              body: JSON.stringify({ category: t.category, components: [component] }),
+            })
+            : await graph(integ, token, `${integ.waba_id}/message_templates`, {
+              method: 'POST',
+              body: JSON.stringify({ name: t.meta_name, language: t.language || 'he', category: t.category, components: [component] }),
+            })
           submitted.push({ key: t.key, ok: r.ok, error: r.ok ? undefined : graphError(r.data) })
           if (r.ok) {
             await svc.from('message_templates').update({
-              meta_status: String(r.data.status || 'PENDING'), meta_id: String(r.data.id || ''),
+              // An edit answers {success:true} with no status and re-enters
+              // review, so PENDING is the right reading of both shapes. Never
+              // blank an existing meta_id with the edit response's absent id.
+              meta_status: String(r.data.status || 'PENDING'),
+              ...(r.data.id ? { meta_id: String(r.data.id) } : {}),
               rejection_reason: null, updated_at: new Date().toISOString(),
             }).eq('key', t.key)
           }
