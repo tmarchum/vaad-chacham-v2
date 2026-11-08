@@ -1135,7 +1135,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     return { list: usable, fallback: true }
   }, [quoteDialogIssue, allVendors])
 
-  const handleSendQuoteRequests = async () => {
+  /**
+   * @param send true = record the quotes AND message the vendors;
+   *             false = record only, contact nobody. Both are legitimate: the
+   *             committee often phones a vendor itself and just wants the
+   *             quote tracked, so "record only" is its own button rather than
+   *             a cancelled confirmation.
+   */
+  const handleSendQuoteRequests = async (send = true) => {
     if (!quoteDialogIssue || quoteSelectedVendors.length === 0) return
     const iss = quoteDialogIssue
     const picked = allVendors.filter((v) => quoteSelectedVendors.includes(v.name))
@@ -1162,10 +1169,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       return
     }
     setQuoteDialogIssue(null)
+    if (!send) {
+      // One message for the action, not one per vendor.
+      toast(`נרשמו ${quoteSelectedVendors.length} בקשות הצעה — לא נשלחה הודעה`)
+      return
+    }
     // A request is only a request once the vendor hears about it — same send
     // path as the workflow's "שלח לכל המומלצים".
     const sent = await dispatchQuoteRequests(picked, iss, buildingMap[iss.buildingId])
-    // One message for the action, not one per vendor.
     toast(sent
       ? `נרשמו ${quoteSelectedVendors.length} בקשות, ונשלחו ${sent} הודעות לספקים`
       : `נרשמו ${quoteSelectedVendors.length} בקשות — לא נשלחה הודעה לספקים`)
@@ -2150,11 +2161,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 onChange={(e) => setQuoteDescription(e.target.value)}
               />
               <div className="flex gap-3 pt-2">
-                <Button onClick={handleSendQuoteRequests} disabled={quoteSelectedVendors.length === 0}>
+                <Button onClick={() => handleSendQuoteRequests(true)} disabled={quoteSelectedVendors.length === 0}>
                   <Send className="h-4 w-4" />
-                  שלח בקשה ({quoteSelectedVendors.length})
+                  רשום ושלח ({quoteSelectedVendors.length})
                 </Button>
-                <Button variant="outline" onClick={() => setQuoteDialogIssue(null)}>
+                {/* Recording without contacting anyone is a real workflow — the
+                    committee often calls a vendor itself, or asks in person,
+                    and only wants the quote tracked. It must be its own button,
+                    not "cancel the confirmation". */}
+                <Button variant="outline" onClick={() => handleSendQuoteRequests(false)} disabled={quoteSelectedVendors.length === 0}>
+                  רשום בלבד
+                </Button>
+                <Button variant="ghost" onClick={() => setQuoteDialogIssue(null)}>
                   ביטול
                 </Button>
               </div>
