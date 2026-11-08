@@ -325,7 +325,7 @@ Deno.serve(async (req: Request) => {
       const query = searchTerms || category
       const where = city || address || 'ישראל'
 
-      const model = Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-5-5'
+      const model = Deno.env.get('CLAUDE_MODEL') || 'claude-haiku-5-5'
 
       const searchPrompt = `חפש 4-5 בעלי מקצוע / ספקים אמיתיים בקטגוריה "${category}"${query !== category ? ` (${query})` : ''} באזור ${where} בישראל, עם מספר טלפון. העדף עסקים מקומיים עם ביקורות.
 החזר אך ורק JSON תקין, ללא טקסט נוסף וללא backticks:
@@ -418,17 +418,19 @@ Deno.serve(async (req: Request) => {
     // Measured 2026-11-08 on the real issue_analysis prompt, 3 cases each,
     // through this function's own extraction path:
     //   claude-sonnet-4-6   44.3s   $0.034/analysis
-    //   claude-sonnet-5-5   30.5s   $0.037/analysis   <- here
-    //   claude-haiku-5-5    19.8s   $0.0017/analysis
+    //   claude-sonnet-5-5   30.5s   $0.037/analysis
+    //   claude-haiku-5-5    19.8s   $0.0017/analysis  <- here
     // All three parsed strictly, none hit the 502 guard, none dropped a field
-    // the UI renders. Sonnet 5.5 is the safe pick: same tier, 1.45x faster,
-    // and the price difference is noise at this volume (5.5's lower rate is
-    // offset by it writing ~2x the tokens). Haiku is 20x cheaper and would be
-    // the move at scale, but it was only checked for STRUCTURE — the quality
-    // of the diagnosis it feeds to a committee was never graded, so it is not
-    // going in front of one on the strength of three samples.
+    // the UI renders.
+    //
+    // Haiku is the owner's call, made knowingly: 20x cheaper and 2.2x faster.
+    // The caveat on record is that only STRUCTURE was verified across those
+    // three cases — the depth of the diagnosis a committee acts on is not
+    // something three samples settle. If dispatch decisions start looking
+    // thin, the revert is one word on this line (or the CLAUDE_MODEL secret,
+    // which overrides it without a deploy).
     const message = await anthropic.messages.create({
-      model: Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-5-5',
+      model: Deno.env.get('CLAUDE_MODEL') || 'claude-haiku-5-5',
       // Structured analyses (a year of months + categories, in Hebrew) need room —
       // at 2000 the JSON was cut mid-object and the raw text leaked to the UI.
       max_tokens: 8000,
