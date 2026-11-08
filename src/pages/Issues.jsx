@@ -940,21 +940,44 @@ function Issues() {
     if (sent) toast('הבקשה נשלחה לספק בוואטסאפ דרך המערכת')
   }
 
-  // Send the quote request to ALL approved relevant vendors at once (gateway
-  // only — paced). Lets the committee get competing quotes in one click.
+  // ONE path for every quote-request send.
+  //
+  // There used to be two, and only one of them sent anything. The workflow's
+  // "שלח לכל המומלצים" went through the gateway, while the standalone
+  // "בקש הצעת מחיר" dialog wrote `quotes` rows and told the vendor nothing — a
+  // button named "בקש" that never asked. Both now come through here.
+  //
+  // Gateway only, on purpose: a wa.me fallback across N vendors would open N
+  // browser tabs. Paced at 1.2s so a burst doesn't get the number flagged.
   const [quoteBulk, setQuoteBulk] = useState({ running: false, done: 0, total: 0 })
-  const sendQuoteToAll = async (vendors, iss, building) => {
+  const dispatchQuoteRequests = async (vendors, iss, building, { requireAgreed = false } = {}) => {
     if (!(await isWhatsappSystemEnabled())) {
-      toast('לשליחה לכל הספקים יש להפעיל "חיבור פעיל" בהגדרות מערכת ← וואטסאפ', 'error'); return
+      toast('לשליחה בוואטסאפ יש להפעיל "חיבור פעיל" בהגדרות מערכת ← וואטסאפ', 'error')
+      return 0
     }
-    const targets = vendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone))
-    if (targets.length === 0) { toast('אין ספקים מאושרים עם וואטסאפ לשליחה', 'info'); return }
-    if (!window.confirm(`לשלוח בקשת הצעת מחיר ל-${targets.length} ספקים מאושרים?`)) return
+    const withPhone = vendors.filter((v) => waNumber(v.phone))
+    const targets = requireAgreed ? withPhone.filter((v) => v.membership_status === 'agreed') : withPhone
+    const noPhone = vendors.length - withPhone.length
+    if (targets.length === 0) {
+      toast(requireAgreed
+        ? 'אין ספקים מאושרים עם וואטסאפ לשליחה'
+        : 'לאף אחד מהספקים שנבחרו אין מספר וואטסאפ', 'info')
+      return 0
+    }
+    // Say who is about to be messaged before messaging them — most of the
+    // directory has not agreed to join, and that is the committee's call to
+    // make knowingly, not a filter applied behind their back.
+    const notAgreed = targets.filter((v) => v.membership_status !== 'agreed').length
+    const ok = window.confirm(
+      `לשלוח בקשת הצעת מחיר ל-${targets.length} ספקים?`
+      + (notAgreed ? `\n${notAgreed} מהם טרם אישרו הצטרפות למאגר.` : '')
+      + (noPhone ? `\n${noPhone} ללא וואטסאפ — יידלגו.` : ''),
+    )
+    if (!ok) return 0
     setQuoteBulk({ running: true, done: 0, total: targets.length })
     let sent = 0
     for (const v of targets) {
-      const msg = buildVendorQuoteMessage(iss, v, building)
-      const res = await systemSendWhatsapp(v.phone, msg, {
+      const res = await systemSendWhatsapp(v.phone, buildVendorQuoteMessage(iss, v, building), {
         ...(iss.photo_url ? { fileUrl: iss.photo_url, fileName: 'fault.jpg' } : {}),
         audience: 'vendor', buildingId: iss.buildingId, template: quoteTemplate(iss, v, building),
       })
@@ -963,7 +986,12 @@ function Issues() {
       await new Promise((r) => setTimeout(r, 1200))
     }
     setQuoteBulk({ running: false, done: 0, total: 0 })
-    toast(`נשלחו ${sent} בקשות הצעה מתוך ${targets.length}`, sent > 0 ? 'success' : 'error')
+    return sent
+  }
+
+  const sendQuoteToAll = async (vendors, iss, building) => {
+    const sent = await dispatchQuoteRequests(vendors, iss, building, { requireAgreed: true })
+    if (sent) toast(`נשלחו ${sent} בקשות הצעה`)
   }
 
   // Generate committee notification message for an issue
@@ -1109,10 +1137,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
   const handleSendQuoteRequests = async () => {
     if (!quoteDialogIssue || quoteSelectedVendors.length === 0) return
+    const iss = quoteDialogIssue
+    const picked = allVendors.filter((v) => quoteSelectedVendors.includes(v.name))
     try {
       for (const vendorName of quoteSelectedVendors) {
         await createQuote({
-          issueId: quoteDialogIssue.id,
+          issueId: iss.id,
           vendorName,
           amount: null,
           status: 'pending',
@@ -1122,17 +1152,23 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         })
       }
       // Move issue to quoted status if still earlier in the flow
-      const idx = STATUSES.indexOf(quoteDialogIssue.status)
+      const idx = STATUSES.indexOf(iss.status)
       if (idx < STATUSES.indexOf('quoted')) {
-        await update(quoteDialogIssue.id, { status: 'quoted' })
+        await update(iss.id, { status: 'quoted' })
       }
-      // One message for the action, not one per vendor.
-      toast(`נרשמה בקשת הצעת מחיר ל-${quoteSelectedVendors.length} ספקים`)
     } catch (err) {
-      console.error('Failed to send quote requests:', err)
-      toastError('שגיאה בשליחת בקשות הצעות מחיר')
+      console.error('Failed to record quote requests:', err)
+      toastError('שגיאה ברישום בקשות הצעות מחיר')
+      return
     }
     setQuoteDialogIssue(null)
+    // A request is only a request once the vendor hears about it — same send
+    // path as the workflow's "שלח לכל המומלצים".
+    const sent = await dispatchQuoteRequests(picked, iss, buildingMap[iss.buildingId])
+    // One message for the action, not one per vendor.
+    toast(sent
+      ? `נרשמו ${quoteSelectedVendors.length} בקשות, ונשלחו ${sent} הודעות לספקים`
+      : `נרשמו ${quoteSelectedVendors.length} בקשות — לא נשלחה הודעה לספקים`)
   }
 
   const handleAcceptQuote = async (quote) => {
