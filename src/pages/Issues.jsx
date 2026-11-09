@@ -1076,10 +1076,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setWorkflowStep(3)
   }
 
-  // Committee declines to handle the issue → "נדחתה" (distinct from "סגורה",
-  // which means handled & paid). Declining doesn't need an accompanying member.
+  // Committee decides not to take the work on. Internally that is 'rejected',
+  // which the board needs kept apart from "סגורה" (handled & paid) — but the
+  // resident hears "נסגרה", not a verdict, and is pointed at the committee for
+  // the reason. This was the one transition out of ten that told the reporter
+  // nothing at all: they reported a fault and it went quiet for good.
   const closeByCommittee = (iss) => {
     update(iss.id, { status: 'rejected' })
+    notifyIssueStatus(iss.id, 'closed')
     setWorkflowIssue(null)
   }
 

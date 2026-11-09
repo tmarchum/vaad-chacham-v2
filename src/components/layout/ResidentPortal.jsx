@@ -27,9 +27,10 @@ const STATUS_MAP = {
 }
 
 // Issue lifecycle statuses (issues.status — default 'reported')
-// Resident-facing issue status — collapsed to the same simple lifecycle the
-// committee sees (חדשה / בטיפול / טופל / נדחתה), so a resident never sees the
-// internal fine-grained steps.
+// Resident-facing issue status — collapsed to a simple lifecycle
+// (התקבלה / בטיפול / הושלם / נסגרה), so a resident never sees the internal
+// fine-grained steps. It is close to the committee's own buckets but not
+// identical: the committee's "נדחתה" is deliberately not shown here.
 const ISSUE_STATUS_MAP = {
   reported:          { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
   open:              { label: 'התקבלה', color: 'text-amber-600',   bg: 'bg-amber-50' },
@@ -45,8 +46,12 @@ const ISSUE_STATUS_MAP = {
   awaiting_payment:  { label: 'הושלם',   color: 'text-emerald-600', bg: 'bg-emerald-50' },
   resolved:          { label: 'טופל',    color: 'text-emerald-600', bg: 'bg-emerald-50' },
   closed:            { label: 'סגור',    color: 'text-slate-500',   bg: 'bg-slate-100' },
-  rejected:          { label: 'נדחתה',   color: 'text-rose-600',    bg: 'bg-rose-50' },
-  declined:          { label: 'נדחתה',   color: 'text-rose-600',    bg: 'bg-rose-50' },
+  // The committee's internal status is 'rejected' — meaning it decided not to
+  // take the work on — but the resident is not the one being rejected, and a
+  // red "נדחתה" reads as a verdict on them. They are told the same thing the
+  // email tells them: it was closed, and the committee can explain why.
+  rejected:          { label: 'נסגרה',   color: 'text-slate-500',   bg: 'bg-slate-100' },
+  declined:          { label: 'נסגרה',   color: 'text-slate-500',   bg: 'bg-slate-100' },
 }
 
 
