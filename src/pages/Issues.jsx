@@ -75,7 +75,7 @@ const STATUS_BUCKETS = [
 ]
 const BUCKET_MAP = Object.fromEntries(STATUS_BUCKETS.map((b) => [b.key, b]))
 const STATUS_TO_BUCKET = {
-  reported: 'new', pending_committee: 'new', acknowledged: 'new', new: 'new',
+  reported: 'new', pending_committee: 'new', acknowledged: 'new', new: 'new', open: 'new',
   approved_for_quotes: 'in_progress', quoted: 'in_progress', approved: 'in_progress',
   scheduled: 'in_progress', in_progress: 'in_progress',
   completed: 'awaiting_payment', awaiting_payment: 'awaiting_payment',
@@ -86,6 +86,11 @@ const bucketOf = (s) => STATUS_TO_BUCKET[s] || 'new'
 const bucketInfo = (s) => BUCKET_MAP[bucketOf(s)] || STATUS_BUCKETS[0]
 // When the committee picks a bucket manually in the edit form, store a
 // representative fine status so the per-step quick-actions keep working.
+// The stages that genuinely come before a quote exists. Spelled out rather
+// than derived by index, so a status missing from STATUSES can never be read
+// as "earlier than everything".
+const PRE_QUOTE_STATUSES = ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes']
+
 const BUCKET_TO_STATUS = {
   new: 'reported', in_progress: 'in_progress',
   awaiting_payment: 'completed', closed: 'closed', rejected: 'rejected',
@@ -1158,9 +1163,15 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           validUntil: null,
         })
       }
-      // Move issue to quoted status if still earlier in the flow
-      const idx = STATUSES.indexOf(iss.status)
-      if (idx < STATUSES.indexOf('quoted')) {
+      // Advance to "quoted" only from a stage that genuinely precedes it.
+      //
+      // This used to be STATUSES.indexOf(iss.status) < STATUSES.indexOf('quoted'),
+      // and indexOf returns -1 for any status not in that list: 'rejected' is
+      // not in it, and neither are the legacy 'open' / 'resolved' rows still in
+      // the database. -1 is less than everything, so a rejected or already
+      // closed issue counted as "earlier in the flow" and would have been
+      // pulled back into the quote stage.
+      if (PRE_QUOTE_STATUSES.includes(iss.status)) {
         await update(iss.id, { status: 'quoted' })
       }
     } catch (err) {
@@ -2345,7 +2356,16 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 value={bucketOf(form.status)}
                 onChange={(e) => {
                   const bucket = e?.target?.value ?? e
-                  setForm((p) => ({ ...p, status: BUCKET_TO_STATUS[bucket] || 'reported' }))
+                  setForm((p) => (
+                    // Picking the bucket the issue is already in must change
+                    // nothing. The selector shows a bucket but stores one
+                    // representative fine status, so re-selecting "בטיפול" on a
+                    // scheduled issue used to rewrite it to in_progress and
+                    // quietly lose the scheduled date.
+                    bucketOf(p.status) === bucket
+                      ? p
+                      : { ...p, status: BUCKET_TO_STATUS[bucket] || 'reported' }
+                  ))
                 }}
                 options={STATUS_OPTIONS}
               />
