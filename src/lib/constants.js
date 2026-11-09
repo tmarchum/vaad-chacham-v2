@@ -27,6 +27,11 @@ export const ISSUE_CATEGORIES = [
   'שערים, דלתות וחניה',
   'ניקיון ותחזוקה',
   'בטיחות וביטחון',
+  // The residents' room is a place, not a trade — a fault there can be the AC,
+  // the furniture or the cleaning. It earns a category anyway because the
+  // committee wanted it routed on its own: it is the one shared space with
+  // bookings and a key, so its faults have a different owner from "אחר".
+  'חדר דיירים',
   'אחר',
 ]
 
