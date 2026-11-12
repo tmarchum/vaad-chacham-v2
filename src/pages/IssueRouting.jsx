@@ -347,7 +347,7 @@ function IssueRouting() {
                 onChange={(e) => setForm((f) => ({ ...f, send_to_vendor: e.target.checked }))}
                 className="h-4 w-4 rounded border-[var(--outline-variant)] accent-[var(--primary)]"
               />
-              ספק קבוע — כשהוועד מאשר, התקלה נשלחת אליו אוטומטית בוואטסאפ (ללא ניקוב)
+              ספק קבוע — כשהוועד מאשר, התקלה נשלחת אליו אוטומטית בערוץ הקשר שלו — מייל, וואטסאפ או טלפון (ללא ניקוב)
             </label>
             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
               <input
