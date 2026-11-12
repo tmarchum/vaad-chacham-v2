@@ -110,7 +110,7 @@ function Layout() {
           </button>
           <Link to="/" className="flex items-center gap-2 lg:hidden">
             <BrandLogo className="w-7 h-7 rounded-md" />
-            <span className="font-bold text-[var(--primary)]">ועדלי</span>
+            <span className="font-bold text-[var(--primary)]">ועד1</span>
           </Link>
 
           <GlobalSearch buildingId={selectedBuilding?.id} className="hidden md:block w-full max-w-sm" />

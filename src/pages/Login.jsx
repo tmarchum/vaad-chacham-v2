@@ -25,7 +25,7 @@ export default function Login() {
       <aside className="hidden lg:flex flex-col justify-between p-12 bg-[var(--primary-dark)] text-white">
         <div className="flex items-center gap-3">
           <BrandLogo className="w-10 h-10 rounded-[var(--radius)]" />
-          <span className="text-[20px] font-bold tracking-[-0.015em]">ועדלי</span>
+          <span className="text-[20px] font-bold tracking-[-0.015em]">ועד1</span>
         </div>
         <div className="max-w-md">
           <h2 className="text-[32px] leading-10 font-bold tracking-[-0.02em]">

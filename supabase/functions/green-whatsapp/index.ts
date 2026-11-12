@@ -105,8 +105,8 @@ Deno.serve(async (req: Request) => {
         }).then(() => {}, () => {})
         // Polite acknowledgement back to the vendor.
         const ack = newStatus === 'agreed'
-          ? 'תודה! נרשמת כספק מאושר במאגר ועדלי — נפנה אליך כשתהיה קריאה מתאימה. בברכה, תומר — ועדלי'
-          : 'תודה על המענה, הוסרת מרשימת הפניות. אם תתחרט — כתוב "מאשר". בברכה, תומר — ועדלי'
+          ? 'תודה! נרשמת כספק מאושר במאגר ועד1 — נפנה אליך כשתהיה קריאה מתאימה. בברכה, תומר — ועד1'
+          : 'תודה על המענה, הוסרת מרשימת הפניות. אם תתחרט — כתוב "מאשר". בברכה, תומר — ועד1'
         try {
           const { data: integ2 } = await svc.from('messaging_integrations').select('*').eq('provider', 'greenapi').maybeSingle()
           const { data: secret2 } = await svc.from('messaging_secrets').select('api_token').eq('provider', 'greenapi').maybeSingle()

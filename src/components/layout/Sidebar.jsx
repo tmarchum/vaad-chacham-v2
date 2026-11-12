@@ -190,7 +190,7 @@ function Sidebar({ open, onClose, pulse = {} }) {
             <Link to="/" onClick={onClose} className="flex items-center gap-3">
               <BrandLogo className="h-10 w-10 rounded-[var(--radius-lg)] shadow-[var(--shadow)]" />
               <span>
-                <span className="block text-[22px] leading-none font-bold tracking-tight text-[var(--primary)]">ועדלי</span>
+                <span className="block text-[22px] leading-none font-bold tracking-tight text-[var(--primary)]">ועד1</span>
                 <span className="block text-[11px] leading-[14px] text-[var(--text-muted)] mt-1">ניהול ועד בית חכם</span>
               </span>
             </Link>

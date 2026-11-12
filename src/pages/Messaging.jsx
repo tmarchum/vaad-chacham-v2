@@ -79,7 +79,7 @@ async function invokeWa(body) {
 }
 
 function grokBrief(webhookUrl, verifyToken) {
-  return `אני מחבר את מערכת "ועדלי" (ניהול ועדי בתים) ל-WhatsApp Business הרשמי של Meta (Cloud API). אני צריך שתעזור לי, צעד אחר צעד:
+  return `אני מחבר את מערכת "ועד1" (ניהול ועדי בתים) ל-WhatsApp Business הרשמי של Meta (Cloud API). אני צריך שתעזור לי, צעד אחר צעד:
 
 1. ליצור או לבחור WhatsApp Business Account תחת ה-Business Manager שלי, ולרשום ולאמת מספר טלפון עסקי שישמש לשליחה.
 2. ליצור System User קבוע עם הרשאות whatsapp_business_messaging ו-whatsapp_business_management, לשייך אליו את האפליקציה ואת חשבון הוואטסאפ, ולהפיק טוקן גישה קבוע (ללא תפוגה).
@@ -88,7 +88,7 @@ function grokBrief(webhookUrl, verifyToken) {
    Callback URL: ${webhookUrl || '(יופיע במערכת אחרי שמירה ראשונה)'}
    Verify Token: ${verifyToken || '(יופיע במערכת אחרי שמירה ראשונה)'}
    ולהירשם לשדות: messages, message_template_status_update.
-5. להגדיר שם תצוגה לעסק ("ועדלי") ושיטת תשלום בחשבון הוואטסאפ.
+5. להגדיר שם תצוגה לעסק ("ועד1") ושיטת תשלום בחשבון הוואטסאפ.
 
 את תבניות ההודעות (לדיירים ולספקים) המערכת מגישה לאישור Meta בעצמה — אין צורך ליצור אותן ידנית.`
 }
@@ -143,7 +143,7 @@ function categoryAppealBrief(templates, wabaId) {
   const list = rows
     .map((t) => `• ${t.meta_name} — ${t.title}\n  ${APPEAL_GROUNDS[t.key] || 'Transactional message tied to the recipient\'s own account.'}`)
     .join('\n')
-  return `Meta סיווגה ${rows.length} מהתבניות של ועדלי כ-MARKETING במקום UTILITY. אני צריך שתגיש בקשת ביקורת קטגוריה (Request category review) ב-WhatsApp Manager.
+  return `Meta סיווגה ${rows.length} מהתבניות של ועד1 כ-MARKETING במקום UTILITY. אני צריך שתגיש בקשת ביקורת קטגוריה (Request category review) ב-WhatsApp Manager.
 
 חשוב: אי אפשר לעשות את זה דרך ה-API. מטא מאפשרת את זה רק מ-WhatsApp Manager, ולכן רק מי שיש לו גישה לחשבון יכול.
 
@@ -702,7 +702,7 @@ function ConnectionPanel({ cfg, reload }) {
   const c = cfg?.config || {}
   const [form, setForm] = useState({
     phone_number_id: c.phone_number_id || '', waba_id: c.waba_id || '',
-    graph_version: c.graph_version || 'v21.0', sender_label: c.sender_label || 'ועדלי', enabled: !!c.enabled,
+    graph_version: c.graph_version || 'v21.0', sender_label: c.sender_label || 'ועד1', enabled: !!c.enabled,
   })
   const [token, setToken] = useState('')
   const [appSecret, setAppSecret] = useState('')
@@ -713,7 +713,7 @@ function ConnectionPanel({ cfg, reload }) {
     const k = cfg?.config || {}
     setForm({
       phone_number_id: k.phone_number_id || '', waba_id: k.waba_id || '',
-      graph_version: k.graph_version || 'v21.0', sender_label: k.sender_label || 'ועדלי', enabled: !!k.enabled,
+      graph_version: k.graph_version || 'v21.0', sender_label: k.sender_label || 'ועד1', enabled: !!k.enabled,
       forward_webhook_url: k.forward_webhook_url || '',
     })
   }, [cfg])
@@ -803,7 +803,7 @@ function ConnectionPanel({ cfg, reload }) {
             </label>
             <p className="text-[11px] text-[var(--text-muted)]">
               ל-Meta יש כתובת webhook אחת בלבד לכל אפליקציה. המספר משותף עם "אות", והגיליון שלה מתעדכן מ-Apps Script.
-              אם תמלאו כאן את הכתובת שלה, ועדלי יקבל את האירועים ויעביר כל אחד מהם הלאה כמו שהוא — ושניהם ימשיכו לעבוד.
+              אם תמלאו כאן את הכתובת שלה, ועד1 יקבל את האירועים ויעביר כל אחד מהם הלאה כמו שהוא — ושניהם ימשיכו לעבוד.
               ריק = אין העברה, והגיליון יפסיק להתעדכן ברגע שה-webhook יוחלף.
             </p>
           </div>

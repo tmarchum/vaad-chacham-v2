@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
       emails = [...new Set(emails)]
 
       const html = render(b.name as string, sections)
-      const subject = `ועדלי — ${sections.reduce((s, x) => s + x.rows.length, 0)} דברים שדורשים טיפול ב${b.name}`
+      const subject = `ועד1 — ${sections.reduce((s, x) => s + x.rows.length, 0)} דברים שדורשים טיפול ב${b.name}`
 
       if (dryRun) { out.push({ building: b.name, sections: sections.length, recipients: emails, html }); continue }
 

@@ -205,7 +205,7 @@ export function ResidentPortal({ profileOverride = null }) {
             <BrandLogo className="w-10 h-10 rounded-[var(--radius-lg)] shrink-0" />
             <div className="min-w-0">
               <p className="text-[17px] leading-tight font-bold text-[var(--primary)] truncate">
-                ועדלי{building?.name ? <span className="text-[var(--text-primary)]"> | {building.name}</span> : null}
+                ועד1{building?.name ? <span className="text-[var(--text-primary)]"> | {building.name}</span> : null}
               </p>
               <p className="text-[12px] text-[var(--text-secondary)] truncate">{[floorLabel, unitNumber !== '—' ? `דירה ${unitNumber}` : ''].filter(Boolean).join(', ')}</p>
             </div>

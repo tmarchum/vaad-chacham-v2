@@ -217,7 +217,7 @@ function Dashboard() {
         <div className="w-16 h-16 rounded-[var(--radius-lg)] bg-[var(--surface-container)] text-[var(--primary)] flex items-center justify-center mb-5">
           <Building2 className="h-8 w-8" strokeWidth={1.5} />
         </div>
-        <h1 className="text-[24px] font-semibold text-[var(--text-primary)] mb-2">ברוכים הבאים לוועדלי</h1>
+        <h1 className="text-[24px] font-semibold text-[var(--text-primary)] mb-2">ברוכים הבאים ל־ועד1</h1>
         <p className="text-[14px] text-[var(--text-secondary)] mb-6 max-w-sm">טרם הוגדר בניין במערכת. הוסיפו את הבניין הראשון כדי להתחיל לנהל גבייה, תקלות ודיירים.</p>
         <Link to="/buildings" className="h-[38px] px-4 rounded-[var(--radius)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-[13px] font-semibold inline-flex items-center gap-2">
           <Plus className="h-4 w-4" />הוספת בניין ראשון

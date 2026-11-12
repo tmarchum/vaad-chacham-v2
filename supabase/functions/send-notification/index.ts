@@ -90,7 +90,7 @@ async function sendGmail(to: string, subject: string, html: string): Promise<voi
     // Dot-stuff the body so a line starting with "." can't terminate DATA early.
     const stuffedHtml = html.replace(/(^|\r\n)\./g, '$1..')
     const rawEmail = [
-      `From: Vaadly <${GMAIL_USER}>`,
+      `From: Vaad1 <${GMAIL_USER}>`,
       `To: <${to}>`,
       `Subject: ${encodeSubject(subject)}`,
       `MIME-Version: 1.0`,
@@ -456,7 +456,7 @@ const ISSUE_OPENED_COPY: Record<string, { headline: string; lead: string; subjec
   },
   committee: {
     headline: 'פנייה חדשה לטיפולך',
-    lead: 'הפנייה שויכה אליך לפי קטגוריית הטיפול. אפשר לטפל בה באפליקציית ועדלי.',
+    lead: 'הפנייה שויכה אליך לפי קטגוריית הטיפול. אפשר לטפל בה באפליקציית ועד1.',
     subject: (t) => `פנייה חדשה לטיפולך — ${t}`,
   },
   routing_email: {

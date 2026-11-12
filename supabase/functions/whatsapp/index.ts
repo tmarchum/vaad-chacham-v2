@@ -283,7 +283,7 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   // The vendor just wrote to us, so the 24h service window is open — free text is allowed.
   if (integ?.enabled && integ.phone_number_id && token) {
     const ack = newStatus === 'agreed'
-      ? 'תודה! נרשמת כספק מאושר במאגר ועדלי — נפנה אליך כשתהיה קריאה מתאימה.'
+      ? 'תודה! נרשמת כספק מאושר במאגר ועד1 — נפנה אליך כשתהיה קריאה מתאימה.'
       : 'תודה על המענה, הוסרת מרשימת הפניות. אם תתחרט — כתוב "מאשר".'
     const r = await graph(integ, token, `${integ.phone_number_id}/messages`, {
       method: 'POST',

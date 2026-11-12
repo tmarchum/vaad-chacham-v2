@@ -237,7 +237,7 @@ function AnnouncementComposer({
           <div className="mx-auto max-w-[280px] rounded-[22px] border-[6px] border-[var(--text-primary)] bg-[var(--surface-secondary)] p-2.5">
             <div className="rounded-xl bg-[var(--surface)] p-3 shadow-[var(--shadow)]">
               <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)] mb-1">
-                <span className="flex items-center gap-1 font-semibold text-[var(--primary)]"><Megaphone className="h-3 w-3" />ועדלי • {buildingName || 'הבניין'}</span>
+                <span className="flex items-center gap-1 font-semibold text-[var(--primary)]"><Megaphone className="h-3 w-3" />ועד1 • {buildingName || 'הבניין'}</span>
                 <span>עכשיו</span>
               </div>
               <p className="text-[12px] font-bold text-[var(--text-primary)] line-clamp-1">{form.title || 'כותרת ההודעה'}</p>
@@ -465,7 +465,7 @@ function Announcements() {
   <p style="color: #565e74; font-size: 15px; line-height: 1.7; white-space: pre-wrap;">${form.content}</p>
   ${form.expiresAt ? `<p style="color: #737686; font-size: 13px; margin-top: 16px;">בתוקף עד: ${new Date(form.expiresAt).toLocaleDateString('he-IL')}</p>` : ''}
   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-  <p style="color: #737686; font-size: 12px; text-align: center;">ועדלי — מערכת ניהול ועד בית</p>
+  <p style="color: #737686; font-size: 12px; text-align: center;">ועד1 — מערכת ניהול ועד בית</p>
 </div>`
 
           let sent = 0
