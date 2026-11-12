@@ -187,9 +187,16 @@ function Dashboard() {
   )
   const expiredDocs = expiryAlerts.filter((a) => a.daysLeft < 0)
   const bankStaleDays = lastBankDate ? Math.floor((Date.now() - new Date(lastBankDate)) / 864e5) : null
+  // Non-urgent issues waiting to share the next maintenance visit.
+  const queuedIssues = openIssues.filter((i) => i.stage === 'queued_for_visit')
+  const oldestQueuedDays = queuedIssues.reduce((m, i) => {
+    const t = i.handled_at || i.reportedAt
+    return t ? Math.max(m, Math.floor((Date.now() - new Date(t).getTime()) / 864e5)) : m
+  }, 0)
   const healthChecks = [
     urgentIssues.length > 0 && { key: 'urgent', severity: 'danger', to: '/issues', text: `${urgentIssues.length} תקלות דחופות פתוחות` },
     ownsFaults && waitingDecision.length > 0 && { key: 'decide', severity: 'warning', to: '/issues', text: `${waitingDecision.length} תקלות ממתינות להחלטה על טיפול` },
+    queuedIssues.length > 0 && { key: 'queued', severity: oldestQueuedDays > 7 ? 'danger' : 'warning', to: '/issues', text: `${queuedIssues.length} תקלות ממתינות לביקור הבא${oldestQueuedDays > 0 ? ` (הוותיקה ${oldestQueuedDays} ימים)` : ''}` },
     staleIssues.length > 0 && { key: 'stale', severity: 'warning', to: '/issues', text: `${staleIssues.length} תקלות פתוחות יותר משבוע` },
     !noChargesYet && daysIntoMonth >= 10 && collectionPct < 80 && { key: 'collection', severity: 'warning', to: '/payments', text: `גבייה ${collectionPct}% לחודש ${monthName}, חסרים ${formatCurrency(debtTotal)}` },
     noChargesYet && daysIntoMonth >= 5 && { key: 'charges', severity: 'warning', to: '/payments', text: `לא הופקו חיובים לחודש ${monthName}` },

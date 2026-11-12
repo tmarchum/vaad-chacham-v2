@@ -83,6 +83,8 @@ export default function ServicePlans() {
       card_validity_months: Number(settings.card_validity_months) || 12,
       parts_approval_threshold: Number(settings.parts_approval_threshold) || 0,
       reopen_free_days: Number(settings.reopen_free_days) || 0,
+      visit_min_punches: Math.max(1, Number(settings.visit_min_punches) || 1),
+      batch_max_days: Number(settings.batch_max_days) || 0,
       updated_at: new Date().toISOString(),
     }).eq('id', true)
     setBusy('')
@@ -206,6 +208,8 @@ export default function ServicePlans() {
               ['card_validity_months', 'תוקף כרטיסייה (חודשים)', 'number'],
               ['parts_approval_threshold', 'אישור ועד לחלקים מעל (₪)', 'number'],
               ['reopen_free_days', 'ביקור חוזר ללא ניקוב (ימים)', 'number'],
+              ['visit_min_punches', 'מינימום ניקובים לביקור', 'number'],
+              ['batch_max_days', 'תקלה לא דחופה ממתינה לביקור עד (ימים)', 'number'],
             ].map(([name, label, type]) => (
               <label key={name} className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5">
                 <span>{label}</span>

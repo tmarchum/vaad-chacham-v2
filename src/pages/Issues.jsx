@@ -24,7 +24,7 @@ import { notifyIssueStatus, notifyIssueOpened, describeIssueNotified } from '@/l
 import { useAuth } from '@/hooks/useAuth'
 import { canSee } from '@/lib/access'
 import {
-  loadServiceConfig, loadPunchBalance, punchesFor, isOffHours,
+  loadServiceConfig, loadPunchBalance, punchesFor, isOffHours, punchRules,
   HANDLER_LABELS, HANDLER_KIND_LABELS, STAGE_LABELS,
 } from '@/lib/servicePlans'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
@@ -551,6 +551,11 @@ function Issues() {
   const [finishForm, setFinishForm] = useState({ kind: 'handyman', hours: 1, offHours: false, partsCost: '', photoUrl: '' })
   const [finishBalance, setFinishBalance] = useState(null)
   const [finishBusy, setFinishBusy] = useState(false)
+  const [visitIds, setVisitIds] = useState([])
+  const [transferIssue, setTransferIssue] = useState(null)
+  const [transferUrgent, setTransferUrgent] = useState(false)
+  const [transferBalance, setTransferBalance] = useState(null)
+  const [transferBusy, setTransferBusy] = useState(false)
   const [vendorAssignIssue, setVendorAssignIssue] = useState(null)
   const [selectedVendorName, setSelectedVendorName] = useState('')
   const [showTemplates, setShowTemplates] = useState(false)
@@ -1344,11 +1349,38 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     toast('התקלה בטיפול הוועד')
   }, [update])
 
+  // Transfer asks one question (urgent, or the next visit) and shows the
+  // balance and the rules, so the committee always knows what it is spending.
   const handleTransfer = useCallback((iss) => {
-    update(iss.id, { handler: 'management', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: new Date().toISOString() })
-    notifyIssueStatus(iss.id, 'acknowledged')
-    toast('התקלה הועברה לטיפול חברת הניהול')
-  }, [update])
+    setTransferIssue(iss)
+    setTransferUrgent(iss.priority === 'urgent')
+    setTransferBalance(null)
+    loadPunchBalance(iss.buildingId).then(setTransferBalance).catch(() => {})
+  }, [])
+
+  const transferBlocked = !isAdmin && transferBalance != null && transferBalance.balance < 1
+
+  const handleConfirmTransfer = async () => {
+    if (!transferIssue || transferBusy || transferBlocked) return
+    setTransferBusy(true)
+    try {
+      const { error } = await supabase.rpc('transfer_issue', { p_issue: transferIssue.id, p_urgent: transferUrgent })
+      if (error) {
+        toastError(String(error.message).includes('no_punches')
+          ? 'אין ניקובים ביתרה — יש לרכוש כרטיסייה לפני העברה לטיפול'
+          : 'ההעברה נכשלה')
+        return
+      }
+      // Mirror what the server wrote, so the list updates without a reload.
+      await update(transferIssue.id, {
+        handler: 'management', status: 'acknowledged', handled_at: new Date().toISOString(),
+        stage: transferUrgent ? 'awaiting_assignment' : 'queued_for_visit',
+      })
+      notifyIssueStatus(transferIssue.id, 'acknowledged')
+      toast(transferUrgent ? 'הועבר לטיפול דחוף' : 'הועבר — יטופל בביקור הבא')
+      setTransferIssue(null)
+    } finally { setTransferBusy(false) }
+  }
 
   const handleOpenCloseNoFix = useCallback((iss) => { setCloseNoFixIssue(iss); setCloseReason('') }, [])
 
@@ -1372,14 +1404,28 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     })
     setFinishBalance(null)
     loadPunchBalance(iss.buildingId).then(setFinishBalance).catch(() => {})
-  }, [serviceCfg.settings])
+    // Everything waiting for the next visit in this building is ticked by
+    // default: one call-out, one charge.
+    setVisitIds(allIssues
+      .filter((o) => o.id !== iss.id && o.buildingId === iss.buildingId && o.stage === 'queued_for_visit' && !isDone(o.status) && o.status !== 'completed')
+      .map((o) => o.id))
+  }, [serviceCfg.settings, allIssues])
+
+  // Other issues in the same building that the management side holds and
+  // could close on this same visit.
+  const visitCandidates = useMemo(() => {
+    if (!finishIssue) return []
+    return allIssues.filter((o) => o.id !== finishIssue.id && o.buildingId === finishIssue.buildingId
+      && o.handler === 'management' && !isDone(o.status) && o.status !== 'completed')
+  }, [finishIssue, allIssues])
 
   // A return visit for the same fault inside the free window costs nothing.
   const finishIsFreeRevisit = useMemo(() => {
+    if (visitIds.length) return false
     if (!finishIssue?.reopened_at || !finishIssue?.resolvedAt) return false
     const days = Number(serviceCfg.settings?.reopen_free_days) || 0
     return (new Date(finishIssue.reopened_at) - new Date(finishIssue.resolvedAt)) / 864e5 <= days
-  }, [finishIssue, serviceCfg.settings])
+  }, [finishIssue, serviceCfg.settings, visitIds.length])
 
   const finishPunches = finishIsFreeRevisit ? 0 : punchesFor(
     { kind: finishForm.kind, hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
@@ -1389,27 +1435,39 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setFinishBusy(true)
     try {
       const parts = finishForm.partsCost !== '' ? Number(finishForm.partsCost) : null
+      const others = visitCandidates.filter((o) => visitIds.includes(o.id))
+      const visitId = crypto.randomUUID()
+      const isVendor = finishForm.kind === 'vendor'
+      const hours = isVendor ? null : Number(finishForm.hours) || 0
+      const offHours = isVendor ? false : !!finishForm.offHours
       if (finishPunches > 0) {
         const { error } = await supabase.from('punch_ledger').insert({
-          building_id: finishIssue.buildingId, issue_id: finishIssue.id, punches: finishPunches,
-          hours: finishForm.kind === 'vendor' ? null : Number(finishForm.hours) || 0,
-          off_hours: finishForm.kind === 'vendor' ? false : !!finishForm.offHours,
-          kind: finishForm.kind === 'vendor' ? 'vendor_coordination' : 'handyman',
-          note: finishIssue.title || '', created_by: profile?.id || null,
+          building_id: finishIssue.buildingId, issue_id: others.length ? null : finishIssue.id, visit_id: visitId,
+          punches: finishPunches, hours, off_hours: offHours,
+          kind: isVendor ? 'vendor_coordination' : 'handyman',
+          note: others.length
+            ? `ביקור · ${others.length + 1} תקלות: ${[finishIssue, ...others].map((o) => o.title).join(', ')}`
+            : finishIssue.title || '',
+          created_by: profile?.id || null,
         })
-        if (error) { toastError('רישום הניקוב נכשל — התקלה לא נסגרה'); return }
+        if (error) { toastError('רישום הניקוב נכשל — התקלות לא נסגרו'); return }
       }
-      await update(finishIssue.id, {
+      const done = {
         status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
-        handler: finishIssue.handler || 'management', handler_kind: finishForm.kind,
-        work_hours: finishForm.kind === 'vendor' ? null : Number(finishForm.hours) || 0,
-        off_hours: finishForm.kind === 'vendor' ? false : !!finishForm.offHours,
+        handler: 'management', handler_kind: finishForm.kind, visit_id: visitId,
+      }
+      // The visit's punches sit on the issue it was opened from; the others
+      // carry the visit id, so each shows it was handled on a shared visit.
+      await update(finishIssue.id, {
+        ...done, work_hours: hours, off_hours: offHours,
         punches_charged: (Number(finishIssue.punches_charged) || 0) + finishPunches,
         parts_cost: parts, ...(parts != null ? { cost: parts } : {}),
         after_photo_url: finishForm.photoUrl.trim() || null,
       })
-      notifyIssueStatus(finishIssue.id, 'resolved')
-      toast(finishPunches > 0 ? `הטיפול הסתיים · נוקבו ${finishPunches} ניקובים` : 'הטיפול הסתיים · ללא ניקוב')
+      for (const o of others) await update(o.id, done)
+      for (const o of [finishIssue, ...others]) notifyIssueStatus(o.id, 'resolved')
+      const what = others.length ? `ביקור הסתיים · ${others.length + 1} תקלות` : 'הטיפול הסתיים'
+      toast(finishPunches > 0 ? `${what} · נוקבו ${finishPunches} ניקובים` : `${what} · ללא ניקוב`)
       setFinishIssue(null)
     } finally { setFinishBusy(false) }
   }
@@ -2474,14 +2532,75 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         </DialogContent>
       </Dialog>
 
+      {/* Transfer to management: urgent or next visit, with the balance and rules in view */}
+      <Dialog open={!!transferIssue} onOpenChange={(o) => { if (!o) setTransferIssue(null) }}>
+        <DialogContent className="w-full max-w-md">
+          <DialogHeader>
+            <DialogTitle>העברה לטיפול איש אחזקה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm font-semibold">{transferIssue?.title}</p>
+            <div className={`rounded-lg p-3 text-sm ${transferBlocked ? 'bg-[var(--danger-light)]' : 'bg-[var(--surface-secondary)]'}`}>
+              {transferBalance == null ? 'טוען יתרה…' : (
+                <>
+                  <p className="font-bold">יתרת ניקובים: {transferBalance.balance}</p>
+                  {transferBlocked && (
+                    <p className="mt-1">הכרטיסייה נגמרה. כדי להעביר תקלות לטיפול צריך לרכוש כרטיסייה חדשה מחברת הניהול. בינתיים אפשר לטפל בעצמכם או לסגור את התקלה עם הסבר לדייר.</p>
+                  )}
+                </>
+              )}
+            </div>
+            {!transferBlocked && (
+              <div className="space-y-2">
+                <label className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer ${!transferUrgent ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
+                  <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]" checked={!transferUrgent} onChange={() => setTransferUrgent(false)} />
+                  <span><span className="font-semibold text-sm">לביקור הבא</span>
+                    <span className="block text-[12px] text-[var(--text-secondary)]">יטופל יחד עם שאר התקלות הממתינות, עד {Number(serviceCfg.settings?.batch_max_days) || 7} ימים. משלמים על ביקור אחד.</span></span>
+                </label>
+                <label className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer ${transferUrgent ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
+                  <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]" checked={transferUrgent} onChange={() => setTransferUrgent(true)} />
+                  <span><span className="font-semibold text-sm">דחוף — ביקור מיוחד</span>
+                    <span className="block text-[12px] text-[var(--text-secondary)]">איש האחזקה יגיע בהקדם. ביקור נפרד, לפחות ניקוב אחד.</span></span>
+                </label>
+              </div>
+            )}
+            <details className="text-[12px] text-[var(--text-secondary)]">
+              <summary className="cursor-pointer font-semibold">איך מחושבים ניקובים</summary>
+              <ul className="mt-2 list-disc pr-4 space-y-1">
+                {punchRules(serviceCfg.settings).map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            </details>
+            <div className="flex gap-3">
+              <Button onClick={handleConfirmTransfer} disabled={transferBusy || transferBlocked || transferBalance == null}>
+                <ArrowRight className="h-4 w-4" />{transferBusy ? 'מעביר…' : 'העבר לטיפול'}
+              </Button>
+              <Button variant="outline" onClick={() => setTransferIssue(null)}>ביטול</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Finish and punch (management side) */}
       <Dialog open={!!finishIssue} onOpenChange={(o) => { if (!o) setFinishIssue(null) }}>
         <DialogContent className="w-full max-w-sm">
           <DialogHeader>
-            <DialogTitle>סיום טיפול וניקוב</DialogTitle>
+            <DialogTitle>סיום ביקור וניקוב</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-[var(--text-secondary)]">{finishIssue?.title}</p>
+            <p className="text-sm font-semibold">{finishIssue?.title}</p>
+            {visitCandidates.length > 0 && (
+              <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+                <p className="text-[13px] font-semibold">טופלו באותו ביקור:</p>
+                {visitCandidates.map((o) => (
+                  <label key={o.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input type="checkbox" className="h-4 w-4 accent-[var(--primary)]" checked={visitIds.includes(o.id)}
+                      onChange={(e) => setVisitIds((ids) => e.target.checked ? [...ids, o.id] : ids.filter((x) => x !== o.id))} />
+                    <span className="truncate">{o.title}</span>
+                    {o.stage === 'queued_for_visit' && <span className="text-[11px] text-[var(--text-muted)] shrink-0">ממתין לביקור</span>}
+                  </label>
+                ))}
+              </div>
+            )}
             <FormSelect
               label="מי ביצע"
               value={finishForm.kind}
@@ -2491,7 +2610,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             {finishForm.kind === 'handyman' && (
               <>
                 <FormField
-                  label="שעות עבודה"
+                  label={visitIds.length ? 'סה״כ שעות בביקור (כל התקלות יחד)' : 'שעות עבודה'}
                   type="number"
                   value={finishForm.hours}
                   onChange={(e) => setFinishForm((f) => ({ ...f, hours: e.target.value }))}
@@ -2515,7 +2634,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               onChange={(e) => setFinishForm((f) => ({ ...f, photoUrl: e.target.value }))}
             />
             <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
-              <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא ניקוב' : `ינוקבו ${finishPunches} ניקובים`}</p>
+              <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא ניקוב' : `ינוקבו ${finishPunches} ניקובים`}
+                {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} תקלות` : ''}</p>
+              {finishForm.kind === 'handyman' && !finishIsFreeRevisit && (
+                <p className="text-[12px] text-[var(--text-muted)]">מינימום {Number(serviceCfg.settings?.visit_min_punches) || 1} לביקור · ניקוב לכל שעה שמתחילה{finishForm.offHours ? ` · פי ${Number(serviceCfg.settings?.off_hours_multiplier) || 2} מחוץ לשעות` : ''}</p>
+              )}
               {finishBalance && (
                 <p className={finishBalance.balance - finishPunches < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-secondary)]'}>
                   יתרת הבניין: {finishBalance.balance} · אחרי הניקוב: {finishBalance.balance - finishPunches}
@@ -2525,7 +2648,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             <div className="flex gap-3">
               <Button onClick={handleFinishWork} disabled={finishBusy}>
                 <CheckCircle2 className="h-4 w-4" />
-                {finishBusy ? 'שומר...' : 'סיום טיפול'}
+                {finishBusy ? 'שומר...' : 'סיום ביקור'}
               </Button>
               <Button variant="outline" onClick={() => setFinishIssue(null)}>
                 ביטול

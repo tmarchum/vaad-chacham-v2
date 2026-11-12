@@ -967,6 +967,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                   <p className="mt-1 text-[12px] text-slate-500">
                     {i.handler === 'management' ? 'בטיפול חברת הניהול' : i.handler === 'committee' ? 'בטיפול הוועד' : 'בטיפול'}
                     {i.scheduled_date ? ` · ביקור מתוכנן ${formatDate(i.scheduled_date)}` : ''}
+                    {!i.scheduled_date && i.stage === 'queued_for_visit' ? ' · ממתין לביקור הבא של איש האחזקה' : ''}
                   </p>
                 )}
                 {['rejected', 'declined'].includes(i.status) && i.close_reason && (

@@ -48,6 +48,11 @@ create table if not exists public.service_settings (
   updated_at timestamptz default now()
 );
 insert into public.service_settings (id) values (true) on conflict (id) do nothing;
+-- A visit is what costs, not an issue: every call-out is at least this many
+-- punches, and non-urgent issues wait (up to batch_max_days) to share one.
+alter table public.service_settings
+  add column if not exists visit_min_punches integer not null default 1 check (visit_min_punches >= 1),
+  add column if not exists batch_max_days integer not null default 7 check (batch_max_days >= 0);
 
 -- Which plan a building is on --------------------------------------------------
 alter table public.buildings
@@ -88,19 +93,63 @@ create table if not exists public.punch_ledger (
 );
 create index if not exists punch_ledger_building_idx on public.punch_ledger (building_id, created_at desc);
 create index if not exists punch_ledger_issue_idx on public.punch_ledger (issue_id);
+alter table public.punch_ledger add column if not exists visit_id uuid;
 
--- Balance per building: unexpired purchases minus everything used.
+-- Balance per building. Plain rules, the same ones the screens explain:
+--   1. A month's included punches (managed plan) are used first that month and
+--      do not carry over.
+--   2. Beyond that, punches come off the OLDEST card first.
+--   3. Whatever is left on a card when it expires is gone.
+--   4. Work done with nothing left is a debt (negative balance); the next
+--      card pays it off first.
+create or replace function public.punch_balance_of(p_building uuid)
+returns table (purchased integer, used integer, included_left integer, expired integer, balance integer)
+language plpgsql stable set search_path to 'public' as $fn$
+declare
+  v_included integer;
+  v_to_cards integer;
+  v_month_used integer;
+  v_purch integer := 0;
+  v_exp integer := 0;
+  v_bal integer := 0;
+  v_used integer;
+  r record;
+begin
+  select coalesce(b.included_punches_override, p.included_punches, 0) into v_included
+    from public.buildings b left join public.service_plans p on p.key = b.service_plan
+   where b.id = p_building;
+  v_included := coalesce(v_included, 0);
+
+  select coalesce(sum(l.punches), 0) into v_used from public.punch_ledger l where l.building_id = p_building;
+  select coalesce(sum(l.punches), 0) into v_month_used from public.punch_ledger l
+   where l.building_id = p_building and l.created_at >= date_trunc('month', now());
+  select coalesce(sum(greatest(m.u - v_included, 0)), 0) into v_to_cards
+    from (select date_trunc('month', l.created_at) as mo, sum(l.punches) as u
+            from public.punch_ledger l where l.building_id = p_building group by 1) m;
+
+  for r in select c.punches, c.expires_at from public.punch_cards c
+            where c.building_id = p_building order by c.purchased_at loop
+    v_purch := v_purch + r.punches;
+    if v_to_cards >= r.punches then
+      v_to_cards := v_to_cards - r.punches;
+    else
+      if r.expires_at is not null and r.expires_at <= now() then
+        v_exp := v_exp + (r.punches - v_to_cards);
+      else
+        v_bal := v_bal + (r.punches - v_to_cards);
+      end if;
+      v_to_cards := 0;
+    end if;
+  end loop;
+
+  return query select v_purch, v_used, greatest(v_included - v_month_used, 0), v_exp,
+    v_bal - v_to_cards + greatest(v_included - v_month_used, 0);
+end $fn$;
+
 create or replace view public.building_punch_balance
 with (security_invoker = true) as
-select
-  b.id as building_id,
-  coalesce((select sum(c.punches) from public.punch_cards c
-            where c.building_id = b.id and (c.expires_at is null or c.expires_at > now())), 0)::integer as purchased,
-  coalesce((select sum(l.punches) from public.punch_ledger l where l.building_id = b.id), 0)::integer as used,
-  (coalesce((select sum(c.punches) from public.punch_cards c
-             where c.building_id = b.id and (c.expires_at is null or c.expires_at > now())), 0)
-   - coalesce((select sum(l.punches) from public.punch_ledger l where l.building_id = b.id), 0))::integer as balance
-from public.buildings b;
+select b.id as building_id, x.purchased, x.used, x.included_left, x.expired, x.balance
+from public.buildings b cross join lateral public.punch_balance_of(b.id) x;
 
 -- Issues: who handles it, and where it stands inside "in treatment" -------------
 -- Status stays the resident-facing answer to "where is it". These columns
@@ -110,7 +159,7 @@ alter table public.issues
   add column if not exists handler text check (handler in ('committee', 'management')),
   add column if not exists handler_kind text check (handler_kind in ('handyman', 'vendor')),
   add column if not exists stage text check (stage in
-    ('awaiting_assignment', 'awaiting_quote_approval', 'scheduled', 'done_awaiting_confirmation')),
+    ('queued_for_visit', 'awaiting_assignment', 'awaiting_quote_approval', 'scheduled', 'done_awaiting_confirmation')),
   add column if not exists close_reason text,
   add column if not exists work_hours numeric check (work_hours >= 0),
   add column if not exists off_hours boolean not null default false,
@@ -119,7 +168,8 @@ alter table public.issues
   add column if not exists after_photo_url text,
   add column if not exists handled_at timestamptz,
   add column if not exists reopened_at timestamptz,
-  add column if not exists reopen_count integer not null default 0;
+  add column if not exists reopen_count integer not null default 0,
+  add column if not exists visit_id uuid;
 
 -- RLS --------------------------------------------------------------------------
 alter table public.service_plans enable row level security;
@@ -177,3 +227,31 @@ begin
      and status in ('completed', 'closed');
 end $fn$;
 grant execute on function public.reopen_issue(uuid) to authenticated;
+
+
+-- Hand an issue to the management side. The committee can do this only while
+-- the building has at least one punch; management itself is never blocked.
+-- Not urgent = waits for the next visit and shares its cost.
+create or replace function public.transfer_issue(p_issue uuid, p_urgent boolean)
+returns void language plpgsql security definer set search_path to 'public' as $fn$
+declare
+  v_building uuid;
+  v_balance integer;
+begin
+  select building_id into v_building from public.issues where id = p_issue;
+  if v_building is null then raise exception 'not_found'; end if;
+  if not (public.is_admin() or v_building in (select public.my_building_ids())) then
+    raise exception 'forbidden';
+  end if;
+  if not public.is_admin() then
+    select balance into v_balance from public.punch_balance_of(v_building);
+    if coalesce(v_balance, 0) < 1 then raise exception 'no_punches'; end if;
+  end if;
+  update public.issues
+     set handler = 'management',
+         stage = case when p_urgent then 'awaiting_assignment' else 'queued_for_visit' end,
+         status = 'acknowledged',
+         handled_at = now()
+   where id = p_issue;
+end $fn$;
+grant execute on function public.transfer_issue(uuid, boolean) to authenticated;

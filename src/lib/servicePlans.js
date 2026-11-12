@@ -9,6 +9,7 @@ export const PLAN_KEYS = ['basic', 'assisted', 'managed']
 export const DAY_LABELS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
 
 export const STAGE_LABELS = {
+  queued_for_visit: 'ממתין לביקור הבא של איש האחזקה',
   awaiting_assignment: 'ממתין לשיבוץ',
   awaiting_quote_approval: 'ממתין לאישור הצעת מחיר',
   scheduled: 'תואם מועד',
@@ -56,17 +57,42 @@ export function isOffHours(date, settings) {
 }
 
 /**
- * Punches for a job. One punch per hour STARTED (2.5h = 3), multiplied outside
- * business hours. Coordinating a licensed contractor is a flat single punch:
- * the contractor's own bill goes to the building against an approved quote.
+ * Punches for a VISIT (one call-out, however many issues it covers).
+ * Every visit costs at least visit_min_punches; beyond that one punch per
+ * hour STARTED (2.5h = 3); the total is multiplied outside business hours.
+ * Coordinating a licensed contractor is a flat single punch: the contractor's
+ * own bill goes to the building against an approved quote.
  */
 export function punchesFor({ kind, hours, offHours }, settings) {
   if (kind === 'vendor') return 1
   const unitMinutes = Number(settings?.punch_minutes) || 60
+  const minPunches = Number(settings?.visit_min_punches) || 1
   const minutes = Math.max(0, Number(hours) || 0) * 60
-  const base = Math.max(1, Math.ceil(minutes / unitMinutes))
+  const base = Math.max(minPunches, Math.ceil(minutes / unitMinutes))
   const mult = offHours ? Number(settings?.off_hours_multiplier) || 2 : 1
   return base * mult
+}
+
+/**
+ * The punch rules in plain Hebrew, built from the live settings so what the
+ * committee reads is always what the system charges.
+ */
+export function punchRules(settings) {
+  const unit = Number(settings?.punch_minutes) || 60
+  const unitText = unit === 60 ? 'שעה' : `${unit} דקות`
+  const min = Number(settings?.visit_min_punches) || 1
+  const mult = Number(settings?.off_hours_multiplier) || 2
+  const days = (settings?.business_days || [0, 1, 2, 3, 4]).map((d) => DAY_LABELS[d]).join(', ')
+  const hours = `${String(settings?.business_start || '08:00').slice(0, 5)}–${String(settings?.business_end || '17:00').slice(0, 5)}`
+  return [
+    `כל ביקור של איש אחזקה עולה לפחות ${min === 1 ? 'ניקוב אחד' : `${min} ניקובים`}, גם אם העבודה קצרה.`,
+    `כל ${unitText} עבודה שמתחילה = ניקוב.`,
+    `מחוץ לשעות הפעילות (${days}, ${hours}) הניקוב פי ${mult}.`,
+    'תקלה לא דחופה מחכה לביקור הבא ומטופלת יחד עם שאר התקלות — משלמים על הביקור, לא על כל תקלה.',
+    'תיאום ספק מוסמך = ניקוב אחד. החשבון של הספק ועלות החלקים בנפרד.',
+    'ניקובים יורדים מהכרטיסייה הישנה קודם. יתרה בכרטיסייה שפג תוקפה — פגה.',
+    'כשהיתרה אפס אי אפשר להעביר תקלה לטיפול עד רכישת כרטיסייה. עבודה שכבר התחילה תושלם, והחוב יקוזז מהכרטיסייה הבאה.',
+  ]
 }
 
 /** Current punch balance for one building (purchased, used, balance). */
