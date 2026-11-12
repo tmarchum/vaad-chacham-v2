@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TextSizeControl } from '@/components/common/TextSizeControl'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useBuildingContext } from '@/hooks/useStore'
 import { useAuth } from '@/hooks/useAuth'
@@ -262,6 +263,7 @@ function Sidebar({ open, onClose, pulse = {} }) {
               </button>
             </div>
           )}
+          <TextSizeControl className="mb-2 px-1" />
           <button
             onClick={() => setUserMenuOpen((v) => !v)}
             className="w-full flex items-center justify-between p-2 rounded-[var(--radius-lg)] hover:bg-[var(--sidebar-bg-hover)] transition-colors"

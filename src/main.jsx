@@ -3,9 +3,13 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import { initTheme } from '@/lib/theme'
+import { initTextSize } from '@/lib/textSize'
 
 // Apply the saved theme before anything renders (no flash of wrong theme).
 initTheme()
+// Same for the chosen text size — a resident who needs 1.3x should never see
+// the small version first.
+initTextSize()
 
 // Error monitoring — inert until VITE_SENTRY_DSN is set (add it in Vercel env).
 if (import.meta.env.VITE_SENTRY_DSN) {

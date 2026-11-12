@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { TextSizeControl } from '@/components/common/TextSizeControl'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
@@ -208,9 +209,14 @@ export function ResidentPortal({ profileOverride = null }) {
               <p className="text-[12px] text-[var(--text-secondary)] truncate">{[floorLabel, unitNumber !== '—' ? `דירה ${unitNumber}` : ''].filter(Boolean).join(', ')}</p>
             </div>
           </div>
-          <button onClick={signOut} title="יציאה" className="p-2 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]">
-            <LogOut className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Residents are the older and larger audience — this cannot live
+                only in a committee screen they never open. */}
+            <TextSizeControl compact />
+            <button onClick={signOut} title="יציאה" className="p-2 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]">
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
