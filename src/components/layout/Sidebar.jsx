@@ -10,7 +10,7 @@ import {
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, X, ChevronDown, ChevronsUpDown, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
-  Coins, Tags, GitBranch, Eye, Plus, Palette, MessageCircle, BadgeDollarSign,
+  Coins, Tags, GitBranch, Eye, Plus, Palette, MessageCircle, BadgeDollarSign, Vote,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/common/BrandLogo'
 import { THEMES, getTheme, setTheme } from '@/lib/theme'
@@ -23,6 +23,7 @@ const PRIMARY_NAV = [
   { to: '/issues',        label: 'תקלות',       icon: Wrench,     badge: 'issues' },
   { to: '/payments',      label: 'גבייה',        icon: CreditCard, badge: 'collection' },
   { to: '/announcements', label: 'הודעות',      icon: Megaphone },
+  { to: '/polls',         label: 'הצבעות',      icon: Vote },
   { to: '/room-booking',  label: 'שריון חדרים', icon: DoorOpen },
 ]
 

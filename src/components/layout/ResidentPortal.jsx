@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import ResidentPolls from '@/components/layout/ResidentPolls'
 import { TextSizeControl } from '@/components/common/TextSizeControl'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
@@ -339,6 +340,9 @@ export function ResidentPortal({ profileOverride = null }) {
               user={user}
             />
           </div>
+
+          {/* ── Polls (renders nothing when the building has none) ── */}
+          <ResidentPolls buildingId={building?.id} />
 
           {/* ── Book a room ── */}
           <div id="portal-booking" className="scroll-mt-20">
