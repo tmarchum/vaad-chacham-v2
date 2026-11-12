@@ -62,7 +62,7 @@ export default function Login() {
             <div className="flex flex-col items-center text-center gap-2">
               <BrandLogo className="w-14 h-14 rounded-[var(--radius-lg)]" />
               <h1 className="mt-2 text-[28px] leading-9 font-bold tracking-[-0.02em] text-[var(--text-primary)]">
-                ועד<span className="text-[var(--primary)]">לי</span>
+                ועד<span className="text-[var(--primary)]">1</span>
               </h1>
               <p className="text-[13px] text-[var(--text-secondary)]">ניהול בתים משותפים חכם</p>
             </div>
