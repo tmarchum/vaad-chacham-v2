@@ -1,36 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vaadly launcher foreground: white apartment building + green check bubble.
-     Content kept inside the 66dp adaptive-icon safe zone (center of 108dp). -->
+<!-- ועד1 launcher foreground: the digit 1 drawn as a residential tower, with the
+     green "all is fine" check. Same geometry as BrandLogo.jsx (64-unit grid),
+     scaled 1.15x and centred so everything sits inside the 66dp adaptive-icon
+     safe zone of the 108dp canvas. Background colour: ic_launcher_background. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- building body (rounded top corners) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M42,32 h16 a4,4 0 0 1 4,4 v33 h-24 v-33 a4,4 0 0 1 4,-4 z" />
+    <group
+        android:scaleX="1.15"
+        android:scaleY="1.15"
+        android:translateX="11.45"
+        android:translateY="17.2">
 
-    <!-- windows -->
-    <path android:fillColor="#2563EB" android:pathData="M42.5,38 h5 v5 h-5 z" />
-    <path android:fillColor="#2563EB" android:pathData="M52.5,38 h5 v5 h-5 z" />
-    <path android:fillColor="#2563EB" android:pathData="M42.5,47 h5 v5 h-5 z" />
-    <path android:fillColor="#2563EB" android:pathData="M52.5,47 h5 v5 h-5 z" />
-    <!-- door -->
-    <path android:fillColor="#2563EB" android:pathData="M46.5,57 h7 v12 h-7 z" />
+        <!-- the tower / numeral 1 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M27,12h11v37h-11V22.5l-6.2,3.6v-6.9z" />
+        <!-- street (base of the numeral) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M20,49h23a2,2 0 0 1 2,2v0.5a2,2 0 0 1 -2,2h-23a2,2 0 0 1 -2,-2v-0.5a2,2 0 0 1 2,-2z" />
 
-    <!-- check bubble -->
-    <path
-        android:fillColor="#10B981"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
-        android:pathData="M64,52 a11,11 0 1 1 -0.01,0 z" />
-    <path
-        android:pathData="M59.2,63.2 l3.4,3.4 6.6,-7"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:fillColor="#00000000" />
+        <!-- windows -->
+        <path android:fillColor="#2563EB" android:pathData="M29.5,17h2.6v3.2h-2.6z" />
+        <path android:fillColor="#2563EB" android:pathData="M33.4,17h2.6v3.2h-2.6z" />
+        <path android:fillColor="#2563EB" android:pathData="M29.5,23h2.6v3.2h-2.6z" />
+        <path android:fillColor="#2563EB" android:pathData="M33.4,23h2.6v3.2h-2.6z" />
+        <path android:fillColor="#2563EB" android:pathData="M29.5,29h2.6v3.2h-2.6z" />
+        <path android:fillColor="#2563EB" android:pathData="M33.4,29h2.6v3.2h-2.6z" />
+        <path android:fillColor="#2563EB" android:pathData="M29.5,35h2.6v3.2h-2.6z" />
+        <path android:fillColor="#2563EB" android:pathData="M33.4,35h2.6v3.2h-2.6z" />
+        <!-- door -->
+        <path android:fillColor="#2563EB" android:pathData="M30.6,42h4.3v7h-4.3z" />
+
+        <!-- check bubble -->
+        <path
+            android:fillColor="#10B981"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2.6"
+            android:pathData="M38,19a9,9 0 1 0 18,0a9,9 0 1 0 -18,0z" />
+        <path
+            android:pathData="M43,19.2l2.8,2.8 5.3,-5.6"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2.8"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000" />
+    </group>
 </vector>
