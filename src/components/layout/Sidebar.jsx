@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { hubPathsFor } from '@/lib/pageHubs'
 import { canSee, ROUTE_FEATURE } from '@/lib/access'
 import { TextSizeControl } from '@/components/common/TextSizeControl'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -10,7 +11,7 @@ import {
   Wrench, Store, CalendarClock, ShieldCheck, Bot,
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, X, ChevronDown, ChevronsUpDown, ClipboardList,
-  Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
+  Landmark, ArrowLeftRight, DoorOpen,
   Coins, Tags, GitBranch, Eye, Plus, Palette, MessageCircle, BadgeDollarSign, Vote,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/common/BrandLogo'
@@ -40,12 +41,8 @@ const NAV_GROUPS = [
     collapsedByDefault: true,
     items: [
       { to: '/expenses',          label: 'הוצאות',          icon: Wallet },
-      { to: '/bank-transactions', label: 'תנועות בנק',     icon: ArrowLeftRight },
-      { to: '/income',            label: 'הכנסות',          icon: ArrowDownLeft },
-      { to: '/collection-cases',  label: 'מעקב גבייה',      icon: UserCheck },
-      { to: '/balance',           label: 'מאזן',            icon: Scale },
-      { to: '/expense-analysis',  label: 'ניתוח הוצאות',    icon: Brain },
-      { to: '/reports',           label: 'דוחות',           icon: BarChart2 },
+      { to: '/bank-transactions', label: 'בנק והכנסות',    icon: ArrowLeftRight },
+      { to: '/reports',           label: 'דוחות ומאזן',     icon: BarChart2 },
     ],
   },
   {
@@ -141,7 +138,10 @@ function Sidebar({ open, onClose, pulse = {} }) {
     Object.fromEntries(NAV_GROUPS.filter((s) => s.collapsedByDefault).map((s) => [s.id, true])),
   )
 
-  const isActive = (path) => (path === '/' ? location.pathname === '/' : location.pathname.startsWith(path))
+  // A hub's entry stays lit on any of its tabs (גבייה on /collection-cases too).
+  const isActive = (path) => (path === '/'
+    ? location.pathname === '/'
+    : hubPathsFor(path).some((p) => location.pathname.startsWith(p)))
 
   const badgeFor = (kind) => {
     if (kind === 'issues' && pulse.openIssues > 0) {

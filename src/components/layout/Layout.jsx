@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { PageTabs } from '@/components/common/PageTabs'
 import { PlanGate } from '@/components/common/PlanGate'
 import { Outlet, useLocation, Link } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
@@ -169,6 +170,7 @@ function Layout() {
         {/* ── Page canvas ── */}
         <main className="flex-1 overflow-y-auto px-4 py-5 md:px-6 lg:px-8 lg:py-6">
           <div className="max-w-[1400px] mx-auto">
+            <PageTabs />
             <PlanGate><Outlet /></PlanGate>
           </div>
         </main>
