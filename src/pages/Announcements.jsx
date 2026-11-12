@@ -13,6 +13,7 @@ import { SearchBar } from '@/components/common/SearchBar'
 import { FormField, FormSelect, FormTextarea } from '@/components/common/FormField'
 import { formatDate } from '@/lib/utils'
 import { notifyAnnouncement } from '@/lib/notify'
+import { MeetingAgenda } from '@/components/meetings/MeetingAgenda'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import {
@@ -806,9 +807,10 @@ function Announcements() {
                           <p className="text-[13px] leading-6 text-[var(--text-secondary)] whitespace-pre-wrap">{min.decisions}</p>
                         </div>
                       )}
-                      {(min.decisions || (min.summary || '').length > 120) && (
+                      {expanded && <MeetingAgenda meetingId={min.id} />}
+                      {(
                         <button onClick={() => toggleExpandedMinutes(min.id)} className="mt-2 text-[12px] font-semibold text-[var(--primary)] inline-flex items-center gap-0.5">
-                          {expanded ? <>הצג פחות<ChevronUp className="h-3.5 w-3.5" /></> : <>פרוטוקול מלא והחלטות<ChevronDown className="h-3.5 w-3.5" /></>}
+                          {expanded ? <>הצג פחות<ChevronUp className="h-3.5 w-3.5" /></> : <>סדר יום, החלטות והצבעות<ChevronDown className="h-3.5 w-3.5" /></>}
                         </button>
                       )}
                     </div>
