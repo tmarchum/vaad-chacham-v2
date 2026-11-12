@@ -835,6 +835,14 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
   }
 
   // Resident rates a resolved issue → secure RPC → feeds the vendor's reputation.
+  // "It was marked done but it is not fixed." Goes back to whoever treated it.
+  const reopenIssue = async (issueId) => {
+    if (!window.confirm('לפתוח מחדש את הפנייה? היא תחזור לטיפול.')) return
+    const { error } = await supabase.rpc('reopen_issue', { p_issue: issueId })
+    if (error) { console.error('reopen issue error', error); window.alert('לא ניתן לפתוח מחדש כרגע. אפשר לדווח על תקלה חדשה.'); return }
+    onCreated()
+  }
+
   const rateIssue = async (issueId, rating) => {
     const { error } = await supabase.rpc('rate_resolved_issue', { p_issue: issueId, p_rating: rating })
     if (error) { console.error('rate issue error', error); return }
@@ -967,6 +975,12 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                         className={`text-base leading-none ${n <= rated ? 'text-amber-400' : 'text-slate-300'} ${!rated ? 'hover:text-amber-400' : ''}`}>★</button>
                     ))}
                   </div>
+                )}
+                {['completed', 'closed'].includes(i.status) && (
+                  <button type="button" onClick={() => reopenIssue(i.id)}
+                    className="mt-1.5 text-[11px] font-semibold text-[var(--primary)] hover:underline">
+                    הבעיה לא נפתרה? פתח/י מחדש
+                  </button>
                 )}
               </div>
             )

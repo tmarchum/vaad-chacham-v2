@@ -10,7 +10,7 @@ import {
   Megaphone, FolderOpen, BarChart2, Cog, Zap, Search,
   Users, Settings, LogOut, X, ChevronDown, ChevronsUpDown, ClipboardList,
   Landmark, ArrowLeftRight, ArrowDownLeft, Scale, Brain, UserCheck, DoorOpen,
-  Coins, Tags, GitBranch, Eye, Plus, Palette, MessageCircle,
+  Coins, Tags, GitBranch, Eye, Plus, Palette, MessageCircle, BadgeDollarSign,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/common/BrandLogo'
 import { THEMES, getTheme, setTheme } from '@/lib/theme'
@@ -54,6 +54,7 @@ const NAV_GROUPS = [
       { to: '/bank-settings',    label: 'חשבונות בנק',     icon: Landmark },
       { to: '/vendor-rules',     label: 'כללי ספקים',       icon: Tags },
       { to: '/issue-routing',    label: 'ניתוב פניות',     icon: GitBranch },
+      { to: '/service-plans',    label: 'מסלולים ותמחור',  icon: BadgeDollarSign },
       { to: '/work-orders',      label: 'הזמנות עבודה',    icon: ClipboardList },
       { to: '/vendor-finder',    label: 'מציאת ספקים',     icon: Search },
       { to: '/supervisors',      label: 'מפקחים',           icon: ShieldCheck },

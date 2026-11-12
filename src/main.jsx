@@ -101,6 +101,7 @@ const ExpenseAnalysis  = lazy(() => import('@/pages/ExpenseAnalysis'))
 const CollectionCases  = lazy(() => import('@/pages/CollectionCases'))
 const RoomBooking      = lazy(() => import('@/pages/RoomBooking'))
 const IssueRouting     = lazy(() => import('@/pages/IssueRouting'))
+const ServicePlans     = lazy(() => import('@/pages/ServicePlans'))
 
 // Shared page loading fallback
 function PageLoader() {
@@ -138,6 +139,7 @@ createRoot(document.getElementById('root')).render(
               <Route path="vendor-rules" element={<Suspense fallback={<PageLoader />}><VendorRules /></Suspense>} />
               <Route path="issues" element={<Suspense fallback={<PageLoader />}><Issues /></Suspense>} />
               <Route path="issue-routing" element={<Suspense fallback={<PageLoader />}><IssueRouting /></Suspense>} />
+              <Route path="service-plans" element={<Suspense fallback={<PageLoader />}><ServicePlans /></Suspense>} />
               <Route path="vendors" element={<Suspense fallback={<PageLoader />}><Vendors /></Suspense>} />
               <Route path="supervisors" element={<Suspense fallback={<PageLoader />}><Supervisors /></Suspense>} />
               <Route path="billing" element={<Suspense fallback={<PageLoader />}><Billing /></Suspense>} />

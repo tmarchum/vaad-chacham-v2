@@ -21,6 +21,11 @@ import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { notifyIssueStatus, notifyIssueOpened, describeIssueNotified } from '@/lib/notify'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  loadServiceConfig, loadPunchBalance, punchesFor, isOffHours,
+  HANDLER_LABELS, HANDLER_KIND_LABELS, STAGE_LABELS,
+} from '@/lib/servicePlans'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
@@ -28,7 +33,7 @@ import { toast, toastError } from '@/lib/toast'
 import {
   AlertTriangle, Plus, Pencil, Trash2, CheckCircle2, Clock,
   FileText, Calendar, Users, LayoutList, Columns3,
-  ArrowRight, Send, Check, X, Sparkles, Copy, CheckCheck, RefreshCw,
+  ArrowRight, Send, Check, X, Sparkles, Copy, CheckCheck, RefreshCw, Wrench,
   Download, GitBranch, ClipboardList, ShieldAlert, Timer, Search,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -98,6 +103,29 @@ const BUCKET_TO_STATUS = {
 // Buckets that count as "done" — excluded from SLA timers and "ללא מלווה" nags.
 const DONE_BUCKETS = new Set(['awaiting_payment', 'closed', 'rejected'])
 const isDone = (s) => DONE_BUCKETS.has(bucketOf(s))
+
+// Which set of actions an issue offers.
+//
+// Status answers "where is it" for the resident. It cannot also answer "whose
+// court is the ball in", which is what the buttons depend on, so that lives in
+// `handler`:
+//   triage  nobody has taken it yet: the committee picks one of three —
+//           handle it ourselves, hand it to the management side, or close it
+//           without treatment (with a reason the resident is told).
+//   manage  handed over, and the viewer IS the management side: vendor tools
+//           plus finish-and-punch.
+//   watch   handed over, and the viewer is the committee: status only.
+//   legacy  everything else, including the committee handling it itself —
+//           the pre-existing buttons.
+// Until migration 030 is applied svc.ready is false and every issue is legacy,
+// so nothing writes to columns that do not exist yet.
+function flowFor(iss, svc) {
+  if (!svc?.ready) return 'legacy'
+  const s = iss.status
+  if (!iss.handler && ['reported', 'pending_committee', 'acknowledged'].includes(s)) return 'triage'
+  if (iss.handler === 'management' && !isDone(s) && s !== 'completed') return svc.isAdmin ? 'manage' : 'watch'
+  return 'legacy'
+}
 
 const PRIORITY_MAP = {
   low:    { label: 'נמוכה', variant: 'default', order: 4, color: 'bg-green-100 text-green-800' },
@@ -229,6 +257,11 @@ const IssueCard = React.memo(function IssueCard({
   onOpenSchedule,
   onOpenComplete,
   onClose,
+  svc,
+  onSelfHandle,
+  onTransfer,
+  onCloseNoFix,
+  onFinishWork,
 }) {
   const priority = PRIORITY_MAP[iss.priority] || PRIORITY_MAP.medium
   const status = bucketInfo(iss.status)
@@ -253,21 +286,36 @@ const IssueCard = React.memo(function IssueCard({
   // Quick actions
   const actions = []
   const s = iss.status
-  if (s === 'reported') {
+  const flow = flowFor(iss, svc)
+  const legacyOrManage = flow === 'legacy' || flow === 'manage'
+  if (flow === 'triage') {
+    actions.push(
+      <Button key="self" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onSelfHandle(iss) }}>
+        <Wrench className="h-3.5 w-3.5" /> אטפל בעצמי
+      </Button>,
+      <Button key="transfer" size="sm" onClick={(e) => { e.stopPropagation(); onTransfer(iss) }}>
+        <ArrowRight className="h-3.5 w-3.5" /> העבר לטיפול
+      </Button>,
+      <Button key="nofix" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onCloseNoFix(iss) }}>
+        <X className="h-3.5 w-3.5" /> סגור ללא טיפול
+      </Button>
+    )
+  }
+  if (s === 'reported' && flow === 'legacy') {
     actions.push(
       <Button key="ack" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onAcknowledge(iss) }}>
         <Check className="h-3.5 w-3.5" /> אשר
       </Button>
     )
   }
-  if (s === 'reported' || s === 'acknowledged') {
+  if ((s === 'reported' || s === 'acknowledged') && legacyOrManage) {
     actions.push(
       <Button key="quote" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenQuoteDialog(iss) }}>
         <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
       </Button>
     )
   }
-  if (!iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(s)) {
+  if (!iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(s) && legacyOrManage) {
     actions.push(
       <Button key="vendor" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenVendorAssign(iss) }}>
         <Users className="h-3.5 w-3.5" /> קבע ספק
@@ -281,7 +329,14 @@ const IssueCard = React.memo(function IssueCard({
       </Button>
     )
   }
-  if (['scheduled','in_progress'].includes(s)) {
+  if (flow === 'manage') {
+    actions.push(
+      <Button key="finish" size="sm" onClick={(e) => { e.stopPropagation(); onFinishWork(iss) }}>
+        <CheckCircle2 className="h-3.5 w-3.5" /> סיום טיפול וניקוב
+      </Button>
+    )
+  }
+  if (['scheduled','in_progress'].includes(s) && flow === 'legacy') {
     actions.push(
       <Button key="complete" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenComplete(iss) }}>
         <CheckCircle2 className="h-3.5 w-3.5" /> סמן כבוצע
@@ -328,6 +383,12 @@ const IssueCard = React.memo(function IssueCard({
             {iss.reportedAt && <span>{timeAgo(iss.reportedAt)}</span>}
             {iss.vendor_name && <span>{iss.reportedAt ? '·' : ''} {iss.vendor_name}</span>}
             {buildingName && <span>· {buildingName}</span>}
+            {iss.handler && (
+              <span className="text-[var(--text-secondary)]">
+                · מטפל: {HANDLER_LABELS[iss.handler]}{iss.handler_kind ? ` (${HANDLER_KIND_LABELS[iss.handler_kind]})` : ''}
+                {iss.stage && !isDone(iss.status) ? ` · ${STAGE_LABELS[iss.stage]}` : ''}
+              </span>
+            )}
             {accompanier
               ? <span className="text-[var(--text-secondary)]">· 👤 מלווה: {accompanier}</span>
               : (!isDone(iss.status) && <span className="text-amber-600 font-medium">· ללא מלווה</span>)}
@@ -350,8 +411,12 @@ const IssueCard = React.memo(function IssueCard({
 // without opening it.
 // ---------------------------------------------------------------------------
 
-function nextAction(iss) {
+function nextAction(iss, svc) {
   const s = iss.status
+  const flow = flowFor(iss, svc)
+  if (flow === 'triage') return { key: 'open', label: 'בחר טיפול', icon: ArrowRight }
+  if (flow === 'watch') return null
+  if (flow === 'manage') return { key: 'finish', label: 'סיום טיפול', icon: CheckCircle2 }
   if (s === 'reported') return { key: 'ack', label: 'אשר', icon: Check }
   if (s === 'acknowledged') return { key: 'quote', label: 'בקש הצעה', icon: FileText }
   if (!iss.vendor_name && ['quoted', 'approved'].includes(s)) return { key: 'vendor', label: 'קבע ספק', icon: Users }
@@ -361,13 +426,13 @@ function nextAction(iss) {
   return null
 }
 
-const IssueRow = React.memo(function IssueRow({ iss, unit, onOpen, onAction }) {
+const IssueRow = React.memo(function IssueRow({ iss, unit, onOpen, onAction, svc }) {
   const priority = PRIORITY_MAP[iss.priority] || PRIORITY_MAP.medium
   const status = bucketInfo(iss.status)
   const urgent = iss.priority === 'urgent' || iss.priority === 'high'
   const done = isDone(iss.status)
   const overdue = !done && isOverdueSLA(iss)
-  const act = nextAction(iss)
+  const act = nextAction(iss, svc)
   return (
     <tr onClick={() => onOpen(iss)} className={`cursor-pointer ${urgent && !done ? '!bg-[var(--danger-light)]/25' : ''}`}>
       <td className="whitespace-nowrap">
@@ -465,6 +530,19 @@ function Issues() {
   const [scheduleDate, setScheduleDate] = useState('')
   const [completeDialogIssue, setCompleteDialogIssue] = useState(null)
   const [completeCost, setCompleteCost] = useState('')
+
+  // Service plans / punch cards. `svc.ready` is false until migration 030 is
+  // applied, and then every issue keeps the old buttons.
+  const { isAdmin, profile } = useAuth()
+  const [serviceCfg, setServiceCfg] = useState({ ready: false, plans: [], settings: null })
+  useEffect(() => { loadServiceConfig().then(setServiceCfg).catch(() => {}) }, [])
+  const svc = useMemo(() => ({ ready: serviceCfg.ready, isAdmin, settings: serviceCfg.settings }), [serviceCfg, isAdmin])
+  const [closeNoFixIssue, setCloseNoFixIssue] = useState(null)
+  const [closeReason, setCloseReason] = useState('')
+  const [finishIssue, setFinishIssue] = useState(null)
+  const [finishForm, setFinishForm] = useState({ kind: 'handyman', hours: 1, offHours: false, partsCost: '', photoUrl: '' })
+  const [finishBalance, setFinishBalance] = useState(null)
+  const [finishBusy, setFinishBusy] = useState(false)
   const [vendorAssignIssue, setVendorAssignIssue] = useState(null)
   const [selectedVendorName, setSelectedVendorName] = useState('')
   const [showTemplates, setShowTemplates] = useState(false)
@@ -1247,6 +1325,83 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setCompleteCost('')
   }
 
+  // ── Handling choice: the committee's three options on a new issue ──────────
+  const handleSelfHandle = useCallback((iss) => {
+    update(iss.id, { handler: 'committee', stage: null, status: 'in_progress', handled_at: new Date().toISOString() })
+    notifyIssueStatus(iss.id, 'acknowledged')
+    toast('התקלה בטיפול הוועד')
+  }, [update])
+
+  const handleTransfer = useCallback((iss) => {
+    update(iss.id, { handler: 'management', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: new Date().toISOString() })
+    notifyIssueStatus(iss.id, 'acknowledged')
+    toast('התקלה הועברה לטיפול חברת הניהול')
+  }, [update])
+
+  const handleOpenCloseNoFix = useCallback((iss) => { setCloseNoFixIssue(iss); setCloseReason('') }, [])
+
+  // Closing without treatment always carries a reason: the resident is told
+  // the issue was closed, and "why" is the first thing they will ask.
+  const handleCloseNoFix = async () => {
+    if (!closeNoFixIssue || !closeReason.trim()) return
+    await update(closeNoFixIssue.id, { status: 'rejected', close_reason: closeReason.trim() })
+    notifyIssueStatus(closeNoFixIssue.id, 'closed')
+    toast('התקלה נסגרה ללא טיפול')
+    setCloseNoFixIssue(null)
+    setCloseReason('')
+  }
+
+  // ── Finish and punch (management side) ─────────────────────────────────────
+  const handleOpenFinish = useCallback((iss) => {
+    setFinishIssue(iss)
+    setFinishForm({
+      kind: iss.handler_kind || 'handyman', hours: 1,
+      offHours: isOffHours(new Date(), serviceCfg.settings), partsCost: '', photoUrl: '',
+    })
+    setFinishBalance(null)
+    loadPunchBalance(iss.buildingId).then(setFinishBalance).catch(() => {})
+  }, [serviceCfg.settings])
+
+  // A return visit for the same fault inside the free window costs nothing.
+  const finishIsFreeRevisit = useMemo(() => {
+    if (!finishIssue?.reopened_at || !finishIssue?.resolvedAt) return false
+    const days = Number(serviceCfg.settings?.reopen_free_days) || 0
+    return (new Date(finishIssue.reopened_at) - new Date(finishIssue.resolvedAt)) / 864e5 <= days
+  }, [finishIssue, serviceCfg.settings])
+
+  const finishPunches = finishIsFreeRevisit ? 0 : punchesFor(
+    { kind: finishForm.kind, hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
+
+  const handleFinishWork = async () => {
+    if (!finishIssue || finishBusy) return
+    setFinishBusy(true)
+    try {
+      const parts = finishForm.partsCost !== '' ? Number(finishForm.partsCost) : null
+      if (finishPunches > 0) {
+        const { error } = await supabase.from('punch_ledger').insert({
+          building_id: finishIssue.buildingId, issue_id: finishIssue.id, punches: finishPunches,
+          hours: finishForm.kind === 'vendor' ? null : Number(finishForm.hours) || 0,
+          off_hours: finishForm.kind === 'vendor' ? false : !!finishForm.offHours,
+          kind: finishForm.kind === 'vendor' ? 'vendor_coordination' : 'handyman',
+          note: finishIssue.title || '', created_by: profile?.id || null,
+        })
+        if (error) { toastError('רישום הניקוב נכשל — התקלה לא נסגרה'); return }
+      }
+      await update(finishIssue.id, {
+        status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
+        handler_kind: finishForm.kind,
+        work_hours: finishForm.kind === 'vendor' ? null : Number(finishForm.hours) || 0,
+        off_hours: finishForm.kind === 'vendor' ? false : !!finishForm.offHours,
+        punches_charged: (Number(finishIssue.punches_charged) || 0) + finishPunches,
+        parts_cost: parts, ...(parts != null ? { cost: parts } : {}),
+        after_photo_url: finishForm.photoUrl.trim() || null,
+      })
+      notifyIssueStatus(finishIssue.id, 'resolved')
+      toast(finishPunches > 0 ? `הטיפול הסתיים · נוקבו ${finishPunches} ניקובים` : 'הטיפול הסתיים · ללא ניקוב')
+      setFinishIssue(null)
+    } finally { setFinishBusy(false) }
+  }
+
   // Closing is the accompanying committee member's responsibility — require one.
   const handleClose = useCallback((iss) => {
     if (!iss.assigned_to) {
@@ -1314,7 +1469,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     URL.revokeObjectURL(url)
   }
   const runAction = (key, iss) => {
-    if (key === 'ack') handleAcknowledge(iss)
+    if (key === 'open') handleOpenDetail(iss)
+    else if (key === 'finish') handleOpenFinish(iss)
+    else if (key === 'ack') handleAcknowledge(iss)
     else if (key === 'quote') handleOpenQuoteDialog(iss)
     else if (key === 'vendor') handleOpenVendorAssign(iss)
     else if (key === 'sched') handleOpenSchedule(iss)
@@ -1428,7 +1585,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 </thead>
                 <tbody>
                   {filtered.map((iss) => (
-                    <IssueRow key={iss.id} iss={iss} unit={dir.byId[iss.unitId]} onOpen={handleOpenDetail} onAction={runAction} />
+                    <IssueRow key={iss.id} iss={iss} unit={dir.byId[iss.unitId]} onOpen={handleOpenDetail} onAction={runAction} svc={svc} />
                   ))}
                 </tbody>
               </table>
@@ -1450,6 +1607,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 onOpenSchedule={handleOpenSchedule}
                 onOpenComplete={handleOpenComplete}
                 onClose={handleClose}
+                svc={svc}
+                onSelfHandle={handleSelfHandle}
+                onTransfer={handleTransfer}
+                onCloseNoFix={handleOpenCloseNoFix}
+                onFinishWork={handleOpenFinish}
               />
             ))}
           </div>
@@ -1486,6 +1648,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                         onOpenSchedule={handleOpenSchedule}
                         onOpenComplete={handleOpenComplete}
                         onClose={handleClose}
+                svc={svc}
+                onSelfHandle={handleSelfHandle}
+                onTransfer={handleTransfer}
+                onCloseNoFix={handleOpenCloseNoFix}
+                onFinishWork={handleOpenFinish}
                       />
                     ))
                   )}
@@ -1613,17 +1780,35 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   <Sparkles className="h-3.5 w-3.5" />
                   ניתוח AI
                 </Button>
-                {iss.status === 'reported' && (
+                {flowFor(iss, svc) === 'triage' && (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => { handleSelfHandle(iss); setDetailIssue(null) }}>
+                      <Wrench className="h-3.5 w-3.5" /> אטפל בעצמי
+                    </Button>
+                    <Button size="sm" onClick={() => { handleTransfer(iss); setDetailIssue(null) }}>
+                      <ArrowRight className="h-3.5 w-3.5" /> העבר לטיפול
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { setDetailIssue(null); handleOpenCloseNoFix(iss) }}>
+                      <X className="h-3.5 w-3.5" /> סגור ללא טיפול
+                    </Button>
+                  </>
+                )}
+                {flowFor(iss, svc) === 'manage' && (
+                  <Button size="sm" onClick={() => { setDetailIssue(null); handleOpenFinish(iss) }}>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> סיום טיפול וניקוב
+                  </Button>
+                )}
+                {iss.status === 'reported' && flowFor(iss, svc) === 'legacy' && (
                   <Button variant="outline" size="sm" onClick={() => handleAcknowledge(iss)}>
                     <Check className="h-3.5 w-3.5" /> אשר
                   </Button>
                 )}
-                {(iss.status === 'reported' || iss.status === 'acknowledged') && (
+                {(iss.status === 'reported' || iss.status === 'acknowledged') && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenQuoteDialog(iss)}>
                     <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
                   </Button>
                 )}
-                {!iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(iss.status) && (
+                {!iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(iss.status) && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenVendorAssign(iss)}>
                     <Users className="h-3.5 w-3.5" /> קבע ספק
                   </Button>
@@ -1633,7 +1818,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <Calendar className="h-3.5 w-3.5" /> תזמן
                   </Button>
                 )}
-                {['scheduled','in_progress'].includes(iss.status) && (
+                {['scheduled','in_progress'].includes(iss.status) && flowFor(iss, svc) === 'legacy' && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenComplete(iss)}>
                     <CheckCircle2 className="h-3.5 w-3.5" /> סמן כבוצע
                   </Button>
@@ -2242,6 +2427,95 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 תזמן
               </Button>
               <Button variant="outline" onClick={() => setScheduleDialogIssue(null)}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close without treatment — reason is mandatory */}
+      <Dialog open={!!closeNoFixIssue} onOpenChange={(o) => { if (!o) setCloseNoFixIssue(null) }}>
+        <DialogContent className="w-full max-w-sm">
+          <DialogHeader>
+            <DialogTitle>סגירה ללא טיפול</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--text-secondary)]">{closeNoFixIssue?.title}</p>
+            <FormTextarea
+              label="סיבת הסגירה (חובה)"
+              value={closeReason}
+              onChange={(e) => setCloseReason(e.target.value)}
+              rows={3}
+            />
+            <p className="text-xs text-[var(--text-muted)]">הדייר שדיווח יקבל הודעה שהפנייה נסגרה.</p>
+            <div className="flex gap-3">
+              <Button onClick={handleCloseNoFix} disabled={!closeReason.trim()}>
+                <X className="h-4 w-4" />
+                סגור ללא טיפול
+              </Button>
+              <Button variant="outline" onClick={() => setCloseNoFixIssue(null)}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Finish and punch (management side) */}
+      <Dialog open={!!finishIssue} onOpenChange={(o) => { if (!o) setFinishIssue(null) }}>
+        <DialogContent className="w-full max-w-sm">
+          <DialogHeader>
+            <DialogTitle>סיום טיפול וניקוב</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--text-secondary)]">{finishIssue?.title}</p>
+            <FormSelect
+              label="מי ביצע"
+              value={finishForm.kind}
+              onChange={(e) => setFinishForm((f) => ({ ...f, kind: e.target.value }))}
+              options={[{ value: 'handyman', label: 'איש אחזקה' }, { value: 'vendor', label: 'ספק מוסמך (תיאום בלבד)' }]}
+            />
+            {finishForm.kind === 'handyman' && (
+              <>
+                <FormField
+                  label="שעות עבודה"
+                  type="number"
+                  value={finishForm.hours}
+                  onChange={(e) => setFinishForm((f) => ({ ...f, hours: e.target.value }))}
+                />
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+                  <input type="checkbox" className="h-4 w-4 accent-[var(--primary)]" checked={finishForm.offHours}
+                    onChange={(e) => setFinishForm((f) => ({ ...f, offHours: e.target.checked }))} />
+                  בוצע מחוץ לשעות הפעילות (ניקוב כפול)
+                </label>
+              </>
+            )}
+            <FormField
+              label="עלות חלקים וחומרים (בנפרד מהניקוב)"
+              type="number"
+              value={finishForm.partsCost}
+              onChange={(e) => setFinishForm((f) => ({ ...f, partsCost: e.target.value }))}
+            />
+            <FormField
+              label="קישור לתמונת סיום (לא חובה)"
+              value={finishForm.photoUrl}
+              onChange={(e) => setFinishForm((f) => ({ ...f, photoUrl: e.target.value }))}
+            />
+            <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
+              <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא ניקוב' : `ינוקבו ${finishPunches} ניקובים`}</p>
+              {finishBalance && (
+                <p className={finishBalance.balance - finishPunches < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-secondary)]'}>
+                  יתרת הבניין: {finishBalance.balance} · אחרי הניקוב: {finishBalance.balance - finishPunches}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={handleFinishWork} disabled={finishBusy}>
+                <CheckCircle2 className="h-4 w-4" />
+                {finishBusy ? 'שומר...' : 'סיום טיפול'}
+              </Button>
+              <Button variant="outline" onClick={() => setFinishIssue(null)}>
                 ביטול
               </Button>
             </div>
