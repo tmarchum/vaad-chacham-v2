@@ -10,6 +10,7 @@ export const DAY_LABELS = ['ראשון', 'שני', 'שלישי', 'רביעי', '
 
 export const STAGE_LABELS = {
   queued_for_visit: 'ממתין לביקור הבא של איש האחזקה',
+  sent_to_vendor: 'נשלח לספק',
   awaiting_assignment: 'ממתין לשיבוץ',
   awaiting_quote_approval: 'ממתין לאישור הצעת מחיר',
   scheduled: 'תואם מועד',
@@ -17,7 +18,7 @@ export const STAGE_LABELS = {
 }
 
 export const HANDLER_LABELS = { committee: 'הוועד', management: 'חברת הניהול' }
-export const HANDLER_KIND_LABELS = { handyman: 'איש אחזקה', vendor: 'ספק מוסמך' }
+export const HANDLER_KIND_LABELS = { handyman: 'איש אחזקה', vendor: 'ספק בתיאום חברת הניהול', contractor: 'הספק הקבוע של הבניין' }
 
 /**
  * Loads plans + settings. Returns { ready: false } when migration 030 has not
@@ -64,6 +65,7 @@ export function isOffHours(date, settings) {
  * own bill goes to the building against an approved quote.
  */
 export function punchesFor({ kind, hours, offHours }, settings) {
+  if (kind === 'contractor') return 0
   if (kind === 'vendor') return 1
   const unitMinutes = Number(settings?.punch_minutes) || 60
   const minPunches = Number(settings?.visit_min_punches) || 1
@@ -89,9 +91,10 @@ export function punchRules(settings) {
     `כל ${unitText} עבודה שמתחילה = ניקוב.`,
     `מחוץ לשעות הפעילות (${days}, ${hours}) הניקוב פי ${mult}.`,
     'תקלה לא דחופה מחכה לביקור הבא ומטופלת יחד עם שאר התקלות — משלמים על הביקור, לא על כל תקלה.',
-    'תיאום ספק מוסמך = ניקוב אחד. החשבון של הספק ועלות החלקים בנפרד.',
+    'הספק הקבוע של הבניין (מעליות, ניקיון וכד׳) מקבל את התקלה ישירות — ללא ניקוב.',
+    'ספק אחר שחברת הניהול מאתרת ומתאמת = ניקוב אחד. החשבון של הספק ועלות החלקים בנפרד.',
     'ניקובים יורדים מהכרטיסייה הישנה קודם. יתרה בכרטיסייה שפג תוקפה — פגה.',
-    'כשהיתרה אפס אי אפשר להעביר תקלה לטיפול עד רכישת כרטיסייה. עבודה שכבר התחילה תושלם, והחוב יקוזז מהכרטיסייה הבאה.',
+    'כשהיתרה אפס אי אפשר להזמין את איש האחזקה עד רכישת כרטיסייה. העברה לספק אף פעם לא נחסמת. עבודה שכבר התחילה תושלם, והחוב יקוזז מהכרטיסייה הבאה.',
   ]
 }
 

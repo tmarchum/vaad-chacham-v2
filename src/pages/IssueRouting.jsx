@@ -21,6 +21,7 @@ const EMPTY_FORM = {
   vendor_name: '',
   notify_email: '',
   auto_acknowledge: false,
+  send_to_vendor: false,
   active: true,
 }
 
@@ -123,6 +124,7 @@ function IssueRouting() {
       vendor_name: r.vendor_name || '',
       notify_email: r.notify_email || '',
       auto_acknowledge: !!r.auto_acknowledge,
+      send_to_vendor: !!r.send_to_vendor,
       active: r.active !== false,
     })
     setEditingId(r.id); setError(''); setFormOpen(true)
@@ -145,6 +147,7 @@ function IssueRouting() {
       vendor_name: form.vendor_name.trim() || null,
       notify_email: form.notify_email.trim() || null,
       auto_acknowledge: !!form.auto_acknowledge,
+      send_to_vendor: !!form.send_to_vendor && !!form.vendor_name,
       active: !!form.active,
     }
     const res = editingId ? await update(editingId, payload) : await create(payload)
@@ -335,6 +338,16 @@ function IssueRouting() {
                 className="h-4 w-4 rounded border-[var(--outline-variant)] accent-[var(--primary)]"
               />
               אישור אוטומטי — הפנייה תעבור ישירות לסטטוס «התקבלה»
+            </label>
+            <label className={`flex items-center gap-2 text-sm cursor-pointer ${form.vendor_name ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)] opacity-60'}`}>
+              <input
+                type="checkbox"
+                disabled={!form.vendor_name}
+                checked={!!form.send_to_vendor && !!form.vendor_name}
+                onChange={(e) => setForm((f) => ({ ...f, send_to_vendor: e.target.checked }))}
+                className="h-4 w-4 rounded border-[var(--outline-variant)] accent-[var(--primary)]"
+              />
+              ספק קבוע — כשהוועד מאשר, התקלה נשלחת אליו אוטומטית בוואטסאפ (ללא ניקוב)
             </label>
             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
               <input

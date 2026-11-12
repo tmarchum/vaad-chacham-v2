@@ -553,7 +553,8 @@ function Issues() {
   const [finishBusy, setFinishBusy] = useState(false)
   const [visitIds, setVisitIds] = useState([])
   const [transferIssue, setTransferIssue] = useState(null)
-  const [transferUrgent, setTransferUrgent] = useState(false)
+  const [transferMode, setTransferMode] = useState('next_visit')
+  const [transferRule, setTransferRule] = useState(null)
   const [transferBalance, setTransferBalance] = useState(null)
   const [transferBusy, setTransferBusy] = useState(false)
   const [vendorAssignIssue, setVendorAssignIssue] = useState(null)
@@ -1349,35 +1350,76 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     toast('התקלה בטיפול הוועד')
   }, [update])
 
-  // Transfer asks one question (urgent, or the next visit) and shows the
-  // balance and the rules, so the committee always knows what it is spending.
+  // Transfer asks one question (who handles it) and shows the balance and the
+  // rules, so the committee always knows what it is spending. The category's
+  // routing rule says whether the building has a regular contractor for it.
   const handleTransfer = useCallback((iss) => {
     setTransferIssue(iss)
-    setTransferUrgent(iss.priority === 'urgent')
+    setTransferMode(iss.priority === 'urgent' ? 'urgent' : 'next_visit')
     setTransferBalance(null)
+    setTransferRule(null)
     loadPunchBalance(iss.buildingId).then(setTransferBalance).catch(() => {})
+    if (iss.category) {
+      supabase.from('issue_routing_rules').select('vendor_name, send_to_vendor')
+        .eq('building_id', iss.buildingId).eq('category', iss.category).eq('active', true).maybeSingle()
+        .then(({ data }) => {
+          setTransferRule(data || null)
+          if (data?.send_to_vendor && data.vendor_name) setTransferMode('contractor')
+        })
+    }
   }, [])
 
-  const transferBlocked = !isAdmin && transferBalance != null && transferBalance.balance < 1
+  const contractorName = transferRule?.send_to_vendor ? transferRule.vendor_name : null
+  const noPunches = !isAdmin && transferBalance != null && transferBalance.balance < 1
+  const transferBlocked = noPunches && (transferMode === 'next_visit' || transferMode === 'urgent')
+
+  // The message the contractor receives: what, where, how urgent. No resident
+  // names: the apartment number is enough to find the place.
+  const contractorMessage = (iss) => {
+    const b = buildingMap[iss.buildingId]
+    const unit = unitMap[iss.unitId]
+    return [
+      `שלום, תקלה חדשה מ־${b?.name || 'הבניין'}${b?.address ? ` (${b.address})` : ''}:`,
+      `*${iss.title}*`,
+      iss.description || '',
+      unit ? `דירה ${unit.unit_number || unit.number}` : (iss.location ? `מיקום: ${iss.location}` : ''),
+      iss.priority === 'urgent' ? 'דחוף.' : '',
+      'נא לאשר קבלה ולעדכן מועד הגעה. תודה, ועד1',
+    ].filter(Boolean).join('\n')
+  }
 
   const handleConfirmTransfer = async () => {
     if (!transferIssue || transferBusy || transferBlocked) return
     setTransferBusy(true)
     try {
-      const { error } = await supabase.rpc('transfer_issue', { p_issue: transferIssue.id, p_urgent: transferUrgent })
+      const iss = transferIssue
+      const vendor = transferMode === 'contractor' ? contractorName : null
+      const { error } = await supabase.rpc('transfer_issue', { p_issue: iss.id, p_mode: transferMode, p_vendor: vendor })
       if (error) {
         toastError(String(error.message).includes('no_punches')
-          ? 'אין ניקובים ביתרה — יש לרכוש כרטיסייה לפני העברה לטיפול'
+          ? 'אין ניקובים ביתרה — אפשר להעביר לספק, או לרכוש כרטיסייה'
           : 'ההעברה נכשלה')
         return
       }
       // Mirror what the server wrote, so the list updates without a reload.
-      await update(transferIssue.id, {
+      await update(iss.id, {
         handler: 'management', status: 'acknowledged', handled_at: new Date().toISOString(),
-        stage: transferUrgent ? 'awaiting_assignment' : 'queued_for_visit',
+        handler_kind: transferMode === 'contractor' ? 'contractor' : transferMode === 'vendor' ? 'vendor' : 'handyman',
+        stage: { next_visit: 'queued_for_visit', urgent: 'awaiting_assignment', contractor: 'sent_to_vendor', vendor: 'awaiting_assignment' }[transferMode],
+        ...(vendor ? { vendor_name: vendor } : {}),
       })
-      notifyIssueStatus(transferIssue.id, 'acknowledged')
-      toast(transferUrgent ? 'הועבר לטיפול דחוף' : 'הועבר — יטופל בביקור הבא')
+      notifyIssueStatus(iss.id, 'acknowledged')
+      if (transferMode === 'contractor') {
+        const { data: v } = await supabase.from('vendors').select('phone').eq('name', vendor).limit(1).maybeSingle()
+        if (v?.phone) {
+          const sent = await sendOrOpen(v.phone, contractorMessage(iss), { audience: 'vendor', buildingId: iss.buildingId })
+          toast(sent ? `נשלח ל${vendor}` : `הועבר ל${vendor} — נפתח וואטסאפ לשליחה`)
+        } else {
+          toastError(`הועבר ל${vendor}, אבל אין לו מספר טלפון — יש להתקשר ידנית`)
+        }
+      } else {
+        toast({ next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: 'הועבר — חברת הניהול תתאם ספק' }[transferMode])
+      }
       setTransferIssue(null)
     } finally { setTransferBusy(false) }
   }
@@ -1437,7 +1479,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       const parts = finishForm.partsCost !== '' ? Number(finishForm.partsCost) : null
       const others = visitCandidates.filter((o) => visitIds.includes(o.id))
       const visitId = crypto.randomUUID()
-      const isVendor = finishForm.kind === 'vendor'
+      const isVendor = finishForm.kind === 'vendor' || finishForm.kind === 'contractor'
       const hours = isVendor ? null : Number(finishForm.hours) || 0
       const offHours = isVendor ? false : !!finishForm.offHours
       if (finishPunches > 0) {
@@ -2536,34 +2578,31 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       <Dialog open={!!transferIssue} onOpenChange={(o) => { if (!o) setTransferIssue(null) }}>
         <DialogContent className="w-full max-w-md">
           <DialogHeader>
-            <DialogTitle>העברה לטיפול איש אחזקה</DialogTitle>
+            <DialogTitle>למי להעביר את התקלה?</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm font-semibold">{transferIssue?.title}</p>
-            <div className={`rounded-lg p-3 text-sm ${transferBlocked ? 'bg-[var(--danger-light)]' : 'bg-[var(--surface-secondary)]'}`}>
-              {transferBalance == null ? 'טוען יתרה…' : (
-                <>
-                  <p className="font-bold">יתרת ניקובים: {transferBalance.balance}</p>
-                  {transferBlocked && (
-                    <p className="mt-1">הכרטיסייה נגמרה. כדי להעביר תקלות לטיפול צריך לרכוש כרטיסייה חדשה מחברת הניהול. בינתיים אפשר לטפל בעצמכם או לסגור את התקלה עם הסבר לדייר.</p>
-                  )}
-                </>
-              )}
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              יתרת ניקובים: <strong className={noPunches ? 'text-[var(--danger)]' : 'text-[var(--text-primary)]'}>{transferBalance == null ? '…' : transferBalance.balance}</strong>
+            </p>
+            <div className="space-y-2" role="radiogroup">
+              {[
+                contractorName && { key: 'contractor', title: `שלח ל${contractorName}`, sub: 'הספק הקבוע של הבניין לקטגוריה הזו. יקבל את התקלה בוואטסאפ עכשיו. ללא ניקוב.' },
+                { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `יטופל יחד עם שאר התקלות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים. משלמים על ביקור אחד.`, needsPunch: true },
+                { key: 'urgent', title: 'איש אחזקה — דחוף', sub: 'ביקור נפרד בהקדם, לפחות ניקוב אחד.', needsPunch: true },
+                { key: 'vendor', title: 'ספק אחר', sub: 'חברת הניהול תאתר ספק מתאים ותתאם מולו. ניקוב תיאום אחד; החשבון של הספק בנפרד.' },
+              ].filter(Boolean).map((o) => {
+                const off = o.needsPunch && noPunches
+                return (
+                  <label key={o.key} className={`flex items-start gap-2 rounded-lg border p-3 ${off ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${transferMode === o.key ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
+                    <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]" disabled={off}
+                      checked={transferMode === o.key} onChange={() => setTransferMode(o.key)} />
+                    <span><span className="font-semibold text-sm">{o.title}</span>
+                      <span className="block text-[12px] text-[var(--text-secondary)]">{off ? 'הכרטיסייה נגמרה — לרכישת כרטיסייה חדשה פנו לחברת הניהול.' : o.sub}</span></span>
+                  </label>
+                )
+              })}
             </div>
-            {!transferBlocked && (
-              <div className="space-y-2">
-                <label className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer ${!transferUrgent ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
-                  <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]" checked={!transferUrgent} onChange={() => setTransferUrgent(false)} />
-                  <span><span className="font-semibold text-sm">לביקור הבא</span>
-                    <span className="block text-[12px] text-[var(--text-secondary)]">יטופל יחד עם שאר התקלות הממתינות, עד {Number(serviceCfg.settings?.batch_max_days) || 7} ימים. משלמים על ביקור אחד.</span></span>
-                </label>
-                <label className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer ${transferUrgent ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
-                  <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]" checked={transferUrgent} onChange={() => setTransferUrgent(true)} />
-                  <span><span className="font-semibold text-sm">דחוף — ביקור מיוחד</span>
-                    <span className="block text-[12px] text-[var(--text-secondary)]">איש האחזקה יגיע בהקדם. ביקור נפרד, לפחות ניקוב אחד.</span></span>
-                </label>
-              </div>
-            )}
             <details className="text-[12px] text-[var(--text-secondary)]">
               <summary className="cursor-pointer font-semibold">איך מחושבים ניקובים</summary>
               <ul className="mt-2 list-disc pr-4 space-y-1">
@@ -2571,7 +2610,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               </ul>
             </details>
             <div className="flex gap-3">
-              <Button onClick={handleConfirmTransfer} disabled={transferBusy || transferBlocked || transferBalance == null}>
+              <Button onClick={handleConfirmTransfer} disabled={transferBusy || transferBlocked || (transferBalance == null && (transferMode === 'next_visit' || transferMode === 'urgent'))}>
                 <ArrowRight className="h-4 w-4" />{transferBusy ? 'מעביר…' : 'העבר לטיפול'}
               </Button>
               <Button variant="outline" onClick={() => setTransferIssue(null)}>ביטול</Button>
@@ -2605,7 +2644,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               label="מי ביצע"
               value={finishForm.kind}
               onChange={(e) => setFinishForm((f) => ({ ...f, kind: e.target.value }))}
-              options={[{ value: 'handyman', label: 'איש אחזקה' }, { value: 'vendor', label: 'ספק מוסמך (תיאום בלבד)' }]}
+              options={[{ value: 'handyman', label: 'איש אחזקה' }, { value: 'vendor', label: 'ספק בתיאום חברת הניהול (ניקוב אחד)' }, { value: 'contractor', label: 'הספק הקבוע של הבניין (ללא ניקוב)' }]}
             />
             {finishForm.kind === 'handyman' && (
               <>

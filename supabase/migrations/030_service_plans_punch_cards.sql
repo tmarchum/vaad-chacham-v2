@@ -157,9 +157,9 @@ from public.buildings b cross join lateral public.punch_balance_of(b.id) x;
 -- is in, and what is happening right now.
 alter table public.issues
   add column if not exists handler text check (handler in ('committee', 'management')),
-  add column if not exists handler_kind text check (handler_kind in ('handyman', 'vendor')),
+  add column if not exists handler_kind text check (handler_kind in ('handyman', 'vendor', 'contractor')),
   add column if not exists stage text check (stage in
-    ('queued_for_visit', 'awaiting_assignment', 'awaiting_quote_approval', 'scheduled', 'done_awaiting_confirmation')),
+    ('queued_for_visit', 'sent_to_vendor', 'awaiting_assignment', 'awaiting_quote_approval', 'scheduled', 'done_awaiting_confirmation')),
   add column if not exists close_reason text,
   add column if not exists work_hours numeric check (work_hours >= 0),
   add column if not exists off_hours boolean not null default false,
@@ -229,29 +229,45 @@ end $fn$;
 grant execute on function public.reopen_issue(uuid) to authenticated;
 
 
--- Hand an issue to the management side. The committee can do this only while
--- the building has at least one punch; management itself is never blocked.
--- Not urgent = waits for the next visit and shares its cost.
-create or replace function public.transfer_issue(p_issue uuid, p_urgent boolean)
+-- A building's regular contractor per category (elevator company, cleaning
+-- company): when the committee approves, the issue goes straight to them.
+alter table public.issue_routing_rules
+  add column if not exists send_to_vendor boolean not null default false;
+
+-- Hand an issue on. Four ways, one question for the committee:
+--   next_visit / urgent  the handyman, paid in punches; blocked at zero
+--   contractor           the building's regular contractor; no punch
+--   vendor               another contractor, found and coordinated by the
+--                        management side; one coordination punch, never
+--                        blocked (at zero it becomes a debt)
+drop function if exists public.transfer_issue(uuid, boolean);
+create or replace function public.transfer_issue(p_issue uuid, p_mode text, p_vendor text default null)
 returns void language plpgsql security definer set search_path to 'public' as $fn$
 declare
   v_building uuid;
   v_balance integer;
 begin
+  if p_mode not in ('next_visit', 'urgent', 'contractor', 'vendor') then raise exception 'bad_mode'; end if;
+  if p_mode = 'contractor' and coalesce(p_vendor, '') = '' then raise exception 'no_vendor'; end if;
   select building_id into v_building from public.issues where id = p_issue;
   if v_building is null then raise exception 'not_found'; end if;
   if not (public.is_admin() or v_building in (select public.my_building_ids())) then
     raise exception 'forbidden';
   end if;
-  if not public.is_admin() then
+  if p_mode in ('next_visit', 'urgent') and not public.is_admin() then
     select balance into v_balance from public.punch_balance_of(v_building);
     if coalesce(v_balance, 0) < 1 then raise exception 'no_punches'; end if;
   end if;
   update public.issues
      set handler = 'management',
-         stage = case when p_urgent then 'awaiting_assignment' else 'queued_for_visit' end,
+         handler_kind = case p_mode when 'contractor' then 'contractor'
+                                    when 'vendor' then 'vendor' else 'handyman' end,
+         stage = case p_mode when 'next_visit' then 'queued_for_visit'
+                             when 'contractor' then 'sent_to_vendor'
+                             else 'awaiting_assignment' end,
+         vendor_name = case when p_mode = 'contractor' then p_vendor else vendor_name end,
          status = 'acknowledged',
          handled_at = now()
    where id = p_issue;
 end $fn$;
-grant execute on function public.transfer_issue(uuid, boolean) to authenticated;
+grant execute on function public.transfer_issue(uuid, text, text) to authenticated;
