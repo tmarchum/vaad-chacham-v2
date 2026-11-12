@@ -16,8 +16,13 @@ import { BrandLogo } from '@/components/common/BrandLogo'
 import { THEMES, getTheme, setTheme } from '@/lib/theme'
 import { enterResidentPreview } from '@/lib/residentPreview'
 
-// Daily flow is flat and always visible (the Civic Blue rail); records and
-// the long tail live in two quiet groups underneath, the second collapsed.
+// Daily flow is flat and always visible. Everything else lives in four named
+// groups, all collapsed until opened, so the rail shows six things by default
+// instead of thirty.
+//
+// `staff: true` marks the management side's tools — vendors, routing, plans,
+// agents. A committee member does not see them: the committee runs its money
+// and its residents; vendors and dispatch are the management side's work.
 const PRIMARY_NAV = [
   { to: '/',              label: 'דשבורד',     icon: LayoutDashboard },
   { to: '/issues',        label: 'תקלות',       icon: Wrench,     badge: 'issues' },
@@ -29,44 +34,68 @@ const PRIMARY_NAV = [
 
 const NAV_GROUPS = [
   {
-    id: 'management',
-    label: 'ניהול',
+    id: 'money',
+    label: 'כספים',
+    collapsedByDefault: true,
     items: [
-      { to: '/units',             label: 'דירות',        icon: Home },
-      { to: '/residents',         label: 'דיירים',       icon: Users },
-      { to: '/vendors',           label: 'ספקים',        icon: Store },
-      { to: '/messaging',         label: 'וואטסאפ והודעות', icon: MessageCircle },
-      { to: '/expenses',          label: 'הוצאות',       icon: Wallet },
-      { to: '/bank-transactions', label: 'תנועות בנק',  icon: ArrowLeftRight },
-      { to: '/documents',         label: 'מסמכים',       icon: FolderOpen },
-      { to: '/reports',           label: 'דוחות',        icon: BarChart2 },
-      { to: '/buildings',         label: 'בניינים',      icon: Building2 },
+      { to: '/expenses',          label: 'הוצאות',          icon: Wallet },
+      { to: '/bank-transactions', label: 'תנועות בנק',     icon: ArrowLeftRight },
+      { to: '/income',            label: 'הכנסות',          icon: ArrowDownLeft },
+      { to: '/collection-cases',  label: 'מעקב גבייה',      icon: UserCheck },
+      { to: '/balance',           label: 'מאזן',            icon: Scale },
+      { to: '/expense-analysis',  label: 'ניתוח הוצאות',    icon: Brain },
+      { to: '/reports',           label: 'דוחות',           icon: BarChart2 },
     ],
   },
   {
-    id: 'advanced',
-    label: 'מתקדם',
+    id: 'building',
+    label: 'הבניין',
     collapsedByDefault: true,
     items: [
-      { to: '/collection-cases', label: 'מעקב גבייה',      icon: UserCheck },
-      { to: '/income',           label: 'הכנסות',           icon: ArrowDownLeft },
-      { to: '/balance',          label: 'מאזן',             icon: Scale },
-      { to: '/expense-analysis', label: 'ניתוח הוצאות AI',  icon: Brain },
-      { to: '/bank-settings',    label: 'חשבונות בנק',     icon: Landmark },
-      { to: '/vendor-rules',     label: 'כללי ספקים',       icon: Tags },
-      { to: '/issue-routing',    label: 'ניתוב פניות',     icon: GitBranch },
-      { to: '/service-plans',    label: 'מסלולים ותמחור',  icon: BadgeDollarSign },
-      { to: '/work-orders',      label: 'הזמנות עבודה',    icon: ClipboardList },
-      { to: '/vendor-finder',    label: 'מציאת ספקים',     icon: Search },
-      { to: '/supervisors',      label: 'מפקחים',           icon: ShieldCheck },
-      { to: '/recurring-tasks',  label: 'משימות חוזרות',   icon: CalendarClock },
-      { to: '/building-assets',  label: 'ציוד ומערכות',    icon: Cog },
+      { to: '/units',            label: 'דירות',           icon: Home },
+      { to: '/residents',        label: 'דיירים',          icon: Users },
+      { to: '/documents',        label: 'מסמכים',          icon: FolderOpen },
       { to: '/compliance',       label: 'רגולציה',          icon: ShieldCheck },
-      { to: '/smart-agents',     label: 'סוכנים חכמים',    icon: Zap },
-      { to: '/building-agent',   label: 'סוכן בריאות',     icon: Bot },
+      { to: '/building-assets',  label: 'ציוד ומערכות',    icon: Cog },
+      { to: '/recurring-tasks',  label: 'משימות חוזרות',   icon: CalendarClock },
+    ],
+  },
+  {
+    id: 'operations',
+    label: 'ספקים ותפעול',
+    collapsedByDefault: true,
+    staff: true,
+    items: [
+      { to: '/vendors',        label: 'ספקים',         icon: Store },
+      { to: '/vendor-finder',  label: 'מציאת ספקים',   icon: Search },
+      { to: '/vendor-rules',   label: 'כללי ספקים',    icon: Tags },
+      { to: '/issue-routing',  label: 'ניתוב פניות',   icon: GitBranch },
+      { to: '/work-orders',    label: 'הזמנות עבודה',  icon: ClipboardList },
+      { to: '/supervisors',    label: 'מפקחים',        icon: ShieldCheck },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'הגדרות',
+    collapsedByDefault: true,
+    items: [
+      { to: '/buildings',      label: 'בניינים',          icon: Building2 },
+      { to: '/bank-settings',  label: 'חשבונות בנק',      icon: Landmark },
+      { to: '/messaging',      label: 'וואטסאפ והודעות',  icon: MessageCircle },
+      { to: '/service-plans',  label: 'מסלולים ותמחור',   icon: BadgeDollarSign, staff: true },
+      { to: '/smart-agents',   label: 'סוכנים חכמים',     icon: Zap,             staff: true },
+      { to: '/building-agent', label: 'סוכן בריאות',      icon: Bot,             staff: true },
     ],
   },
 ]
+
+/** The groups a viewer sees: management-side items drop out for the committee. */
+function visibleGroups(isAdmin) {
+  return NAV_GROUPS
+    .filter((g) => isAdmin || !g.staff)
+    .map((g) => ({ ...g, items: g.items.filter((i) => isAdmin || !i.staff) }))
+    .filter((g) => g.items.length > 0)
+}
 
 function NavLink({ item, active, badge, onClick }) {
   const Icon = item.icon
@@ -198,7 +227,7 @@ function Sidebar({ open, onClose, pulse = {} }) {
               <NavLink key={item.to} item={item} active={isActive(item.to)} badge={item.badge ? badgeFor(item.badge) : undefined} onClick={onClose} />
             ))}
 
-            {NAV_GROUPS.map((group) => {
+            {visibleGroups(isAdmin).map((group) => {
               const groupActive = group.items.some((i) => isActive(i.to))
               const isCollapsed = collapsed[group.id] && !groupActive
               return (
