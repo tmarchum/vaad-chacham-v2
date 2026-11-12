@@ -961,6 +961,17 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                   </div>
                   <span className={`text-xs font-medium px-2 py-1 rounded-full shrink-0 ${st.bg} ${st.color}`}>{st.label}</span>
                 </div>
+                {/* What the resident is told about the handling, in one line:
+                    who has it, when someone is coming, or why it was closed. */}
+                {stillOpen && (i.handler || i.scheduled_date) && (
+                  <p className="mt-1 text-[12px] text-slate-500">
+                    {i.handler === 'management' ? 'בטיפול חברת הניהול' : i.handler === 'committee' ? 'בטיפול הוועד' : 'בטיפול'}
+                    {i.scheduled_date ? ` · ביקור מתוכנן ${formatDate(i.scheduled_date)}` : ''}
+                  </p>
+                )}
+                {['rejected', 'declined'].includes(i.status) && i.close_reason && (
+                  <p className="mt-1 text-[12px] text-slate-500">סיבת הסגירה: {i.close_reason}</p>
+                )}
                 {/* Late photo attach — only while the fault is still open and has no photo */}
                 {stillOpen && !i.photo_url && (
                   <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 cursor-pointer">

@@ -22,6 +22,7 @@ import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { notifyIssueStatus, notifyIssueOpened, describeIssueNotified } from '@/lib/notify'
 import { useAuth } from '@/hooks/useAuth'
+import { canSee } from '@/lib/access'
 import {
   loadServiceConfig, loadPunchBalance, punchesFor, isOffHours,
   HANDLER_LABELS, HANDLER_KIND_LABELS, STAGE_LABELS,
@@ -115,6 +116,9 @@ const isDone = (s) => DONE_BUCKETS.has(bucketOf(s))
 //   manage  handed over, and the viewer IS the management side: vendor tools
 //           plus finish-and-punch.
 //   watch   handed over, and the viewer is the committee: status only.
+//           On the managed plan a new fault starts here for the committee
+//           and at `manage` for the management side — nobody has to hand it
+//           over.
 //   legacy  everything else, including the committee handling it itself —
 //           the pre-existing buttons.
 // Until migration 030 is applied svc.ready is false and every issue is legacy,
@@ -122,7 +126,11 @@ const isDone = (s) => DONE_BUCKETS.has(bucketOf(s))
 function flowFor(iss, svc) {
   if (!svc?.ready) return 'legacy'
   const s = iss.status
-  if (!iss.handler && ['reported', 'pending_committee', 'acknowledged'].includes(s)) return 'triage'
+  const managed = svc.planOf?.(iss.buildingId) === 'managed'
+  if (!iss.handler && ['reported', 'pending_committee', 'acknowledged'].includes(s)) {
+    if (managed) return svc.isAdmin ? 'manage' : 'watch'
+    return 'triage'
+  }
   if (iss.handler === 'management' && !isDone(s) && s !== 'completed') return svc.isAdmin ? 'manage' : 'watch'
   return 'legacy'
 }
@@ -536,7 +544,7 @@ function Issues() {
   const { isAdmin, profile } = useAuth()
   const [serviceCfg, setServiceCfg] = useState({ ready: false, plans: [], settings: null })
   useEffect(() => { loadServiceConfig().then(setServiceCfg).catch(() => {}) }, [])
-  const svc = useMemo(() => ({ ready: serviceCfg.ready, isAdmin, settings: serviceCfg.settings }), [serviceCfg, isAdmin])
+  const svcBase = useMemo(() => ({ ready: serviceCfg.ready, isAdmin, settings: serviceCfg.settings }), [serviceCfg, isAdmin])
   const [closeNoFixIssue, setCloseNoFixIssue] = useState(null)
   const [closeReason, setCloseReason] = useState('')
   const [finishIssue, setFinishIssue] = useState(null)
@@ -573,6 +581,10 @@ function Issues() {
     buildings.forEach((b) => { map[b.id] = b })
     return map
   }, [buildings])
+
+  // The building's plan decides who owns a new fault: on the managed plan it is
+  // the management side's from the start, without the committee choosing.
+  const svc = useMemo(() => ({ ...svcBase, planOf: (bid) => buildingMap[bid]?.service_plan }), [svcBase, buildingMap])
 
   const unitMap = useMemo(() => {
     const map = {}
@@ -1389,7 +1401,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       }
       await update(finishIssue.id, {
         status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
-        handler_kind: finishForm.kind,
+        handler: finishIssue.handler || 'management', handler_kind: finishForm.kind,
         work_hours: finishForm.kind === 'vendor' ? null : Number(finishForm.hours) || 0,
         off_hours: finishForm.kind === 'vendor' ? false : !!finishForm.offHours,
         punches_charged: (Number(finishIssue.punches_charged) || 0) + finishPunches,
@@ -1772,14 +1784,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   <ArrowRight className="h-3.5 w-3.5" />
                   תהליך מלא
                 </Button>
-                <Button
+                {canSee('ai_analysis', { isAdmin, building: buildingMap[iss.buildingId] }) && <Button
                   size="sm"
                   onClick={() => openAiAnalysis(iss)}
                   className="gap-1.5 bg-[var(--primary)] text-white hover:opacity-90"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   ניתוח AI
-                </Button>
+                </Button>}
                 {flowFor(iss, svc) === 'triage' && (
                   <>
                     <Button variant="outline" size="sm" onClick={() => { handleSelfHandle(iss); setDetailIssue(null) }}>

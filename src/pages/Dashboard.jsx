@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { TabGroup } from '@/components/ui/tabs'
 import { formatCurrency, calcUnitFee } from '@/lib/utils'
 import { isOpenIssueStatus, issueStatusLabel } from '@/lib/issueStatus'
+import { HealthCard } from '@/components/common/HealthCard'
+import { canSee, committeeHandlesIssues, PLAN_LABELS } from '@/lib/access'
 import { waLink, telHref } from '@/lib/phone'
 import { HEBREW_MONTHS } from '@/lib/constants'
 import {
@@ -50,7 +52,7 @@ function downloadCsv(filename, rows) {
 
 function Dashboard() {
   const { selectedBuilding, buildings, isLoading: buildingsLoading } = useBuildingContext()
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const bid = selectedBuilding?.id
 
   const now = new Date()
@@ -81,6 +83,18 @@ function Dashboard() {
       .not('insurance_expiry', 'is', null).lte('insurance_expiry', in30)
       .then(({ data }) => setExpiringVendors(data || []))
   }, [])
+
+  // Health inputs that the collections above do not carry.
+  const [lastBankDate, setLastBankDate] = useState(undefined)
+  const [openPolls, setOpenPolls] = useState(0)
+  useEffect(() => {
+    if (!bid) return
+    supabase.from('bank_transactions').select('date').eq('building_id', bid)
+      .order('date', { ascending: false }).limit(1)
+      .then(({ data, error }) => setLastBankDate(error ? undefined : (data?.[0]?.date || null)))
+    supabase.from('polls').select('id', { count: 'exact', head: true }).eq('building_id', bid).eq('status', 'open')
+      .then(({ count, error }) => setOpenPolls(error ? 0 : count || 0))
+  }, [bid])
 
   const [tableTab, setTableTab] = useState('debtors')
 
@@ -155,6 +169,37 @@ function Dashboard() {
   const agentAlerts = agentAlertsRaw.filter((a) => !a.is_dismissed && !a.is_read).slice(0, 4)
   const announcement = latestAnnouncements[0]
 
+  // ── Health: what needs attention, phrased for the person looking ──
+  // The committee on the managed plan does not dispatch faults, so a fault
+  // waiting on the management side is not "theirs" to act on; it shows only
+  // when it has waited long enough to be worth a word.
+  const ctx = { isAdmin, building: selectedBuilding }
+  const ownsFaults = isAdmin || committeeHandlesIssues(selectedBuilding)
+  const waitingDecision = openIssues.filter((i) => !i.handler && ['reported', 'pending_committee', 'acknowledged'].includes(i.status))
+  const staleIssues = openIssues.filter((i) => {
+    const t = new Date(i.reportedAt || i.created_at || 0).getTime()
+    return t && Date.now() - t > 7 * 864e5
+  })
+  // Counted from the full list, not the six the panel below shows.
+  const overdueTasks = useMemo(
+    () => upcomingMaintenance({ assets: buildingAssets, compliance, recurringTasks }, 0).filter((m) => m.overdue),
+    [buildingAssets, compliance, recurringTasks]
+  )
+  const expiredDocs = expiryAlerts.filter((a) => a.daysLeft < 0)
+  const bankStaleDays = lastBankDate ? Math.floor((Date.now() - new Date(lastBankDate)) / 864e5) : null
+  const healthChecks = [
+    urgentIssues.length > 0 && { key: 'urgent', severity: 'danger', to: '/issues', text: `${urgentIssues.length} תקלות דחופות פתוחות` },
+    ownsFaults && waitingDecision.length > 0 && { key: 'decide', severity: 'warning', to: '/issues', text: `${waitingDecision.length} תקלות ממתינות להחלטה על טיפול` },
+    staleIssues.length > 0 && { key: 'stale', severity: 'warning', to: '/issues', text: `${staleIssues.length} תקלות פתוחות יותר משבוע` },
+    !noChargesYet && daysIntoMonth >= 10 && collectionPct < 80 && { key: 'collection', severity: 'warning', to: '/payments', text: `גבייה ${collectionPct}% לחודש ${monthName}, חסרים ${formatCurrency(debtTotal)}` },
+    noChargesYet && daysIntoMonth >= 5 && { key: 'charges', severity: 'warning', to: '/payments', text: `לא הופקו חיובים לחודש ${monthName}` },
+    canSee('bank_settings', ctx) && bankStaleDays != null && bankStaleDays > 45 && { key: 'bank', severity: 'warning', to: '/bank-transactions', text: `דף הבנק לא עודכן ${bankStaleDays} ימים` },
+    canSee('compliance', ctx) && overdueTasks.length > 0 && { key: 'tasks', severity: 'danger', to: '/compliance', text: `${overdueTasks.length} בדיקות ותחזוקות שעבר מועדן` },
+    expiredDocs.length > 0 && { key: 'docs', severity: 'danger', to: expiredDocs[0].link, text: `${expiredDocs.length} אישורים או מסמכים שפג תוקפם` },
+    pendingBookings.length > 0 && { key: 'bookings', severity: 'warning', to: '/room-booking', text: `${pendingBookings.length} בקשות שריון ממתינות לאישור` },
+    openPolls > 0 && { key: 'polls', severity: 'warning', to: '/polls', text: `${openPolls} הצבעות פתוחות לדיירים` },
+  ]
+
   // ── Greeting ──
   const [hebrewDate, setHebrewDate] = useState('')
   useEffect(() => {
@@ -205,6 +250,11 @@ function Dashboard() {
               {monthName} {now.getFullYear()}
             </span>
             {hebrewDate && <span className="text-[11px] text-[var(--text-muted)]">{hebrewDate}</span>}
+            {selectedBuilding?.service_plan && (
+              <span className="px-2.5 py-0.5 rounded-full border border-[var(--outline-variant)] text-[var(--text-secondary)] text-[11px] font-semibold">
+                מסלול {PLAN_LABELS[selectedBuilding.service_plan]}
+              </span>
+            )}
           </div>
           <p className="text-[14px] leading-5 text-[var(--text-secondary)]">
             {noChargesYet
@@ -229,6 +279,9 @@ function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {/* 1b ── Health: what needs attention right now */}
+      <HealthCard checks={healthChecks} />
 
       {/* 2 ── KPI cards */}
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

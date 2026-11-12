@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { canSee, ROUTE_FEATURE } from '@/lib/access'
 import { TextSizeControl } from '@/components/common/TextSizeControl'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useBuildingContext } from '@/hooks/useStore'
@@ -89,11 +90,17 @@ const NAV_GROUPS = [
   },
 ]
 
-/** The groups a viewer sees: management-side items drop out for the committee. */
-function visibleGroups(isAdmin) {
+/**
+ * The groups a viewer sees. Management-side tools drop out for the committee,
+ * and so do pages the building's plan does not include (lib/access.js). The
+ * page itself is also guarded, so hiding here is about a clean rail, not
+ * security.
+ */
+function visibleGroups(isAdmin, building) {
+  const ok = (to) => canSee(ROUTE_FEATURE[to], { isAdmin, building })
   return NAV_GROUPS
     .filter((g) => isAdmin || !g.staff)
-    .map((g) => ({ ...g, items: g.items.filter((i) => isAdmin || !i.staff) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => (isAdmin || !i.staff) && ok(i.to)) }))
     .filter((g) => g.items.length > 0)
 }
 
@@ -227,7 +234,7 @@ function Sidebar({ open, onClose, pulse = {} }) {
               <NavLink key={item.to} item={item} active={isActive(item.to)} badge={item.badge ? badgeFor(item.badge) : undefined} onClick={onClose} />
             ))}
 
-            {visibleGroups(isAdmin).map((group) => {
+            {visibleGroups(isAdmin, selectedBuilding).map((group) => {
               const groupActive = group.items.some((i) => isActive(i.to))
               const isCollapsed = collapsed[group.id] && !groupActive
               return (
