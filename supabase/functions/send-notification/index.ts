@@ -408,9 +408,20 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
   // any standing routing address, so it is built once, outside the branch.
   const contact = [memberName, memberPhone].filter(Boolean).join(' ') || buildingName || 'ועד הבית'
 
-  // 3. Whoever is meant to fix it.
+  // 3. Whoever is meant to fix it — but only once the committee has handed the
+  //    issue on. With service plans in place a new issue waits for that
+  //    decision (handler is null), and a contractor must not hear about a job
+  //    nobody has approved. Before the plans migration the column does not
+  //    exist and the old behaviour (tell the routed vendor at once) stays.
+  let awaitingDecision = false
+  {
+    const { data: h, error: hErr } = await svc.from('issues').select('handler').eq('id', issueId).maybeSingle()
+    if (!hErr && h && h.handler == null) awaitingDecision = true
+  }
   let vendor: Record<string, unknown> | null = null
-  if (issue.vendor_id) {
+  if (awaitingDecision) {
+    // no contractor yet
+  } else if (issue.vendor_id) {
     const { data } = await svc.from('vendors').select('id, name, phone, email, contact_channel').eq('id', issue.vendor_id).maybeSingle()
     vendor = data || null
   } else if (issue.vendor_name) {

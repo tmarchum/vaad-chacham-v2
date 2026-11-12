@@ -20,7 +20,7 @@ import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
-import { notifyIssueStatus, notifyIssueOpened, describeIssueNotified } from '@/lib/notify'
+import { notifyIssueStatus, notifyIssueOpened, notifyIssueDispatch, describeIssueNotified } from '@/lib/notify'
 import { useAuth } from '@/hooks/useAuth'
 import { canSee } from '@/lib/access'
 import {
@@ -1373,21 +1373,6 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   const noPunches = !isAdmin && transferBalance != null && transferBalance.balance < 1
   const transferBlocked = noPunches && (transferMode === 'next_visit' || transferMode === 'urgent')
 
-  // The message the contractor receives: what, where, how urgent. No resident
-  // names: the apartment number is enough to find the place.
-  const contractorMessage = (iss) => {
-    const b = buildingMap[iss.buildingId]
-    const unit = unitMap[iss.unitId]
-    return [
-      `שלום, תקלה חדשה מ־${b?.name || 'הבניין'}${b?.address ? ` (${b.address})` : ''}:`,
-      `*${iss.title}*`,
-      iss.description || '',
-      unit ? `דירה ${unit.unit_number || unit.number}` : (iss.location ? `מיקום: ${iss.location}` : ''),
-      iss.priority === 'urgent' ? 'דחוף.' : '',
-      'נא לאשר קבלה ולעדכן מועד הגעה. תודה, ועד1',
-    ].filter(Boolean).join('\n')
-  }
-
   const handleConfirmTransfer = async () => {
     if (!transferIssue || transferBusy || transferBlocked) return
     setTransferBusy(true)
@@ -1410,13 +1395,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       })
       notifyIssueStatus(iss.id, 'acknowledged')
       if (transferMode === 'contractor') {
-        const { data: v } = await supabase.from('vendors').select('phone').eq('name', vendor).limit(1).maybeSingle()
-        if (v?.phone) {
-          const sent = await sendOrOpen(v.phone, contractorMessage(iss), { audience: 'vendor', buildingId: iss.buildingId })
-          toast(sent ? `נשלח ל${vendor}` : `הועבר ל${vendor} — נפתח וואטסאפ לשליחה`)
-        } else {
-          toastError(`הועבר ל${vendor}, אבל אין לו מספר טלפון — יש להתקשר ידנית`)
-        }
+        // Server-built message, sent the way this contractor asked to be
+        // reached: email for some (the elevator company), WhatsApp for others.
+        const res = await notifyIssueDispatch(iss.id)
+        const line = describeIssueNotified(res)
+        if (res.reached.length) toast(`הועבר ל${vendor} · ${line}`)
+        else toastError(`הועבר ל${vendor}, אבל ההודעה לא יצאה — ${line || 'חסרים פרטי קשר לספק'}`)
       } else {
         toast({ next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: 'הועבר — חברת הניהול תתאם ספק' }[transferMode])
       }

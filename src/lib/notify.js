@@ -56,12 +56,16 @@ export async function notifyIssueStatus(issueId, kind = 'resolved') {
  * Returns { reached: [{ role, name, channel, phone }], unreachable: [...] } so
  * the caller can say in one line who was told — and who has to be phoned.
  */
-export async function notifyIssueOpened(issueId) {
+export async function notifyIssueOpened(issueId, { only } = {}) {
   const empty = { reached: [], unreachable: [] }
   if (!issueId) return empty
   try {
     const plan = await callSendNotification({ template: 'issue_opened', issueId, plan: true })
     if (!plan?.ok || !Array.isArray(plan.parties)) return empty
+    // `only` narrows the fan-out to some parties (e.g. just the contractor on
+    // a transfer); everyone else is skipped on both channels.
+    const others = only ? plan.parties.filter((p) => !only.includes(p.id)).map((p) => p.id) : []
+    if (only) plan.parties = plan.parties.filter((p) => only.includes(p.id))
 
     // WhatsApp pass. The official channel is the only one allowed to write to a
     // resident — GreenAPI stays vendor-only, as it always has.
@@ -87,7 +91,7 @@ export async function notifyIssueOpened(issueId) {
       }
     }
 
-    const out = await callSendNotification({ template: 'issue_opened', issueId, skip })
+    const out = await callSendNotification({ template: 'issue_opened', issueId, skip: [...skip, ...others] })
     for (const r of out?.results || []) {
       if (r.skipped) continue
       if (r.email) reached.push({ role: r.role, name: r.name, channel: 'email', phone: r.phone })
@@ -102,6 +106,14 @@ export async function notifyIssueOpened(issueId) {
     console.error('notifyIssueOpened error', e)
     return empty
   }
+}
+
+/**
+ * Send an issue to the contractor it was handed to, the way that contractor
+ * asked to be reached (email, WhatsApp, or a phone call the committee makes).
+ */
+export function notifyIssueDispatch(issueId) {
+  return notifyIssueOpened(issueId, { only: ['handler'] })
 }
 
 /** One Hebrew line summarising who was told and how — for the toast. */
