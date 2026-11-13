@@ -141,7 +141,7 @@ export function ResidentPortal({ profileOverride = null }) {
   const dayOfWeek = WEEKDAYS_HE[now.getDay()]
   const gregDate = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()}`
   const hour = now.getHours()
-  const greeting = hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : 'ערב טוב'
+  const greeting = hour < 5 ? 'לילה טוב' : hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : hour < 22 ? 'ערב טוב' : 'לילה טוב'
   const [hebrewDate, setHebrewDate] = useState('')
   useEffect(() => {
     let timer

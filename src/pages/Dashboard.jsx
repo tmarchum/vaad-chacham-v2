@@ -215,7 +215,7 @@ function Dashboard() {
     })
   }, [])
   const hour = now.getHours()
-  const greeting = hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : 'ערב טוב'
+  const greeting = hour < 5 ? 'לילה טוב' : hour < 12 ? 'בוקר טוב' : hour < 17 ? 'צהריים טובים' : hour < 22 ? 'ערב טוב' : 'לילה טוב'
   const firstName = profile?.first_name || ''
 
   if (!buildingsLoading && buildings.length === 0) {
