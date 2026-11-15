@@ -794,6 +794,23 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  // Categories where this building has a standing contractor, so an emergency
+  // can go straight out instead of waiting for the committee (migration 034).
+  const [emergencyCats, setEmergencyCats] = useState([])
+  const [emergency, setEmergency] = useState(false)
+  const [dispatched, setDispatched] = useState(null)
+
+  useEffect(() => {
+    if (!profile?.building_id) return
+    let alive = true
+    supabase.rpc('emergency_categories_of', { p_building: profile.building_id })
+      .then(({ data }) => { if (alive) setEmergencyCats((data || []).map(r => (typeof r === 'string' ? r : r?.category)).filter(Boolean)) })
+      .catch(() => {})    // no rule, old schema — the button simply never shows
+    return () => { alive = false }
+  }, [profile?.building_id])
+
+  const canEmergency = !!form.category && emergencyCats.includes(form.category)
+
   // Upload the fault photo to storage and return its public URL. NEVER throws —
   // a photo failure must not block creating the issue itself.
   const uploadPhoto = async () => {
@@ -816,25 +833,43 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
     if (!form.title.trim()) return
     setSaving(true); setError(null)
     const { url: photoUrl, failed: photoFailed } = await uploadPhoto()
+    const wantEmergency = emergency && canEmergency
     const { data: created, error } = await supabase.from('issues').insert({
       building_id: profile.building_id,
       unit_id: profile.unit_id,
       title: form.title.trim(),
       description: form.description.trim(),
       category: form.category,
-      priority: form.priority,
+      priority: wantEmergency ? 'high' : form.priority,
       reported_by: user?.id || null,
       status: 'reported',
       photo_url: photoUrl,
     }).select('id').single()
+    if (error) { setSaving(false); console.error('issue insert error', error); setError('שגיאה בשליחת התקלה. נסה שוב.'); return }
+
+    // Emergency: hand it to the category's standing contractor BEFORE
+    // notifying, so the one notification pass reaches the contractor too
+    // rather than stopping at the committee.
+    let sentTo = null
+    if (wantEmergency && created?.id) {
+      const { data: vendorName, error: emErr } = await supabase.rpc('report_emergency', { p_issue: created.id })
+      if (emErr) {
+        console.error('emergency dispatch error', emErr)
+        setError('הדיווח נשמר וסומן דחוף, אך השליחה הישירה לספק נכשלה. הוועד קיבל התראה — אם מדובר בסכנה מיידית, חייגו 101/100.')
+      } else {
+        sentTo = vendorName || 'הספק הקבוע'
+      }
+    }
     setSaving(false)
-    if (error) { console.error('issue insert error', error); setError('שגיאה בשליחת התקלה. נסה שוב.'); return }
+
     // Confirm to the resident and alert the responsible board member and the
     // handler. Fire-and-forget: the report is already saved either way.
     if (created?.id) notifyIssueOpened(created.id).catch(() => {})
     if (photoFailed) setError('התקלה נפתחה, אך העלאת התמונה נכשלה — אפשר להוסיף תמונה מאוחר יותר.')
+    setDispatched(sentTo)
     setForm({ title: '', description: '', category: '', priority: 'medium' })
     setPhoto(null)
+    setEmergency(false)
     onCreated()
   }
 
@@ -913,7 +948,8 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
           </label>
           <div className="grid grid-cols-2 gap-2">
             <select
-              value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+              value={form.category}
+              onChange={e => { setForm({ ...form, category: e.target.value }); setEmergency(false) }}
               className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="">קטגוריה</option>
@@ -928,15 +964,53 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
               <option value="high">דחוף</option>
             </select>
           </div>
+          {/* Emergency — only where the building has a standing contractor for
+              this category. A fault report waits for the committee; a person
+              shut in a lift cannot. */}
+          {canEmergency && (
+            <label className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors ${
+              emergency ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200 hover:border-red-200'
+            }`}>
+              <input
+                type="checkbox" checked={emergency}
+                onChange={e => setEmergency(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-red-600 shrink-0"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-red-700">סכנה מיידית — מישהו לכוד או בסכנה</span>
+                <span className="block text-xs text-slate-500 mt-0.5">
+                  סמנו רק במקרה חירום אמיתי. התקלה תישלח מיד לספק הקבוע של הבניין, בלי להמתין לאישור הוועד, והוועד יקבל התראה במקביל.
+                </span>
+                <span className="block text-xs font-semibold text-slate-600 mt-1">
+                  בסכנת חיים חייגו קודם 101 (מד״א) או 102 (כבאות).
+                </span>
+              </span>
+            </label>
+          )}
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
             type="submit" disabled={saving || !form.title.trim()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors"
+            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-semibold disabled:opacity-40 transition-colors ${
+              emergency && canEmergency ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            שליחת תקלה
+            {emergency && canEmergency ? 'שליחה דחופה לספק' : 'שליחת תקלה'}
           </button>
         </form>
+      )}
+
+      {dispatched && (
+        <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-red-700">הקריאה נשלחה ל{dispatched}</p>
+            <p className="text-xs text-slate-600 mt-0.5">הוועד קיבל התראה במקביל. בסכנת חיים חייגו 101 או 102.</p>
+          </div>
+          <button onClick={() => setDispatched(null)} className="ms-auto shrink-0 text-slate-400 hover:text-slate-600" aria-label="סגירה">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       )}
 
       {issues.length === 0 ? (

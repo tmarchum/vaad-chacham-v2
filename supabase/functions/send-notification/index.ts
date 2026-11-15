@@ -344,6 +344,13 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
   const parties: Party[] = []
   const ticket = String(issue.ticket_no || '').trim() || '—'
 
+  // An emergency is the one issue a resident can send straight to the
+  // contractor (migration 034); only the resident can set 'urgent', so it is an
+  // unambiguous marker. Whoever opens the message has to see that first, not
+  // read it as one more dripping tap.
+  const isEmergency = String(issue.priority || '') === 'urgent'
+  const mark = (text: string) => (isEmergency ? `חירום — דיווח על סכנה מיידית: ${text}` : text)
+
   // 1. The resident who reported it.
   if (issue.unit_id) {
     const { data: residents } = await svc
@@ -390,7 +397,7 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
         name: memberName, phone: m.phone || '', email: m.email || '',
         audience: 'resident', templateKey: 'committee_issue_opened',
         variables: [memberName, buildingName, String(issue.category || 'כללי'),
-          String(issue.description || issue.title || ''), unitLabel || '—'],
+          mark(String(issue.description || issue.title || '')), unitLabel || '—'],
         pushTo: (m.user_id as string) || null,
       })
     }
@@ -439,7 +446,7 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
       email: channel === 'whatsapp' || channel === 'phone' ? '' : String(vendor.email || ''),
       audience: 'vendor', templateKey: 'vendor_issue_dispatch',
       variables: [String(vendor.name || 'ספק'), buildingName,
-        String(issue.description || issue.title || ''), contact],
+        mark(String(issue.description || issue.title || '')), contact],
     })
   }
 
