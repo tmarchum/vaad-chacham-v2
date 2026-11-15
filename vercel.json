@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/", "has": [{ "type": "host", "value": "www.vaad1.co.il" }], "destination": "/site/index.html" },
+    { "source": "/", "has": [{ "type": "host", "value": "vaad1.co.il" }], "destination": "/site/index.html" },
     { "source": "/((?!assets/|site/|site$).*)", "destination": "/index.html" }
   ],
   "headers": [
