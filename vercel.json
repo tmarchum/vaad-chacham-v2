@@ -1,13 +1,43 @@
 {
   "rewrites": [
-    { "source": "/", "has": [{ "type": "host", "value": "www.vaad1.co.il" }], "destination": "/site/index.html" },
-    { "source": "/", "has": [{ "type": "host", "value": "vaad1.co.il" }], "destination": "/site/index.html" },
-    { "source": "/((?!assets/|site/|site$).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets/|site/|site$).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/assets/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.vaad1.co.il"
+        }
+      ],
+      "destination": "/site/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "vaad1.co.il"
+        }
+      ],
+      "destination": "https://www.vaad1.co.il/site/",
+      "permanent": false
     }
   ]
 }
