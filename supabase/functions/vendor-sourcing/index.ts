@@ -21,6 +21,18 @@ const FIELDS = [
   'places.businessStatus', 'nextPageToken',
 ].join(',')
 
+// A bare trade name pulls in shops, gyms and car services ("חדר כושר" →
+// fitness studios). Search what a building actually needs.
+const QUERY: Record<string, string> = {
+  'בדיקת חשמל': 'בודק חשמל מוסמך', 'בדיקת מעליות': 'בודק מעליות מוסמך', 'גז מרכזי': 'טכנאי גז מוסמך',
+  'גינון': 'גנן לבניינים משותפים', 'גנרטור': 'תחזוקת גנרטורים', 'חדר כושר': 'תיקון מכשירי כושר',
+  'יועץ נגישות': 'מורשה נגישות', 'מהנדס בניין': 'מהנדס קונסטרוקציה בדק בית', 'מיזוג אוויר': 'טכנאי מזגנים',
+  'מנעולן': 'מנעולן דלתות', 'ניקיון': 'ניקיון בניינים חדרי מדרגות', 'מעליות': 'חברת תחזוקת מעליות',
+  'משאבות מים': 'תחזוקת משאבות מים', 'חיטוי מאגרי מים': 'חיטוי מאגרי מים', 'כיבוי וגילוי אש': 'מערכות כיבוי אש',
+  'פינוי אשפה ודחסנים': 'דחסנים לבניינים', 'צבע ושיפוצים': 'צבעי בניינים', 'בריכת שחייה': 'תחזוקת בריכות שחייה',
+  'מצלמות ואזעקות': 'התקנת מצלמות אבטחה', 'אינטרקום': 'טכנאי אינטרקום', 'זגגות': 'זגג',
+}
+
 const digits = (s: string) => String(s || '').replace(/\D/g, '')
 // Normalise to 05XXXXXXXX; null when not an Israeli mobile.
 function israeliMobile(national?: string, intl?: string): string | null {
@@ -58,7 +70,7 @@ Deno.serve(async (req: Request) => {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
           body: JSON.stringify({
-            textQuery: `${category} ${area}`.trim(), languageCode: 'he', regionCode: 'IL', pageSize: 20,
+            textQuery: `${QUERY[category] || category} ${area}`.trim(), languageCode: 'he', regionCode: 'IL', pageSize: 20,
             ...(pageToken ? { pageToken } : {}),
           }),
           signal: AbortSignal.timeout(20000),
