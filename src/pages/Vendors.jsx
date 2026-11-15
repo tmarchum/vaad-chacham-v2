@@ -17,6 +17,7 @@ import { vendorReputation } from '@/lib/reputation'
 import { isWhatsappable, isMobile } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { toast } from '@/lib/toast'
+import { GoogleSourcing } from '@/components/vendors/GoogleSourcing'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail,
   Shield, Clock, BarChart3, GitCompare,
@@ -219,7 +220,9 @@ function buildInviteMessage(vendor) {
   return `שלום${vendor?.name ? ' ' + vendor.name : ''},\n\n` +
     `אנחנו *ועד1* — מערכת לניהול תחזוקת בנייני מגורים. אנו מנהלים עבור ועדי בתים את הטיפול בתקלות ובעבודות, ומפנים אותן לספקים מהמאגר שלנו.\n\n` +
     `נשמח לצרף אתכם${trade} למאגר. מעת לעת, כשעולה צורך בבניין באזורכם, תקבלו פנייה לעבודה עם כל פרטי התקלה (כולל תמונה) — ישירות לנייד. אין כאן התחייבות לעבודות קבועות, אלא פניות לפי צורך.\n\n` +
-    `שקיפות מלאה: שיתוף הפעולה כרוך בעמלה לכל עבודה שתתקבל דרך המערכת. הפרטים המלאים יסוכמו איתכם לאחר שתאשרו.\n\n` +
+    `ההצטרפות ללא עלות וללא עמלה על עבודות. הבניין משלם לכם ישירות.
+
+` +
     `*אם אתם מעוניינים לקבל פניות לעבודות — השיבו "מאשר", ונמשיך משם.* תודה!\n` +
     `בברכה,\nתומר — ועד1`
 }
@@ -378,7 +381,7 @@ const LEDGER_CARD = 'rounded-[var(--radius)] border border-[var(--border)] bg-[v
 // ---------------------------------------------------------------------------
 
 function Vendors() {
-  const { data: allVendors, create, update, remove, isSaving, isLoading } = useCollection('vendors')
+  const { data: allVendors, create, update, remove, isSaving, isLoading, refresh: refreshVendors } = useCollection('vendors')
   const { data: workOrders } = useCollection('workOrders')
 
   const [activeTab, setActiveTab] = useState('my-vendors')
@@ -547,14 +550,14 @@ function Vendors() {
       (v) => !v.is_blacklisted && (v.membership_status || 'pending') === 'pending' && isMobile(v.phone),
     )
     if (targets.length === 0) { toast('אין ספקים ממתינים עם מספר וואטסאפ תקין', 'info'); return }
-    if (!window.confirm(`לשלוח הזמנת שיתוף פעולה ל-${targets.length} ספקים ממתינים? השליחה תיקח כדקה לכל ~50 ספקים.`)) return
+    if (!window.confirm(`לשלוח הזמנת שיתוף פעולה ל-${targets.length} ספקים ממתינים? ההודעות יוצאות אחת ל-20–40 שניות כדי שהמספר לא ייחסם (50 ספקים ≈ חצי שעה). יש להשאיר את הדף פתוח.`)) return
     setBulk({ running: true, done: 0, total: targets.length })
     let sent = 0
     for (const v of targets) {
       const res = await systemSendWhatsapp(v.phone, buildInviteMessage(v), { audience: 'vendor', template: inviteTemplate(v) })
       if (res.sent) { sent++; await update(v.id, { membership_status: 'invited', invited_at: new Date().toISOString() }) }
       setBulk((b) => ({ ...b, done: b.done + 1 }))
-      await new Promise((r) => setTimeout(r, 1200)) // pacing between messages
+      await new Promise((r) => setTimeout(r, 20000 + Math.random() * 20000)) // 20–40s apart: cold outreach must not look like spam
     }
     setBulk({ running: false, done: 0, total: 0 })
     toast(`נשלחו ${sent} הזמנות מתוך ${targets.length}`, sent > 0 ? 'success' : 'error')
@@ -878,6 +881,7 @@ function Vendors() {
 
         return (
           <div className="space-y-4">
+            <GoogleSourcing categoryOptions={CATEGORY_OPTIONS} onAdded={refreshVendors} />
             <SectionCard
               icon={Send}
               title="הזמנת ספקים למאגר ועד1"
@@ -923,7 +927,7 @@ function Vendors() {
                 <div className={cn(LEDGER_CARD, 'hidden md:block')}>
                   <div className="overflow-x-auto">
                     <table className="ds-table">
-                      <thead><tr><th>ספק</th><th>קטגוריה</th><th>טלפון</th><th>סטטוס</th><th>פעולות</th></tr></thead>
+                      <thead><tr><th>ספק</th><th>קטגוריה</th><th>טלפון</th><th>גוגל</th><th>סטטוס</th><th>פעולות</th></tr></thead>
                       <tbody>
                         {list.map((v) => {
                           const status = v.membership_status || 'pending'
@@ -934,6 +938,11 @@ function Vendors() {
                               </td>
                               <td className="whitespace-nowrap text-[12px]">{v.category || '—'}</td>
                               <td className="whitespace-nowrap text-[12px] num-tabular" dir="ltr">{v.phone}</td>
+                              <td className="whitespace-nowrap text-[12px] num-tabular">
+                                {v.review_count != null
+                                  ? <a href={v.maps_url || undefined} target="_blank" rel="noreferrer" className="text-[var(--primary)]">★ {Number(v.rating) || '—'} ({v.review_count})</a>
+                                  : <span className="text-[var(--text-muted)]">—</span>}
+                              </td>
                               <td><MembershipBadge status={status} /></td>
                               <td className="whitespace-nowrap">{inviteActions(v, status)}</td>
                             </tr>
