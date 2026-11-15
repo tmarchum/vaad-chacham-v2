@@ -8,8 +8,8 @@ import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { DAY_LABELS, loadServiceConfig, monthlyPrice } from '@/lib/servicePlans'
-import { BadgeDollarSign, Clock, Building2, Ticket, History, Save, Plus } from 'lucide-react'
+import { DAY_LABELS, loadServiceConfig, monthlyPrice, activePlans, loadPriceLists, UNIT_LABELS } from '@/lib/servicePlans'
+import { BadgeDollarSign, Clock, Building2, Ticket, History, Save, Plus, ListChecks, Package } from 'lucide-react'
 
 // Plans, prices, business hours and punch cards — the commercial settings of
 // the management side. Everything a price depends on is edited here rather
@@ -33,10 +33,15 @@ export default function ServicePlans() {
   const [busy, setBusy] = useState('')
   const [buyFor, setBuyFor] = useState(null) // building being sold a card
   const [buyForm, setBuyForm] = useState({ punches: 10, price: 0, paid: false, notes: '' })
+  const [items, setItems] = useState([])
+  const [parts, setParts] = useState([])
 
   const load = useCallback(async () => {
     const cfg = await loadServiceConfig()
     if (!cfg.ready) { setReady(false); return }
+    const lists = await loadPriceLists()
+    setItems(lists.items)
+    setParts(lists.parts)
     const [b, bal, led, crd] = await Promise.all([
       supabase.from('buildings').select('id, name, total_units, service_plan, plan_price_override, included_punches_override').order('name'),
       supabase.from('building_punch_balance').select('*'),
@@ -66,6 +71,7 @@ export default function ServicePlans() {
     const results = await Promise.all(plans.map((p) => supabase.from('service_plans').update({
       price_per_unit: num(p.price_per_unit), min_per_building: num(p.min_per_building),
       card_price: num(p.card_price), card_punches: Math.max(1, num(p.card_punches)),
+      card_bonus_punches: num(p.card_bonus_punches), hour_price: num(p.hour_price), handle_fee: num(p.handle_fee),
       included_punches: num(p.included_punches), updated_at: new Date().toISOString(),
     }).eq('key', p.key)))
     setBusy('')
@@ -82,6 +88,7 @@ export default function ServicePlans() {
       punch_minutes: Number(settings.punch_minutes) || 60,
       card_validity_months: Number(settings.card_validity_months) || 12,
       parts_approval_threshold: Number(settings.parts_approval_threshold) || 0,
+      parts_handling_pct: Number(settings.parts_handling_pct) || 0,
       reopen_free_days: Number(settings.reopen_free_days) || 0,
       visit_min_punches: Math.max(1, Number(settings.visit_min_punches) || 1),
       batch_max_days: Number(settings.batch_max_days) || 0,
@@ -97,6 +104,36 @@ export default function ServicePlans() {
     return { ...s, business_days: next }
   })
 
+  const setItemField = (key, name, value) =>
+    setItems((xs) => xs.map((x) => (x.key === key ? { ...x, [name]: value } : x)))
+
+  const saveItems = async () => {
+    setBusy('items')
+    const n = (v) => (v === '' || v == null ? null : Number(v))
+    const results = await Promise.all(items.map((x) => supabase.from('service_price_items').update({
+      label: x.label, price_basic: n(x.price_basic), price_assisted: n(x.price_assisted),
+      active: x.active !== false, notes: x.notes || '', updated_at: new Date().toISOString(),
+    }).eq('key', x.key)))
+    setBusy('')
+    if (results.some((r) => r.error)) toastError('שמירת מחירון התוספות נכשלה')
+    else { toast('מחירון התוספות נשמר'); load() }
+  }
+
+  const setPartField = (id, name, value) =>
+    setParts((xs) => xs.map((x) => (x.id === id ? { ...x, [name]: value } : x)))
+
+  const saveParts = async () => {
+    setBusy('parts')
+    const results = await Promise.all(parts.map((x) => (x.id.startsWith('new-')
+      ? supabase.from('parts_catalog').insert({ label: x.label, price: Number(x.price) || 0, active: x.active !== false, position: Number(x.position) || 0 })
+      : supabase.from('parts_catalog').update({ label: x.label, price: Number(x.price) || 0, active: x.active !== false }).eq('id', x.id))))
+    setBusy('')
+    if (results.some((r) => r.error)) toastError('שמירת מחירון החלקים נכשלה')
+    else { toast('מחירון החלקים נשמר'); load() }
+  }
+
+  const addPartRow = () => setParts((xs) => [...xs, { id: `new-${Date.now()}`, label: '', price: 0, active: true, position: xs.length + 1 }])
+
   const setBuildingPlan = async (b, patch) => {
     const { error } = await supabase.from('buildings').update(patch).eq('id', b.id)
     if (error) toastError('עדכון הבניין נכשל'); else { toast(`${b.name} עודכן`); load() }
@@ -104,7 +141,9 @@ export default function ServicePlans() {
 
   const openBuy = (b) => {
     const plan = planByKey[b.service_plan] || planByKey.basic
-    setBuyForm({ punches: plan?.card_punches || 10, price: plan?.card_price || 0, paid: false, notes: '' })
+    const bonus = Number(plan?.card_bonus_punches) || 0
+    setBuyForm({ punches: (Number(plan?.card_punches) || 10) + bonus, price: plan?.card_price || 0, paid: false,
+      notes: bonus ? `${plan?.card_punches} שעות + ${bonus} בונוס` : '' })
     setBuyFor(b)
   }
 
@@ -122,7 +161,7 @@ export default function ServicePlans() {
     })
     setBusy('')
     if (error) { toastError('רישום הכרטיסייה נכשל'); return }
-    toast(`נרשמה כרטיסייה של ${buyForm.punches} ניקובים ל${buyFor.name}`)
+    toast(`נרשמה כרטיסייה של ${buyForm.punches} שעות ל${buyFor.name}`)
     setBuyFor(null)
     load()
   }
@@ -144,27 +183,30 @@ export default function ServicePlans() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">מסלולים ותמחור</h1>
-        <p className="text-[13px] text-[var(--text-secondary)]">מחיר לדירה ומינימום לבניין בכל מסלול, מחיר כרטיסיית אחזקה, שעות פעילות, והמסלול של כל בניין</p>
+        <p className="text-[13px] text-[var(--text-secondary)]">שני מסלולים — כניסה וליווי. מחיר לדירה ומינימום, שעת אחזקה וכרטיסייה, דמי "ועד1 תטפל", מחירון תוספות וחלקים, והמסלול של כל בניין</p>
       </div>
 
       {/* ── Plans ── */}
       <SectionCard icon={BadgeDollarSign} title="מסלולים ומחירים" subtitle="המחיר החודשי לבניין = מחיר לדירה × מספר דירות, ולא פחות מהמינימום"
         actions={<Button size="sm" onClick={savePlans} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'plans' ? 'שומר...' : 'שמירה'}</Button>}>
         <div className="overflow-x-auto p-2">
-          <table className="w-full min-w-[640px]">
+          <table className="w-full min-w-[900px]">
             <thead><tr>
               <th className={th}>מסלול</th>
-              <th className={th}>מחיר לדירה לחודש (₪)</th>
+              <th className={th}>לדירה לחודש (₪)</th>
               <th className={th}>מינימום לבניין (₪)</th>
-              <th className={th}>מחיר כרטיסייה (₪)</th>
-              <th className={th}>ניקובים בכרטיסייה</th>
-              <th className={th}>ניקובים כלולים בחודש</th>
+              <th className={th}>שעת אחזקה (₪)</th>
+              <th className={th}>כרטיסייה (₪)</th>
+              <th className={th}>שעות בכרטיסייה</th>
+              <th className={th}>שעות בונוס</th>
+              <th className={th}>"ועד1 תטפל" (₪)</th>
+              <th className={th}>שעות כלולות בחודש</th>
             </tr></thead>
             <tbody>
-              {plans.map((p) => (
+              {activePlans(plans).map((p) => (
                 <tr key={p.key} className="border-t border-[var(--border-light)]">
                   <td className={cn(td, 'font-bold whitespace-nowrap')}>{p.label}</td>
-                  {['price_per_unit', 'min_per_building', 'card_price', 'card_punches', 'included_punches'].map((name) => (
+                  {['price_per_unit', 'min_per_building', 'hour_price', 'card_price', 'card_punches', 'card_bonus_punches', 'handle_fee', 'included_punches'].map((name) => (
                     <td key={name} className={td}>
                       <input type="number" min="0" dir="ltr" className={field} value={p[name] ?? ''}
                         onChange={(e) => setPlanField(p.key, name, e.target.value)} />
@@ -175,7 +217,7 @@ export default function ServicePlans() {
             </tbody>
           </table>
           <p className="text-[11px] text-[var(--text-muted)] px-2 pt-2">
-            ניקוב מכסה שעת עבודה ותיאום. חלקים, חומרים ובעלי מקצוע מוסמכים משולמים על ידי הבניין בנפרד.
+            השעות הכלולות בליווי הן ביקור הליקויים החודשי. חלקים מחויבים בנפרד. ספקים — הבניין משלם להם ישירות.
           </p>
         </div>
       </SectionCard>
@@ -207,6 +249,7 @@ export default function ServicePlans() {
               ['punch_minutes', 'דקות בניקוב', 'number'],
               ['card_validity_months', 'תוקף כרטיסייה (חודשים)', 'number'],
               ['parts_approval_threshold', 'אישור ועד לחלקים מעל (₪)', 'number'],
+              ['parts_handling_pct', 'טיפול על חלקים לפי קבלה (%)', 'number'],
               ['reopen_free_days', 'ביקור חוזר ללא ניקוב (ימים)', 'number'],
               ['visit_min_punches', 'מינימום ניקובים לביקור', 'number'],
               ['batch_max_days', 'תקלה לא דחופה ממתינה לביקור עד (ימים)', 'number'],
@@ -219,6 +262,61 @@ export default function ServicePlans() {
               </label>
             ))}
           </div>
+        </div>
+      </SectionCard>
+
+      {/* ── Extras price list ── */}
+      <SectionCard icon={ListChecks} title="מחירון תוספות" subtitle="ריק = לא מוצע במסלול. מתחת ל-₪100 לא מחייבים שירות."
+        actions={<Button size="sm" onClick={saveItems} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'items' ? 'שומר...' : 'שמירה'}</Button>}>
+        <div className="overflow-x-auto p-2">
+          <table className="w-full min-w-[720px]">
+            <thead><tr>
+              <th className={th}>שירות</th>
+              <th className={th}>יחידה</th>
+              <th className={th}>כניסה (₪)</th>
+              <th className={th}>ליווי (₪)</th>
+              <th className={th}>משלם</th>
+              <th className={th}>פעיל</th>
+            </tr></thead>
+            <tbody>
+              {items.map((x) => (
+                <tr key={x.key} className="border-t border-[var(--border-light)]">
+                  <td className={td}><input className={field} value={x.label} onChange={(e) => setItemField(x.key, 'label', e.target.value)} /></td>
+                  <td className={cn(td, 'whitespace-nowrap text-[var(--text-secondary)]')}>{UNIT_LABELS[x.unit] || x.unit}</td>
+                  <td className={td}><input type="number" min="0" dir="ltr" className={field} placeholder="לא מוצע" value={x.price_basic ?? ''} onChange={(e) => setItemField(x.key, 'price_basic', e.target.value)} /></td>
+                  <td className={td}><input type="number" min="0" dir="ltr" className={field} placeholder="לא מוצע" value={x.price_assisted ?? ''} onChange={(e) => setItemField(x.key, 'price_assisted', e.target.value)} /></td>
+                  <td className={cn(td, 'whitespace-nowrap text-[var(--text-secondary)]')}>{x.payer === 'resident' ? 'הדייר' : 'הבניין'}</td>
+                  <td className={td}><input type="checkbox" className="h-4 w-4 accent-[var(--primary)]" checked={x.active !== false} onChange={(e) => setItemField(x.key, 'active', e.target.checked)} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+
+      {/* ── Parts catalogue ── */}
+      <SectionCard icon={Package} title="מחירון חלקים מהמלאי" subtitle={`פריטים קטנים במחיר קבוע. חלק שנקנה לעבודה — לפי קבלה ועוד ${Number(settings.parts_handling_pct ?? 10)}% טיפול.`}
+        actions={<div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={addPartRow}><Plus className="h-4 w-4" />פריט</Button>
+          <Button size="sm" onClick={saveParts} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'parts' ? 'שומר...' : 'שמירה'}</Button>
+        </div>}>
+        <div className="overflow-x-auto p-2">
+          <table className="w-full min-w-[480px]">
+            <thead><tr>
+              <th className={th}>פריט</th>
+              <th className={th}>מחיר (₪)</th>
+              <th className={th}>פעיל</th>
+            </tr></thead>
+            <tbody>
+              {parts.map((x) => (
+                <tr key={x.id} className="border-t border-[var(--border-light)]">
+                  <td className={td}><input className={field} value={x.label} onChange={(e) => setPartField(x.id, 'label', e.target.value)} /></td>
+                  <td className={td}><input type="number" min="0" dir="ltr" className={cn(field, 'w-28')} value={x.price ?? ''} onChange={(e) => setPartField(x.id, 'price', e.target.value)} /></td>
+                  <td className={td}><input type="checkbox" className="h-4 w-4 accent-[var(--primary)]" checked={x.active !== false} onChange={(e) => setPartField(x.id, 'active', e.target.checked)} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </SectionCard>
 
@@ -245,7 +343,7 @@ export default function ServicePlans() {
                     <td className={cn(td, 'num-tabular')}>{b.total_units || 0}</td>
                     <td className={td}>
                       <Select value={b.service_plan} onChange={(e) => setBuildingPlan(b, { service_plan: e.target.value })}
-                        options={plans.map((p) => ({ value: p.key, label: p.label }))} />
+                        options={activePlans(plans).map((p) => ({ value: p.key, label: p.label }))} />
                     </td>
                     <td className={cn(td, 'font-bold num-tabular whitespace-nowrap')}>{nis(monthlyPrice(plan, b.total_units, b.plan_price_override))}</td>
                     <td className={td}>
@@ -318,7 +416,7 @@ export default function ServicePlans() {
         <DialogContent className="w-full max-w-sm">
           <DialogHeader><DialogTitle>כרטיסייה חדשה — {buyFor?.name}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5"><span>מספר ניקובים</span>
+            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5"><span>מספר שעות (כולל בונוס)</span>
               <input type="number" min="1" dir="ltr" className={field} value={buyForm.punches} onChange={(e) => setBuyForm({ ...buyForm, punches: e.target.value })} /></label>
             <label className="block text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5"><span>מחיר (₪)</span>
               <input type="number" min="0" dir="ltr" className={field} value={buyForm.price} onChange={(e) => setBuyForm({ ...buyForm, price: e.target.value })} /></label>

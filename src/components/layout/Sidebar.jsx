@@ -80,6 +80,7 @@ const NAV_GROUPS = [
       { to: '/buildings',      label: 'בניינים',          icon: Building2 },
       { to: '/bank-settings',  label: 'חשבונות בנק',      icon: Landmark },
       { to: '/messaging',      label: 'וואטסאפ והודעות',  icon: MessageCircle },
+      { to: '/charges',        label: 'חשבון ועד1',       icon: BadgeDollarSign },
       { to: '/service-plans',  label: 'מסלולים ותמחור',   icon: BadgeDollarSign, staff: true },
       { to: '/smart-agents',   label: 'סוכנים חכמים',     icon: Zap,             staff: true },
       { to: '/building-agent', label: 'סוכן בריאות',      icon: Bot,             staff: true },

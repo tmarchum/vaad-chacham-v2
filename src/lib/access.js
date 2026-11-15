@@ -19,7 +19,7 @@
 // A building with no plan column yet (migration 030 not applied) is treated as
 // "legacy": everything stays visible, exactly as before this file existed.
 
-export const PLAN_LABELS = { basic: 'בסיסי', assisted: 'ועד מלווה', managed: 'ניהול מלא' }
+export const PLAN_LABELS = { basic: 'כניסה', assisted: 'ליווי', managed: 'ניהול מלא (הופסק)' }
 
 // The lowest plan at which a committee sees each feature. Anything not listed
 // here is available on every plan.
@@ -90,6 +90,6 @@ export const committeeHandlesIssues = (building) => building?.service_plan !== '
 
 /** One line per plan for the upgrade screen. */
 export const PLAN_PITCH = {
-  assisted: 'הזרמת בנק אוטומטית, תיקי גבייה ומכתבים, רגולציה ובדיקות חובה, ניתוח AI לתקלות, וואטסאפ רשמי ודוחות.',
-  managed: 'כל מה שבמסלול ועד מלווה, וחברת הניהול מקבלת ומטפלת בכל התקלות מול אנשי אחזקה וספקים.',
+  assisted: 'הזרמת בנק אוטומטית, מאגר ספקים מדורג, תיקי גבייה ומכתבים, רגולציה ובדיקות חובה, ביקור אחזקה חודשי, וואטסאפ רשמי ודוחות.',
+  managed: 'כל מה שבמסלול ליווי.',
 }
