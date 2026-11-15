@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ועד1 — אפליקציה לניהול ועד בית: גבייה, תקלות ודיירים</title>
+<meta name="description" content="ועד1 מרכזת את ניהול הבניין: גבייה עם ייבוא דפי בנק ושיוך אוטומטי, קריאות שירות עם ספק קבוע לכל קטגוריה, אפליקציה לדיירים והודעות בוואטסאפ רשמי. שלושה מסלולים, מחיר לדירה, בלי הפתעות.">
+<link rel="canonical" href="https://www.vaad1.co.il/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="he_IL">
+<meta property="og:title" content="ועד1 — אפליקציה לניהול ועד בית">
+<meta property="og:description" content="גבייה, תקלות, דיירים והודעות — במקום אחד. שלושה מסלולים עם מחיר ברור לדירה.">
+<meta property="og:url" content="https://www.vaad1.co.il/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#2563eb; --primary-dark:#1e40af; --success:#10b981;
+    --ink:#0b1c30; --body:#475569; --muted:#94a3b8;
+    --line:#e2e8f0; --surface:#ffffff; --canvas:#f8fafc; --tint:#eff6ff;
+    --radius:16px; --shadow:0 1px 3px rgba(11,28,48,.07),0 8px 24px -12px rgba(11,28,48,.12);
+    --wrap:1120px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;font-family:Rubik,system-ui,'Segoe UI',Arial,sans-serif;
+    background:var(--canvas);color:var(--body);line-height:1.75;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{color:var(--ink);line-height:1.25;margin:0;font-weight:800;letter-spacing:-.01em}
+  h1{font-size:clamp(30px,5.2vw,52px)}
+  h2{font-size:clamp(24px,3.6vw,36px)}
+  h3{font-size:18px;font-weight:700}
+  p{margin:0}
+  a{color:inherit}
+  .wrap{max-width:var(--wrap);margin:0 auto;padding:0 20px}
+  section{padding:clamp(52px,8vw,88px) 0}
+  .eyebrow{
+    display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;
+    color:var(--primary);background:var(--tint);border:1px solid #dbeafe;
+    padding:5px 12px;border-radius:999px;margin-bottom:18px
+  }
+  .lead{font-size:clamp(16px,2vw,19px);max-width:62ch}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:13px 24px;border-radius:12px;
+    font-weight:700;font-size:15px;text-decoration:none;transition:.15s;border:1px solid transparent
+  }
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-primary:hover{background:var(--primary-dark)}
+  .btn-ghost{background:var(--surface);color:var(--ink);border-color:var(--line)}
+  .btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:26px;box-shadow:var(--shadow)}
+  .grid{display:grid;gap:18px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:900px){.g3,.g4{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+  /* header */
+  header{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .nav{display:flex;align-items:center;gap:16px;height:66px}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:20px;color:var(--ink)}
+  .nav-links{display:flex;gap:22px;margin-inline-start:auto;font-size:14px;font-weight:600}
+  .nav-links a{text-decoration:none;color:var(--body)}
+  .nav-links a:hover{color:var(--primary)}
+  @media(max-width:820px){.nav-links{display:none}}
+
+  /* hero */
+  .hero{background:linear-gradient(180deg,#fff 0%,var(--canvas) 100%);padding-top:clamp(44px,6vw,72px)}
+  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:32px}}
+  .cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .hero-note{margin-top:16px;font-size:13px;color:var(--muted)}
+
+  /* phone mock */
+  .mock{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:18px;box-shadow:0 24px 60px -28px rgba(11,28,48,.4)}
+  .mock-bar{display:flex;align-items:center;gap:8px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:14px}
+  .row{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:9px;font-size:13.5px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .pill{margin-inline-start:auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+
+  /* pillars */
+  .pillar-n{font-size:12px;font-weight:800;color:var(--primary);letter-spacing:.08em}
+  .tick{list-style:none;padding:0;margin:14px 0 0;font-size:14.5px}
+  .tick li{position:relative;padding-inline-start:24px;margin-bottom:7px}
+  .tick li::before{
+    content:"";position:absolute;inset-inline-start:0;top:9px;width:13px;height:13px;border-radius:50%;
+    background:var(--success);
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center/80% no-repeat,linear-gradient(#000,#000);
+    -webkit-mask-composite:xor;mask-composite:exclude;
+    box-shadow:inset 0 0 0 13px var(--success)
+  }
+  .tick li::after{
+    content:"";position:absolute;inset-inline-start:2.5px;top:12px;width:8px;height:4px;
+    border-inline-start:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg)
+  }
+
+  /* steps */
+  .steps{counter-reset:s}
+  .step{position:relative;padding-top:30px}
+  .step::before{
+    counter-increment:s;content:counter(s);
+    position:absolute;top:0;inset-inline-start:0;width:30px;height:30px;border-radius:9px;
+    background:var(--primary);color:#fff;font-weight:800;font-size:14px;
+    display:grid;place-items:center
+  }
+
+  /* pricing */
+  .price{font-size:38px;font-weight:800;color:var(--ink);line-height:1.1}
+  .price small{font-size:14px;font-weight:600;color:var(--muted)}
+  .featured{border-color:var(--primary);box-shadow:0 0 0 3px var(--tint),var(--shadow);position:relative}
+  .flag{position:absolute;top:-12px;inset-inline-start:26px;background:var(--primary);color:#fff;font-size:11.5px;font-weight:700;padding:4px 12px;border-radius:999px}
+
+  details{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:10px}
+  details[open]{border-color:#cbd5e1}
+  summary{cursor:pointer;font-weight:700;color:var(--ink);font-size:15.5px;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"+";float:left;color:var(--primary);font-weight:800;font-size:20px;line-height:1}
+  details[open] summary::after{content:"–"}
+  details p{margin-top:10px;font-size:14.5px}
+
+  .band{background:var(--ink);color:#cbd5e1}
+  .band h2{color:#fff}
+  footer{border-top:1px solid var(--line);padding:30px 0;font-size:13.5px;color:var(--muted)}
+  .todo{background:#fffbeb;border:1px dashed #f59e0b;color:#92400e;border-radius:8px;padding:2px 8px;font-size:13px;font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 64 64" width="34" height="34" role="img" aria-label="ועד1">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1e40af"/></linearGradient></defs>
+        <rect width="64" height="64" rx="14" fill="url(#lg)"/>
+        <path d="M27 12h11v37h-11V22.5l-6.2 3.6v-6.9z" fill="#fff"/>
+        <rect x="18" y="49" width="27" height="4.5" rx="2" fill="#fff"/>
+        <g fill="#2563eb">
+          <rect x="29.5" y="17" width="2.6" height="3.2" rx=".6"/><rect x="33.4" y="17" width="2.6" height="3.2" rx=".6"/>
+          <rect x="29.5" y="23" width="2.6" height="3.2" rx=".6"/><rect x="33.4" y="23" width="2.6" height="3.2" rx=".6"/>
+          <rect x="29.5" y="29" width="2.6" height="3.2" rx=".6"/><rect x="33.4" y="29" width="2.6" height="3.2" rx=".6"/>
+          <rect x="29.5" y="35" width="2.6" height="3.2" rx=".6"/><rect x="33.4" y="35" width="2.6" height="3.2" rx=".6"/>
+          <rect x="30.6" y="42" width="4.3" height="7" rx="1"/>
+        </g>
+        <circle cx="47" cy="19" r="9" fill="#10b981" stroke="#fff" stroke-width="2.6"/>
+        <path d="M43 19.2l2.8 2.8 5.3-5.6" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      ועד<span style="color:var(--primary)">1</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#what">מה המערכת עושה</a>
+      <a href="#flow">איך זה עובד</a>
+      <a href="#pricing">מסלולים ומחירים</a>
+      <a href="#faq">שאלות</a>
+    </nav>
+    <a class="btn btn-primary" href="#contact" style="padding:10px 18px">דברו איתנו</a>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ───────── hero ───────── -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">ניהול ועד בית</span>
+      <h1>הכסף, התקלות והדיירים —<br>במקום אחד.</h1>
+      <p class="lead" style="margin-top:20px">
+        מי שילם ומי לא, איזו תקלה פתוחה ואצל מי היא תקועה, ומה הדיירים כבר יודעים.
+        ועד1 מחזיקה את כל אלה יחד, כדי שניהול הבניין יפסיק לרוץ על זיכרון, אקסל וקבוצת וואטסאפ.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#contact">לתיאום הדגמה לבניין שלכם</a>
+        <a class="btn btn-ghost" href="#pricing">למסלולים ולמחירים</a>
+      </div>
+      <p class="hero-note">הדגמה קצרה על הבניין שלכם, בלי התחייבות. המחירים מלאים באתר — לא צריך פגישה כדי לדעת כמה זה עולה.</p>
+    </div>
+
+    <!-- illustrative UI, not a screenshot -->
+    <div class="mock" aria-hidden="true">
+      <div class="mock-bar">
+        <span class="dot" style="background:#ef4444"></span>
+        <span class="dot" style="background:#f59e0b"></span>
+        <span class="dot" style="background:#10b981"></span>
+        <span style="margin-inline-start:auto;font-size:12px;color:var(--muted)">הבניין שלי · 58 דירות</span>
+      </div>
+      <div class="row"><span class="dot" style="background:#ef4444"></span> מעלית תקועה — קומה 7
+        <span class="pill" style="background:#fee2e2;color:#b91c1c">נשלח לספק</span></div>
+      <div class="row"><span class="dot" style="background:#f59e0b"></span> נורה שרופה בלובי
+        <span class="pill" style="background:#fef3c7;color:#92400e">ממתין לביקור</span></div>
+      <div class="row"><span class="dot" style="background:#10b981"></span> דירה 14 — שולם ₪350
+        <span class="pill" style="background:#d1fae5;color:#047857">שויך אוטומטית</span></div>
+      <div class="row"><span class="dot" style="background:#2563eb"></span> הודעה לדיירים — ניקיון מדרגות
+        <span class="pill" style="background:#dbeafe;color:#1e40af">נשלח ל-58</span></div>
+      <p style="font-size:11px;color:var(--muted);margin-top:12px">המחשה למבנה המסך, לא צילום מסך של המוצר.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── pillars ───────── -->
+<section id="what" style="background:var(--surface);border-block:1px solid var(--line)">
+  <div class="wrap">
+    <span class="eyebrow">מה המערכת עושה</span>
+    <h2>ארבעה דברים שגוזלים לכם את הזמן.</h2>
+    <p class="lead" style="margin-top:14px">כל אחד מהם מקבל מקום מסודר — ובעיקר, המשך ברור.</p>
+
+    <div class="grid g2" style="margin-top:34px">
+      <div class="card">
+        <p class="pillar-n">01 / גבייה</p>
+        <h3 style="margin-top:6px">לדעת מי שילם, בלי לשבת על דפי בנק</h3>
+        <ul class="tick">
+          <li>מייבאים את דף הבנק החודשי, והמערכת משייכת כל תשלום לדירה</li>
+          <li>הוראות קבע בלי שם מזוהות לפי כללים שהמערכת לומדת</li>
+          <li>יתרה חיה לכל דירה, כולל חובות ישנים</li>
+          <li>תיקי גבייה לחייבים — עם תיעוד, ובלי שליחה אוטומטית מאחורי הגב שלכם</li>
+          <li>הוצאות, ספקים, וניתוח לאן הכסף הולך</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <p class="pillar-n">02 / תחזוקה</p>
+        <h3 style="margin-top:6px">תקלה נכנסת, ויש לה אחראי</h3>
+        <ul class="tick">
+          <li>דייר מדווח מהנייד, עם תמונה</li>
+          <li>כל קטגוריה מנותבת לספק הקבוע שלה — מעלית לחברת המעליות, ניקיון לחברת הניקיון</li>
+          <li>כשהוועד מאשר, הספק מקבל פנייה בערוץ שלו: מייל, וואטסאפ או טלפון</li>
+          <li>כפתור חירום לדייר — לכוד במעלית יוצא לספק מיד, והוועד מעודכן במקביל</li>
+          <li>משימות תקופתיות ובדיקות חובה לפי חוק, עם תאריכי תוקף</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <p class="pillar-n">03 / דיירים</p>
+        <h3 style="margin-top:6px">אפליקציה לדיירים, לא רק לוועד</h3>
+        <ul class="tick">
+          <li>לדייר יש מסך משלו: היתרה שלו, התקלות שלו, ההודעות</li>
+          <li>דיווח תקלה, מעקב אחריה ודירוג הטיפול בסיום</li>
+          <li>הצבעות דיירים ושריון חדר דיירים</li>
+          <li>בעלים מול שוכרים, כולל מעבר דיירים</li>
+          <li>רציפות: חבר ועד מתחלף, המידע נשאר</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <p class="pillar-n">04 / שקיפות</p>
+        <h3 style="margin-top:6px">הודעות שמגיעות, ודוחות שמסבירים</h3>
+        <ul class="tick">
+          <li>וואטסאפ רשמי של Meta, עם תבניות מאושרות — לא קבוצה</li>
+          <li>מייל והתראות לנייד, לפי מה שלדייר נוח</li>
+          <li>יומן הודעות: מה נשלח, למי, ומה הגיע</li>
+          <li>פרוטוקול ישיבה עם סדר יום, החלטות ותיעוד ההצבעה</li>
+          <li>דוחות תקופתיים לדיירים ולרואה החשבון</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── flow ───────── -->
+<section id="flow">
+  <div class="wrap">
+    <span class="eyebrow">איך זה עובד</span>
+    <h2>תקלה אחת, מההתחלה ועד הסוף.</h2>
+    <div class="grid g4 steps" style="margin-top:36px">
+      <div class="step">
+        <h3>הדייר מדווח</h3>
+        <p style="margin-top:8px;font-size:14.5px">מהנייד, עם תמונה וקטגוריה. מקבל מספר פנייה ואישור.</p>
+      </div>
+      <div class="step">
+        <h3>הוועד מחליט</h3>
+        <p style="margin-top:8px;font-size:14.5px">לספק הקבוע, לאיש האחזקה בביקור הבא, או דחוף עכשיו. ההחלטה מתועדת.</p>
+      </div>
+      <div class="step">
+        <h3>הטיפול יוצא</h3>
+        <p style="margin-top:8px;font-size:14.5px">הפנייה נשלחת בערוץ של אותו ספק, עם כתובת מלאה ואיש קשר בבניין.</p>
+      </div>
+      <div class="step">
+        <h3>נסגר ומדווח</h3>
+        <p style="margin-top:8px;font-size:14.5px">הדייר רואה שטופל ומדרג. אם לא תוקן — פותח מחדש, וזה חוזר לאותו גורם.</p>
+      </div>
+    </div>
+    <p style="margin-top:26px;font-size:13.5px;color:var(--muted)">
+      טיפול מקצועי בפועל נעשה בידי ספקים מוסמכים. במצב של סכנת חיים יש לחייג 101 או 102.
+    </p>
+  </div>
+</section>
+
+<!-- ───────── pricing ───────── -->
+<section id="pricing" style="background:var(--surface);border-block:1px solid var(--line)">
+  <div class="wrap">
+    <span class="eyebrow">מסלולים ומחירים</span>
+    <h2>שלושה מסלולים. אתם בוחרים כמה לעשות לבד.</h2>
+    <p class="lead" style="margin-top:14px">
+      המחיר נגזר ממספר הדירות בבניין. עבודה של איש אחזקה נמדדת בכרטיסייה — ניקוב לכל שעה שהתחילה, מינימום שעה לביקור.
+    </p>
+
+    <div class="grid g3" style="margin-top:34px;align-items:start">
+      <div class="card">
+        <h3>בסיסי</h3>
+        <p style="font-size:14px;margin-top:4px">התוכנה בלבד. הוועד מנהל, אנחנו נותנים את הכלים.</p>
+        <p class="price" style="margin-top:18px">ללא דמי מנוי</p>
+        <ul class="tick">
+          <li>כל המסכים: גבייה, תקלות, דיירים, הודעות</li>
+          <li>אפליקציה לדיירים</li>
+          <li>כרטיסיית אחזקה בתשלום לפי שימוש — ₪3,500 ל-10 שעות</li>
+        </ul>
+      </div>
+
+      <div class="card featured">
+        <span class="flag">הנפוץ ביותר</span>
+        <h3>ועד מלווה</h3>
+        <p style="font-size:14px;margin-top:4px">אנחנו מלווים את הוועד: ניתוב, מעקב ואיש אחזקה זמין.</p>
+        <p class="price" style="margin-top:18px">₪17 <small>לדירה לחודש</small></p>
+        <p style="font-size:13px;color:var(--muted)">מינימום ₪250 לבניין · בניין של 58 דירות ≈ ₪986 לחודש</p>
+        <ul class="tick">
+          <li>כל מה שבמסלול הבסיסי</li>
+          <li>ניתוב תקלות לספקים הקבועים של הבניין</li>
+          <li>מעקב אחרי תקלות תקועות וחריגות גבייה</li>
+          <li>כרטיסיית אחזקה — ₪3,000 ל-10 שעות</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>ניהול מלא</h3>
+        <p style="font-size:14px;margin-top:4px">אנחנו מנהלים. הוועד מאשר ורואה הכול.</p>
+        <p class="price" style="margin-top:18px">₪40 <small>לדירה לחודש</small></p>
+        <p style="font-size:13px;color:var(--muted)">מינימום ₪1,500 לבניין · בניין של 58 דירות ≈ ₪2,320 לחודש</p>
+        <ul class="tick">
+          <li>כל מה שבמסלול ועד מלווה</li>
+          <li>4 שעות אחזקה כלולות בכל חודש</li>
+          <li>ניהול ספקים, הצעות מחיר ותיאום מול הדיירים</li>
+          <li>טיפול בגבייה ובדוחות</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:22px;background:var(--tint);border-color:#dbeafe">
+      <h3>איך הכרטיסייה עובדת</h3>
+      <div class="grid g3" style="margin-top:12px">
+        <p style="font-size:14.5px"><strong>ניקוב = שעת עבודה</strong> של איש אחזקה. כל שעה שהתחילה נספרת, ומינימום ניקוב אחד לכל ביקור.</p>
+        <p style="font-size:14.5px"><strong>אוספים קריאות.</strong> תקלות לא דחופות מחכות לביקור אחד ומנוקבות יחד, במקום נסיעה לכל נורה.</p>
+        <p style="font-size:14.5px"><strong>ספק קבוע לא עולה ניקוב.</strong> תקלת מעלית שנשלחת לחברת המעליות לא נוגעת בכרטיסייה.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── who ───────── -->
+<section>
+  <div class="wrap">
+    <span class="eyebrow">למי זה מתאים</span>
+    <h2>כל בניין והסיפור שלו.</h2>
+    <div class="grid g3" style="margin-top:30px">
+      <div class="card">
+        <h3>ועד בית מתנדב</h3>
+        <p style="margin-top:8px;font-size:14.5px">מי שעושה את זה בערב אחרי העבודה, ורוצה שזה ייקח פחות זמן ושהמידע לא ייעלם עם חילופי ועד.</p>
+      </div>
+      <div class="card">
+        <h3>בניינים ומגדלים</h3>
+        <p style="margin-top:8px;font-size:14.5px">יותר דירות, יותר מערכות ויותר ספקים — וצורך אמיתי לראות מה פתוח ומי מטפל.</p>
+      </div>
+      <div class="card">
+        <h3>חברות ניהול</h3>
+        <p style="margin-top:8px;font-size:14.5px">חלוקת אחריות ברורה מול הוועד, עם תיעוד של כל החלטה ושל כל שעה שנעשתה בבניין.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── faq ───────── -->
+<section id="faq" style="background:var(--surface);border-block:1px solid var(--line)">
+  <div class="wrap" style="max-width:860px">
+    <span class="eyebrow">שאלות</span>
+    <h2>מה שבדרך כלל שואלים.</h2>
+    <div style="margin-top:28px">
+      <details open>
+        <summary>כמה זה עולה?</summary>
+        <p>בסיסי — ללא דמי מנוי, ומשלמים רק על כרטיסיית אחזקה אם צריך. ועד מלווה — ₪17 לדירה לחודש, מינימום ₪250 לבניין. ניהול מלא — ₪40 לדירה לחודש, מינימום ₪1,500 לבניין, כולל 4 שעות אחזקה בחודש. כל המחירים מופיעים כאן; אין מחירון נסתר שנפתח רק בפגישה.</p>
+      </details>
+      <details>
+        <summary>האם המערכת מחליפה חברת ניהול?</summary>
+        <p>תלוי במסלול. בבסיסי ובוועד מלווה הוועד ממשיך לנהל ומקבל כלים וליווי. בניהול מלא אנחנו עושים את העבודה בפועל — וזו כבר חברת ניהול לכל דבר, רק עם מערכת שהדיירים רואים.</p>
+      </details>
+      <details>
+        <summary>מה קורה כשהכרטיסייה נגמרת?</summary>
+        <p>אי אפשר לשלוח תקלה חדשה לאיש האחזקה עד שמחדשים — וזה מוצג בפירוש, לא כשגיאה. העברה לספק קבוע של הבניין, כמו חברת המעליות, לא נחסמת אף פעם ולא עולה ניקוב.</p>
+      </details>
+      <details>
+        <summary>מה עם דיירים מבוגרים שלא ירצו אפליקציה?</summary>
+        <p>הם לא חייבים. הודעות מגיעות בוואטסאפ ובמייל, והוועד יכול לפתוח תקלה בשם דייר שהתקשר. האפליקציה היא אפשרות, לא תנאי.</p>
+      </details>
+      <details>
+        <summary>הנתונים שלנו — של מי הם?</summary>
+        <p>של הבניין. אפשר להוציא דוחות ונתונים בכל שלב. הזיהוי במערכת נעשה לפי מספר דירה ושם משפחה בלבד, ודיירים רואים רק את הבניין שלהם.</p>
+      </details>
+      <details>
+        <summary>איך מתחילים, וכמה זה מסובך?</summary>
+        <p>מתחילים מרשימת הדירות והדיירים ומהיתרות הפתוחות. משם מוסיפים לפי הקצב שלכם — קודם תקלות, אחר כך גבייה, אחר כך הודעות. אין צורך להעביר הכול ביום אחד.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ───────── contact ───────── -->
+<section id="contact" class="band">
+  <div class="wrap" style="text-align:center">
+    <h2>נראה לכם רלוונטי לבניין שלכם?</h2>
+    <p class="lead" style="margin:16px auto 0;color:#cbd5e1">
+      הדגמה קצרה על הבניין שלכם: כמה דירות, איך מנהלים היום, ומה הכי מציק. בלי התחייבות.
+    </p>
+    <div class="cta-row" style="justify-content:center">
+      <a class="btn btn-primary" href="tel:TODO-PHONE" data-fill="phone">טלפון: <span class="todo">למלא</span></a>
+      <a class="btn btn-ghost" href="mailto:TODO-EMAIL" data-fill="email">מייל: <span class="todo">למלא</span></a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+    <span>ועד1 — מערכת לניהול ועד בית</span>
+    <span style="margin-inline-start:auto">© <span id="y"></span></span>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('y').textContent = new Date().getFullYear()
+</script>
+
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org",
+  "@type":"SoftwareApplication",
+  "name":"ועד1",
+  "applicationCategory":"BusinessApplication",
+  "operatingSystem":"Web, Android",
+  "inLanguage":"he",
+  "url":"https://www.vaad1.co.il/",
+  "description":"מערכת לניהול ועד בית: גבייה ושיוך תשלומים מדף הבנק, קריאות שירות וניתוב לספקים, אפליקציה לדיירים והודעות בוואטסאפ רשמי.",
+  "offers":[
+    {"@type":"Offer","name":"בסיסי","price":"0","priceCurrency":"ILS"},
+    {"@type":"Offer","name":"ועד מלווה","price":"17","priceCurrency":"ILS","description":"לדירה לחודש, מינימום ₪250 לבניין"},
+    {"@type":"Offer","name":"ניהול מלא","price":"40","priceCurrency":"ILS","description":"לדירה לחודש, מינימום ₪1,500 לבניין"}
+  ]
+}
+</script>
+</body>
+</html>
