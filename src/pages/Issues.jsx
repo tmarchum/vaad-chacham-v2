@@ -25,6 +25,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { canSee } from '@/lib/access'
 import {
   loadServiceConfig, loadPunchBalance, punchesFor, isOffHours, punchRules,
+  loadBuildingBilling, loadPriceLists, partLineTotal,
   HANDLER_LABELS, HANDLER_KIND_LABELS, STAGE_LABELS,
 } from '@/lib/servicePlans'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
@@ -548,14 +549,21 @@ function Issues() {
   const [closeNoFixIssue, setCloseNoFixIssue] = useState(null)
   const [closeReason, setCloseReason] = useState('')
   const [finishIssue, setFinishIssue] = useState(null)
-  const [finishForm, setFinishForm] = useState({ kind: 'handyman', hours: 1, offHours: false, partsCost: '', photoUrl: '' })
+  const [finishForm, setFinishForm] = useState({ kind: 'handyman', hours: 1, offHours: false, photoUrl: '' })
   const [finishBalance, setFinishBalance] = useState(null)
+  const [finishBilling, setFinishBilling] = useState(null)
+  // Parts used on the visit: stock items at the catalogue price, anything
+  // bought for the job at receipt cost plus the disclosed handling percentage.
+  const [finishParts, setFinishParts] = useState([])
+  const [partsCatalog, setPartsCatalog] = useState([])
+  useEffect(() => { loadPriceLists().then((l) => setPartsCatalog(l.parts.filter((x) => x.active !== false))).catch(() => {}) }, [])
   const [finishBusy, setFinishBusy] = useState(false)
   const [visitIds, setVisitIds] = useState([])
   const [transferIssue, setTransferIssue] = useState(null)
   const [transferMode, setTransferMode] = useState('next_visit')
   const [transferRule, setTransferRule] = useState(null)
   const [transferBalance, setTransferBalance] = useState(null)
+  const [transferBilling, setTransferBilling] = useState(null)
   const [transferBusy, setTransferBusy] = useState(false)
   const [vendorAssignIssue, setVendorAssignIssue] = useState(null)
   const [selectedVendorName, setSelectedVendorName] = useState('')
@@ -1358,7 +1366,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setTransferMode(iss.priority === 'urgent' ? 'urgent' : 'next_visit')
     setTransferBalance(null)
     setTransferRule(null)
+    setTransferBilling(null)
     loadPunchBalance(iss.buildingId).then(setTransferBalance).catch(() => {})
+    loadBuildingBilling(iss.buildingId).then(setTransferBilling).catch(() => {})
     if (iss.category) {
       supabase.from('issue_routing_rules').select('vendor_name, send_to_vendor')
         .eq('building_id', iss.buildingId).eq('category', iss.category).eq('active', true).maybeSingle()
@@ -1370,7 +1380,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   }, [])
 
   const contractorName = transferRule?.send_to_vendor ? transferRule.vendor_name : null
-  const noPunches = !isAdmin && transferBalance != null && transferBalance.balance < 1
+  const transferPlan = serviceCfg.plans.find((p) => p.key === transferBilling?.service_plan) || null
+  const transferPolicy = transferBilling?.card_exhausted_policy || 'bill_hourly'
+  // Only a building that chose "block" is stopped when the card is empty;
+  // otherwise the extra hours go on the monthly bill (or onto a new card).
+  const noPunches = !isAdmin && transferPolicy === 'block' && transferBalance != null && transferBalance.balance < 1
   const transferBlocked = noPunches && (transferMode === 'next_visit' || transferMode === 'urgent')
 
   const handleConfirmTransfer = async () => {
@@ -1382,7 +1396,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       const { error } = await supabase.rpc('transfer_issue', { p_issue: iss.id, p_mode: transferMode, p_vendor: vendor })
       if (error) {
         toastError(String(error.message).includes('no_punches')
-          ? 'אין ניקובים ביתרה — אפשר להעביר לספק, או לרכוש כרטיסייה'
+          ? 'הכרטיסייה נגמרה — אפשר לקנות כרטיסייה במסך "חשבון ועד1", או להעביר לספק'
           : 'ההעברה נכשלה')
         return
       }
@@ -1402,7 +1416,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         if (res.reached.length) toast(`הועבר ל${vendor} · ${line}`)
         else toastError(`הועבר ל${vendor}, אבל ההודעה לא יצאה — ${line || 'חסרים פרטי קשר לספק'}`)
       } else {
-        toast({ next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: 'הועבר — חברת הניהול תתאם ספק' }[transferMode])
+        const fee = Number(transferPlan?.handle_fee) || 0
+        toast({ next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: `הועבר — ועד1 תטפל בספק${fee ? ` (₪${fee})` : ''}` }[transferMode])
       }
       setTransferIssue(null)
     } finally { setTransferBusy(false) }
@@ -1426,10 +1441,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setFinishIssue(iss)
     setFinishForm({
       kind: iss.handler_kind || 'handyman', hours: 1,
-      offHours: isOffHours(new Date(), serviceCfg.settings), partsCost: '', photoUrl: '',
+      offHours: isOffHours(new Date(), serviceCfg.settings), photoUrl: '',
     })
+    setFinishParts([])
     setFinishBalance(null)
+    setFinishBilling(null)
     loadPunchBalance(iss.buildingId).then(setFinishBalance).catch(() => {})
+    loadBuildingBilling(iss.buildingId).then(setFinishBilling).catch(() => {})
     // Everything waiting for the next visit in this building is ticked by
     // default: one call-out, one charge.
     setVisitIds(allIssues
@@ -1456,44 +1474,95 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   const finishPunches = finishIsFreeRevisit ? 0 : punchesFor(
     { kind: finishForm.kind, hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
 
+  const handlingPct = Number(serviceCfg.settings?.parts_handling_pct ?? 10)
+  const partsApprovalThreshold = Number(serviceCfg.settings?.parts_approval_threshold) || 0
+  const lineTotal = (l) => partLineTotal({ qty: l.qty, unitCost: l.unitCost, handlingPct: l.source === 'receipt' ? handlingPct : 0 })
+  const finishPartsTotal = finishParts.reduce((sum, l) => sum + lineTotal(l), 0)
+  const finishPlan = serviceCfg.plans.find((p) => p.key === finishBilling?.service_plan) || null
+  const finishPolicy = finishBilling?.card_exhausted_policy || 'bill_hourly'
+  const finishCovered = finishBalance ? Math.min(Math.max(finishBalance.balance, 0), finishPunches) : finishPunches
+  const finishOverflow = Math.max(0, finishPunches - finishCovered)
+
+  const addCatalogPart = (id) => {
+    const c = partsCatalog.find((x) => x.id === id)
+    if (!c) return
+    setFinishParts((ps) => [...ps, { key: crypto.randomUUID(), source: 'catalog', catalogId: c.id, label: c.label, qty: 1, unitCost: Number(c.price) || 0, receiptUrl: '' }])
+  }
+  const addReceiptPart = () =>
+    setFinishParts((ps) => [...ps, { key: crypto.randomUUID(), source: 'receipt', catalogId: null, label: '', qty: 1, unitCost: '', receiptUrl: '' }])
+  const setPart = (key, patch) => setFinishParts((ps) => ps.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  const removePart = (key) => setFinishParts((ps) => ps.filter((l) => l.key !== key))
+
   const handleFinishWork = async () => {
     if (!finishIssue || finishBusy) return
+    const badPart = finishParts.find((l) => !String(l.label).trim() || l.unitCost === '' || !(Number(l.unitCost) >= 0) || !(Number(l.qty) > 0))
+    if (badPart) { toastError('בכל חלק צריך שם, כמות ומחיר'); return }
     setFinishBusy(true)
     try {
-      const parts = finishForm.partsCost !== '' ? Number(finishForm.partsCost) : null
       const others = visitCandidates.filter((o) => visitIds.includes(o.id))
       const visitId = crypto.randomUUID()
       const isVendor = finishForm.kind === 'vendor' || finishForm.kind === 'contractor'
       const hours = isVendor ? null : Number(finishForm.hours) || 0
       const offHours = isVendor ? false : !!finishForm.offHours
+      const note = others.length
+        ? `ביקור · ${others.length + 1} תקלות: ${[finishIssue, ...others].map((o) => o.title).join(', ')}`
+        : finishIssue.title || ''
+
+      // Hours: off the card first; what the card does not cover follows the
+      // building's own choice (billed by the hour, a new card, or debt).
+      let settled = null
       if (finishPunches > 0) {
-        const { error } = await supabase.from('punch_ledger').insert({
-          building_id: finishIssue.buildingId, issue_id: others.length ? null : finishIssue.id, visit_id: visitId,
-          punches: finishPunches, hours, off_hours: offHours,
-          kind: isVendor ? 'vendor_coordination' : 'handyman',
-          note: others.length
-            ? `ביקור · ${others.length + 1} תקלות: ${[finishIssue, ...others].map((o) => o.title).join(', ')}`
-            : finishIssue.title || '',
-          created_by: profile?.id || null,
+        const { data, error } = await supabase.rpc('settle_visit_punches', {
+          p_building: finishIssue.buildingId, p_visit: visitId, p_issue: others.length ? null : finishIssue.id,
+          p_punches: finishPunches, p_hours: hours, p_off_hours: offHours, p_note: note,
         })
-        if (error) { toastError('רישום הניקוב נכשל — התקלות לא נסגרו'); return }
+        if (error) { toastError('רישום השעות נכשל — התקלות לא נסגרו'); return }
+        settled = data
       }
+
+      // Parts: one line each, so the committee sees what was fitted and why.
+      for (const l of finishParts) {
+        const total = lineTotal(l)
+        const pct = l.source === 'receipt' ? handlingPct : 0
+        const label = String(l.label).trim()
+        const receipt = (l.receiptUrl || '').trim() || null
+        const { error: pErr } = await supabase.from('issue_parts').insert({
+          issue_id: finishIssue.id, building_id: finishIssue.buildingId, visit_id: visitId,
+          catalog_id: l.catalogId || null, label, qty: Number(l.qty) || 1,
+          unit_cost: Number(l.unitCost) || 0, handling_pct: pct, total,
+          receipt_url: receipt, created_by: profile?.id || null,
+        })
+        if (pErr) { toastError('רישום החלקים נכשל'); return }
+        const { error: cErr } = await supabase.rpc('create_charge', {
+          p_building: finishIssue.buildingId, p_type: 'parts', p_amount: total,
+          p_item_key: l.source === 'receipt' ? 'part_receipt' : 'part_stock',
+          p_quantity: Number(l.qty) || 1, p_unit_price: Number(l.unitCost) || 0,
+          p_issue: finishIssue.id, p_visit: visitId,
+          p_note: `${label}${pct ? ` (עלות + ${pct}% טיפול)` : ''}`, p_receipt: receipt,
+        })
+        if (cErr) { toastError('רישום החיוב על החלקים נכשל'); return }
+      }
+
       const done = {
         status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
         handler: 'management', handler_kind: finishForm.kind, visit_id: visitId,
       }
-      // The visit's punches sit on the issue it was opened from; the others
-      // carry the visit id, so each shows it was handled on a shared visit.
+      const partsTotal = Math.round(finishPartsTotal * 100) / 100
       await update(finishIssue.id, {
         ...done, work_hours: hours, off_hours: offHours,
         punches_charged: (Number(finishIssue.punches_charged) || 0) + finishPunches,
-        parts_cost: parts, ...(parts != null ? { cost: parts } : {}),
+        parts_cost: partsTotal || null, ...(partsTotal ? { cost: partsTotal } : {}),
         after_photo_url: finishForm.photoUrl.trim() || null,
       })
       for (const o of others) await update(o.id, done)
       for (const o of [finishIssue, ...others]) notifyIssueStatus(o.id, 'resolved')
-      const what = others.length ? `ביקור הסתיים · ${others.length + 1} תקלות` : 'הטיפול הסתיים'
-      toast(finishPunches > 0 ? `${what} · נוקבו ${finishPunches} ניקובים` : `${what} · ללא ניקוב`)
+
+      const bits = [others.length ? `ביקור הסתיים · ${others.length + 1} תקלות` : 'הטיפול הסתיים']
+      if (settled?.covered) bits.push(`${settled.covered} שעות מהכרטיסייה`)
+      if (settled?.billed) bits.push(`${settled.billed} שעות לחיוב`)
+      if (settled?.card_id) bits.push('נקנתה כרטיסייה חדשה')
+      if (partsTotal) bits.push(`חלקים ₪${partsTotal}`)
+      toast(bits.join(' · '))
       setFinishIssue(null)
     } finally { setFinishBusy(false) }
   }
@@ -2567,14 +2636,15 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           <div className="space-y-4">
             <p className="text-sm font-semibold">{transferIssue?.title}</p>
             <p className="text-[13px] text-[var(--text-secondary)]">
-              יתרת ניקובים: <strong className={noPunches ? 'text-[var(--danger)]' : 'text-[var(--text-primary)]'}>{transferBalance == null ? '…' : transferBalance.balance}</strong>
+              יתרת שעות בכרטיסייה: <strong className={noPunches ? 'text-[var(--danger)]' : 'text-[var(--text-primary)]'}>{transferBalance == null ? '…' : transferBalance.balance}</strong>
+              {transferPlan ? ` · מסלול ${transferPlan.label}` : ''}
             </p>
             <div className="space-y-2" role="radiogroup">
               {[
-                contractorName && { key: 'contractor', title: `שלח ל${contractorName}`, sub: 'הספק הקבוע של הבניין לקטגוריה הזו. יקבל את התקלה בוואטסאפ עכשיו. ללא ניקוב.' },
-                { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `יטופל יחד עם שאר התקלות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים. משלמים על ביקור אחד.`, needsPunch: true },
-                { key: 'urgent', title: 'איש אחזקה — דחוף', sub: 'ביקור נפרד בהקדם, לפחות ניקוב אחד.', needsPunch: true },
-                { key: 'vendor', title: 'ספק אחר', sub: 'חברת הניהול תאתר ספק מתאים ותתאם מולו. ניקוב תיאום אחד; החשבון של הספק בנפרד.' },
+                contractorName && { key: 'contractor', title: `שלח ל${contractorName}`, sub: 'הספק הקבוע של הבניין לקטגוריה הזו. יקבל את התקלה עכשיו, בערוץ שהוגדר לו. ללא חיוב.' },
+                { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `יטופל יחד עם שאר התקלות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים. משלמים על ביקור אחד, השעות יורדות מהכרטיסייה.`, needsPunch: true },
+                { key: 'urgent', title: 'איש אחזקה — דחוף', sub: 'ביקור נפרד בהקדם, לפחות שעה.', needsPunch: true },
+                { key: 'vendor', title: 'ועד1 תטפל בספק', sub: `ועד1 מבקשת הצעות, מתאמת ומוודאת ביצוע. הוועד בוחר את ההצעה.${Number(transferPlan?.handle_fee) ? ` ₪${Number(transferPlan.handle_fee)} לעבודה.` : ''} את הספק הבניין משלם ישירות.` },
               ].filter(Boolean).map((o) => {
                 const off = o.needsPunch && noPunches
                 return (
@@ -2582,19 +2652,19 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]" disabled={off}
                       checked={transferMode === o.key} onChange={() => setTransferMode(o.key)} />
                     <span><span className="font-semibold text-sm">{o.title}</span>
-                      <span className="block text-[12px] text-[var(--text-secondary)]">{off ? 'הכרטיסייה נגמרה — לרכישת כרטיסייה חדשה פנו לחברת הניהול.' : o.sub}</span></span>
+                      <span className="block text-[12px] text-[var(--text-secondary)]">{off ? 'הכרטיסייה נגמרה, והוועד בחר לעצור עד קניית כרטיסייה. אפשר לקנות כרטיסייה במסך "חשבון ועד1".' : o.sub}</span></span>
                   </label>
                 )
               })}
             </div>
             <details className="text-[12px] text-[var(--text-secondary)]">
-              <summary className="cursor-pointer font-semibold">איך מחושבים ניקובים</summary>
+              <summary className="cursor-pointer font-semibold">איך מחושב החיוב</summary>
               <ul className="mt-2 list-disc pr-4 space-y-1">
-                {punchRules(serviceCfg.settings).map((r) => <li key={r}>{r}</li>)}
+                {punchRules(serviceCfg.settings, transferPlan, transferPolicy).map((r) => <li key={r}>{r}</li>)}
               </ul>
             </details>
             <div className="flex gap-3">
-              <Button onClick={handleConfirmTransfer} disabled={transferBusy || transferBlocked || (transferBalance == null && (transferMode === 'next_visit' || transferMode === 'urgent'))}>
+              <Button onClick={handleConfirmTransfer} disabled={transferBusy || transferBlocked}>
                 <ArrowRight className="h-4 w-4" />{transferBusy ? 'מעביר…' : 'העבר לטיפול'}
               </Button>
               <Button variant="outline" onClick={() => setTransferIssue(null)}>ביטול</Button>
@@ -2607,7 +2677,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       <Dialog open={!!finishIssue} onOpenChange={(o) => { if (!o) setFinishIssue(null) }}>
         <DialogContent className="w-full max-w-sm">
           <DialogHeader>
-            <DialogTitle>סיום ביקור וניקוב</DialogTitle>
+            <DialogTitle>סיום ביקור</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm font-semibold">{finishIssue?.title}</p>
@@ -2628,7 +2698,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               label="מי ביצע"
               value={finishForm.kind}
               onChange={(e) => setFinishForm((f) => ({ ...f, kind: e.target.value }))}
-              options={[{ value: 'handyman', label: 'איש אחזקה' }, { value: 'vendor', label: 'ספק בתיאום חברת הניהול (ניקוב אחד)' }, { value: 'contractor', label: 'הספק הקבוע של הבניין (ללא ניקוב)' }]}
+              options={[{ value: 'handyman', label: 'איש אחזקה' }, { value: 'vendor', label: 'ספק בטיפול ועד1 (דמי הטיפול נגבו בהעברה)' }, { value: 'contractor', label: 'הספק הקבוע של הבניין (ללא חיוב)' }]}
             />
             {finishForm.kind === 'handyman' && (
               <>
@@ -2641,32 +2711,71 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 <label className="flex items-center gap-2 cursor-pointer text-sm font-medium">
                   <input type="checkbox" className="h-4 w-4 accent-[var(--primary)]" checked={finishForm.offHours}
                     onChange={(e) => setFinishForm((f) => ({ ...f, offHours: e.target.checked }))} />
-                  בוצע מחוץ לשעות הפעילות (ניקוב כפול)
+                  בוצע מחוץ לשעות הפעילות (שעות כפולות)
                 </label>
               </>
             )}
-            <FormField
-              label="עלות חלקים וחומרים (בנפרד מהניקוב)"
-              type="number"
-              value={finishForm.partsCost}
-              onChange={(e) => setFinishForm((f) => ({ ...f, partsCost: e.target.value }))}
-            />
+            <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+              <p className="text-[13px] font-semibold">חלקים</p>
+              {finishParts.map((l) => (
+                <div key={l.key} className="rounded-md bg-[var(--surface-secondary)] p-2 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <input className="flex-1 min-w-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px]"
+                      placeholder="שם החלק" value={l.label} readOnly={l.source === 'catalog'}
+                      onChange={(e) => setPart(l.key, { label: e.target.value })} />
+                    <button type="button" onClick={() => removePart(l.key)} className="text-[var(--text-muted)] hover:text-[var(--danger)]" aria-label="הסרת חלק"><X className="h-4 w-4" /></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-[11px] text-[var(--text-muted)]">כמות
+                      <input type="number" min="1" dir="ltr" className="mt-0.5 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px]"
+                        value={l.qty} onChange={(e) => setPart(l.key, { qty: e.target.value })} />
+                    </label>
+                    <label className="text-[11px] text-[var(--text-muted)]">{l.source === 'catalog' ? 'מחיר ליחידה (מחירון)' : 'עלות לפי קבלה, ליחידה'}
+                      <input type="number" min="0" dir="ltr" className="mt-0.5 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px]"
+                        value={l.unitCost} readOnly={l.source === 'catalog'} onChange={(e) => setPart(l.key, { unitCost: e.target.value })} />
+                    </label>
+                  </div>
+                  {l.source === 'receipt' && (
+                    <input className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px]"
+                      placeholder="קישור לתמונת הקבלה" value={l.receiptUrl} onChange={(e) => setPart(l.key, { receiptUrl: e.target.value })} />
+                  )}
+                  <p className="text-[12px] text-[var(--text-secondary)]">
+                    לחיוב: ₪{lineTotal(l)}{l.source === 'receipt' && handlingPct ? ` (כולל ${handlingPct}% טיפול)` : ''}
+                    {l.source === 'receipt' && partsApprovalThreshold && lineTotal(l) > partsApprovalThreshold ? ` · מעל ₪${partsApprovalThreshold} — דרוש אישור הוועד` : ''}
+                  </p>
+                </div>
+              ))}
+              <div className="flex flex-wrap gap-2">
+                {partsCatalog.length > 0 && (
+                  <select className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px]" value=""
+                    onChange={(e) => addCatalogPart(e.target.value)}>
+                    <option value="">+ פריט מהמלאי</option>
+                    {partsCatalog.map((c) => <option key={c.id} value={c.id}>{c.label} · ₪{Number(c.price)}</option>)}
+                  </select>
+                )}
+                <Button type="button" variant="outline" size="sm" onClick={addReceiptPart}><Plus className="h-4 w-4" />חלק לפי קבלה</Button>
+              </div>
+            </div>
             <FormField
               label="קישור לתמונת סיום (לא חובה)"
               value={finishForm.photoUrl}
               onChange={(e) => setFinishForm((f) => ({ ...f, photoUrl: e.target.value }))}
             />
             <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
-              <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא ניקוב' : `ינוקבו ${finishPunches} ניקובים`}
+              <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא חיוב שעות' : finishPunches ? `${finishPunches} שעות` : 'ללא שעות לחיוב'}
                 {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} תקלות` : ''}</p>
               {finishForm.kind === 'handyman' && !finishIsFreeRevisit && (
-                <p className="text-[12px] text-[var(--text-muted)]">מינימום {Number(serviceCfg.settings?.visit_min_punches) || 1} לביקור · ניקוב לכל שעה שמתחילה{finishForm.offHours ? ` · פי ${Number(serviceCfg.settings?.off_hours_multiplier) || 2} מחוץ לשעות` : ''}</p>
+                <p className="text-[12px] text-[var(--text-muted)]">מינימום {Number(serviceCfg.settings?.visit_min_punches) || 1} שעה לביקור · כל שעה שמתחילה נספרת{finishForm.offHours ? ` · פי ${Number(serviceCfg.settings?.off_hours_multiplier) || 2} מחוץ לשעות` : ''}</p>
               )}
-              {finishBalance && (
-                <p className={finishBalance.balance - finishPunches < 0 ? 'text-[var(--danger)]' : 'text-[var(--text-secondary)]'}>
-                  יתרת הבניין: {finishBalance.balance} · אחרי הניקוב: {finishBalance.balance - finishPunches}
+              {finishBalance && finishPunches > 0 && (
+                <p className="text-[var(--text-secondary)]">
+                  מהכרטיסייה: {finishCovered} (יתרה {finishBalance.balance})
+                  {finishOverflow > 0 && (finishPolicy === 'bill_hourly'
+                    ? ` · ${finishOverflow} שעות לחיוב, ₪${finishOverflow * (Number(finishPlan?.hour_price) || 0)}`
+                    : finishPolicy === 'auto_renew' ? ' · תירכש כרטיסייה חדשה אוטומטית' : ` · ${finishOverflow} שעות בחוב, יקוזזו מהכרטיסייה הבאה`)}
                 </p>
               )}
+              {finishPartsTotal > 0 && <p className="text-[var(--text-secondary)]">חלקים: ₪{Math.round(finishPartsTotal * 100) / 100}</p>}
             </div>
             <div className="flex gap-3">
               <Button onClick={handleFinishWork} disabled={finishBusy}>
