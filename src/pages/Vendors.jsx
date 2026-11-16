@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { vendorDistanceKm, formatKm, distanceBand } from '@/lib/geo'
+import { ISSUE_GROUPS, issueGroupOf, issueGroupRank } from '@/lib/vendorGroups'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
@@ -752,15 +753,16 @@ function Vendors() {
                         <th></th>
                       </tr>
                     </thead>
-                    {SERVICE_GROUPS.map((g) => {
-                      const group = filtered.filter((v) => serviceTypeOf(v.category) === g.key)
+                    {ISSUE_GROUPS.map((g) => {
+                      const group = filtered.filter((v) => issueGroupOf(v.category) === g.key)
+                        .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he') || (Number(b.rating) || 0) - (Number(a.rating) || 0))
                       if (group.length === 0) return null
                       return (
                         <tbody key={g.key}>
                           <tr className="!bg-[var(--bg)] hover:!bg-[var(--bg)]">
                             <td colSpan={compareMode ? 9 : 8} className="!py-2">
                               <span className="text-[12px] font-bold text-[var(--text-primary)]">{g.label}</span>
-                              <span className="text-[11px] text-[var(--text-muted)] ms-2">{g.desc} · <span className="num-tabular">{group.length}</span></span>
+                              <span className="text-[11px] text-[var(--text-muted)] ms-2">{[...new Set(group.map((v) => v.category).filter(Boolean))].join(" · ")} · <span className="num-tabular">{group.length}</span></span>
                             </td>
                           </tr>
                           {group.map((vendor) => {
@@ -822,14 +824,15 @@ function Vendors() {
 
               {/* Mobile cards */}
               <div className="md:hidden space-y-5">
-                {SERVICE_GROUPS.map((g) => {
-                  const group = filtered.filter((v) => serviceTypeOf(v.category) === g.key)
+                {ISSUE_GROUPS.map((g) => {
+                  const group = filtered.filter((v) => issueGroupOf(v.category) === g.key)
+                    .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he') || (Number(b.rating) || 0) - (Number(a.rating) || 0))
                   if (group.length === 0) return null
                   return (
                     <div key={g.key} className="space-y-2">
                       <div className="flex items-baseline gap-2 border-b border-[var(--border)] pb-1.5">
                         <h3 className="text-[13px] font-bold text-[var(--text-primary)]">{g.label}</h3>
-                        <span className="text-[11px] text-[var(--text-muted)]">{g.desc} · {group.length}</span>
+                        <span className="text-[11px] text-[var(--text-muted)]">{[...new Set(group.map((v) => v.category).filter(Boolean))].join(" · ")} · {group.length}</span>
                       </div>
                       {group.map((vendor) => {
                         const stats = statsMap[vendor.id] || EMPTY_STATS
@@ -895,7 +898,7 @@ function Vendors() {
           .filter((v) => (membershipFilter === 'all' ? true : (v.membership_status || 'pending') === membershipFilter))
           .filter((v) => (inviteCategoryFilter ? v.category === inviteCategoryFilter : true))
           .slice()
-          .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he'))
+          .sort((a, b) => issueGroupRank(a.category) - issueGroupRank(b.category) || (a.category || '').localeCompare(b.category || '', 'he'))
 
         const inviteActions = (v, status) => (
           <div className="flex gap-1.5 flex-wrap">
@@ -918,7 +921,8 @@ function Vendors() {
 
         return (
           <div className="space-y-4">
-            <GoogleSourcing categoryOptions={CATEGORY_OPTIONS} onAdded={refreshVendors} />
+            {/* Lift maintenance is the building's own contractor (contract + liability) — never sourced from the web. */}
+            <GoogleSourcing categoryOptions={CATEGORY_OPTIONS.filter((o) => o.value !== 'מעליות')} onAdded={refreshVendors} />
             <SectionCard
               icon={Send}
               title="הזמנת ספקים למאגר ועד1"
