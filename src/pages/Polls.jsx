@@ -10,9 +10,10 @@ import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { PollResultBars } from '@/components/common/PollResultBars'
 import {
-  DEFAULT_OPTIONS, SHOW_RESULTS_LABELS, POLL_DISCLAIMER, isPollClosed, loadPollResults,
+  DEFAULT_OPTIONS, SHOW_RESULTS_LABELS, POLL_DISCLAIMER, isPollClosed, loadPollResults, pollLink, pollShareText,
 } from '@/lib/polls'
-import { Vote, Plus, Lock, Info, Trash2, X } from 'lucide-react'
+import { notifyPollOpened } from '@/lib/notify'
+import { Vote, Plus, Lock, Info, Trash2, X, Link2, Share2, Bell } from 'lucide-react'
 
 // Committee side of resident polls: create a question, watch the tally, close
 // it. Residents answer from the portal, one vote per apartment.
@@ -50,15 +51,19 @@ export default function Polls() {
     const options = form.options.map((o) => o.trim()).filter(Boolean)
     if (!form.title.trim() || options.length < 2) { toastError('נדרשים נושא ולפחות שתי אפשרויות'); return }
     setSaving(true)
-    const { error } = await supabase.from('polls').insert({
+    const { data: created, error } = await supabase.from('polls').insert({
       building_id: selectedBuilding.id, title: form.title.trim(), description: form.description.trim(),
       options, owners_only: !!form.owners_only, show_results: form.show_results,
       closes_at: form.closes_at ? new Date(form.closes_at).toISOString() : null,
       created_by: profile?.id || null,
-    })
+    }).select('id, title, closes_at').single()
     setSaving(false)
     if (error) { toastError('יצירת ההצבעה נכשלה'); return }
-    toast('ההצבעה נפתחה לדיירים')
+    // Tell the residents: app notification now; the WhatsApp-group text is one tap away on the card.
+    const res = await notifyPollOpened(created.id)
+    toast(res?.push?.sent > 0
+      ? `ההצבעה נפתחה · נשלחה התראה ל-${res.push.sent} מכשירים. לשיתוף בקבוצת הבניין: "שיתוף בוואטסאפ"`
+      : 'ההצבעה נפתחה. לשיתוף בקבוצת הבניין: "שיתוף בוואטסאפ" בכרטיס ההצבעה')
     setFormOpen(false)
     setForm(EMPTY)
     load()
@@ -120,8 +125,22 @@ export default function Polls() {
                   {p.closes_at ? ` · נסגרת ב-${new Date(p.closes_at).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}` : ''}
                 </p>
                 <PollResultBars poll={p} result={results[p.id]} />
-                <div className="flex gap-2 pt-1">
-                  {!closed && <Button variant="outline" size="sm" onClick={() => closePoll(p)}><Lock className="h-4 w-4" />סגור הצבעה</Button>}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {!closed && (
+                    <>
+                      <Button size="sm" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(pollShareText(p, selectedBuilding?.name))}`, '_blank')}>
+                        <Share2 className="h-4 w-4" />שיתוף בוואטסאפ
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={async () => {
+                        try { await navigator.clipboard.writeText(pollLink(p.id)); toast('הקישור הועתק') } catch { toastError('ההעתקה נכשלה') }
+                      }}><Link2 className="h-4 w-4" />העתקת קישור</Button>
+                      <Button variant="outline" size="sm" onClick={async () => {
+                        const r = await notifyPollOpened(p.id)
+                        r?.push?.sent > 0 ? toast(`נשלחה תזכורת ל-${r.push.sent} מכשירים`) : toastError('אין מכשירים רשומים להתראות בבניין')
+                      }}><Bell className="h-4 w-4" />תזכורת באפליקציה</Button>
+                      <Button variant="outline" size="sm" onClick={() => closePoll(p)}><Lock className="h-4 w-4" />סגור הצבעה</Button>
+                    </>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => removePoll(p)}><Trash2 className="h-4 w-4" />מחיקה</Button>
                 </div>
               </div>

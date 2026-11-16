@@ -145,3 +145,13 @@ export async function notifyAnnouncement(announcementId) {
     return { success: false, error: String(e) }
   }
 }
+
+/** Push "a vote opened" to the building's app users (committee-initiated). */
+export async function notifyPollOpened(pollId) {
+  try {
+    return await callSendNotification({ template: 'poll_push', pollId })
+  } catch (e) {
+    console.error('notifyPollOpened error', e)
+    return { success: false, error: String(e) }
+  }
+}

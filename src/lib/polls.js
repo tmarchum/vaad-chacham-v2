@@ -38,3 +38,34 @@ export async function loadPollResults(polls) {
   }))
   return Object.fromEntries(pairs)
 }
+
+// Direct link to a poll. Opening it signs the resident in (first time only:
+// choose building + apartment) and lands on the poll itself.
+export const pollLink = (pollId) => `https://app.vaad1.co.il/?poll=${pollId}`
+
+export function pollShareText(poll, buildingName) {
+  const until = poll.closes_at ? `
+ההצבעה פתוחה עד ${new Date(poll.closes_at).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}.` : ''
+  return `🗳️ הצבעת דיירים${buildingName ? ` — ${buildingName}` : ''}
+
+${poll.title}${until}
+
+קול אחד לכל דירה. להצבעה:
+${pollLink(poll.id)}`
+}
+
+const PENDING_POLL_KEY = 'vc_open_poll'
+/** Remember ?poll=… across the sign-in redirect. */
+export function capturePollFromUrl() {
+  try {
+    const id = new URLSearchParams(window.location.search).get('poll')
+    if (id) localStorage.setItem(PENDING_POLL_KEY, id)
+  } catch { /* storage unavailable */ }
+}
+export function takePendingPoll() {
+  try {
+    const id = localStorage.getItem(PENDING_POLL_KEY)
+    if (id) localStorage.removeItem(PENDING_POLL_KEY)
+    return id
+  } catch { return null }
+}

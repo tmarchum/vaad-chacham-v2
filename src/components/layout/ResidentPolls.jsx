@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { POLL_DISCLAIMER, isPollClosed, loadPollResults, pollErrorMessage } from '@/lib/polls'
+import { POLL_DISCLAIMER, isPollClosed, loadPollResults, pollErrorMessage, takePendingPoll } from '@/lib/polls'
 import { PollResultBars } from '@/components/common/PollResultBars'
 import { Vote, Check } from 'lucide-react'
 
@@ -13,6 +13,7 @@ export default function ResidentPolls({ buildingId }) {
   const [results, setResults] = useState({})
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState('')
+  const [focusId, setFocusId] = useState(null)
 
   const load = useCallback(async () => {
     if (!buildingId) return
@@ -27,6 +28,15 @@ export default function ResidentPolls({ buildingId }) {
   }, [buildingId])
 
   useEffect(() => { load() }, [load])
+
+  // Arrived from a poll link: scroll to that poll and highlight it.
+  useEffect(() => {
+    if (!polls.length) return
+    const id = takePendingPoll()
+    if (!id) return
+    setFocusId(id)
+    setTimeout(() => document.getElementById(`poll-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150)
+  }, [polls])
 
   const vote = async (poll, option) => {
     setBusy(poll.id)
@@ -51,7 +61,7 @@ export default function ResidentPolls({ buildingId }) {
         const r = results[p.id]
         const closed = isPollClosed(p) || r?.closed
         return (
-          <div key={p.id} className="rounded-[var(--radius)] border border-[var(--border-light)] p-3 space-y-3">
+          <div key={p.id} id={`poll-${p.id}`} className={`scroll-mt-24 rounded-[var(--radius)] border p-3 space-y-3 ${focusId === p.id ? 'border-[var(--primary)] ring-2 ring-[var(--primary)]/30' : 'border-[var(--border-light)]'}`}>
             <div>
               <p className="text-[15px] font-bold">{p.title}</p>
               {p.description && <p className="text-[13px] text-[var(--text-secondary)] mt-0.5 whitespace-pre-wrap">{p.description}</p>}

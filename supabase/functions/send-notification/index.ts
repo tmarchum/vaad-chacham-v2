@@ -666,6 +666,32 @@ Deno.serve(async (req) => {
       return json({ success: true, push: out })
     }
 
+    // ── Template: poll_push — tell the building's app users a vote opened.
+    // Push-only, committee-initiated; tapping opens the poll. ──
+    if (body.template === 'poll_push' && body.pollId) {
+      if (!isPrivileged(caller)) return json({ error: 'forbidden' }, 403)
+      const { data: poll } = await supabase.from('polls')
+        .select('id, building_id, title, closes_at').eq('id', body.pollId).maybeSingle()
+      if (!poll) return json({ error: 'poll_not_found' }, 404)
+      const { data: profs } = await supabase.from('profiles').select('id').eq('building_id', poll.building_id)
+      const out = await sendPushToUsers(supabase, (profs || []).map((p) => p.id), {
+        title: 'נפתחה הצבעה בבניין 🗳️',
+        body: String(poll.title || '').slice(0, 200),
+        data: { type: 'poll', pollId: String(poll.id), url: `https://app.vaad1.co.il/?poll=${poll.id}` },
+      })
+      try {
+        await supabase.from('notification_log').insert({
+          building_id: poll.building_id, channel: 'push', provider: 'fcm', audience: 'resident',
+          recipient: `${(profs || []).length} משתמשים בבניין`,
+          subject: `פוש: הצבעה — ${String(poll.title || '').slice(0, 180)}`, body: '',
+          status: out.sent > 0 ? 'sent' : (out.skipped ? 'skipped' : 'failed'),
+          error_message: out.sent > 0 ? null : JSON.stringify(out).slice(0, 500),
+          sent_by: caller?.kind === 'user' ? caller.uid : null,
+        })
+      } catch { /* */ }
+      return json({ success: true, push: out, recipients: (profs || []).length })
+    }
+
     let to = '', subject = '', html = ''
     let buildingId = body.buildingId || null
     let unitId = body.unitId || null

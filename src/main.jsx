@@ -4,6 +4,9 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import { initTheme } from '@/lib/theme'
 import { initTextSize } from '@/lib/textSize'
+import { capturePollFromUrl } from '@/lib/polls'
+
+capturePollFromUrl()
 
 // Apply the saved theme before anything renders (no flash of wrong theme).
 initTheme()
