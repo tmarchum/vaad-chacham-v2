@@ -283,6 +283,7 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
         <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{preview?.subject}</DialogTitle></DialogHeader>
           <iframe title="תצוגת המייל" sandbox="" srcDoc={preview?.html || ''} className="w-full h-[60vh] rounded-[var(--radius)] border border-[var(--border)] bg-white" />
+          <div className="mt-3 flex justify-end"><Button size="sm" variant="outline" onClick={() => setPreview(null)}>סגירה</Button></div>
         </DialogContent>
       </Dialog>
     </SectionCard>

@@ -27,6 +27,11 @@ const TYPE_LABELS: Record<string, string> = {
   parts: 'חלקים', building_subscription: 'מנוי חודשי',
 }
 
+const lineLabel = (l: any) => {
+  const type = TYPE_LABELS[l.type] || l.type
+  const note = String(l.note || '').trim()
+  return note.startsWith(type) ? note : [type, note].filter(Boolean).join(' · ')
+}
 const nis = (n: unknown) => `₪${Number(n || 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}`
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 const periodLabel = (p: string) => { const [y, m] = p.split('-'); return `${MONTHS[Number(m) - 1] || m} ${y}` }
@@ -49,7 +54,7 @@ function emailHtml(s: any, building: string, w: any, vars: Record<string, string
   // deno-lint-ignore no-explicit-any
   const lines = (s.lines || []) as any[]
   // deno-lint-ignore no-explicit-any
-  const row = (l: any) => `<tr><td style="padding:6px 0;border-bottom:1px solid #e2e8f0">${esc([TYPE_LABELS[l.type] || l.type, l.note].filter(Boolean).join(' · '))}</td><td style="padding:6px 0;border-bottom:1px solid #e2e8f0;text-align:left;white-space:nowrap">${nis(l.amount)}</td></tr>`
+  const row = (l: any) => `<tr><td style="padding:6px 0;border-bottom:1px solid #e2e8f0">${esc(lineLabel(l))}</td><td style="padding:6px 0;border-bottom:1px solid #e2e8f0;text-align:left;white-space:nowrap">${nis(l.amount)}</td></tr>`
   const billed = lines.filter((l) => l.approval !== 'awaiting')
   const awaiting = lines.filter((l) => l.approval === 'awaiting')
   return `<div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#0b1c30">

@@ -24,7 +24,12 @@ export function splitLines(lines = []) {
   }
 }
 
-export const lineLabel = (l) => [CHARGE_TYPE_LABELS[l.type] || l.type, l.note].filter(Boolean).join(' · ')
+// The note of a subscription line already opens with its type, so it is not repeated.
+export const lineLabel = (l) => {
+  const type = CHARGE_TYPE_LABELS[l.type] || l.type
+  const note = String(l.note || '').trim()
+  return note.startsWith(type) ? note : [type, note].filter(Boolean).join(' · ')
+}
 export const approvalLabel = (a) => APPROVAL_LABELS[a] || a
 
 // Direct-debit authorization of a building.

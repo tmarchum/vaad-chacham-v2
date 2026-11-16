@@ -14,6 +14,14 @@ function Dialog({ open, onOpenChange, children }) {
     }
   }, [open])
 
+  // Escape closes, as people expect from a window.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => { if (e.key === 'Escape') onOpenChange?.(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onOpenChange])
+
   if (!open) return null
 
   return createPortal(
