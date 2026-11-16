@@ -108,6 +108,7 @@ const ServicePlans     = lazy(() => import('@/pages/ServicePlans'))
 const Charges          = lazy(() => import('@/pages/Charges'))
 const Polls            = lazy(() => import('@/pages/Polls'))
 const IssueBrief       = lazy(() => import('@/pages/IssueBrief'))
+const StatementView    = lazy(() => import('@/pages/StatementView'))
 
 // Shared page loading fallback
 function PageLoader() {
@@ -133,6 +134,7 @@ createRoot(document.getElementById('root')).render(
           {/* Public route */}
           <Route path="/login" element={<Login />} />
           <Route path="/brief/:token" element={<Suspense fallback={<PageLoader />}><IssueBrief /></Suspense>} />
+          <Route path="/statement/:token" element={<Suspense fallback={<PageLoader />}><StatementView /></Suspense>} />
 
           {/* Protected routes */}
           <Route element={<AuthGuard />}>

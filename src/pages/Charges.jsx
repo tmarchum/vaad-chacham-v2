@@ -7,6 +7,7 @@ import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { toast, toastError } from '@/lib/toast'
 import { useConfirm } from '@/lib/confirm'
+import { StatementsCard } from '@/components/billing/StatementsCard'
 import { cn } from '@/lib/utils'
 import {
   loadServiceConfig, loadBuildingBilling, loadPunchBalance, loadPriceLists, monthlyPrice, punchRules, itemPrice,
@@ -176,6 +177,8 @@ export default function Charges() {
           ? <p className="p-4 text-[13px] text-[var(--text-muted)]">עוד אין תוספות החודש</p>
           : <div className="divide-y divide-[var(--border-light)]">{thisMonth.map((c) => <ChargeRow key={c.id} c={c} />)}</div>}
       </SectionCard>
+
+      <StatementsCard buildingId={buildingId} buildingName={selectedBuilding?.name || ''} isAdmin={isAdmin} />
 
       {/* ── Committee choices ── */}
       <SectionCard icon={SlidersHorizontal} title="הגדרות חיוב של הוועד"

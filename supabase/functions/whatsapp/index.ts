@@ -707,7 +707,7 @@ Deno.serve(async (req: Request) => {
     // is an interactive message; otherwise the approved template. ──
     if (action === 'issue-decision') {
       if (!integ?.enabled || !integ.phone_number_id || !token) return json({ ok: false, error: 'integration_disabled' })
-      let q = svc.from('issues').select('id, title, description, building_id, created_at, ticket_no, handler, status')
+      let q = svc.from('issues').select('id, title, description, building_id, created_at, ticket_no, handler, status, assigned_to')
         .is('handler', null).not('status', 'in', '("completed","resolved","closed","rejected")').order('created_at')
       if (body.issueId) q = q.eq('id', body.issueId)
       else if (body.buildingId) q = q.eq('building_id', body.buildingId)
@@ -731,6 +731,12 @@ Deno.serve(async (req: Request) => {
           // Admin can try it on one number first.
           if (isAdmin && body.onlyPhone) { const one = toE164(String(body.onlyPhone)); phones = one ? [one] : [] }
           phonesByBuilding.set(iss.building_id, phones)
+        }
+        // Routed issue → its assigned committee member; unassigned → the whole committee.
+        if (iss.assigned_to && !(isAdmin && body.onlyPhone)) {
+          const { data: owner } = await svc.from('unit_residents').select('phone').eq('id', iss.assigned_to).maybeSingle()
+          const one = toE164(String(owner?.phone || ''))
+          if (one && /^9725\d{8}$/.test(one)) phones = [one]
         }
         const { data: b } = await svc.from('buildings').select('name').eq('id', iss.building_id).maybeSingle()
         const days = String(Math.max(0, Math.floor((Date.now() - new Date(iss.created_at).getTime()) / 86400000)))
