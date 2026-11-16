@@ -421,13 +421,19 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
   //    nobody has approved. Before the plans migration the column does not
   //    exist and the old behaviour (tell the routed vendor at once) stays.
   let awaitingDecision = false
+  let handledByVaad1 = false
   {
-    const { data: h, error: hErr } = await svc.from('issues').select('handler').eq('id', issueId).maybeSingle()
+    const { data: h, error: hErr } = await svc.from('issues').select('handler, handler_kind').eq('id', issueId).maybeSingle()
     if (!hErr && h && h.handler == null) awaitingDecision = true
+    if (!hErr && h?.handler === 'management' && h?.handler_kind === 'handyman') handledByVaad1 = true
   }
   let vendor: Record<string, unknown> | null = null
   if (awaitingDecision) {
     // no contractor yet
+  } else if (handledByVaad1) {
+    // Handed to ועד1's own handling: dispatch to ועד1's handyman.
+    const { data } = await svc.from('vendors').select('id, name, phone, email, contact_channel').eq('is_internal', true).limit(1).maybeSingle()
+    vendor = data || null
   } else if (issue.vendor_id) {
     const { data } = await svc.from('vendors').select('id, name, phone, email, contact_channel').eq('id', issue.vendor_id).maybeSingle()
     vendor = data || null

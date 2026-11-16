@@ -1429,7 +1429,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         else toastError(`הועבר ל${vendor}, אבל ההודעה לא יצאה — ${line || 'חסרים פרטי קשר לספק'}`)
       } else {
         const fee = Number(transferPlan?.handle_fee) || 0
-        toast({ next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: `הועבר — ועד1 תטפל בספק${fee ? ` (₪${fee})` : ''}` }[transferMode])
+        let msg = { next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: `הועבר — ועד1 תטפל בספק${fee ? ` (₪${fee})` : ''}` }[transferMode]
+        // ועד1's own handyman gets the job on WhatsApp.
+        if (transferMode === 'next_visit' || transferMode === 'urgent') {
+          const res = await notifyIssueDispatch(iss.id)
+          if (res?.reached?.length) msg += ' · נשלח להנדימן של ועד1'
+        }
+        toast(msg)
       }
       setTransferIssue(null)
     } finally { setTransferBusy(false) }

@@ -246,6 +246,9 @@ function VendorAvatar({ vendor }) {
 
 // Where the vendor was verified: Google listing (rating + review count) or מידרג.
 function SourceBadge({ vendor }) {
+  if (vendor.is_internal) {
+    return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--primary)] text-white">ועד1 · הנדימן</span>
+  }
   if (vendor.source === 'midrag') {
     return (
       <a href={vendor.midrag_url || undefined} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}

@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/select'
 import { toast, toastError } from '@/lib/toast'
 import { vendorDistanceKm, formatKm } from '@/lib/geo'
 import { cn, formatCurrency } from '@/lib/utils'
-import { MessageCircle, Wrench, Receipt, Send, Plus, Check, X } from 'lucide-react'
+import { MessageCircle, Wrench, Receipt, Send, Plus, Check, X, Clock } from 'lucide-react'
 
 // "תיק ספק": one place per vendor for the WhatsApp conversation, the jobs and
 // quotes with the selected building, and the building's payables to the vendor.
@@ -124,7 +124,9 @@ export function VendorFile({ vendor, initialTab = 'chat', onClose }) {
           tabs={[
             { key: 'chat', label: 'שיחה', icon: MessageCircle, count: inbound || null },
             { key: 'jobs', label: 'עבודות והצעות', icon: Wrench, count: jobs.workOrders.length + jobs.quotes.length || null },
-            { key: 'billing', label: 'התחשבנות', icon: Receipt, count: totals.openCount || null },
+            vendor.is_internal
+              ? { key: 'billing', label: 'שעות טיפול', icon: Clock }
+              : { key: 'billing', label: 'התחשבנות', icon: Receipt, count: totals.openCount || null },
           ]}
         />
 
@@ -135,6 +137,8 @@ export function VendorFile({ vendor, initialTab = 'chat', onClose }) {
             <ChatTab vendor={vendor} messages={messages} live={live} onSent={loadMessages} />
           ) : tab === 'jobs' ? (
             <JobsTab jobs={jobs} hasBuilding={!!buildingId} />
+          ) : vendor.is_internal ? (
+            <HoursTab buildingId={buildingId} />
           ) : (
             <BillingTab vendor={vendor} buildingId={buildingId} bills={bills} totals={totals} unbilled={unbilled} onChange={load} />
           )}
@@ -253,6 +257,57 @@ function JobsTab({ jobs, hasBuilding }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ועד1 handyman: hours logged on issues (punch card / ועד1 bill) ──────────
+function HoursTab({ buildingId }) {
+  const [rows, setRows] = useState(null)
+  useEffect(() => {
+    if (!buildingId) { setRows([]); return }
+    supabase.from('issues')
+      .select('id, title, ticket_no, status, stage, work_hours, punches_charged, off_hours, resolved_at, handled_at, created_at')
+      .eq('building_id', buildingId).eq('handler', 'management').eq('handler_kind', 'handyman')
+      .order('created_at', { ascending: false }).limit(200)
+      .then(({ data }) => setRows(data || []))
+  }, [buildingId])
+  if (!buildingId) return <p className="text-[13px] text-[var(--text-muted)] py-6 text-center">יש לבחור בניין.</p>
+  if (!rows) return <p className="text-[13px] text-[var(--text-muted)] py-6 text-center">טוען...</p>
+  const month = new Date().toISOString().slice(0, 7)
+  const done = rows.filter((r) => Number(r.work_hours) > 0)
+  const sum = (list) => list.reduce((a, r) => a + Number(r.work_hours || 0), 0)
+  const thisMonth = done.filter((r) => String(r.resolved_at || '').startsWith(month))
+  const open = rows.filter((r) => !(Number(r.work_hours) > 0) && !['completed', 'resolved', 'closed', 'rejected'].includes(r.status))
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2">
+        {[['פתוחות לטיפול', open.length, ''], ['שעות החודש', sum(thisMonth), ''], ['שעות סה"כ', sum(done), '']].map(([label, v]) => (
+          <div key={label} className="rounded-[var(--radius)] border border-[var(--border)] p-3">
+            <p className="text-[11px] text-[var(--text-muted)]">{label}</p>
+            <p className="text-[17px] font-semibold num-tabular">{Math.round(v * 10) / 10}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-[var(--text-muted)]">ההנדימן של ועד1: השעות נרשמות בסיום הטיפול בתקלה ויורדות מהכרטיסייה של הבניין או נכנסות לחשבון ועד1 — לא חשבון ספק נפרד.</p>
+      {rows.length === 0 ? (
+        <p className="text-[13px] text-[var(--text-muted)] py-4 text-center">עדיין לא הועברו תקלות לטיפול ועד1 בבניין הזה.</p>
+      ) : (
+        <div className="divide-y divide-[var(--border-light)] rounded-[var(--radius)] border border-[var(--border)]">
+          {rows.map((r) => (
+            <div key={r.id} className="flex items-center justify-between gap-3 p-2.5 text-[13px]">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{r.ticket_no ? `#${r.ticket_no} · ` : ''}{r.title}</p>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  {Number(r.work_hours) > 0 ? `טופל ${fmtDate(r.resolved_at)}` : r.stage === 'queued_for_visit' ? 'ממתין לביקור הבא' : 'בטיפול'}
+                  {r.off_hours ? ' · מחוץ לשעות' : ''}
+                </p>
+              </div>
+              <span className="num-tabular shrink-0">{Number(r.work_hours) > 0 ? `${r.work_hours} ש׳` : '—'}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
