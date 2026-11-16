@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useBuildingContext } from '@/hooks/useStore'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -39,13 +39,32 @@ export function VendorFile({ vendor, initialTab = 'chat', onClose }) {
   const [bills, setBills] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const loadMessages = useCallback(async () => {
+    if (!vendor) return
+    const { data } = await supabase.from('notification_log')
+      .select('id, created_at, channel, status, delivery_status, subject, body, error_message')
+      .eq('vendor_id', vendor.id).in('channel', ['whatsapp', 'whatsapp_in'])
+      .order('created_at', { ascending: true }).limit(500)
+    setMessages(data || [])
+  }, [vendor])
+
+  // Live: new messages, replies and delivery/read receipts appear as they happen.
+  const [live, setLive] = useState(false)
+  useEffect(() => {
+    if (!vendor) return
+    const ch = supabase.channel(`vendor-chat-${vendor.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notification_log', filter: `vendor_id=eq.${vendor.id}` }, () => loadMessages())
+      .subscribe((st) => setLive(st === 'SUBSCRIBED'))
+    return () => { supabase.removeChannel(ch); setLive(false) }
+  }, [vendor, loadMessages])
+
   const load = useCallback(async () => {
     if (!vendor) return
     setLoading(true)
     const msgQ = supabase.from('notification_log')
       .select('id, created_at, channel, status, delivery_status, subject, body, error_message')
       .eq('vendor_id', vendor.id).in('channel', ['whatsapp', 'whatsapp_in'])
-      .order('created_at', { ascending: true }).limit(300)
+      .order('created_at', { ascending: true }).limit(500)
     const woQ = buildingId
       ? supabase.from('work_orders').select('id, title, status, scheduled_date, completed_date, estimated_cost, actual_cost, created_at')
         .eq('vendor_id', vendor.id).eq('building_id', buildingId).order('created_at', { ascending: false })
@@ -109,7 +128,7 @@ export function VendorFile({ vendor, initialTab = 'chat', onClose }) {
           {loading ? (
             <p className="text-[13px] text-[var(--text-muted)] py-8 text-center">טוען...</p>
           ) : tab === 'chat' ? (
-            <ChatTab vendor={vendor} messages={messages} onSent={load} />
+            <ChatTab vendor={vendor} messages={messages} live={live} onSent={loadMessages} />
           ) : tab === 'jobs' ? (
             <JobsTab jobs={jobs} hasBuilding={!!buildingId} />
           ) : (
@@ -122,8 +141,10 @@ export function VendorFile({ vendor, initialTab = 'chat', onClose }) {
 }
 
 // ── Conversation ───────────────────────────────────────────────────────────
-function ChatTab({ vendor, messages, onSent }) {
+function ChatTab({ vendor, messages, live, onSent }) {
   const [text, setText] = useState('')
+  const endRef = useRef(null)
+  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }) }, [messages.length])
   const [busy, setBusy] = useState(false)
   const lastIn = [...messages].reverse().find((m) => m.channel === 'whatsapp_in')
   // WhatsApp allows free text only within 24h of the vendor's last message.
@@ -144,6 +165,10 @@ function ChatTab({ vendor, messages, onSent }) {
 
   return (
     <div className="space-y-3">
+      <p className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)]">
+        <span className={cn('h-2 w-2 rounded-full', live ? 'bg-[var(--success)] animate-pulse' : 'bg-[var(--text-muted)]')} />
+        {live ? 'מתעדכן בזמן אמת' : 'מתחבר...'} · {messages.length} הודעות בתיעוד
+      </p>
       {messages.length === 0 ? (
         <p className="text-[13px] text-[var(--text-muted)] py-6 text-center">עדיין אין הודעות עם הספק הזה.</p>
       ) : (
@@ -167,6 +192,7 @@ function ChatTab({ vendor, messages, onSent }) {
               </div>
             )
           })}
+          <div ref={endRef} />
         </div>
       )}
 

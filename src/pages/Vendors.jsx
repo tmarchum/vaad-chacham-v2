@@ -19,6 +19,7 @@ import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/w
 import { toast } from '@/lib/toast'
 import { GoogleSourcing } from '@/components/vendors/GoogleSourcing'
 import { VendorFile } from '@/components/vendors/VendorFile'
+import { VendorInbox } from '@/components/vendors/VendorInbox'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail,
   Shield, Clock, BarChart3, GitCompare,
@@ -110,6 +111,7 @@ const EMPTY_FORM = {
 const TABS = [
   { key: 'my-vendors', label: 'הספקים שלי' },
   { key: 'invites', label: 'הזמנות למאגר' },
+  { key: 'chats', label: 'שיחות' },
   { key: 'compare', label: 'השוואת ספקים' },
 ]
 
@@ -989,6 +991,10 @@ function Vendors() {
       {/* ================================================================== */}
       {/* TAB 3 - Compare Vendors */}
       {/* ================================================================== */}
+      {activeTab === 'chats' && (
+        <VendorInbox vendors={allVendors} onOpen={(v) => setFileVendor({ vendor: v, tab: 'chat' })} />
+      )}
+
       {activeTab === 'compare' && (
         <SectionCard
           icon={GitCompare}
