@@ -1445,6 +1445,24 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     } finally { setTransferBusy(false) }
   }
 
+  // Issues nobody decided on yet → to the committee's WhatsApp, with decision
+  // buttons (ועד1 תטפל / ספק דרך ועד1 / הוועד יטפל). The committee still decides.
+  const [decisionBusy, setDecisionBusy] = useState(false)
+  const pendingDecisionCount = useMemo(() => allIssues.filter((i) =>
+    i.buildingId === selectedBuilding?.id && !i.handler && !['completed', 'resolved', 'closed', 'rejected'].includes(i.status)).length,
+  [allIssues, selectedBuilding?.id])
+  const sendPendingToCommittee = async () => {
+    if (!selectedBuilding?.id || decisionBusy) return
+    if (!window.confirm(`לשלוח לחברי הוועד בוואטסאפ ${pendingDecisionCount} תקלות שממתינות להחלטה? כל תקלה נשלחת כהודעה עם שלושה כפתורי החלטה.`)) return
+    setDecisionBusy(true)
+    try {
+      const { data } = await supabase.functions.invoke('whatsapp', { body: { action: 'issue-decision', buildingId: selectedBuilding.id } })
+      if (!data?.ok) { toastError('השליחה נכשלה'); return }
+      if (data.sent) toast(`נשלחו ${data.sent} הודעות להחלטת הוועד${data.skipped ? ` · ${data.skipped} לא נשלחו` : ''}`)
+      else toastError(data.template === 'APPROVED' ? 'לא נמצאו חברי ועד עם נייד' : 'נוסח ההודעה עדיין ממתין לאישור של מטא. חבר ועד שכתב למספר של ועד1 ב-24 השעות האחרונות יקבל את ההודעות גם עכשיו.')
+    } finally { setDecisionBusy(false) }
+  }
+
   const handleOpenCloseNoFix = useCallback((iss) => { setCloseNoFixIssue(iss); setCloseReason('') }, [])
 
   // Closing without treatment always carries a reason: the resident is told
@@ -1685,6 +1703,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           <Link to="/issue-routing" className="h-[38px] px-3.5 rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] hover:bg-[var(--surface-secondary)] text-[13px] font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
             <GitBranch className="h-4 w-4" />ניתוב פניות
           </Link>
+          {pendingDecisionCount > 0 && (
+            <Button variant="outline" onClick={sendPendingToCommittee} disabled={decisionBusy}
+              title="שולח לחברי הוועד בוואטסאפ כל תקלה שממתינה להחלטה, עם כפתורי החלטה">
+              💬 {decisionBusy ? 'שולח...' : `להחלטת הוועד בוואטסאפ (${pendingDecisionCount})`}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setShowTemplates(true)}><FileText className="h-4 w-4" />מתבנית</Button>
           <Button onClick={openCreate}><Plus className="h-4 w-4" />תקלה חדשה</Button>
         </div>

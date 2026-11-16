@@ -308,7 +308,61 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   }).then(() => {}, () => {})
 
   // Poll vote from a template quick-reply button: payload "poll:<pollId>:<optionIndex>".
-  const payload = String((msg.button as Record<string, unknown>)?.payload || '')
+  const payload = String((msg.button as Record<string, unknown>)?.payload ||
+    ((msg.interactive as Record<string, unknown>)?.button_reply as Record<string, unknown>)?.id || '')
+
+  // Committee decision on an open issue: "issue:<issueId>:<vaad1|vendor|self>".
+  if (payload.startsWith('issue:')) {
+    const [, issueId, action] = payload.split(':')
+    const { data: res } = await svc.rpc('decide_issue_by_phone', { p_issue: issueId, p_phone: from, p_action: action })
+    const { data: iss } = await svc.from('issues')
+      .select('id, title, description, building_id, ticket_no, brief_token').eq('id', issueId).maybeSingle()
+    const title = String(iss?.title || 'התקלה')
+    const OK: Record<string, string> = {
+      vaad1: `✅ נרשם: ועד1 תטפל ב"${title}" בביקור האחזקה הבא. השעות יירדו מהכרטיסייה או ייכנסו לחשבון החודשי.`,
+      vendor: `✅ נרשם: ועד1 תתאם ספק ל"${title}". דמי הטיפול הקבועים נכנסו לחשבון החודשי, והצעת המחיר של הספק תגיע אליכם לאישור.`,
+      self: `✅ נרשם: הוועד מטפל ב"${title}".`,
+    }
+    const reply = res === 'ok' ? OK[action]
+      : res === 'already_decided' ? `כבר התקבלה החלטה על "${title}". אפשר לראות ולשנות באפליקציה.`
+      : res === 'no_punches' ? 'הכרטיסייה של הבניין נגמרה, ולכן ההעברה לא בוצעה. אפשר לקנות כרטיסייה במסך "חשבון ועד1" או לבחור אפשרות אחרת.'
+      : res === 'forbidden' ? 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.'
+      : 'ההחלטה לא נקלטה. אפשר להחליט באפליקציה.'
+    if (integ?.enabled && integ.phone_number_id && token) {
+      const r = await graph(integ, token, `${integ.phone_number_id}/messages`, {
+        method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: reply } }),
+      })
+      await log(svc, {
+        recipient: from, audience: 'resident', building_id: iss?.building_id || null,
+        subject: `החלטת ועד בוואטסאפ: ${title.slice(0, 120)}`, body: reply,
+        status: r.ok ? 'sent' : 'failed', error_message: r.ok ? null : graphError(r.data),
+      })
+      // ועד1's handyman hears about the job at once.
+      if (res === 'ok' && action === 'vaad1' && iss) {
+        const { data: hm } = await svc.from('vendors').select('id, name, phone').eq('is_internal', true).limit(1).maybeSingle()
+        const { data: t } = await svc.from('message_templates').select('*').eq('key', 'vendor_issue_dispatch').maybeSingle()
+        const { data: b } = await svc.from('buildings').select('name, street, house_number, city').eq('id', iss.building_id).maybeSingle()
+        const to = toE164(String(hm?.phone || ''))
+        if (hm && to && t?.meta_status === 'APPROVED') {
+          const vars = [hm.name, [b?.street, b?.house_number, b?.city].filter(Boolean).join(' ') || String(b?.name || ''),
+            `${iss.description || iss.title}${iss.brief_token ? ` | פרטים ותמונות: https://app.vaad1.co.il/brief/${iss.brief_token}` : ''}`,
+            'ועד הבית'].map(cleanParam)
+          const g = await graph(integ, token, `${integ.phone_number_id}/messages`, {
+            method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'template',
+              template: { name: t.meta_name, language: { code: t.language || 'he' }, components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } }),
+          })
+          await log(svc, {
+            recipient: to, audience: 'vendor', vendor_id: hm.id, template_key: 'vendor_issue_dispatch', building_id: iss.building_id,
+            subject: t.title, body: render(t.body, vars), status: g.ok ? 'sent' : 'failed', delivery_status: g.ok ? 'sent' : null,
+            external_id: ((g.data?.messages as Array<Record<string, unknown>>)?.[0]?.id as string) || null,
+            error_message: g.ok ? null : graphError(g.data),
+          })
+        }
+      }
+    }
+    return
+  }
+
   if (payload.startsWith('poll:')) {
     const [, pollId, idx] = payload.split(':')
     const { data: res } = await svc.rpc('cast_poll_vote_by_phone', { p_poll: pollId, p_phone: from, p_option: Number(idx) })
@@ -347,7 +401,7 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   // The vendor just wrote to us, so the 24h service window is open — free text is allowed.
   if (integ?.enabled && integ.phone_number_id && token) {
     const ack = newStatus === 'agreed'
-      ? 'תודה! נרשמת כספק מאושר במאגר ועד1 — נפנה אליך כשתהיה קריאה מתאימה.'
+      ? 'תודה! נרשמת כספק מאושר במאגר ועד1 — נפנה אליך כשתהיה קריאה מתאימה.\nמכירים ועד בית שמחפש סדר? ספק שמביא בניין מקבל קדימות בפניות. אפשר פשוט להשיב כאן.'
       : 'תודה על המענה, הוסרת מרשימת הפניות. אם תתחרט — כתוב "מאשר".'
     const r = await graph(integ, token, `${integ.phone_number_id}/messages`, {
       method: 'POST',
@@ -646,6 +700,70 @@ Deno.serve(async (req: Request) => {
         }
       }
       return json({ ok: r.ok, submitted, error: r.ok ? undefined : graphError(r.data) })
+    }
+
+    // ── Send issues that wait for a decision to the building's committee, with
+    // decision buttons. In-session (the member wrote to us in the last 24h) it
+    // is an interactive message; otherwise the approved template. ──
+    if (action === 'issue-decision') {
+      if (!integ?.enabled || !integ.phone_number_id || !token) return json({ ok: false, error: 'integration_disabled' })
+      let q = svc.from('issues').select('id, title, description, building_id, created_at, ticket_no, handler, status')
+        .is('handler', null).not('status', 'in', '("completed","resolved","closed","rejected")').order('created_at')
+      if (body.issueId) q = q.eq('id', body.issueId)
+      else if (body.buildingId) q = q.eq('building_id', body.buildingId)
+      else return json({ ok: false, error: 'issue_or_building_required' }, 400)
+      const { data: issues } = await q.limit(30)
+      if (!issues?.length) return json({ ok: true, sent: 0, issues: 0 })
+      const mine = isAdmin ? null : await callerBuildings(svc, uid)
+      if (mine && issues.some((i) => !mine.has(i.building_id))) return json({ error: 'forbidden' }, 403)
+
+      const { data: tpl } = await svc.from('message_templates').select('*').eq('key', 'committee_issue_decision').maybeSingle()
+      const since = new Date(Date.now() - 23.5 * 3600 * 1000).toISOString()
+      let sent = 0, skipped = 0, failed = 0
+      const phonesByBuilding = new Map<string, string[]>()
+      for (const iss of issues) {
+        let phones = phonesByBuilding.get(iss.building_id)
+        if (!phones) {
+          const { data: rows } = await svc.from('unit_residents')
+            .select('phone, units!inner(building_id, board_member)')
+            .eq('units.building_id', iss.building_id).eq('units.board_member', true).eq('archived', false)
+          phones = [...new Set((rows || []).map((r) => toE164(String(r.phone || ''))).filter((x): x is string => !!x && /^9725\d{8}$/.test(x)))]
+          // Admin can try it on one number first.
+          if (isAdmin && body.onlyPhone) { const one = toE164(String(body.onlyPhone)); phones = one ? [one] : [] }
+          phonesByBuilding.set(iss.building_id, phones)
+        }
+        const { data: b } = await svc.from('buildings').select('name').eq('id', iss.building_id).maybeSingle()
+        const days = String(Math.max(0, Math.floor((Date.now() - new Date(iss.created_at).getTime()) / 86400000)))
+        const what = `${iss.ticket_no ? `#${iss.ticket_no} ` : ''}${iss.title}`
+        const ids = ['vaad1', 'vendor', 'self'].map((a) => `issue:${iss.id}:${a}`)
+        for (const to of phones) {
+          const { data: recent } = await svc.from('notification_log').select('id')
+            .eq('channel', 'whatsapp_in').eq('recipient', to).gte('created_at', since).limit(1)
+          let payload: Record<string, unknown> | null = null
+          const text = `תקלה ב${b?.name || 'בניין'} ממתינה להחלטת הוועד:\n*${what}*\nפתוחה ${days} ימים.${iss.description ? `\n${String(iss.description).slice(0, 300)}` : ''}\n\nועד1 תטפל: איש האחזקה שלנו בביקור הבא, לפי שעות.\nספק דרך ועד1: אנחנו מתאמים ספק, בדמי טיפול קבועים.\nהוועד יטפל: נשאר אצלכם.`
+          if (recent?.length) {
+            payload = { messaging_product: 'whatsapp', to, type: 'interactive', interactive: { type: 'button', body: { text },
+              action: { buttons: [['ועד1 תטפל', ids[0]], ['ספק דרך ועד1', ids[1]], ['הוועד יטפל', ids[2]]].map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } }
+          } else if (tpl?.meta_status === 'APPROVED') {
+            const vars = [cleanParam(b?.name || 'הבניין'), cleanParam(what), days]
+            payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: tpl.meta_name, language: { code: tpl.language || 'he' },
+              components: [{ type: 'body', parameters: vars.map((t) => ({ type: 'text', text: t })) },
+                ...buttonComponents(ids.map((id, index) => ({ type: 'quick_reply', index, payload: id })))] } }
+          }
+          if (!payload) { skipped++; continue }
+          const g = await graph(integ, token, `${integ.phone_number_id}/messages`, { method: 'POST', body: JSON.stringify(payload) })
+          if (g.ok) sent++; else failed++
+          await log(svc, {
+            recipient: to, audience: 'resident', template_key: 'committee_issue_decision', building_id: iss.building_id,
+            subject: `להחלטת הוועד: ${String(what).slice(0, 150)}`, body: text,
+            status: g.ok ? 'sent' : 'failed', delivery_status: g.ok ? 'sent' : null,
+            external_id: ((g.data?.messages as Array<Record<string, unknown>>)?.[0]?.id as string) || null,
+            error_message: g.ok ? null : graphError(g.data), sent_by: uid,
+          })
+          await new Promise((res) => setTimeout(res, 400))
+        }
+      }
+      return json({ ok: true, issues: issues.length, sent, skipped, failed, template: tpl?.meta_status || null })
     }
 
     // ── Committee: send an open poll to the building's residents on WhatsApp,
