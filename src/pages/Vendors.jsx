@@ -18,10 +18,11 @@ import { isWhatsappable, isMobile } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { toast } from '@/lib/toast'
 import { GoogleSourcing } from '@/components/vendors/GoogleSourcing'
+import { VendorFile } from '@/components/vendors/VendorFile'
 import {
   Plus, Pencil, Trash2, Users, Ban, Phone, Mail,
   Shield, Clock, BarChart3, GitCompare,
-  Award, Wrench, Store, Tags, Handshake, ShieldAlert, ChevronLeft, Send,
+  Award, Wrench, Store, Tags, Handshake, ShieldAlert, ChevronLeft, Send, FolderOpen,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -397,6 +398,7 @@ function Vendors() {
   const [detailVendor, setDetailVendor] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [performanceVendor, setPerformanceVendor] = useState(null)
+  const [fileVendor, setFileVendor] = useState(null) // { vendor, tab }
   const [compareIds, setCompareIds] = useState([])
 
   // Pre-compute stats for all vendors
@@ -870,6 +872,9 @@ function Vendors() {
                 {isWhatsappable(v.phone) ? '📨' : '📞'} {status === 'pending' ? 'שלח הזמנה' : 'שלח שוב'}
               </Button>
             )}
+            {status !== 'pending' && (
+              <Button size="sm" variant="ghost" onClick={() => setFileVendor({ vendor: v, tab: 'chat' })}>💬 שיחה</Button>
+            )}
             {status !== 'agreed' && (
               <Button size="sm" variant="ghost" className="text-[var(--success)]" onClick={() => setMembership(v, 'agreed')}>✓ אישר</Button>
             )}
@@ -1104,6 +1109,10 @@ function Vendors() {
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2 pt-4">
+              <Button size="sm" onClick={() => { setFileVendor({ vendor: detailVendor, tab: 'chat' }); setDetailVendor(null) }}>
+                <FolderOpen className="h-3.5 w-3.5" />
+                תיק ספק
+              </Button>
               <Button variant="outline" size="sm" onClick={() => openEdit(detailVendor)}>
                 <Pencil className="h-3.5 w-3.5" />
                 עריכה
@@ -1187,6 +1196,8 @@ function Vendors() {
       />
 
       {/* ================================================================== */}
+      <VendorFile vendor={fileVendor?.vendor || null} initialTab={fileVendor?.tab} onClose={() => setFileVendor(null)} />
+
       {/* Create/Edit Dialog */}
       {/* ================================================================== */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
