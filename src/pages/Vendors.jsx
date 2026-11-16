@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useCollection } from '@/hooks/useStore'
+import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { vendorDistanceKm, formatKm, distanceBand } from '@/lib/geo'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
@@ -242,7 +243,33 @@ function VendorAvatar({ vendor }) {
   )
 }
 
-function VendorNameCell({ vendor, stats }) {
+// Where the vendor was verified: Google listing (rating + review count) or מידרג.
+function SourceBadge({ vendor }) {
+  if (vendor.source === 'midrag') {
+    return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#fff1e6] text-[#c2410c]">מידרג{vendor.rating ? ` ★ ${vendor.rating}` : ''}</span>
+  }
+  if (!vendor.google_place_id) return null
+  return (
+    <a href={vendor.maps_url || undefined} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#e8f0fe] text-[#1a56db] num-tabular">
+      Google ★ {Number(vendor.rating) || '—'} ({vendor.review_count ?? 0})
+    </a>
+  )
+}
+
+const BAND_CLS = { near: 'text-[var(--success)]', ok: 'text-[var(--text-secondary)]', far: 'text-[var(--warning)]', too_far: 'text-[var(--danger)]' }
+function DistanceTag({ vendor, building }) {
+  const km = vendorDistanceKm(vendor, building)
+  if (km == null) return null
+  const approx = vendor.geo_source === 'area'
+  return (
+    <span className={cn('text-[10px] font-semibold num-tabular', BAND_CLS[distanceBand(km)])} title={approx ? 'מיקום משוער לפי עיר' : undefined}>
+      📍 {approx ? '~' : ''}{formatKm(km)}
+    </span>
+  )
+}
+
+function VendorNameCell({ vendor, stats, building }) {
   const tags = getVendorTags(vendor)
   const rep = stats?.reputation
   return (
@@ -259,6 +286,8 @@ function VendorNameCell({ vendor, stats }) {
           )}
         </div>
         <div className="flex items-center gap-1 flex-wrap mt-0.5">
+          <SourceBadge vendor={vendor} />
+          <DistanceTag vendor={vendor} building={building} />
           {tags.map((t) => <Badge key={t.label} variant={t.variant} className="text-[10px] px-1.5 py-0">{t.label}</Badge>)}
           {rep?.flag && rep.flag !== 'good' && (
             <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-semibold',
@@ -386,6 +415,7 @@ const LEDGER_CARD = 'rounded-[var(--radius)] border border-[var(--border)] bg-[v
 function Vendors() {
   const { data: allVendors, create, update, remove, isSaving, isLoading, refresh: refreshVendors } = useCollection('vendors')
   const { data: workOrders } = useCollection('workOrders')
+  const { selectedBuilding } = useBuildingContext()
 
   const [activeTab, setActiveTab] = useState('my-vendors')
   const [membershipFilter, setMembershipFilter] = useState('pending')
@@ -756,7 +786,7 @@ function Vendors() {
                                     />
                                   </td>
                                 )}
-                                <td className="min-w-[220px]"><VendorNameCell vendor={vendor} stats={stats} /></td>
+                                <td className="min-w-[220px]"><VendorNameCell vendor={vendor} stats={stats} building={selectedBuilding} /></td>
                                 <td className="whitespace-nowrap">
                                   {vendor.category
                                     ? <span className="px-2 py-0.5 rounded-full border border-[var(--primary)]/15 bg-[var(--surface-container)] text-[var(--primary-dark)] text-[11px] font-semibold">{vendor.category}</span>
@@ -816,7 +846,7 @@ function Vendors() {
                             )}
                           >
                             <div className="flex items-start justify-between gap-2">
-                              <VendorNameCell vendor={vendor} stats={stats} />
+                              <VendorNameCell vendor={vendor} stats={stats} building={selectedBuilding} />
                               {compareMode && (
                                 <input
                                   type="checkbox"
@@ -934,7 +964,7 @@ function Vendors() {
                 <div className={cn(LEDGER_CARD, 'hidden md:block')}>
                   <div className="overflow-x-auto">
                     <table className="ds-table">
-                      <thead><tr><th>ספק</th><th>קטגוריה</th><th>טלפון</th><th>גוגל</th><th>סטטוס</th><th>פעולות</th></tr></thead>
+                      <thead><tr><th>ספק</th><th>קטגוריה</th><th>טלפון</th><th>מקור · מרחק</th><th>סטטוס</th><th>פעולות</th></tr></thead>
                       <tbody>
                         {list.map((v) => {
                           const status = v.membership_status || 'pending'
@@ -946,9 +976,7 @@ function Vendors() {
                               <td className="whitespace-nowrap text-[12px]">{v.category || '—'}</td>
                               <td className="whitespace-nowrap text-[12px] num-tabular" dir="ltr">{v.phone}</td>
                               <td className="whitespace-nowrap text-[12px] num-tabular">
-                                {v.review_count != null
-                                  ? <a href={v.maps_url || undefined} target="_blank" rel="noreferrer" className="text-[var(--primary)]">★ {Number(v.rating) || '—'} ({v.review_count})</a>
-                                  : <span className="text-[var(--text-muted)]">—</span>}
+                                <div className="flex flex-col gap-0.5 items-start"><SourceBadge vendor={v} /><DistanceTag vendor={v} building={selectedBuilding} /></div>
                               </td>
                               <td><MembershipBadge status={status} /></td>
                               <td className="whitespace-nowrap">{inviteActions(v, status)}</td>

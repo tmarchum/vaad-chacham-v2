@@ -18,6 +18,7 @@ import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
+import { vendorDistanceKm, formatKm } from '@/lib/geo'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { notifyIssueStatus, notifyIssueOpened, notifyIssueDispatch, describeIssueNotified } from '@/lib/notify'
@@ -635,14 +636,24 @@ function Issues() {
 
   // Only vendors whose trade fits the issue (synonym-aware). Falls back to all
   // vendors when the issue has no category/title to match on.
+  // Building of an issue (for vendor distance); falls back to the selected one.
+  const buildingOf = (id) => buildings.find((b) => b.id === id) || selectedBuilding || null
+  // Vendors sorted nearest-first; unknown locations last.
+  const byDistance = (list, building) => [...list].sort((a, b) =>
+    (vendorDistanceKm(a, building) ?? 1e9) - (vendorDistanceKm(b, building) ?? 1e9))
+
   const vendorOptions = useMemo(() => {
-    const ranked = rankVendorsForIssue({ category: form.category, title: form.title, priority: form.priority }, allVendors)
-    const base = ranked.length > 0 ? ranked.map((r) => r.vendor) : allVendors
+    const building = buildingOf(form.buildingId)
+    const ranked = rankVendorsForIssue({ category: form.category, title: form.title, priority: form.priority }, allVendors, { building })
+    const base = ranked.length > 0 ? ranked.map((r) => r.vendor) : byDistance(allVendors, building)
     return [
       { value: '', label: 'ללא ספק' },
-      ...base.map((v) => ({ value: v.name, label: `${v.name} (${v.category || ''})` })),
+      ...base.map((v) => {
+        const km = formatKm(vendorDistanceKm(v, building))
+        return { value: v.name, label: `${v.name} (${v.category || ''})${km ? ` · ${km}` : ''}` }
+      }),
     ]
-  }, [form.category, form.title, allVendors]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form.category, form.title, form.buildingId, allVendors, buildings, selectedBuilding]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Committee members for assigning a handler ("נציג מטפל"). Admins can list
   // them (RLS); for non-admins the list may be empty — they self-handle.
@@ -684,8 +695,8 @@ function Issues() {
   // Suggested vendors for the issue being edited — the "dispatcher".
   const issueForMatch = { category: form.category, title: form.title, priority: form.priority }
   const suggestedVendors = useMemo(
-    () => rankVendorsForIssue(issueForMatch, allVendors).slice(0, 3),
-    [form.category, form.title, form.priority, allVendors] // eslint-disable-line react-hooks/exhaustive-deps
+    () => rankVendorsForIssue(issueForMatch, allVendors, { building: buildingOf(form.buildingId) }).slice(0, 3),
+    [form.category, form.title, form.priority, form.buildingId, allVendors, buildings, selectedBuilding] // eslint-disable-line react-hooks/exhaustive-deps
   )
   // Emergency on-call vendor for urgent issues.
   const emergencyVendor = useMemo(
@@ -1241,9 +1252,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     if (!quoteDialogIssue) return { list: [], fallback: false }
     const usable = allVendors.filter((v) => !v.is_blacklisted && !v.sanctions)
     const cat = quoteDialogIssue.category
-    const exact = cat ? usable.filter((v) => v.category === cat) : []
+    const qb = buildingOf(quoteDialogIssue.building_id)
+    const exact = cat ? byDistance(usable.filter((v) => v.category === cat), qb) : []
     if (exact.length) return { list: exact, fallback: false }
-    const ranked = rankVendorsForIssue(quoteDialogIssue, usable).map((r) => r.vendor)
+    const ranked = rankVendorsForIssue(quoteDialogIssue, usable, { building: qb }).map((r) => r.vendor)
     if (ranked.length) return { list: ranked, fallback: false }
     return { list: usable, fallback: true }
   }, [quoteDialogIssue, allVendors])
@@ -2199,7 +2211,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             const exact = category
               ? allVendors
                   .filter((v) => !v.is_blacklisted && v.category === category)
-                  .sort((a, b) => ((b.preferred ? 10 : 0) + (Number(b.rating) || 0)) - ((a.preferred ? 10 : 0) + (Number(a.rating) || 0)))
+                  .map((v) => ({ v, km: vendorDistanceKm(v, buildingOf(workflowIssue.building_id)) }))
+                  // Preferred first, then distance bands (≤7, ≤20, ≤40, beyond), then rating.
+                  .sort((a, b) => {
+                    const band = (km) => (km == null ? 3 : km <= 7 ? 0 : km <= 20 ? 1 : km <= 40 ? 2 : 4)
+                    return ((b.v.preferred ? 1 : 0) - (a.v.preferred ? 1 : 0)) || (band(a.km) - band(b.km)) || ((Number(b.v.rating) || 0) - (Number(a.v.rating) || 0))
+                  })
+                  .map((x) => x.v)
               : []
             const matchedVendors = exact.length > 0
               ? exact.slice(0, 8)
@@ -2209,7 +2227,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   title: workflowIssue.title,
                   description: workflowIssue.description,
                   priority: workflowIssue.priority,
-                }, allVendors).map((r) => r.vendor).slice(0, 8)
+                }, allVendors, { building: buildingOf(workflowIssue.building_id) }).map((r) => r.vendor).slice(0, 8)
 
             return (
               <div className="space-y-4">
@@ -2254,7 +2272,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                                 {idx === 0 && <span className="text-[10px] font-bold text-[var(--primary)] ml-1">★ מומלץ</span>}
                                 {v.name}
                               </p>
-                              <p className="text-xs text-[var(--text-secondary)]">{v.category}{v.rating ? ` · ⭐ ${v.rating}` : ''}{v.phone ? ` · ${v.phone}` : ''}</p>
+                              <p className="text-xs text-[var(--text-secondary)]">{v.category}{v.rating ? ` · ⭐ ${v.rating}${v.review_count ? ` (${v.review_count})` : ''}` : ''}{(() => { const km = formatKm(vendorDistanceKm(v, building)); return km ? ` · 📍 ${km}` : '' })()}{v.phone ? ` · ${v.phone}` : ''}</p>
                             </div>
                             <div className="flex gap-1.5 shrink-0 items-center">
                               {approved ? (

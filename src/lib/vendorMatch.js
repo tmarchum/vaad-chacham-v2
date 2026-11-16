@@ -5,6 +5,8 @@
 //   [{ vendor, score, reasons[], warnings[] }]
 // Blacklisted/sanctioned vendors are excluded; expired insurance is a warning.
 
+import { vendorDistanceKm, formatKm, distanceBand } from './geo'
+
 // Trade synonym groups — an issue category and a vendor category match if they
 // share a group, or one string contains the other.
 const SYNONYMS = [
@@ -66,7 +68,7 @@ function isInsuranceExpired(vendor) {
   return Number.isFinite(t) && t < Date.now()
 }
 
-export function scoreVendorForIssue(issue, vendor, { urgent = false } = {}) {
+export function scoreVendorForIssue(issue, vendor, { urgent = false, building = null } = {}) {
   const reasons = []
   const warnings = []
 
@@ -90,6 +92,18 @@ export function scoreVendorForIssue(issue, vendor, { urgent = false } = {}) {
     warnings.push('לא מסומן כזמין 24/7')
   }
 
+  // Distance from the building (when both locations are known).
+  if (building) {
+    const km = vendorDistanceKm(vendor, building)
+    const band = distanceBand(km)
+    const label = formatKm(km)
+    if (band === 'near') { score += 15; reasons.push(`קרוב · ${label}`) }
+    else if (band === 'ok') { score += 6; reasons.push(label) }
+    else if (band === 'far') { score -= 12; warnings.push(`רחוק · ${label}`) }
+    else if (band === 'too_far') { score -= 35; warnings.push(`רחוק מאוד · ${label}`) }
+    else warnings.push('מיקום הספק לא ידוע')
+  }
+
   if (isInsuranceExpired(vendor)) { score -= 40; warnings.push('ביטוח פג תוקף') }
   if (!(vendor.license_number || vendor.licenseNumber)) warnings.push('אין מספר רישיון')
 
@@ -100,7 +114,7 @@ export function rankVendorsForIssue(issue, vendors, opts = {}) {
   const urgent = opts.urgent ?? ['high', 'urgent'].includes(issue?.priority)
   return (vendors || [])
     .filter((v) => !v.is_blacklisted && !v.isBlacklisted && !v.sanctions)
-    .map((v) => scoreVendorForIssue(issue, v, { urgent }))
+    .map((v) => scoreVendorForIssue(issue, v, { urgent, building: opts.building || null }))
     // Only suggest vendors whose trade actually fits the issue.
     .filter((r) => r.matched)
     .sort((a, b) => b.score - a.score)

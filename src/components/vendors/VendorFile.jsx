@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { toast, toastError } from '@/lib/toast'
+import { vendorDistanceKm, formatKm } from '@/lib/geo'
 import { cn, formatCurrency } from '@/lib/utils'
 import { MessageCircle, Wrench, Receipt, Send, Plus, Check, X } from 'lucide-react'
 
@@ -110,6 +111,9 @@ export function VendorFile({ vendor, initialTab = 'chat', onClose }) {
         </DialogHeader>
         <p className="text-[12px] text-[var(--text-muted)] -mt-2">
           {vendor.category || 'ללא תחום'} · <span dir="ltr" className="num-tabular">{vendor.phone || '—'}</span>
+          {vendor.google_place_id && <> · <a href={vendor.maps_url || undefined} target="_blank" rel="noreferrer" className="text-[var(--primary)]">Google ★ {Number(vendor.rating) || '—'} ({vendor.review_count ?? 0})</a></>}
+          {vendor.source === 'midrag' && <> · מידרג</>}
+          {formatKm(vendorDistanceKm(vendor, selectedBuilding)) && <> · 📍 {vendor.geo_source === 'area' ? '~' : ''}{formatKm(vendorDistanceKm(vendor, selectedBuilding))} מהבניין</>}
           {selectedBuilding && <> · עבודות והתחשבנות מול {selectedBuilding.name}</>}
         </p>
 

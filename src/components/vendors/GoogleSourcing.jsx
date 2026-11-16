@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useBuildingContext } from '@/hooks/useStore'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -32,7 +33,8 @@ async function call(payload) {
 }
 
 export function GoogleSourcing({ categoryOptions, defaultArea = '', onAdded }) {
-  const [q, setQ] = useState({ category: categoryOptions[0]?.value || '', area: defaultArea, minRating: 4.5, minReviews: 15 })
+  const { selectedBuilding } = useBuildingContext()
+  const [q, setQ] = useState({ category: categoryOptions[0]?.value || '', area: defaultArea || selectedBuilding?.city || '', minRating: 4.5, minReviews: 15, maxKm: 20 })
   const [results, setResults] = useState(null)
   const [picked, setPicked] = useState(new Set())
   const [busy, setBusy] = useState('')
@@ -40,7 +42,7 @@ export function GoogleSourcing({ categoryOptions, defaultArea = '', onAdded }) {
   const search = async () => {
     setBusy('search'); setResults(null)
     try {
-      const { results: r } = await call({ action: 'search', ...q, minRating: Number(q.minRating), minReviews: Number(q.minReviews) })
+      const { results: r } = await call({ action: 'search', ...q, minRating: Number(q.minRating), minReviews: Number(q.minReviews), maxKm: Number(q.maxKm) || null, buildingId: selectedBuilding?.id })
       setResults(r)
       setPicked(new Set(r.filter((x) => x.qualifies).map((x) => x.place_id)))
     } catch (e) { toastError(e.message) }
@@ -75,12 +77,12 @@ export function GoogleSourcing({ categoryOptions, defaultArea = '', onAdded }) {
 
   return (
     <SectionCard icon={Search} title="איתור ספקים מגוגל"
-      subtitle="לפי תחום ואזור. נשארים רק עסקים עם נייד ודירוג מעל הסף — ונכנסים למאגר כממתינים להזמנה"
+      subtitle={`לפי תחום ואזור${selectedBuilding ? `, עם מרחק מ${selectedBuilding.name}` : ''}. נשארים רק עסקים עם נייד, דירוג מעל הסף ובטווח המרחק — ונכנסים למאגר כממתינים להזמנה`}
       actions={<Button size="sm" variant="outline" onClick={enrich} disabled={!!busy}>
         <RefreshCw className={cn('h-4 w-4', busy === 'enrich' && 'animate-spin')} />{busy === 'enrich' ? 'בודק...' : 'דירוג גוגל לספקים הקיימים'}
       </Button>}>
       <div className="p-4 space-y-3">
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 items-end">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 items-end">
           <label className="col-span-2 lg:col-span-1 text-[12px] font-semibold text-[var(--text-secondary)] space-y-1">
             <span>תחום</span>
             <Select value={q.category} onChange={(e) => setQ({ ...q, category: e.target.value })} options={categoryOptions} />
@@ -96,6 +98,10 @@ export function GoogleSourcing({ categoryOptions, defaultArea = '', onAdded }) {
           <label className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1">
             <span>מינימום ביקורות</span>
             <input type="number" min="0" dir="ltr" className={field} value={q.minReviews} onChange={(e) => setQ({ ...q, minReviews: e.target.value })} />
+          </label>
+          <label className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1">
+            <span>מרחק מקסימלי מהבניין (ק"מ)</span>
+            <input type="number" min="0" dir="ltr" className={field} value={q.maxKm} onChange={(e) => setQ({ ...q, maxKm: e.target.value })} />
           </label>
           <Button onClick={search} disabled={!!busy || !q.category}>{busy === 'search' ? 'מחפש...' : 'חיפוש'}</Button>
         </div>
@@ -124,6 +130,7 @@ export function GoogleSourcing({ categoryOptions, defaultArea = '', onAdded }) {
                       <span className="font-normal text-[var(--text-muted)]">({r.reviews})</span>
                     </p>
                     <p dir="ltr" className="num-tabular text-[var(--text-secondary)]">{r.phone || r.landline || '—'}</p>
+                    {r.distance_km != null && <p className="num-tabular text-[var(--text-secondary)]">📍 {r.distance_km < 10 ? r.distance_km : Math.round(r.distance_km)} ק"מ</p>}
                     {r.maps_url && <a href={r.maps_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-[var(--primary)]"><MapPin className="h-3 w-3" />מפה</a>}
                   </div>
                 </label>

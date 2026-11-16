@@ -18,7 +18,7 @@ import { corsHeaders, json, serviceClient } from '../_shared/mod.ts'
 const FIELDS = [
   'places.id', 'places.displayName', 'places.nationalPhoneNumber', 'places.internationalPhoneNumber',
   'places.rating', 'places.userRatingCount', 'places.formattedAddress', 'places.googleMapsUri',
-  'places.businessStatus', 'nextPageToken',
+  'places.businessStatus', 'places.location', 'nextPageToken',
 ].join(',')
 
 // A bare trade name pulls in shops, gyms and car services ("חדר כושר" →
@@ -31,6 +31,13 @@ const QUERY: Record<string, string> = {
   'משאבות מים': 'תחזוקת משאבות מים', 'חיטוי מאגרי מים': 'חיטוי מאגרי מים', 'כיבוי וגילוי אש': 'מערכות כיבוי אש',
   'פינוי אשפה ודחסנים': 'דחסנים לבניינים', 'צבע ושיפוצים': 'צבעי בניינים', 'בריכת שחייה': 'תחזוקת בריכות שחייה',
   'מצלמות ואזעקות': 'התקנת מצלמות אבטחה', 'אינטרקום': 'טכנאי אינטרקום', 'זגגות': 'זגג',
+}
+
+// Great-circle distance in km.
+function km(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const r = (d: number) => (d * Math.PI) / 180
+  const h = Math.sin(r(bLat - aLat) / 2) ** 2 + Math.cos(r(aLat)) * Math.cos(r(bLat)) * Math.sin(r(bLng - aLng) / 2) ** 2
+  return 2 * 6371 * Math.asin(Math.sqrt(h))
 }
 
 const digits = (s: string) => String(s || '').replace(/\D/g, '')
@@ -70,6 +77,13 @@ Deno.serve(async (req: Request) => {
       if (!category) return json({ error: 'no_category' }, 400)
       const minRating = Number(body.minRating ?? 4.5)
       const minReviews = Number(body.minReviews ?? 15)
+      // Optional: distance from a building (its saved coordinates) and a radius.
+      const maxKm = Number(body.maxKm) > 0 ? Number(body.maxKm) : null
+      let origin: { lat: number; lng: number } | null = null
+      if (body.buildingId) {
+        const { data: b } = await svc.from('buildings').select('geo_lat, geo_lng').eq('id', body.buildingId).maybeSingle()
+        if (b?.geo_lat != null && b?.geo_lng != null) origin = { lat: Number(b.geo_lat), lng: Number(b.geo_lng) }
+      }
 
       const places: any[] = []
       let pageToken: string | undefined
@@ -106,14 +120,18 @@ Deno.serve(async (req: Request) => {
           if (rating < minRating) reasons.push(`דירוג ${rating || '—'}`)
           if (reviews < minReviews) reasons.push(`${reviews} ביקורות`)
           if (exists) reasons.push('כבר במאגר')
+          const lat = p.location?.latitude ?? null, lng = p.location?.longitude ?? null
+          const distance_km = origin && lat != null ? Math.round(km(origin.lat, origin.lng, lat, lng) * 10) / 10 : null
+          if (maxKm && distance_km != null && distance_km > maxKm) reasons.push(`רחוק · ${Math.round(distance_km)} ק"מ`)
           return {
+            lat, lng, distance_km,
             place_id: p.id, name: p.displayName?.text || '', phone: mobile,
             landline: mobile ? null : (p.nationalPhoneNumber || null),
             rating, reviews, address: p.formattedAddress || '', maps_url: p.googleMapsUri || '',
             exists, qualifies: reasons.length === 0, reasons,
           }
         })
-        .sort((a, b) => Number(b.qualifies) - Number(a.qualifies) || b.rating - a.rating || b.reviews - a.reviews)
+        .sort((a, b) => Number(b.qualifies) - Number(a.qualifies) || (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9) || b.rating - a.rating || b.reviews - a.reviews)
 
       return json({ results })
     }
@@ -128,6 +146,9 @@ Deno.serve(async (req: Request) => {
           rating: Number(c.rating) || 0, review_count: Number(c.reviews) || 0,
           address: String(c.address || ''), service_area: String(body.area || ''),
           google_place_id: c.place_id, maps_url: String(c.maps_url || ''),
+          geo_lat: Number.isFinite(Number(c.lat)) && c.lat != null ? Number(c.lat) : null,
+          geo_lng: Number.isFinite(Number(c.lng)) && c.lng != null ? Number(c.lng) : null,
+          geo_source: c.lat != null ? 'google' : null,
           source: 'google', membership_status: 'pending', contact_channel: 'whatsapp',
         }))
       if (rows.length === 0) return json({ added: 0 })
@@ -163,6 +184,7 @@ Deno.serve(async (req: Request) => {
         if (hit) {
           const { error } = await svc.from('vendors').update({
             google_place_id: hit.id, rating: Number(hit.rating || 0), review_count: Number(hit.userRatingCount || 0),
+            ...(hit.location ? { geo_lat: hit.location.latitude, geo_lng: hit.location.longitude, geo_source: 'google' } : {}),
             maps_url: hit.googleMapsUri || null,
           }).eq('id', v.id)
           if (!error) matched++
