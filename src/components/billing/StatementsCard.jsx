@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SectionCard } from '@/components/common/SectionCard'
 import { toast, toastError } from '@/lib/toast'
-import { statementLink, periodLabel, nis } from '@/lib/statements'
+import { statementLink, periodLabel, nis, heDate } from '@/lib/statements'
 import { FileText, UserRound, PenLine } from 'lucide-react'
 
 const field = 'h-[36px] w-full rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 text-[13px] focus:border-[var(--primary)] focus:outline-none'
@@ -12,10 +12,20 @@ const area = 'w-full rounded-[var(--radius)] border border-[var(--outline-varian
 const prevPeriod = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7) }
 const thisPeriod = () => new Date().toISOString().slice(0, 7)
 
+const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+const readyForDebit = (s) => s.status === 'sent' && s.debit_on && s.debit_on <= today()
+function statusText(s) {
+  if (s.status === 'draft') return 'טיוטה — עוד לא נשלח'
+  if (s.status === 'paid') return `חויב בהוראת קבע${s.debited_at ? ` ${new Date(s.debited_at).toLocaleDateString('he-IL')}` : ''}`
+  if (s.status === 'disputed') return 'הגזבר העיר — החיוב מעוכב'
+  if (readyForDebit(s)) return 'לא התקבלה הערה — מוכן לחיוב'
+  return `נשלח ${new Date(s.sent_at).toLocaleDateString('he-IL')}${s.debit_on ? ` · ממתין להערות עד ${heDate(s.debit_on)}` : ''}`
+}
+
 const WORDING = [
   ['statement_subject', 'נושא המייל', 1],
   ['statement_intro', 'פתיחה', 3],
-  ['statement_payment', 'הוראות תשלום', 3],
+  ['statement_payment', 'אופן החיוב (הוראת קבע)', 3],
   ['statement_footer', 'שורת סיום', 2],
 ]
 
@@ -105,6 +115,20 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
     load()
   }
 
+  const act = async (key, fn, args, okMsg) => {
+    setBusy(key)
+    const { error } = await supabase.rpc(fn, args)
+    setBusy('')
+    if (error) { toastError('הפעולה נכשלה'); return }
+    toast(okMsg)
+    load()
+  }
+  const resolve = (s) => act(`res-${s.id}`, 'resolve_statement_objection', { p_statement: s.id }, 'הבירור נסגר — החשבון חזר לתור החיוב')
+  const debited = (s) => {
+    if (!window.confirm(`לסמן שהוראת הקבע על ${nis(s.total)} (${periodLabel(s.period)}) נשלחה לבנק? המערכת רק מתעדת — היא לא שולחת את ההוראה בעצמה.`)) return
+    act(`deb-${s.id}`, 'mark_statement_debited', { p_statement: s.id }, 'סומן כחויב')
+  }
+
   const openWording = async () => {
     const { data } = await supabase.from('billing_settings').select('*').eq('id', 'default').maybeSingle()
     setWording(data || {})
@@ -113,6 +137,7 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
   const saveWording = async () => {
     setBusy('wording')
     const patch = Object.fromEntries(WORDING.map(([k]) => [k, String(wording[k] || '').trim()]))
+    patch.statement_objection_days = Math.min(30, Math.max(1, Number(wording.statement_objection_days) || 7))
     const { error } = await supabase.from('billing_settings').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', 'default')
     setBusy('')
     if (error) { toastError('השמירה נכשלה'); return }
@@ -125,7 +150,7 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
 
   return (
     <SectionCard icon={FileText} title="חשבון חודשי וגזבר"
-      subtitle="החשבון החודשי של ועד1 נשלח לגזבר הבניין. חיוב שממתין לאישור הוועד לא נכנס לסכום לתשלום"
+      subtitle="החשבון נשלח לגזבר לעיון. אם לא העיר עד מועד החיוב, הסכום נגבה בהוראת קבע. חיוב שממתין לאישור הוועד לא נכנס לסכום"
       actions={isAdmin && <Button size="sm" variant="outline" onClick={openWording}><PenLine className="h-4 w-4" />נוסח החשבון</Button>}>
       <div className="p-4 space-y-4">
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] items-end">
@@ -188,14 +213,21 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
                 <div>
                   <p className="font-semibold">{periodLabel(s.period)}</p>
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    {s.status === 'sent' ? `נשלח ${new Date(s.sent_at).toLocaleDateString('he-IL')}` : s.status === 'paid' ? 'שולם' : 'טיוטה — עוד לא נשלח'}
+                    <span className={s.status === 'disputed' ? 'text-[var(--warning)] font-semibold' : readyForDebit(s) ? 'text-[var(--success)] font-semibold' : ''}>{statusText(s)}</span>
                     {Number(s.awaiting) > 0 && ` · ${nis(s.awaiting)} ממתינים לאישור הוועד`}
                   </p>
+                  {s.status === 'disputed' && <p className="mt-1 text-[12px] whitespace-pre-wrap">"{s.objection_note}"</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="num-tabular font-semibold">{nis(s.total)}</span>
                   <a href={statementLink(s)} target="_blank" rel="noreferrer" className="text-[12px] text-[var(--primary)]">פירוט</a>
-                  {isAdmin && (
+                  {isAdmin && s.status === 'disputed' && (
+                    <Button size="sm" variant="outline" onClick={() => resolve(s)} disabled={!!busy}>הבירור הסתיים</Button>
+                  )}
+                  {isAdmin && readyForDebit(s) && (
+                    <Button size="sm" onClick={() => debited(s)} disabled={!!busy}>סימון כחויב</Button>
+                  )}
+                  {isAdmin && (s.status === 'draft' || s.status === 'sent') && (
                     <>
                       <Button size="sm" variant="ghost" onClick={() => showPreview(s.period)} disabled={!!busy}>תצוגת המייל</Button>
                       <Button size="sm" variant="outline" onClick={() => send(s)} disabled={!!busy}>
@@ -215,8 +247,15 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
         <DialogContent className="max-w-xl max-h-[88vh] overflow-y-auto">
           <DialogHeader><DialogTitle>נוסח החשבון החודשי</DialogTitle></DialogHeader>
           <p className="text-[12px] text-[var(--text-muted)]">
-            הנוסח משותף לכל הבניינים. אפשר לשלב: <span dir="ltr">{'{building}'}</span> שם הבניין · <span dir="ltr">{'{month}'}</span> החודש · <span dir="ltr">{'{total}'}</span> הסכום לתשלום.
+            הנוסח משותף לכל הבניינים. אפשר לשלב: <span dir="ltr">{'{building}'}</span> שם הבניין · <span dir="ltr">{'{month}'}</span> החודש · <span dir="ltr">{'{total}'}</span> הסכום · <span dir="ltr">{'{debit_date}'}</span> מועד החיוב.
           </p>
+          {wording && (
+            <label className="block text-[12px] font-semibold text-[var(--text-secondary)] space-y-1 mt-2">
+              <span>ימים להערות לפני החיוב</span>
+              <input type="number" min={1} max={30} className={field + ' max-w-[120px]'} value={wording.statement_objection_days ?? 7}
+                onChange={(e) => setWording({ ...wording, statement_objection_days: e.target.value })} />
+            </label>
+          )}
           {wording && WORDING.map(([k, label, rows]) => (
             <label key={k} className="block text-[12px] font-semibold text-[var(--text-secondary)] space-y-1 mt-2">
               <span>{label}</span>

@@ -6,6 +6,11 @@
 //   Admin (user JWT, role admin):
 //     { buildingId, period?, force? }     → send one building now (the "שליחה לגזבר" button)
 //     { buildingId, period?, preview: true } → return the email without sending
+//   Treasurer (public statement page, no login; the statement token is the key):
+//     { objection: { token, note } }      → holds the direct debit and emails the admin
+//
+// The treasurer does not pay: ועד1 collects by direct debit on debit_on
+// (send date + statement_objection_days) unless an objection was raised.
 //
 // Nothing is sent for a building without a treasurer, and the scheduler never
 // touches a building whose switch is off. One implementation of the wording for
@@ -25,8 +30,12 @@ const TYPE_LABELS: Record<string, string> = {
 const nis = (n: unknown) => `₪${Number(n || 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}`
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 const periodLabel = (p: string) => { const [y, m] = p.split('-'); return `${MONTHS[Number(m) - 1] || m} ${y}` }
-const fill = (t: string, v: Record<string, string>) => String(t || '').replace(/\{(building|month|total)\}/g, (_, k) => v[k] ?? '')
+const fill = (t: string, v: Record<string, string>) => String(t || '').replace(/\{(building|month|total|debit_date)\}/g, (_, k) => v[k] ?? '')
 const para = (t: string) => esc(t).replace(/\n/g, '<br>')
+
+const ilToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+const heDate = (iso: string) => iso.split('-').reverse().join('/')
 
 function prevPeriod(): string {
   // Israel time: the run on the 1st bills the month that just ended.
@@ -48,11 +57,11 @@ function emailHtml(s: any, building: string, w: any, vars: Record<string, string
   <p style="margin:0 0 14px;color:#565e74">${esc(building)} · ${esc(periodLabel(s.period))}</p>
   <p style="font-size:14px;line-height:1.7">${para(fill(w.statement_intro, vars))}</p>
   <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">${billed.map(row).join('')}
-    <tr><td style="padding:10px 0;font-weight:bold">סה"כ לתשלום (לפני מע"מ)</td><td style="padding:10px 0;font-weight:bold;text-align:left">${nis(s.total)}</td></tr>
+    <tr><td style="padding:10px 0;font-weight:bold">סה"כ לחיוב (לפני מע"מ)</td><td style="padding:10px 0;font-weight:bold;text-align:left">${nis(s.total)}</td></tr>
   </table>
   ${awaiting.length ? `<p style="margin:16px 0 4px;font-weight:bold">ממתינים לאישור הוועד — לא נכללים בסכום (${nis(s.awaiting)})</p>
   <table style="width:100%;border-collapse:collapse;font-size:13px;color:#565e74">${awaiting.map(row).join('')}</table>` : ''}
-  <p style="margin:20px 0"><a href="${APP}/statement/${s.token}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">לפירוט המלא</a></p>
+  <p style="margin:20px 0"><a href="${APP}/statement/${s.token}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">לצפייה בחשבון</a></p>
   <p style="font-size:14px;line-height:1.7">${para(fill(w.statement_payment, vars))}</p>
   <p style="font-size:12px;color:#737686">${para(fill(w.statement_footer, vars))}</p>
 </div>`
@@ -62,13 +71,33 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
     const svc = serviceClient()
+    const body = await req.json().catch(() => ({}))
+
+    // Public: the treasurer reports a problem from the statement page.
+    if (body.objection) {
+      const { data: r, error } = await svc.rpc('raise_statement_objection', { p_token: String(body.objection.token || ''), p_note: String(body.objection.note || '') })
+      if (error) return json({ ok: false, error: 'failed' }, 400)
+      if (r?.ok) {
+        const { data: b } = await svc.from('buildings').select('name').eq('id', r.building_id).maybeSingle()
+        const { data: admins } = await svc.from('profiles').select('email').eq('role', 'admin')
+        const html = `<div dir="rtl" style="font-family:Arial,sans-serif"><h3>הערת גזבר על חשבון חודשי — החיוב מעוכב</h3>
+          <p>${esc(b?.name)} · ${esc(periodLabel(r.period))} · ${nis(r.total)}</p>
+          <p style="white-space:pre-wrap;border-right:3px solid #f59e0b;padding-right:10px">${esc(String(body.objection.note || '').slice(0, 1000))}</p>
+          <p>הוראת הקבע לא תצא עד שתסמנו "הבירור הסתיים" במסך חשבון ועד1.</p></div>`
+        for (const a of admins || []) if (a.email) await fetch(`${SUPABASE_URL}/functions/v1/send-notification`, {
+          method: 'POST', headers: { Authorization: `Bearer ${SERVICE_KEY}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ to: a.email, subject: `הערת גזבר על חשבון ${periodLabel(r.period)} · ${b?.name || ''}`, html, buildingId: r.building_id, channel: 'email' }),
+        }).catch(() => null)
+      }
+      return json({ ok: !!r?.ok, error: r?.error })
+    }
+
     const CRON_SECRET = Deno.env.get('CRON_SECRET')
     const isCron = !!CRON_SECRET && timingSafeEqual(req.headers.get('x-cron-secret') || '', CRON_SECRET)
     const caller = isCron ? null : await identifyCaller(req, svc)
     const isAdmin = caller?.kind === 'user' && caller.role === 'admin'
     if (!isCron && !isAdmin) return json({ error: 'unauthorized' }, 401)
 
-    const body = await req.json().catch(() => ({}))
     const period: string = /^\d{4}-\d{2}$/.test(String(body.period || '')) ? body.period : prevPeriod()
 
     let q = svc.from('buildings').select('id, name, treasurer_resident_id, billing_email, statement_cc_committee, statement_auto_send')
@@ -94,9 +123,12 @@ Deno.serve(async (req) => {
       const { data: s } = await svc.from('billing_statements').select('*').eq('id', id).maybeSingle()
       if (!s) { out.error = 'statement_missing'; continue }
       if (s.status !== 'draft' && !body.force && !body.preview) { out.skipped = 'already_sent'; continue }
+      if (!body.preview && (s.status === 'disputed' || s.status === 'paid')) { out.skipped = s.status; continue }
+      const today = ilToday()
+      const debitOn: string = s.debit_on && s.debit_on > today ? s.debit_on : addDays(today, Number(w?.statement_objection_days) || 7)
 
       const { data: t } = await svc.from('unit_residents').select('last_name, phone, email, unit_id').eq('id', b.treasurer_resident_id).maybeSingle()
-      const vars = { building: b.name, month: periodLabel(period), total: nis(s.total) }
+      const vars = { building: b.name, month: periodLabel(period), total: nis(s.total), debit_date: heDate(debitOn) }
       const subject = fill(w?.statement_subject || 'ועד1 — חשבון חודשי {month} · {building}', vars)
       const html = emailHtml(s, b.name, w || {}, vars)
       if (body.preview) { out.subject = subject; out.html = html; out.total = s.total; continue }
@@ -141,8 +173,8 @@ Deno.serve(async (req) => {
       }
 
       if (sentTo.length) {
-        await svc.from('billing_statements').update({ status: 'sent', sent_at: new Date().toISOString(), sent_to: sentTo.join(', '), updated_at: new Date().toISOString() }).eq('id', s.id)
-        out.sent = sentTo; out.total = s.total
+        await svc.from('billing_statements').update({ status: 'sent', debit_on: debitOn, sent_at: new Date().toISOString(), sent_to: sentTo.join(', '), updated_at: new Date().toISOString() }).eq('id', s.id)
+        out.sent = sentTo; out.total = s.total; out.debit_on = debitOn
       } else out.error = 'no_channel'
     }
     return json({ ok: true, period, results })

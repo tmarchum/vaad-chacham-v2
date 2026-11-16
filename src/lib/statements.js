@@ -11,6 +11,9 @@ export function periodLabel(period) {
   return MONTHS[Number(m) - 1] && y ? `${MONTHS[Number(m) - 1]} ${y}` : String(period || '')
 }
 
+/** '2026-12-08' → '08/12/2026' */
+export const heDate = (iso) => String(iso || '').slice(0, 10).split('-').reverse().join('/')
+
 export const nis = (n) => `₪${Number(n || 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}`
 
 /** Lines that count toward the total, and lines still waiting for approval. */
