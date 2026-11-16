@@ -26,3 +26,6 @@ verify_jwt = false # Meta webhook: GET verify_token handshake + X-Hub-Signature-
 
 [functions.committee-digest]
 verify_jwt = false # GitHub Actions cron authenticates with CRON_SECRET, fail closed; admin calls still check the JWT in code
+
+[functions.billing-statements]
+verify_jwt = false # GitHub Actions cron authenticates with CRON_SECRET, fail closed; admin calls check the JWT in code

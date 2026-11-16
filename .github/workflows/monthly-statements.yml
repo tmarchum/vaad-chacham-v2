@@ -1,0 +1,21 @@
+name: Monthly statements to treasurers
+
+# On the 1st of the month, builds the previous month's statement of ועד1's
+# charges and sends it to the treasurer — only for buildings whose
+# "automatic sending" switch is on (חשבון ועד1 → חשבון חודשי וגזבר).
+on:
+  schedule:
+    - cron: "0 7 1 * *" # 07:00 UTC, 1st of every month
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger billing-statements function
+        run: |
+          curl -fsS -X POST \
+            "https://stncskqjrmecjckxldvi.supabase.co/functions/v1/billing-statements" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}'

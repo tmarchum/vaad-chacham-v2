@@ -1,24 +1,42 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SectionCard } from '@/components/common/SectionCard'
 import { toast, toastError } from '@/lib/toast'
-import { statementLink, periodLabel, statementEmailHtml } from '@/lib/statements'
-import { FileText, UserRound } from 'lucide-react'
+import { statementLink, periodLabel, nis } from '@/lib/statements'
+import { FileText, UserRound, PenLine } from 'lucide-react'
 
-const nis = (n) => `₪${Number(n || 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}`
 const field = 'h-[36px] w-full rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 text-[13px] focus:border-[var(--primary)] focus:outline-none'
+const area = 'w-full rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 py-1.5 text-[13px] focus:border-[var(--primary)] focus:outline-none'
 const prevPeriod = () => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7) }
 const thisPeriod = () => new Date().toISOString().slice(0, 7)
 
+const WORDING = [
+  ['statement_subject', 'נושא המייל', 1],
+  ['statement_intro', 'פתיחה', 3],
+  ['statement_payment', 'הוראות תשלום', 3],
+  ['statement_footer', 'שורת סיום', 2],
+]
+
+async function callStatements(payload) {
+  const { data, error } = await supabase.functions.invoke('billing-statements', { body: payload })
+  if (error) return { error: 'failed' }
+  return data || {}
+}
+
 // Treasurer + monthly statements of ועד1's charges. The committee chooses who
-// receives the statement; the system admin produces and sends it.
+// receives the statement; the system admin produces it, sends it, and decides
+// whether it goes out automatically on the 1st of the month.
 export function StatementsCard({ buildingId, buildingName, isAdmin }) {
   const [rec, setRec] = useState(null)
   const [form, setForm] = useState({ resident: '', email: '', cc: true })
   const [list, setList] = useState([])
   const [period, setPeriod] = useState(prevPeriod())
   const [busy, setBusy] = useState('')
+  const [wording, setWording] = useState(null)
+  const [wordingOpen, setWordingOpen] = useState(false)
+  const [preview, setPreview] = useState(null)
 
   const load = useCallback(async () => {
     if (!buildingId) return
@@ -44,6 +62,17 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
     load()
   }
 
+  const toggleAuto = async () => {
+    const on = !rec.auto_send
+    if (on && !window.confirm(`להפעיל שליחה אוטומטית? מעכשיו, ב-1 בכל חודש, החשבון של ${buildingName} על החודש שהסתיים יופק ויישלח לגזבר בלי לחיצה נוספת.`)) return
+    setBusy('auto')
+    const { error } = await supabase.rpc('set_statement_auto_send', { p_building: buildingId, p_on: on })
+    setBusy('')
+    if (error) { toastError(String(error.message).includes('no_treasurer') ? 'יש לבחור גזבר לפני הפעלת שליחה אוטומטית' : 'העדכון נכשל'); return }
+    toast(on ? 'שליחה אוטומטית הופעלה — החשבון יישלח ב-1 בכל חודש' : 'שליחה אוטומטית כובתה')
+    load()
+  }
+
   const build = async () => {
     setBusy('build')
     const { error } = await supabase.rpc('build_statement', { p_building: buildingId, p_period: period })
@@ -53,38 +82,42 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
     load()
   }
 
+  const showPreview = async (p) => {
+    setBusy(`prev-${p}`)
+    const d = await callStatements({ buildingId, period: p, preview: true })
+    setBusy('')
+    const r = d.results?.[0]
+    if (!r?.html) { toastError(r?.skipped === 'no_treasurer' ? 'יש לבחור גזבר כדי לראות את המייל' : 'התצוגה המקדימה נכשלה'); return }
+    setPreview(r)
+    load()
+  }
+
   const send = async (s) => {
     const t = rec?.treasurer
     if (!t) { toastError('יש לבחור גזבר לפני השליחה'); return }
-    const emails = [t.email, ...(rec.cc ? rec.committee.map((c) => c.email) : [])].filter(Boolean)
-    const unique = [...new Set(emails)]
-    if (!unique.length && !t.phone) { toastError('לגזבר אין מייל או נייד'); return }
     if (!window.confirm(`לשלוח את החשבון לחודש ${periodLabel(s.period)} (${nis(s.total)}) לגזבר — משפחת ${t.name}, דירה ${t.unit}${rec.cc ? ', עם העתק לחברי הוועד' : ''}?`)) return
     setBusy(`send-${s.id}`)
-    let sentTo = []
-    for (const to of unique) {
-      const { error } = await supabase.functions.invoke('send-notification', {
-        body: { to, subject: `ועד1 — חשבון חודשי ${periodLabel(s.period)} · ${buildingName}`, html: statementEmailHtml(s, buildingName), buildingId, channel: 'email' },
-      })
-      if (!error) sentTo.push(to)
-    }
-    let wa = false
-    if (t.phone) {
-      const { data } = await supabase.functions.invoke('whatsapp', {
-        body: {
-          action: 'send', audience: 'resident', to: t.phone, templateKey: 'committee_monthly_statement', buildingId,
-          variables: [buildingName, periodLabel(s.period), Number(s.total).toLocaleString('he-IL')],
-          buttons: [{ type: 'url', index: 0, text: s.token }],
-        },
-      })
-      wa = !!data?.ok
-    }
-    if (sentTo.length || wa) {
-      await supabase.rpc('mark_statement_sent', { p_statement: s.id, p_to: [...sentTo, wa ? `whatsapp:${t.phone}` : ''].filter(Boolean).join(', ') })
-      toast(`החשבון נשלח${sentTo.length ? ` · ${sentTo.length} מיילים` : ''}${wa ? ' · וואטסאפ לגזבר' : ''}`)
-    } else toastError('השליחה נכשלה')
+    const d = await callStatements({ buildingId, period: s.period, force: true })
     setBusy('')
+    const r = d.results?.[0]
+    if (r?.sent?.length) toast(`החשבון נשלח · ${r.sent.length} נמענים`)
+    else toastError(r?.error === 'no_channel' ? 'לגזבר אין מייל או נייד' : 'השליחה נכשלה')
     load()
+  }
+
+  const openWording = async () => {
+    const { data } = await supabase.from('billing_settings').select('*').eq('id', 'default').maybeSingle()
+    setWording(data || {})
+    setWordingOpen(true)
+  }
+  const saveWording = async () => {
+    setBusy('wording')
+    const patch = Object.fromEntries(WORDING.map(([k]) => [k, String(wording[k] || '').trim()]))
+    const { error } = await supabase.from('billing_settings').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', 'default')
+    setBusy('')
+    if (error) { toastError('השמירה נכשלה'); return }
+    toast('הנוסח נשמר')
+    setWordingOpen(false)
   }
 
   if (!rec) return null
@@ -92,7 +125,8 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
 
   return (
     <SectionCard icon={FileText} title="חשבון חודשי וגזבר"
-      subtitle="החשבון החודשי של ועד1 נשלח לגזבר הבניין ב-1 בחודש. חיוב שממתין לאישור הוועד לא נכנס לסכום לתשלום">
+      subtitle="החשבון החודשי של ועד1 נשלח לגזבר הבניין. חיוב שממתין לאישור הוועד לא נכנס לסכום לתשלום"
+      actions={isAdmin && <Button size="sm" variant="outline" onClick={openWording}><PenLine className="h-4 w-4" />נוסח החשבון</Button>}>
       <div className="p-4 space-y-4">
         <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] items-end">
           <label className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1">
@@ -114,6 +148,26 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
           העתק במייל לשאר חברי הוועד
         </label>
         {!t && <p className="text-[12px] text-[var(--warning)]">עדיין לא נבחר גזבר, ולכן החשבון לא יישלח לאף אחד.</p>}
+
+        {/* The switch: automatic sending on the 1st of the month */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] p-3">
+          <div>
+            <p className="text-[13px] font-semibold">שליחה אוטומטית ב-1 בחודש</p>
+            <p className="text-[11px] text-[var(--text-muted)]">
+              {rec.auto_send
+                ? 'פעילה: ב-1 בכל חודש החשבון על החודש שהסתיים מופק ונשלח לגזבר לבד.'
+                : 'כבויה: החשבון נשלח רק בלחיצה על "שליחה לגזבר".'}
+            </p>
+          </div>
+          {isAdmin ? (
+            <button type="button" role="switch" aria-checked={!!rec.auto_send} onClick={toggleAuto} disabled={!!busy}
+              className={`relative h-6 w-11 rounded-full transition-colors ${rec.auto_send ? 'bg-[var(--success)]' : 'bg-[var(--outline-variant)]'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${rec.auto_send ? 'right-0.5' : 'right-[22px]'}`} />
+            </button>
+          ) : (
+            <span className="text-[12px] font-semibold">{rec.auto_send ? 'פעילה' : 'כבויה'}</span>
+          )}
+        </div>
 
         {isAdmin && (
           <div className="flex flex-wrap items-end gap-2 border-t border-[var(--border-light)] pt-3">
@@ -142,9 +196,12 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
                   <span className="num-tabular font-semibold">{nis(s.total)}</span>
                   <a href={statementLink(s)} target="_blank" rel="noreferrer" className="text-[12px] text-[var(--primary)]">פירוט</a>
                   {isAdmin && (
-                    <Button size="sm" variant="outline" onClick={() => send(s)} disabled={!!busy}>
-                      {busy === `send-${s.id}` ? 'שולח...' : s.status === 'sent' ? 'שליחה חוזרת' : 'שליחה לגזבר'}
-                    </Button>
+                    <>
+                      <Button size="sm" variant="ghost" onClick={() => showPreview(s.period)} disabled={!!busy}>תצוגת המייל</Button>
+                      <Button size="sm" variant="outline" onClick={() => send(s)} disabled={!!busy}>
+                        {busy === `send-${s.id}` ? 'שולח...' : s.status === 'sent' ? 'שליחה חוזרת' : 'שליחה לגזבר'}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -152,6 +209,36 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
           </div>
         )}
       </div>
+
+      {/* Wording templates (all buildings) */}
+      <Dialog open={wordingOpen} onOpenChange={setWordingOpen}>
+        <DialogContent className="max-w-xl max-h-[88vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>נוסח החשבון החודשי</DialogTitle></DialogHeader>
+          <p className="text-[12px] text-[var(--text-muted)]">
+            הנוסח משותף לכל הבניינים. אפשר לשלב: <span dir="ltr">{'{building}'}</span> שם הבניין · <span dir="ltr">{'{month}'}</span> החודש · <span dir="ltr">{'{total}'}</span> הסכום לתשלום.
+          </p>
+          {wording && WORDING.map(([k, label, rows]) => (
+            <label key={k} className="block text-[12px] font-semibold text-[var(--text-secondary)] space-y-1 mt-2">
+              <span>{label}</span>
+              {rows === 1
+                ? <input className={field} value={wording[k] || ''} onChange={(e) => setWording({ ...wording, [k]: e.target.value })} />
+                : <textarea rows={rows} className={area} value={wording[k] || ''} onChange={(e) => setWording({ ...wording, [k]: e.target.value })} />}
+            </label>
+          ))}
+          <div className="flex justify-end gap-2 mt-3">
+            <Button variant="outline" size="sm" onClick={() => setWordingOpen(false)}>ביטול</Button>
+            <Button size="sm" onClick={saveWording} disabled={busy === 'wording'}>{busy === 'wording' ? 'שומר...' : 'שמירה'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email preview */}
+      <Dialog open={!!preview} onOpenChange={() => setPreview(null)}>
+        <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{preview?.subject}</DialogTitle></DialogHeader>
+          <iframe title="תצוגת המייל" sandbox="" srcDoc={preview?.html || ''} className="w-full h-[60vh] rounded-[var(--radius)] border border-[var(--border)] bg-white" />
+        </DialogContent>
+      </Dialog>
     </SectionCard>
   )
 }
