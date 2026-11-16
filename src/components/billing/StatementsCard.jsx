@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SectionCard } from '@/components/common/SectionCard'
 import { toast, toastError } from '@/lib/toast'
-import { statementLink, periodLabel, nis, heDate } from '@/lib/statements'
+import { statementLink, periodLabel, nis, heDate, mandateAllowsDebit } from '@/lib/statements'
 import { FileText, UserRound, PenLine } from 'lucide-react'
 
 const field = 'h-[36px] w-full rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 text-[13px] focus:border-[var(--primary)] focus:outline-none'
@@ -47,13 +47,16 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
   const [wording, setWording] = useState(null)
   const [wordingOpen, setWordingOpen] = useState(false)
   const [preview, setPreview] = useState(null)
+  const [mandate, setMandate] = useState('missing')
 
   const load = useCallback(async () => {
     if (!buildingId) return
-    const [r, s] = await Promise.all([
+    const [r, s, bm] = await Promise.all([
       supabase.rpc('statement_recipients', { p_building: buildingId }),
       supabase.from('billing_statements').select('*').eq('building_id', buildingId).order('period', { ascending: false }).limit(12),
+      supabase.from('building_bank_mandates').select('status').eq('building_id', buildingId).maybeSingle(),
     ])
+    setMandate(bm.data?.status || 'missing')
     const d = r.data || { committee: [] }
     setRec(d)
     setForm({ resident: d.treasurer?.id || '', email: d.billing_email || '', cc: d.cc !== false })
@@ -147,6 +150,7 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
 
   if (!rec) return null
   const t = rec.treasurer
+  const canDebit = mandateAllowsDebit(mandate)
 
   return (
     <SectionCard icon={FileText} title="חשבון חודשי וגזבר"
@@ -173,6 +177,7 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
           העתק במייל לשאר חברי הוועד
         </label>
         {!t && <p className="text-[12px] text-[var(--warning)]">עדיין לא נבחר גזבר, ולכן החשבון לא יישלח לאף אחד.</p>}
+        {!canDebit && <p className="text-[12px] text-[var(--warning)]">לבניין אין הרשאה פעילה לחיוב חשבון. החשבון יישלח לעיון, אבל אי אפשר לחייב עד שההרשאה תאושר (בכרטיס "חשבון בנק והרשאה לחיוב").</p>}
 
         {/* The switch: automatic sending on the 1st of the month */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] p-3">
@@ -213,7 +218,9 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
                 <div>
                   <p className="font-semibold">{periodLabel(s.period)}</p>
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    <span className={s.status === 'disputed' ? 'text-[var(--warning)] font-semibold' : readyForDebit(s) ? 'text-[var(--success)] font-semibold' : ''}>{statusText(s)}</span>
+                    {readyForDebit(s) && !canDebit
+                      ? <span className="text-[var(--warning)] font-semibold">לא התקבלה הערה, אבל אין הרשאה פעילה לחיוב</span>
+                      : <span className={s.status === 'disputed' ? 'text-[var(--warning)] font-semibold' : readyForDebit(s) ? 'text-[var(--success)] font-semibold' : ''}>{statusText(s)}</span>}
                     {Number(s.awaiting) > 0 && ` · ${nis(s.awaiting)} ממתינים לאישור הוועד`}
                   </p>
                   {s.status === 'disputed' && <p className="mt-1 text-[12px] whitespace-pre-wrap">"{s.objection_note}"</p>}
@@ -224,7 +231,7 @@ export function StatementsCard({ buildingId, buildingName, isAdmin }) {
                   {isAdmin && s.status === 'disputed' && (
                     <Button size="sm" variant="outline" onClick={() => resolve(s)} disabled={!!busy}>הבירור הסתיים</Button>
                   )}
-                  {isAdmin && readyForDebit(s) && (
+                  {isAdmin && readyForDebit(s) && canDebit && (
                     <Button size="sm" onClick={() => debited(s)} disabled={!!busy}>סימון כחויב</Button>
                   )}
                   {isAdmin && (s.status === 'draft' || s.status === 'sent') && (

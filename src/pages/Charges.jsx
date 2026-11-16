@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { toast, toastError } from '@/lib/toast'
 import { useConfirm } from '@/lib/confirm'
 import { StatementsCard } from '@/components/billing/StatementsCard'
+import { BankMandateCard } from '@/components/billing/BankMandateCard'
 import { cn } from '@/lib/utils'
 import {
   loadServiceConfig, loadBuildingBilling, loadPunchBalance, loadPriceLists, monthlyPrice, punchRules, itemPrice,
@@ -30,6 +31,7 @@ export default function Charges() {
   const confirm = useConfirm()
   const buildingId = selectedBuilding?.id
 
+  const [mandateRev, setMandateRev] = useState(0)
   const [cfg, setCfg] = useState({ ready: false, plans: [], settings: null })
   const [billing, setBilling] = useState(null)
   const [balance, setBalance] = useState(null)
@@ -178,7 +180,8 @@ export default function Charges() {
           : <div className="divide-y divide-[var(--border-light)]">{thisMonth.map((c) => <ChargeRow key={c.id} c={c} />)}</div>}
       </SectionCard>
 
-      <StatementsCard buildingId={buildingId} buildingName={selectedBuilding?.name || ''} isAdmin={isAdmin} />
+      <StatementsCard key={`st-${mandateRev}`} buildingId={buildingId} buildingName={selectedBuilding?.name || ''} isAdmin={isAdmin} />
+      <BankMandateCard buildingId={buildingId} isAdmin={isAdmin} onChange={() => setMandateRev((n) => n + 1)} />
 
       {/* ── Committee choices ── */}
       <SectionCard icon={SlidersHorizontal} title="הגדרות חיוב של הוועד"

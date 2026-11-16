@@ -26,3 +26,14 @@ export function splitLines(lines = []) {
 
 export const lineLabel = (l) => [CHARGE_TYPE_LABELS[l.type] || l.type, l.note].filter(Boolean).join(' · ')
 export const approvalLabel = (a) => APPROVAL_LABELS[a] || a
+
+// Direct-debit authorization of a building.
+export const MANDATE_STATUS = {
+  missing: 'אין הרשאה',
+  sent: 'הטופס נשלח לוועד לחתימה',
+  signed: 'נחתם — ממתין לאישור הבנק',
+  active: 'פעילה — אפשר לחייב',
+  cancelled: 'בוטלה',
+  not_required: 'לא נדרשת — הבניין משלם בדרך אחרת',
+}
+export const mandateAllowsDebit = (status) => status === 'active' || status === 'not_required'
