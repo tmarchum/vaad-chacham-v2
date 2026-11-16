@@ -637,6 +637,11 @@ Deno.serve(async (req: Request) => {
         external_id: wamid, error_message: r.ok ? null : graphError(r.data),
         building_id: buildingId, unit_id: unitId, vendor_id: vendorId, sent_by: uid,
       })
+      // A delivered pool invite moves the vendor from "pending" to "invited".
+      if (r.ok && templateKey === 'vendor_invite' && vendorId) {
+        await svc.from('vendors').update({ membership_status: 'invited', invited_at: new Date().toISOString() })
+          .eq('id', vendorId).eq('membership_status', 'pending')
+      }
       return json({ ok: r.ok, id: wamid, error: r.ok ? undefined : graphError(r.data) })
     }
 
