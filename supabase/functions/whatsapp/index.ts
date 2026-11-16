@@ -264,7 +264,7 @@ async function forwardWebhook(svc: SupabaseClient, url: string | null | undefine
       // which would fill the log with failures that never happened. The 3xx
       // is the success signal, so stop there.
       redirect: 'manual',
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(25000),
     })
     if (r.status >= 400) throw new Error(`HTTP ${r.status}`)
   } catch (e) {
@@ -335,10 +335,12 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   if (!vendor || !text) return
   await recordVendorDetails(svc, vendor, text).catch(() => {})
   const declineRe = /מסרב|סירוב|לא מעוניין|לא מתאים|הסר אותי|תסיר/
-  const approveRe = /מאשר|מעוניין|מסכים|אשר/
+  // Whole words only: "כאשר אין מענה" and "לפני שאאשר" are not approvals.
+  const approveRe = /(^|[^א-ת])(מאשר|מאשרת|מאושר|מסכים|מסכימה|מעוניין|מעוניינת)(?![א-ת])/
   const newStatus = declineRe.test(text) ? 'declined' : approveRe.test(text) ? 'agreed' : null
   const current = vendor.membership_status || 'pending'
-  const allowedFrom = newStatus === 'agreed' ? ['pending', 'invited', 'declined'] : ['pending', 'invited']
+  // Opting out is always honoured, also after an earlier "מאשר".
+  const allowedFrom = newStatus === 'agreed' ? ['pending', 'invited', 'declined'] : ['pending', 'invited', 'agreed']
   if (!newStatus || !allowedFrom.includes(current)) return
   await svc.from('vendors').update({ membership_status: newStatus }).eq('id', vendor.id)
 
@@ -412,18 +414,31 @@ Deno.serve(async (req: Request) => {
           }
           for (const st of (v.statuses as Array<Record<string, unknown>>) || []) {
             const err = (st.errors as Array<Record<string, unknown>>)?.[0]
-            await svc.from('notification_log').update({
+            let upd = svc.from('notification_log').update({
               delivery_status: String(st.status || ''),
               ...(st.status === 'failed' ? { status: 'failed', error_message: String(err?.title || err?.message || 'failed') } : {}),
               updated_at: new Date().toISOString(),
             }).eq('external_id', String(st.id || ''))
+            if (st.status === 'sent') upd = upd.not('delivery_status', 'in', '("delivered","read")')
+            if (st.status === 'delivered') upd = upd.neq('delivery_status', 'read')
+            const { data: rows } = await upd.select('vendor_id, template_key')
+            if (st.status === 'failed') {
+              for (const row of rows || []) {
+                if (row.vendor_id && String(row.template_key || '').startsWith('vendor_invite')) {
+                  await svc.from('vendors').update({ membership_status: 'pending', invited_at: null })
+                    .eq('id', row.vendor_id).eq('membership_status', 'invited')
+                }
+              }
+            }
           }
           for (const m of (v.messages as Array<Record<string, unknown>>) || []) {
             await handleInbound(svc, integ, sec?.api_token || null, m)
           }
         }
       }
-      await forwarded
+      // deno-lint-ignore no-explicit-any
+      const rt = (globalThis as any).EdgeRuntime
+      if (rt?.waitUntil) rt.waitUntil(forwarded); else await forwarded
       return json({ ok: true })
     }
 

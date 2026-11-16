@@ -3,8 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { toast, toastError } from '@/lib/toast'
 import { ImagePlus, Link2, Trash2, StickyNote } from 'lucide-react'
-
-export const issueBriefLink = (iss) => (iss?.brief_token ? `https://app.vaad1.co.il/brief/${iss.brief_token}` : '')
+import { issueBriefLink } from '@/lib/issueBrief'
 
 // Committee: add notes and photos to an issue so a vendor can price it without
 // a visit. Everything here appears on the vendor's job page (issueBriefLink).

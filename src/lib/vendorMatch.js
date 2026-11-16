@@ -95,7 +95,8 @@ export function scoreVendorForIssue(issue, vendor, { urgent = false, building = 
   // Distance from the building (when both locations are known).
   if (building) {
     const km = vendorDistanceKm(vendor, building)
-    const band = distanceBand(km)
+    // A vendor known only by service area (no address) is never ranked as "near".
+    const band = vendor.geo_source === 'area' && distanceBand(km) === 'near' ? 'ok' : distanceBand(km)
     const label = formatKm(km)
     if (band === 'near') { score += 15; reasons.push(`קרוב · ${label}`) }
     else if (band === 'ok') { score += 6; reasons.push(label) }
