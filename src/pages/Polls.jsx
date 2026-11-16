@@ -13,7 +13,7 @@ import {
   DEFAULT_OPTIONS, SHOW_RESULTS_LABELS, POLL_DISCLAIMER, isPollClosed, loadPollResults, pollLink, pollShareText,
 } from '@/lib/polls'
 import { notifyPollOpened } from '@/lib/notify'
-import { Vote, Plus, Lock, Info, Trash2, X, Link2, Share2, Bell } from 'lucide-react'
+import { Vote, Plus, Lock, Info, Trash2, X, Link2, Share2, Bell, MessageCircle } from 'lucide-react'
 
 // Committee side of resident polls: create a question, watch the tally, close
 // it. Residents answer from the portal, one vote per apartment.
@@ -67,6 +67,29 @@ export default function Polls() {
     setFormOpen(false)
     setForm(EMPTY)
     load()
+  }
+
+  // Send the poll to every resident's WhatsApp, with vote buttons (בעד/נגד/נמנע)
+  // or, for custom options, a link. Committee-initiated, one tap + confirm.
+  const [waBusy, setWaBusy] = useState(null)
+  const WA_ERR = {
+    template_not_approved: 'נוסח ההודעה עדיין ממתין לאישור של מטא. אפשר בינתיים לשתף בקבוצת הבניין.',
+    integration_disabled: 'חיבור הוואטסאפ של המערכת כבוי',
+    poll_closed: 'ההצבעה סגורה',
+  }
+  const sendPollWhatsapp = async (p) => {
+    setWaBusy(p.id)
+    try {
+      const dry = await supabase.functions.invoke('whatsapp', { body: { action: 'poll-whatsapp', pollId: p.id, dryRun: true } })
+      const d = dry.data || {}
+      if (!d.ok) { toastError(WA_ERR[d.error] || 'השליחה נכשלה'); return }
+      if (!d.recipients) { toastError('לא נמצאו דיירים עם נייד בבניין'); return }
+      const how = d.buttons ? 'עם כפתורי בעד / נגד / נמנע' : 'עם קישור להצבעה'
+      if (!window.confirm(`לשלוח את ההצבעה "${p.title}" בוואטסאפ ל-${d.recipients} דיירים, ${how}?${p.wa_sent_at ? '\n\nשימו לב: ההצבעה כבר נשלחה בוואטסאפ בעבר.' : ''}`)) return
+      const { data } = await supabase.functions.invoke('whatsapp', { body: { action: 'poll-whatsapp', pollId: p.id } })
+      if (data?.ok) { toast(`נשלח בוואטסאפ ל-${data.sent} דיירים${data.failed ? ` · ${data.failed} נכשלו` : ''}`); load() }
+      else toastError(WA_ERR[data?.error] || 'השליחה נכשלה')
+    } finally { setWaBusy(null) }
   }
 
   const closePoll = async (p) => {
@@ -123,13 +146,17 @@ export default function Polls() {
                 <p className="text-[11px] text-[var(--text-muted)]">
                   {p.owners_only ? 'בעלי דירות בלבד' : 'כל הדיירים'} · תוצאות לדיירים: {SHOW_RESULTS_LABELS[p.show_results]}
                   {p.closes_at ? ` · נסגרת ב-${new Date(p.closes_at).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}` : ''}
+                  {p.wa_sent_at ? ` · נשלחה בוואטסאפ ל-${p.wa_sent_count ?? 0} דיירים` : ''}
                 </p>
                 <PollResultBars poll={p} result={results[p.id]} />
                 <div className="flex flex-wrap gap-2 pt-1">
                   {!closed && (
                     <>
-                      <Button size="sm" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(pollShareText(p, selectedBuilding?.name))}`, '_blank')}>
-                        <Share2 className="h-4 w-4" />שיתוף בוואטסאפ
+                      <Button size="sm" onClick={() => sendPollWhatsapp(p)} disabled={waBusy === p.id}>
+                        <MessageCircle className="h-4 w-4" />{waBusy === p.id ? 'שולח...' : 'שליחה לדיירים בוואטסאפ'}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(pollShareText(p, selectedBuilding?.name))}`, '_blank')}>
+                        <Share2 className="h-4 w-4" />לקבוצת הבניין
                       </Button>
                       <Button variant="outline" size="sm" onClick={async () => {
                         try { await navigator.clipboard.writeText(pollLink(p.id)); toast('הקישור הועתק') } catch { toastError('ההעתקה נכשלה') }

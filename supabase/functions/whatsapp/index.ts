@@ -115,6 +115,14 @@ function graphBase(integ: Integ | null) {
   return `https://graph.facebook.com/${(integ?.graph_version || 'v21.0').trim()}`
 }
 
+// Template button parameters: [{ type: 'quick_reply', index, payload } | { type: 'url', index, text }]
+function buttonComponents(list: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(list)) return []
+  return list.slice(0, 10).map((b: any) => b?.type === 'url'
+    ? { type: 'button', sub_type: 'url', index: String(b.index ?? 0), parameters: [{ type: 'text', text: String(b.text || '') }] }
+    : { type: 'button', sub_type: 'quick_reply', index: String(b.index ?? 0), parameters: [{ type: 'payload', payload: String(b.payload || '') }] })
+}
+
 async function graph(integ: Integ | null, token: string, path: string, init: RequestInit = {}) {
   const r = await fetch(`${graphBase(integ)}/${path}`, {
     ...init,
@@ -270,6 +278,31 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
     subject: vendor ? `הודעה נכנסת מספק: ${vendor.name}` : resident ? `הודעה נכנסת מדייר: ${resident.first_name || ''} ${resident.last_name || ''}`.trim() : 'הודעה נכנסת',
     body: text || `[${String(msg.type || 'message')}]`,
   }).then(() => {}, () => {})
+
+  // Poll vote from a template quick-reply button: payload "poll:<pollId>:<optionIndex>".
+  const payload = String((msg.button as Record<string, unknown>)?.payload || '')
+  if (payload.startsWith('poll:')) {
+    const [, pollId, idx] = payload.split(':')
+    const { data: res } = await svc.rpc('cast_poll_vote_by_phone', { p_poll: pollId, p_phone: from, p_option: Number(idx) })
+    const { data: poll } = await svc.from('polls').select('title, options').eq('id', pollId).maybeSingle()
+    const choice = Array.isArray(poll?.options) ? String(poll.options[Number(idx)] ?? '') : ''
+    const reply = res === 'ok'
+      ? `✅ הקול של הדירה שלך נקלט: *${choice}*\nאפשר לשנות בלחיצה על כפתור אחר עד שההצבעה נסגרת.`
+      : res === 'poll_closed' ? 'ההצבעה כבר נסגרה, והקול לא נקלט.'
+      : res === 'owners_only' ? 'ההצבעה מיועדת לבעלי דירות בלבד. אם את/ה בעל/ת הדירה, יש לעדכן את פרטי הבעלות מול הוועד.'
+      : 'לא מצאנו דירה בבניין שרשומה עם המספר הזה, ולכן הקול לא נקלט. אפשר להצביע דרך הקישור בהודעה.'
+    if (integ?.enabled && integ.phone_number_id && token) {
+      const r = await graph(integ, token, `${integ.phone_number_id}/messages`, {
+        method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: reply } }),
+      })
+      await log(svc, {
+        recipient: from, audience: 'resident', building_id: resident?.building_id || null, unit_id: resident?.unit_id || null,
+        subject: `אישור הצבעה בוואטסאפ: ${String(poll?.title || '').slice(0, 120)}`, body: reply,
+        status: r.ok ? 'sent' : 'failed', error_message: r.ok ? null : graphError(r.data),
+      })
+    }
+    return
+  }
 
   if (!vendor || !text) return
   const declineRe = /מסרב|סירוב|לא מעוניין|לא מתאים|הסר אותי|תסיר/
@@ -571,6 +604,61 @@ Deno.serve(async (req: Request) => {
       return json({ ok: r.ok, submitted, error: r.ok ? undefined : graphError(r.data) })
     }
 
+    // ── Committee: send an open poll to the building's residents on WhatsApp,
+    // with vote buttons (default options) or a link (custom options). ──
+    if (action === 'poll-whatsapp') {
+      if (!integ?.enabled || !integ.phone_number_id || !token) return json({ ok: false, error: 'integration_disabled' })
+      const { data: poll } = await svc.from('polls').select('*').eq('id', body.pollId).maybeSingle()
+      if (!poll) return json({ ok: false, error: 'poll_not_found' }, 404)
+      if (!isAdmin && !(await callerBuildings(svc, uid)).has(poll.building_id)) return json({ error: 'forbidden' }, 403)
+      if (poll.status !== 'open' || (poll.closes_at && new Date(poll.closes_at) <= new Date())) return json({ ok: false, error: 'poll_closed' })
+      const opts = (poll.options || []) as string[]
+      const withButtons = opts.length === 3 && opts[0] === 'בעד' && opts[1] === 'נגד' && opts[2] === 'נמנע'
+      const key = withButtons ? 'resident_poll' : 'resident_poll_link'
+      const { data: t } = await svc.from('message_templates').select('*').eq('key', key).maybeSingle()
+      if (!t || t.meta_status !== 'APPROVED') return json({ ok: false, error: 'template_not_approved', template: key, status: t?.meta_status || null })
+      const { data: b } = await svc.from('buildings').select('name').eq('id', poll.building_id).maybeSingle()
+      const { data: rows } = await svc.from('unit_residents')
+        .select('phone, resident_type, unit_id, units!inner(building_id)')
+        .eq('units.building_id', poll.building_id).eq('archived', false)
+      const seen = new Set<string>(), recipients: { to: string; unit_id: string }[] = []
+      for (const r of rows || []) {
+        if (poll.owners_only && r.resident_type !== 'owner') continue
+        const to = toE164(String(r.phone || ''))
+        if (!to || !/^9725\d{8}$/.test(to) || seen.has(to)) continue
+        seen.add(to); recipients.push({ to, unit_id: r.unit_id })
+      }
+      if (body.dryRun) return json({ ok: true, recipients: recipients.length, buttons: withButtons })
+      const until = poll.closes_at
+        ? new Date(poll.closes_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
+        : 'סגירה על ידי הוועד'
+      const vars = [cleanParam(b?.name || 'הבניין'), cleanParam(poll.title), cleanParam(until)]
+      const buttons = [
+        ...(withButtons ? [0, 1, 2].map((i) => ({ type: 'quick_reply', index: i, payload: `poll:${poll.id}:${i}` })) : []),
+        { type: 'url', index: withButtons ? 3 : 0, text: String(poll.id) },
+      ]
+      let sent = 0, failed = 0
+      for (const r of recipients) {
+        const payload = {
+          messaging_product: 'whatsapp', to: r.to, type: 'template',
+          template: { name: t.meta_name, language: { code: t.language || 'he' }, components: [
+            { type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }, ...buttonComponents(buttons)] },
+        }
+        const g = await graph(integ, token, `${integ.phone_number_id}/messages`, { method: 'POST', body: JSON.stringify(payload) })
+        if (g.ok) sent++; else failed++
+        await log(svc, {
+          recipient: r.to, audience: 'resident', template_key: key, building_id: poll.building_id, unit_id: r.unit_id,
+          subject: `הצבעה: ${String(poll.title).slice(0, 150)}`, body: render(t.body, vars),
+          status: g.ok ? 'sent' : 'failed', delivery_status: g.ok ? 'sent' : null,
+          external_id: ((g.data?.messages as Array<Record<string, unknown>>)?.[0]?.id as string) || null,
+          error_message: g.ok ? null : graphError(g.data), sent_by: uid,
+        })
+        await new Promise((res) => setTimeout(res, 150))
+      }
+      await svc.from('polls').update({ wa_sent_at: new Date().toISOString(), wa_sent_count: sent }).eq('id', poll.id)
+      return json({ ok: true, sent, failed, recipients: recipients.length, buttons: withButtons })
+    }
+
     if (action === 'send' || action === 'send-text') {
       if (!integ.enabled) return json({ ok: false, error: 'integration_disabled' })
       const audience = String(body.audience || '')
@@ -621,7 +709,10 @@ Deno.serve(async (req: Request) => {
           messaging_product: 'whatsapp', to, type: 'template',
           template: {
             name: t.meta_name, language: { code: t.language || 'he' },
-            components: needed ? [{ type: 'body', parameters: vars.slice(0, needed).map((text) => ({ type: 'text', text })) }] : [],
+            components: [
+              ...(needed ? [{ type: 'body', parameters: vars.slice(0, needed).map((text) => ({ type: 'text', text })) }] : []),
+              ...buttonComponents(body.buttons),
+            ],
           },
         }
         subject = t.title
