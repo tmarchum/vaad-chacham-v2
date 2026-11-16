@@ -115,6 +115,34 @@ function graphBase(integ: Integ | null) {
   return `https://graph.facebook.com/${(integ?.graph_version || 'v21.0').trim()}`
 }
 
+// Extra services a vendor mentions in a reply ("מאשר, גם מצלמות") → trades.
+const TRADE_WORDS: [RegExp, string][] = [
+  [/מצלמ|אזעק|מיגון|אבטח/, 'מצלמות ואזעקות'], [/אינטרקום|קודן|בקרת כניסה/, 'אינטרקום'],
+  [/סנפלינג|גובה|מנוף/, 'עבודות גובה'], [/איטום|זיפות|גגות/, 'איטום וגגות'], [/צבע|סיוד|טיח|שיפוץ/, 'צבע ושיפוצים'],
+  [/חשמל|תאורה|לוח/, 'חשמל'], [/אינסטל|נזיל|צנרת|ביוב|סתימ/, 'אינסטלציה'], [/מזגנ|מיזוג/, 'מיזוג אוויר'],
+  [/גינ|גנן|השקיה|גיזום/, 'גינון'], [/ניקיון|נקיון|פוליש/, 'ניקיון'], [/הדבר|מזיק|ג'?וק|מכרס/, 'הדברה'],
+  [/מנעול|פריצ|צילינדר/, 'מנעולן'], [/שער|מחסום|דלתות אוטומ/, 'שערים ודלתות אוטומטיות'], [/דוד|סולאר/, 'דוד שמש'],
+  [/כיבוי|ספרינקל|גילוי אש|מטפ/, 'כיבוי וגילוי אש'], [/גז/, 'גז מרכזי'], [/זכוכית|זגג|ויטרינ/, 'זגגות'],
+  [/משאב|הידרופור|מאגר/, 'משאבות מים'], [/גנרטור/, 'גנרטור'], [/מעלית|מעליות/, 'מעליות'],
+]
+// Business auto-replies ("תודה שפנית…, אחזור בהקדם") are not information about the vendor.
+const AUTO_REPLY = /תודה שיצרת קשר|תודה שפנית|תודה על פנייתכם|תודה על שפנית|קיבלתי את ההודעה|קיבלנו את ההודעה|אחזור אליך|נחזור אליכם|אחזור בהקדם|הודעה אוטומטית|automatic reply|מחוץ לשעות|הגעתם ל|ברוכים הבאים/i
+
+async function recordVendorDetails(svc: SupabaseClient, vendor: Record<string, any>, text: string) {
+  // Only details that come with an answer to the invite ("מאשר, גם מצלמות"); questions and chatter are not services.
+  if (!/מאשר|מאושר|מעוניין|מסכים/.test(text) || /\?/.test(text)) return
+  const extra = text.replace(/^\s*(מאשר|מסרב|לא מעוניין|מעוניין|אשר)[\s.,!-]*/u, '').trim()
+  if (extra.length < 4 || AUTO_REPLY.test(text)) return
+  const have = String(vendor.specialties || '')
+  const trades = TRADE_WORDS.filter(([re, t]) => re.test(extra) && t !== vendor.category && !have.includes(t)).map(([, t]) => t)
+  const date = new Date().toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem' })
+  const note = `מהספק בוואטסאפ (${date}): ${extra.slice(0, 300)}`
+  await svc.from('vendors').update({
+    notes: [vendor.notes, note].filter(Boolean).join('\n'),
+    ...(trades.length ? { specialties: [have, ...trades].filter(Boolean).join(', ') } : {}),
+  }).eq('id', vendor.id)
+}
+
 // Template button parameters: [{ type: 'quick_reply', index, payload } | { type: 'url', index, text }]
 function buttonComponents(list: unknown): Record<string, unknown>[] {
   if (!Array.isArray(list)) return []
@@ -183,7 +211,7 @@ async function hmacHex(secret: string, raw: string) {
 async function findVendor(svc: SupabaseClient, phone: string) {
   const t = last9(phone)
   if (t.length < 9) return null
-  const { data } = await svc.from('vendors').select('id, name, phone, membership_status')
+  const { data } = await svc.from('vendors').select('id, name, phone, membership_status, category, specialties, notes')
   return (data || []).find((v) => last9(v.phone) === t) || null
 }
 
@@ -305,6 +333,7 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   }
 
   if (!vendor || !text) return
+  await recordVendorDetails(svc, vendor, text).catch(() => {})
   const declineRe = /מסרב|סירוב|לא מעוניין|לא מתאים|הסר אותי|תסיר/
   const approveRe = /מאשר|מעוניין|מסכים|אשר/
   const newStatus = declineRe.test(text) ? 'declined' : approveRe.test(text) ? 'agreed' : null

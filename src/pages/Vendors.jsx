@@ -247,7 +247,12 @@ function VendorAvatar({ vendor }) {
 // Where the vendor was verified: Google listing (rating + review count) or מידרג.
 function SourceBadge({ vendor }) {
   if (vendor.source === 'midrag') {
-    return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#fff1e6] text-[#c2410c]">מידרג{vendor.rating ? ` ★ ${vendor.rating}` : ''}</span>
+    return (
+      <a href={vendor.midrag_url || undefined} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+        className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#fff1e6] text-[#c2410c] num-tabular">
+        מידרג {vendor.midrag_score ?? ''}{vendor.review_count ? ` (${vendor.review_count})` : ''}
+      </a>
+    )
   }
   if (!vendor.google_place_id) return null
   return (
