@@ -18,6 +18,7 @@ const field = 'h-[36px] w-full rounded-[var(--radius)] border border-[var(--outl
 const ERRORS = {
   no_key: 'חסר מפתח Google Places — יש להגדיר אותו פעם אחת בשרת',
   forbidden: 'הפעולה זמינה למנהל המערכת בלבד',
+  daily_cap: 'הגעת לתקרת 100 החיפושים היומית בגוגל (הגנה מחיוב). אפשר להמשיך מחר',
 }
 
 async function call(payload) {

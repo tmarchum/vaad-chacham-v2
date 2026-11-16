@@ -41,6 +41,14 @@ function israeliMobile(national?: string, intl?: string): string | null {
   return /^05\d{8}$/.test(d) ? d : null
 }
 
+// Billing guard: at most DAILY_CAP paid Places calls per day (counted in the DB).
+const DAILY_CAP = 100
+async function placesFetch(svc: any, init: RequestInit) {
+  const { data: ok } = await svc.rpc('bump_google_api_usage', { p_cap: DAILY_CAP })
+  if (!ok) throw new Error('daily_cap')
+  return fetch('https://places.googleapis.com/v1/places:searchText', init)
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
@@ -66,7 +74,7 @@ Deno.serve(async (req: Request) => {
       const places: any[] = []
       let pageToken: string | undefined
       for (let page = 0; page < 3; page++) {
-        const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        const res = await placesFetch(svc, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
           body: JSON.stringify({
@@ -142,7 +150,7 @@ Deno.serve(async (req: Request) => {
       const unmatched: string[] = []
       for (const v of vendors || []) {
         const want = digits(v.phone).slice(-9)
-        const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        const res = await placesFetch(svc, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
           body: JSON.stringify({ textQuery: `${v.name} ${v.service_area || ''}`.trim(), languageCode: 'he', regionCode: 'IL', pageSize: 5 }),
