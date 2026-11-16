@@ -317,7 +317,7 @@ function issueOpenedHtml(
 async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, issueId: string) {
   const { data: issue } = await svc
     .from('issues')
-    .select('id, building_id, unit_id, title, description, category, priority, vendor_id, vendor_name, assigned_to, reported_by, ticket_no, scheduled_date, photo_url')
+    .select('id, building_id, unit_id, title, description, category, priority, vendor_id, vendor_name, assigned_to, reported_by, ticket_no, scheduled_date, photo_url, brief_token')
     .eq('id', issueId)
     .maybeSingle()
   if (!issue) return null
@@ -452,7 +452,7 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
       email: channel === 'whatsapp' || channel === 'phone' ? '' : String(vendor.email || ''),
       audience: 'vendor', templateKey: 'vendor_issue_dispatch',
       variables: [String(vendor.name || 'ספק'), buildingName,
-        mark(String(issue.description || issue.title || '')), contact],
+        mark(String(issue.description || issue.title || '') + (issue.brief_token ? ` | פרטים ותמונות: https://app.vaad1.co.il/brief/${issue.brief_token}` : '')), contact],
     })
   }
 

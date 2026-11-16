@@ -19,6 +19,7 @@ import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
 import { vendorDistanceKm, formatKm } from '@/lib/geo'
+import { IssueVendorDetails, issueBriefLink } from '@/components/issues/IssueVendorDetails'
 import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { notifyIssueStatus, notifyIssueOpened, notifyIssueDispatch, describeIssueNotified } from '@/lib/notify'
@@ -512,7 +513,9 @@ function Issues() {
   const { data: allIssues, create, update, remove, isSaving, isLoading } = useRealtimeCollection('issues', scope)
   const dir = useUnitDirectory(selectedBuilding?.id)
   const { data: allUnits } = useCollection('units', scope)
-  const { data: allVendors } = useCollection('vendors')
+  const { data: vendorRows } = useCollection('vendors')
+  // ועד1's own handyman is reached through "טיפול ועד1", not picked as a pool vendor.
+  const allVendors = useMemo(() => vendorRows.filter((v) => !v.is_internal), [vendorRows])
   const { data: supervisors } = useCollection('supervisors')
   const { data: allQuotes, create: createQuote, update: updateQuote } = useCollection('quotes', scope)
 
@@ -543,7 +546,7 @@ function Issues() {
 
   // Service plans / punch cards. `svc.ready` is false until migration 030 is
   // applied, and then every issue keeps the old buttons.
-  const { isAdmin, profile } = useAuth()
+  const { isAdmin, isCommittee: isCommitteeUser, profile } = useAuth()
   const [serviceCfg, setServiceCfg] = useState({ ready: false, plans: [], settings: null })
   useEffect(() => { loadServiceConfig().then(setServiceCfg).catch(() => {}) }, [])
   const svcBase = useMemo(() => ({ ready: serviceCfg.ready, isAdmin, settings: serviceCfg.settings }), [serviceCfg, isAdmin])
@@ -1047,7 +1050,7 @@ function Issues() {
     variables: [
       vendor?.name || vendor?.business_name || 'שלום',
       [building?.name, building?.address].filter(Boolean).join(', ') || 'הבניין',
-      [iss?.title, iss?.description, iss?.photo_url ? `תמונה: ${iss.photo_url}` : ''].filter(Boolean).join(' — '),
+      [iss?.title, iss?.description, issueBriefLink(iss) ? `פרטים ותמונות: ${issueBriefLink(iss)}` : (iss?.photo_url ? `תמונה: ${iss.photo_url}` : '')].filter(Boolean).join(' — '),
       'ועד הבית',
     ],
   })
@@ -1143,7 +1146,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 נדרשת הצעת מחיר לעבודה הבאה:
 📋 *${iss.title}*
 🔧 קטגוריה: ${iss.category || 'כללי'}
-📝 ${iss.description || ''}${iss.photo_url ? `\n📷 תמונת התקלה: ${iss.photo_url}` : ''}
+📝 ${iss.description || ''}${issueBriefLink(iss) ? `\n📷 כל הפרטים והתמונות: ${issueBriefLink(iss)}` : iss.photo_url ? `\n📷 תמונת התקלה: ${iss.photo_url}` : ''}
 
 אנא שלחו הצעת מחיר בהקדם. נשמח לתאם ביקור לסקירה.
 
@@ -1867,6 +1870,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   <img src={iss.photo_url} alt="תמונת התקלה" className="mt-1 max-h-48 rounded-lg border border-[var(--border)] object-cover" />
                 </a>
               )}
+              {isCommitteeUser && <IssueVendorDetails issue={iss} />}
               <DetailRow
                 label="עדיפות"
                 value={

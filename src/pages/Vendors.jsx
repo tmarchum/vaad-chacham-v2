@@ -245,6 +245,10 @@ function VendorAvatar({ vendor }) {
 }
 
 // Where the vendor was verified: Google listing (rating + review count) or מידרג.
+// ועד1's own team sits apart from the pool: different billing (hours on the punch card).
+const VENDOR_GROUPS = [{ key: '__vaad1', label: 'צוות ועד1 — שעות טיפול בכרטיסייה, לא חשבון ספק' }, ...ISSUE_GROUPS]
+const groupKeyOf = (v) => (v.is_internal ? '__vaad1' : issueGroupOf(v.category))
+
 function SourceBadge({ vendor }) {
   if (vendor.is_internal) {
     return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--primary)] text-white">ועד1 · הנדימן</span>
@@ -590,7 +594,7 @@ function Vendors() {
       return
     }
     const targets = allVendors.filter(
-      (v) => !v.is_blacklisted && (v.membership_status || 'pending') === 'pending' && isMobile(v.phone),
+      (v) => !v.is_blacklisted && !v.is_internal && (v.membership_status || 'pending') === 'pending' && isMobile(v.phone),
     )
     if (targets.length === 0) { toast('אין ספקים ממתינים עם מספר וואטסאפ תקין', 'info'); return }
     if (!window.confirm(`לשלוח הזמנת שיתוף פעולה ל-${targets.length} ספקים ממתינים? ההודעות יוצאות אחת ל-20–40 שניות כדי שהמספר לא ייחסם (50 ספקים ≈ חצי שעה). יש להשאיר את הדף פתוח.`)) return
@@ -761,8 +765,8 @@ function Vendors() {
                         <th></th>
                       </tr>
                     </thead>
-                    {ISSUE_GROUPS.map((g) => {
-                      const group = filtered.filter((v) => issueGroupOf(v.category) === g.key)
+                    {VENDOR_GROUPS.map((g) => {
+                      const group = filtered.filter((v) => groupKeyOf(v) === g.key)
                         .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he') || (Number(b.rating) || 0) - (Number(a.rating) || 0))
                       if (group.length === 0) return null
                       return (
@@ -832,8 +836,8 @@ function Vendors() {
 
               {/* Mobile cards */}
               <div className="md:hidden space-y-5">
-                {ISSUE_GROUPS.map((g) => {
-                  const group = filtered.filter((v) => issueGroupOf(v.category) === g.key)
+                {VENDOR_GROUPS.map((g) => {
+                  const group = filtered.filter((v) => groupKeyOf(v) === g.key)
                     .sort((a, b) => (a.category || '').localeCompare(b.category || '', 'he') || (Number(b.rating) || 0) - (Number(a.rating) || 0))
                   if (group.length === 0) return null
                   return (
@@ -902,7 +906,7 @@ function Vendors() {
         // WhatsApp appear in the invite flow (others are counted + surfaced).
         const noMobile = allVendors.filter((v) => !v.is_blacklisted && !isMobile(v.phone)).length
         const list = allVendors
-          .filter((v) => !v.is_blacklisted && isMobile(v.phone))
+          .filter((v) => !v.is_blacklisted && !v.is_internal && isMobile(v.phone))
           .filter((v) => (membershipFilter === 'all' ? true : (v.membership_status || 'pending') === membershipFilter))
           .filter((v) => (inviteCategoryFilter ? v.category === inviteCategoryFilter : true))
           .slice()

@@ -113,7 +113,8 @@ export function scoreVendorForIssue(issue, vendor, { urgent = false, building = 
 export function rankVendorsForIssue(issue, vendors, opts = {}) {
   const urgent = opts.urgent ?? ['high', 'urgent'].includes(issue?.priority)
   return (vendors || [])
-    .filter((v) => !v.is_blacklisted && !v.isBlacklisted && !v.sanctions)
+    // ועד1's own handyman is reached through "טיפול ועד1", not offered as a vendor.
+    .filter((v) => !v.is_blacklisted && !v.isBlacklisted && !v.sanctions && !v.is_internal)
     .map((v) => scoreVendorForIssue(issue, v, { urgent, building: opts.building || null }))
     // Only suggest vendors whose trade actually fits the issue.
     .filter((r) => r.matched)
