@@ -602,7 +602,12 @@ Deno.serve(async (req: Request) => {
       let payload: Record<string, unknown>, subject: string, rendered: string, templateKey: string | null = null
       if (action === 'send') {
         templateKey = String(body.templateKey || '')
-        const { data: t } = await svc.from('message_templates').select('*').eq('key', templateKey).maybeSingle()
+        let { data: t } = await svc.from('message_templates').select('*').eq('key', templateKey).maybeSingle()
+        // Pool invite: prefer the version with "מאשר" / "לא מעוניין" buttons once Meta approves it.
+        if (templateKey === 'vendor_invite') {
+          const { data: btn } = await svc.from('message_templates').select('*').eq('key', 'vendor_invite_btn').maybeSingle()
+          if (btn?.active && btn.meta_status === 'APPROVED') t = btn
+        }
         if (!t || !t.active) return json({ ok: false, error: 'template_not_found' }, 404)
         if (t.audience !== audience) return json({ ok: false, error: 'template_audience_mismatch' }, 400)
         if (MANUAL_CONFIRM_TEMPLATES.has(t.key) && body.confirmManual !== true) {
