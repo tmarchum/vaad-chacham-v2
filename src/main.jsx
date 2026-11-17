@@ -39,12 +39,24 @@ window.addEventListener('vite:preloadError', (e) => { if (reloadForNewBuild()) e
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null } }
-  static getDerivedStateFromError(error) { return { error } }
+  // A missing chunk means a new version was deployed: show a quiet
+  // "updating" screen while the page reloads, not the crash screen.
+  static getDerivedStateFromError(error) { return { error, updating: isChunkError(error) } }
   componentDidCatch(error, info) {
-    if (isChunkError(error) && reloadForNewBuild()) return
+    if (isChunkError(error)) {
+      if (reloadForNewBuild()) return
+      this.setState({ updating: false })
+    }
     console.error('App crash:', error, info); Sentry.captureException(error)
   }
   render() {
+    if (this.state.error && this.state.updating) {
+      return (
+        <div dir="rtl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f8fafc', color: '#475569', fontSize: 14 }}>
+          מעדכן לגרסה חדשה...
+        </div>
+      )
+    }
     if (this.state.error) {
       return (
         <div dir="rtl" style={{ padding: 40, textAlign: 'center', color: '#fff', background: '#1e293b', minHeight: '100vh' }}>
