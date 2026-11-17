@@ -861,7 +861,7 @@ Deno.serve(async (req: Request) => {
         let { data: t } = await svc.from('message_templates').select('*').eq('key', templateKey).maybeSingle()
         // Pool invite: prefer the version with "מאשר" / "לא מעוניין" buttons once Meta approves it.
         if (templateKey === 'vendor_invite') {
-          const { data: btn } = await svc.from('message_templates').select('*').eq('key', 'vendor_invite_btn').maybeSingle()
+          const { data: btn } = await svc.from('message_templates').select('*').eq('key', 'vendor_invite_btn2').maybeSingle()
           if (btn?.active && btn.meta_status === 'APPROVED') t = btn
         }
         if (!t || !t.active) return json({ ok: false, error: 'template_not_found' }, 404)
