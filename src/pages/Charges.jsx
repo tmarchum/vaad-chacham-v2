@@ -225,7 +225,7 @@ export default function Charges() {
           </ul>
           <p className="flex items-start gap-1.5 text-[12px] font-semibold text-[var(--text-primary)]">
             <ShieldCheck className="h-4 w-4 shrink-0 text-[var(--success)]" />
-            ועד1 לא מקבלת עמלה על אף עבודה, והבחירה שלכם בספק לא משפיעה על מה שאנחנו מקבלים. את הספקים הבניין משלם ישירות.
+            את הספקים הבניין משלם ישירות.
           </p>
           {!isAdmin && <p className="text-[11px] text-[var(--text-muted)]">שיחות, הודעות, פתיחת תקלות, מכתבי גבייה והדוח החודשי — לעולם לא מחויבים.</p>}
         </div>

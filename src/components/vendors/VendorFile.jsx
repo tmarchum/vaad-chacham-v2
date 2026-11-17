@@ -370,7 +370,7 @@ function BillingTab({ vendor, buildingId, bills, totals, unbilled, onChange }) {
           </div>
         ))}
       </div>
-      <p className="text-[11px] text-[var(--text-muted)]">רישום בלבד: הבניין משלם לספק ישירות. ועד1 לא מעבירה כסף ולא גובה עמלה.</p>
+      <p className="text-[11px] text-[var(--text-muted)]">רישום בלבד: הבניין משלם לספק ישירות. ועד1 לא מעבירה את הכסף.</p>
 
       {unbilled.length > 0 && !form && (
         <div className="rounded-[var(--radius)] bg-[var(--surface-secondary)] p-3 space-y-1.5">

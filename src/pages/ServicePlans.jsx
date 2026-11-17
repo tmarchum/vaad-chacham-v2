@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { SectionCard } from '@/components/common/SectionCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { toast, toastError } from '@/lib/toast'
+import { HandymanLedgerCard } from '@/components/billing/HandymanLedgerCard'
 import { cn } from '@/lib/utils'
 import { DAY_LABELS, loadServiceConfig, monthlyPrice, activePlans, loadPriceLists, UNIT_LABELS } from '@/lib/servicePlans'
 import { BadgeDollarSign, Clock, Building2, Ticket, History, Save, Plus, ListChecks, Package, Handshake } from 'lucide-react'
@@ -441,6 +442,8 @@ export default function ServicePlans() {
           )}
         </SectionCard>
       </div>
+
+      <HandymanLedgerCard buildingName={buildingName} />
 
       {/* ── Sell a card ── */}
       <Dialog open={!!buyFor} onOpenChange={(o) => { if (!o) setBuyFor(null) }}>

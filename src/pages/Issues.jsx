@@ -918,6 +918,25 @@ function Issues() {
     }
   }
 
+  // Receipt or after-work photo, straight from the phone camera or gallery.
+  const [finishUploading, setFinishUploading] = useState('')
+  const uploadFinishFile = async (file, key, folder, onUrl) => {
+    if (!file) return
+    setFinishUploading(key)
+    try {
+      const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+      const path = `${finishIssue?.buildingId || 'b'}/${folder}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('issue-photos')
+        .upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' })
+      if (error) { toastError('העלאת התמונה נכשלה'); return }
+      onUrl(supabase.storage.from('issue-photos').getPublicUrl(path).data.publicUrl)
+    } catch {
+      toastError('העלאת התמונה נכשלה')
+    } finally {
+      setFinishUploading('')
+    }
+  }
+
   const setField = (field) => (e) => {
     const val = e?.target?.value !== undefined ? e.target.value : e
     setForm((prev) => {
@@ -1529,7 +1548,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setFinishParts((ps) => [...ps, { key: crypto.randomUUID(), source: 'catalog', catalogId: c.id, label: c.label, qty: 1, unitCost: Number(c.price) || 0, receiptUrl: '' }])
   }
   const addReceiptPart = () =>
-    setFinishParts((ps) => [...ps, { key: crypto.randomUUID(), source: 'receipt', catalogId: null, label: '', qty: 1, unitCost: '', receiptUrl: '' }])
+    setFinishParts((ps) => [...ps, { key: crypto.randomUUID(), source: 'receipt', catalogId: null, label: '', qty: 1, unitCost: '', receiptUrl: '', paidByHandyman: true }])
   const setPart = (key, patch) => setFinishParts((ps) => ps.map((l) => (l.key === key ? { ...l, ...patch } : l)))
   const removePart = (key) => setFinishParts((ps) => ps.filter((l) => l.key !== key))
 
@@ -1581,6 +1600,19 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           p_note: `${label}${pct ? ` (עלות + ${pct}% טיפול)` : ''}`, p_receipt: receipt,
         })
         if (cErr) { toastError('רישום החיוב על החלקים נכשל'); return }
+      }
+
+      // ועד1's own side: what the handyman is owed for this visit.
+      if (finishForm.kind === 'handyman') {
+        const { error: hErr } = await supabase.rpc('log_handyman_work', {
+          p_building: finishIssue.buildingId, p_issue: others.length ? null : finishIssue.id, p_visit: visitId,
+          p_hours: hours, p_note: note,
+          p_parts: finishParts.filter((l) => l.source === 'receipt' && l.paidByHandyman !== false).map((l) => ({
+            label: String(l.label).trim(), amount: Math.round((Number(l.qty) || 1) * (Number(l.unitCost) || 0) * 100) / 100,
+            receipt: (l.receiptUrl || '').trim() || null,
+          })),
+        })
+        if (hErr) toastError('ההתחשבנות עם איש האחזקה לא נרשמה — רשמו אותה ידנית')
       }
 
       const done = {
@@ -2789,8 +2821,21 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     </label>
                   </div>
                   {l.source === 'receipt' && (
-                    <input className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px]"
-                      placeholder="קישור לתמונת הקבלה" value={l.receiptUrl} onChange={(e) => setPart(l.key, { receiptUrl: e.target.value })} />
+                    <div className="space-y-1.5">
+                      <label className="block text-[11px] text-[var(--text-muted)]">תמונת הקבלה
+                        <input type="file" accept="image/*,application/pdf" className="mt-0.5 block w-full text-[12px]"
+                          onChange={(e) => uploadFinishFile(e.target.files?.[0], l.key, 'receipts', (url) => setPart(l.key, { receiptUrl: url }))} />
+                      </label>
+                      {finishUploading === l.key && <p className="text-[11px] text-[var(--text-muted)]">מעלה...</p>}
+                      {l.receiptUrl && <a href={l.receiptUrl} target="_blank" rel="noreferrer" className="text-[12px] text-[var(--primary)]">הקבלה הועלתה — לצפייה</a>}
+                      {finishForm.kind === 'handyman' && (
+                        <label className="flex items-center gap-2 text-[12px]">
+                          <input type="checkbox" className="accent-[var(--primary)]" checked={l.paidByHandyman !== false}
+                            onChange={(e) => setPart(l.key, { paidByHandyman: e.target.checked })} />
+                          איש האחזקה שילם על החלק (יוחזר לו לפי הקבלה)
+                        </label>
+                      )}
+                    </div>
                   )}
                   <p className="text-[12px] text-[var(--text-secondary)]">
                     לחיוב: ₪{lineTotal(l)}{l.source === 'receipt' && handlingPct ? ` (כולל ${handlingPct}% טיפול)` : ''}
@@ -2809,11 +2854,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 <Button type="button" variant="outline" size="sm" onClick={addReceiptPart}><Plus className="h-4 w-4" />חלק לפי קבלה</Button>
               </div>
             </div>
-            <FormField
-              label="קישור לתמונת סיום (לא חובה)"
-              value={finishForm.photoUrl}
-              onChange={(e) => setFinishForm((f) => ({ ...f, photoUrl: e.target.value }))}
-            />
+            <div className="space-y-1">
+              <label className="block text-[13px] font-semibold">תמונת סיום (לא חובה)
+                <input type="file" accept="image/*" className="mt-1 block w-full text-[12px] font-normal"
+                  onChange={(e) => uploadFinishFile(e.target.files?.[0], 'after', 'after', (url) => setFinishForm((f) => ({ ...f, photoUrl: url })))} />
+              </label>
+              {finishUploading === 'after' && <p className="text-[11px] text-[var(--text-muted)]">מעלה...</p>}
+              {finishForm.photoUrl && <a href={finishForm.photoUrl} target="_blank" rel="noreferrer" className="text-[12px] text-[var(--primary)]">התמונה הועלתה — לצפייה</a>}
+            </div>
             <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
               <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא חיוב שעות' : finishPunches ? `${finishPunches} שעות` : 'ללא שעות לחיוב'}
                 {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} תקלות` : ''}</p>
@@ -2831,7 +2879,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               {finishPartsTotal > 0 && <p className="text-[var(--text-secondary)]">חלקים: ₪{Math.round(finishPartsTotal * 100) / 100}</p>}
             </div>
             <div className="flex gap-3">
-              <Button onClick={handleFinishWork} disabled={finishBusy}>
+              <Button onClick={handleFinishWork} disabled={finishBusy || !!finishUploading}>
                 <CheckCircle2 className="h-4 w-4" />
                 {finishBusy ? 'שומר...' : 'סיום ביקור'}
               </Button>

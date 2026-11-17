@@ -109,7 +109,7 @@ export default function StatementView() {
           </section>
         )}
         <p className="text-[12px] text-slate-500 text-center pb-6 whitespace-pre-wrap">
-          {s.footer || 'החשבון כולל רק שירותים של ועד1. את הספקים הבניין משלם ישירות, וועד1 לא מקבלת עמלה מאף ספק.'}
+          {s.footer || 'החשבון כולל רק שירותים של ועד1. את הספקים הבניין משלם ישירות.'}
         </p>
       </div>
     </div>
