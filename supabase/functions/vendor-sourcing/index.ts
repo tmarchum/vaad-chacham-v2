@@ -25,12 +25,23 @@ const FIELDS = [
 // fitness studios). Search what a building actually needs.
 const QUERY: Record<string, string> = {
   'בדיקת חשמל': 'בודק חשמל מוסמך', 'בדיקת מעליות': 'בודק מעליות מוסמך', 'גז מרכזי': 'טכנאי גז מוסמך',
-  'גינון': 'גנן לבניינים משותפים', 'גנרטור': 'תחזוקת גנרטורים', 'חדר כושר': 'תיקון מכשירי כושר',
+  'גינון': 'גנן לבניינים משותפים', 'גנרטור': 'שירות ותחזוקת גנרטורים', 'חדר כושר': 'טכנאי תיקון הליכונים ומכשירי כושר',
   'יועץ נגישות': 'מורשה נגישות', 'מהנדס בניין': 'מהנדס קונסטרוקציה בדק בית', 'מיזוג אוויר': 'טכנאי מזגנים',
   'מנעולן': 'מנעולן דלתות', 'ניקיון': 'ניקיון בניינים חדרי מדרגות', 'מעליות': 'חברת תחזוקת מעליות',
-  'משאבות מים': 'תחזוקת משאבות מים', 'חיטוי מאגרי מים': 'חיטוי מאגרי מים', 'כיבוי וגילוי אש': 'מערכות כיבוי אש',
-  'פינוי אשפה ודחסנים': 'דחסנים לבניינים', 'צבע ושיפוצים': 'צבעי בניינים', 'בריכת שחייה': 'תחזוקת בריכות שחייה',
+  'משאבות מים': 'שירות ותיקון משאבות מים לבניינים', 'חיטוי מאגרי מים': 'ניקוי וחיטוי מאגרי מים בבניינים', 'כיבוי וגילוי אש': 'מערכות כיבוי אש',
+  'פינוי אשפה ודחסנים': 'דחסנים לבניינים', 'צבע ושיפוצים': 'צבעי בניינים', 'בריכת שחייה': 'טכנאי תחזוקת בריכות שחייה',
   'מצלמות ואזעקות': 'התקנת מצלמות אבטחה', 'אינטרקום': 'טכנאי אינטרקום', 'זגגות': 'זגג',
+}
+
+// Narrow trades return anything loosely related (a search for gym-equipment
+// repair brought pilates studios and a gun shop). For these, a business whose
+// name says nothing about the trade is shown but never pre-selected.
+const NAME_HINTS: Record<string, string[]> = {
+  'משאבות מים': ['משאב', 'מים', 'אינסטל', 'הידרו'],
+  'חיטוי מאגרי מים': ['מאגר', 'חיטוי', 'מים', 'מיכל'],
+  'חדר כושר': ['כושר', 'הליכונ', 'מכשירי'],
+  'גנרטור': ['גנרטור', 'גנרציה', 'אנרגי', 'חשמל'],
+  'בריכת שחייה': ['בריכ', 'pool', 'פול'],
 }
 
 // Great-circle distance in km.
@@ -93,6 +104,8 @@ Deno.serve(async (req: Request) => {
           headers: { 'content-type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': FIELDS },
           body: JSON.stringify({
             textQuery: `${QUERY[category] || category} ${area}`.trim(), languageCode: 'he', regionCode: 'IL', pageSize: 20,
+            // Lean towards the building's surroundings, not only the named town.
+            ...(origin ? { locationBias: { circle: { center: { latitude: origin.lat, longitude: origin.lng }, radius: Math.min((maxKm || 20) * 1000, 50000) } } } : {}),
             ...(pageToken ? { pageToken } : {}),
           }),
           signal: AbortSignal.timeout(20000),
@@ -120,6 +133,9 @@ Deno.serve(async (req: Request) => {
           if (rating < minRating) reasons.push(`דירוג ${rating || '—'}`)
           if (reviews < minReviews) reasons.push(`${reviews} ביקורות`)
           if (exists) reasons.push('כבר במאגר')
+          const hints = NAME_HINTS[category]
+          const nm = String(p.displayName?.text || '').toLowerCase()
+          if (hints && !hints.some((h) => nm.includes(h))) reasons.push('השם לא מעיד על התחום')
           const lat = p.location?.latitude ?? null, lng = p.location?.longitude ?? null
           const distance_km = origin && lat != null ? Math.round(km(origin.lat, origin.lng, lat, lng) * 10) / 10 : null
           if (maxKm && distance_km != null && distance_km > maxKm) reasons.push(`רחוק · ${Math.round(distance_km)} ק"מ`)
