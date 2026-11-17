@@ -214,6 +214,13 @@ const QUOTE_FILTERS = [
 function timeAgo(dateStr) {
   if (!dateStr) return ''
   const now = new Date()
+  // A date without a time is counted in days, not from midnight UTC.
+  if (String(dateStr).length <= 10) {
+    const days = Math.round((new Date(now.toLocaleDateString('en-CA')) - new Date(dateStr)) / 86400000)
+    if (days <= 0) return 'היום'
+    if (days === 1) return 'אתמול'
+    if (days < 30) return `לפני ${days} ימים`
+  }
   const then = new Date(dateStr)
   const diffMs = now - then
   if (diffMs < 0) return ''
@@ -808,7 +815,7 @@ function Issues() {
     setForm({
       ...EMPTY_FORM,
       reportedAt: new Date().toISOString().slice(0, 10),
-      buildingId: buildingFilter !== 'all' ? buildingFilter : (buildings[0]?.id || ''),
+      buildingId: buildingFilter !== 'all' ? buildingFilter : (selectedBuilding?.id || buildings[0]?.id || ''),
     })
     setFormOpen(true)
     setShowTemplates(false)
@@ -823,7 +830,7 @@ function Issues() {
       category: template.category,
       priority: template.priority,
       reportedAt: new Date().toISOString().slice(0, 10),
-      buildingId: buildingFilter !== 'all' ? buildingFilter : (buildings[0]?.id || ''),
+      buildingId: buildingFilter !== 'all' ? buildingFilter : (selectedBuilding?.id || buildings[0]?.id || ''),
     })
     setShowTemplates(false)
     setFormOpen(true)
