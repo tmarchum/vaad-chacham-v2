@@ -156,8 +156,7 @@ export function AuthProvider({ children }) {
 
   // True when a non-admin user is logged in but has not yet been linked to a unit
   const needsOnboarding = !loading && !!user && onboardingChecked &&
-    !isCommittee && !profile?.unit_id &&
-    !localStorage.getItem(ONBOARDING_KEY(user?.id))
+    !isCommittee && !profile?.unit_id
 
   const updateProfile = useCallback(async (updates) => {
     if (!user) return

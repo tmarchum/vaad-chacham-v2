@@ -2,6 +2,7 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { ResidentOnboarding } from './ResidentOnboarding'
 import { ResidentPortal } from './ResidentPortal'
+import { PendingApproval } from './PendingApproval'
 import { ResidentPreview } from './ResidentPreview'
 import { isResidentPreviewOn } from '@/lib/residentPreview'
 
@@ -23,6 +24,9 @@ export function AuthGuard() {
 
   // New user whose email didn't auto-match a resident → show onboarding wizard
   if (needsOnboarding) return <ResidentOnboarding />
+
+  // Picked an apartment, not approved by the committee yet → nothing of the building is shown
+  if (!isCommittee && profile?.unit_id && profile.is_verified === false) return <PendingApproval />
 
   // Resident user (not admin/committee) who has been linked to a unit → dedicated portal
   if (!isCommittee && profile?.unit_id) return <ResidentPortal />
