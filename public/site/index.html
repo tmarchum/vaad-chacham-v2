@@ -303,8 +303,8 @@
       <div class="card">
         <h3>כניסה</h3>
         <p style="font-size:14px;margin-top:4px">המערכת המלאה, ואיש אחזקה של ועד1 כשצריך.</p>
-        <p class="price" style="margin-top:18px">₪10 <small>לדירה לחודש</small></p>
-        <p style="font-size:13px;color:var(--muted)">מינימום ₪250 לבניין</p>
+        <p class="price" style="margin-top:18px">₪<span data-p="basic.unit">10</span> <small>לדירה לחודש</small></p>
+        <p style="font-size:13px;color:var(--muted)">מינימום ₪<span data-p="basic.min">250</span> לבניין</p>
         <ul class="tick">
           <li>גבייה, תקלות, דיירים והודעות במקום אחד</li>
           <li>אפליקציה לדיירים</li>
@@ -317,14 +317,14 @@
         <span class="flag">מומלץ</span>
         <h3>ליווי</h3>
         <p style="font-size:14px;margin-top:4px">הוועד מחליט, אנחנו מכינים, מזכירים ומתאמים.</p>
-        <p class="price" style="margin-top:18px">₪25 <small>לדירה לחודש</small></p>
-        <p style="font-size:13px;color:var(--muted)">מינימום ₪750 לבניין</p>
+        <p class="price" style="margin-top:18px">₪<span data-p="assisted.unit">25</span> <small>לדירה לחודש</small></p>
+        <p style="font-size:13px;color:var(--muted)">מינימום ₪<span data-p="assisted.min">750</span> לבניין</p>
         <ul class="tick">
           <li>כל מה שבמסלול כניסה</li>
           <li>סיוע בגבייה ושיוך תשלומים מהבנק</li>
           <li>ספקים מומלצים, הצעות מחיר ותיאום</li>
           <li>ביקור אחזקה חודשי בבניין</li>
-          <li>הקמה: ₪990 חד-פעמי, או חינם בהתחייבות לשנה</li>
+          <li>הקמה: ₪<span data-p="setup">990</span> חד-פעמי, או חינם בהתחייבות לשנה</li>
         </ul>
       </div>
     </div>
@@ -378,7 +378,7 @@
       </div>
       <div class="card">
         <h3>בניינים קטנים יותר</h3>
-        <p style="margin-top:8px;font-size:14.5px">20–30 דירות בלי חברת ניהול ובלי תקציב לאחת. מסלול כניסה — כל המערכת ב-₪10 לדירה, מינימום ₪250 לבניין.</p>
+        <p style="margin-top:8px;font-size:14.5px">20–30 דירות בלי חברת ניהול ובלי תקציב לאחת. מסלול כניסה — כל המערכת ב-₪<span data-p="basic.unit">10</span> לדירה, מינימום ₪<span data-p="basic.min">250</span> לבניין.</p>
       </div>
     </div>
   </div>
@@ -392,7 +392,7 @@
     <div style="margin-top:28px">
       <details open>
         <summary>כמה זה עולה?</summary>
-        <p>כניסה — ₪10 לדירה לחודש, מינימום ₪250 לבניין. ליווי — ₪25 לדירה לחודש, מינימום ₪750 לבניין. שירותים נוספים, כמו שעות אחזקה, מתומחרים מראש ונכנסים לחשבון רק אחרי אישור הוועד. נשמח לתת הצעה מסודרת לבניין שלכם.</p>
+        <p>כניסה — ₪<span data-p="basic.unit">10</span> לדירה לחודש, מינימום ₪<span data-p="basic.min">250</span> לבניין. ליווי — ₪<span data-p="assisted.unit">25</span> לדירה לחודש, מינימום ₪<span data-p="assisted.min">750</span> לבניין. שירותים נוספים, כמו שעות אחזקה, מתומחרים מראש ונכנסים לחשבון רק אחרי אישור הוועד. נשמח לתת הצעה מסודרת לבניין שלכם.</p>
       </details>
       <details>
         <summary>האם המערכת מחליפה חברת ניהול?</summary>
@@ -412,7 +412,7 @@
       </details>
       <details>
         <summary>איך מתחילים, וכמה זה מסובך?</summary>
-        <p>מתחילים מרשימת הדירות והדיירים ומהיתרות הפתוחות. משם מוסיפים לפי הקצב שלכם — קודם תקלות, אחר כך גבייה, אחר כך הודעות. אין צורך להעביר הכול ביום אחד. במסלול ליווי אנחנו מקימים בשבילכם: ₪990 חד-פעמי, או חינם בהתחייבות לשנה. במסלול כניסה ההקמה עצמית וללא תשלום.</p>
+        <p>מתחילים מרשימת הדירות והדיירים ומהיתרות הפתוחות. משם מוסיפים לפי הקצב שלכם — קודם תקלות, אחר כך גבייה, אחר כך הודעות. אין צורך להעביר הכול ביום אחד. במסלול ליווי אנחנו מקימים בשבילכם: ₪<span data-p="setup">990</span> חד-פעמי, או חינם בהתחייבות לשנה. במסלול כניסה ההקמה עצמית וללא תשלום.</p>
       </details>
     </div>
   </div>
@@ -449,6 +449,17 @@
 
 <script>
   document.getElementById('y').textContent = new Date().getFullYear()
+  // Prices come from the admin price list ("מסלולים ותמחור"); the numbers in the page are the fallback.
+  fetch('https://stncskqjrmecjckxldvi.supabase.co/rest/v1/rpc/public_price_list', {
+    method: 'POST', headers: { apikey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0bmNza3Fqcm1lY2pja3hsZHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDExNzcsImV4cCI6MjA5MDExNzE3N30.7HOgnQskv6RblMQvoDaQzXE3kj2KP7lpugSbjYeVG2g', 'content-type': 'application/json' }, body: '{}',
+  }).then(function (r) { return r.ok ? r.json() : null }).then(function (d) {
+    if (!d) return
+    document.querySelectorAll('[data-p]').forEach(function (el) {
+      var k = el.getAttribute('data-p').split('.')
+      var v = k.length === 1 ? d[k[0]] : (d.plans && d.plans[k[0]] ? d.plans[k[0]][k[1]] : null)
+      if (v != null && isFinite(v)) el.textContent = Number(v).toLocaleString('he-IL')
+    })
+  }).catch(function () {})
 </script>
 
 <script type="application/ld+json">

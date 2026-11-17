@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { DAY_LABELS, loadServiceConfig, monthlyPrice, activePlans, loadPriceLists, UNIT_LABELS } from '@/lib/servicePlans'
-import { BadgeDollarSign, Clock, Building2, Ticket, History, Save, Plus, ListChecks, Package } from 'lucide-react'
+import { BadgeDollarSign, Clock, Building2, Ticket, History, Save, Plus, ListChecks, Package, Handshake } from 'lucide-react'
 
 // Plans, prices, business hours and punch cards — the commercial settings of
 // the management side. Everything a price depends on is edited here rather
@@ -35,6 +35,7 @@ export default function ServicePlans() {
   const [buyForm, setBuyForm] = useState({ punches: 10, price: 0, paid: false, notes: '' })
   const [items, setItems] = useState([])
   const [parts, setParts] = useState([])
+  const [referral, setReferral] = useState({ fee: 0, active: false })
 
   const load = useCallback(async () => {
     const cfg = await loadServiceConfig()
@@ -50,6 +51,8 @@ export default function ServicePlans() {
     ])
     setPlans(cfg.plans)
     setSettings(cfg.settings)
+    const ref = await supabase.from('billing_settings').select('vendor_call_fee, vendor_referral_active').eq('id', 'default').maybeSingle()
+    setReferral({ fee: Number(ref.data?.vendor_call_fee) || 0, active: !!ref.data?.vendor_referral_active })
     setBuildings(b.data || [])
     setBalances(Object.fromEntries((bal.data || []).map((x) => [x.building_id, x])))
     setLedger(led.data || [])
@@ -96,6 +99,16 @@ export default function ServicePlans() {
     }).eq('id', true)
     setBusy('')
     if (error) toastError('שמירת ההגדרות נכשלה'); else toast('הגדרות השירות נשמרו')
+  }
+
+  const saveReferral = async () => {
+    setBusy('referral')
+    const { error } = await supabase.from('billing_settings').update({
+      vendor_call_fee: Math.max(0, Number(referral.fee) || 0), vendor_referral_active: !!referral.active,
+      updated_at: new Date().toISOString(),
+    }).eq('id', 'default')
+    setBusy('')
+    if (error) toastError('השמירה נכשלה'); else toast(referral.active ? 'דמי ההפניה פעילים' : 'דמי ההפניה נשמרו, כבויים')
   }
 
   const toggleDay = (d) => setSettings((s) => {
@@ -262,6 +275,24 @@ export default function ServicePlans() {
               </label>
             ))}
           </div>
+        </div>
+      </SectionCard>
+
+      {/* ── Referral fee from vendors: prepared, off until switched on ── */}
+      <SectionCard icon={Handshake} title="דמי הפניה מספקים" subtitle="מה שספק משלם לוועד1 על קריאה שקיבל דרך המערכת. התחשבנות מול הספק בלבד — לא מוצג לבניין ולא נכנס לחשבון שלו"
+        actions={<Button size="sm" onClick={saveReferral} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'referral' ? 'שומר...' : 'שמירה'}</Button>}>
+        <div className="p-4 flex flex-wrap items-end gap-4">
+          <label className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5">
+            <span>סכום לקריאה (₪)</span>
+            <input type="number" min={0} dir="ltr" className={field + ' max-w-[140px]'} value={referral.fee}
+              onChange={(e) => setReferral((r) => ({ ...r, fee: e.target.value }))} />
+          </label>
+          <label className="flex items-center gap-2 text-[13px] font-semibold pb-2">
+            <input type="checkbox" className="accent-[var(--primary)]" checked={referral.active}
+              onChange={(e) => setReferral((r) => ({ ...r, active: e.target.checked }))} />
+            פעיל
+          </label>
+          <p className="text-[12px] text-[var(--text-muted)] pb-2">{referral.active ? 'קריאות שבהן שובץ ספק נרשמות במסך "דמי הפניה מספקים".' : 'כבוי: שום דבר לא נרשם לספקים.'}</p>
         </div>
       </SectionCard>
 

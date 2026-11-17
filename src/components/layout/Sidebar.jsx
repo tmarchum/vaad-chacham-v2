@@ -294,7 +294,7 @@ function Sidebar({ open, onClose, pulse = {} }) {
               )}
               {isAdmin && (
                 <Link to="/billing" onClick={() => { setUserMenuOpen(false); onClose() }} className={menuItemCls}>
-                  <Coins className="h-4 w-4 text-[var(--text-muted)]" />הכנסות פלטפורמה
+                  <Coins className="h-4 w-4 text-[var(--text-muted)]" />דמי הפניה מספקים
                 </Link>
               )}
               <button onClick={handleSignOut} className={cn(menuItemCls, 'text-[var(--danger)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]')}>

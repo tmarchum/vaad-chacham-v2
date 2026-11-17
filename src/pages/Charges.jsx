@@ -49,7 +49,7 @@ export default function Charges() {
       loadBuildingBilling(buildingId),
       loadPunchBalance(buildingId),
       loadPriceLists(),
-      supabase.from('billing_charges').select('*').eq('building_id', buildingId)
+      supabase.from('billing_charges').select('*').eq('building_id', buildingId).neq('type', 'vendor_call')
         .or(`created_at.gte.${monthStart()},approval.eq.awaiting`).order('created_at', { ascending: false }),
     ])
     setCfg(c)
