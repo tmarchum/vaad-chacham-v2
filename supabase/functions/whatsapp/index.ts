@@ -454,7 +454,13 @@ Deno.serve(async (req: Request) => {
           const v = (ch.value || {}) as Record<string, unknown>
           if (ch.field === 'message_template_status_update') {
             const name = String(v.message_template_name || '')
-            if (name) {
+            // A re-worded version in review (vaad1_<key>) replaces the live
+            // one when Meta approves it; until then the live row is untouched.
+            const { data: wasUpgrade } = name ? await svc.rpc('apply_template_upgrade', {
+              p_name: name, p_status: String(v.event || ''), p_meta_id: v.message_template_id ? String(v.message_template_id) : '',
+              p_reason: v.reason ? String(v.reason) : '',
+            }) : { data: false }
+            if (name && !wasUpgrade) {
               await svc.from('message_templates').update({
                 meta_status: String(v.event || '').toUpperCase() || 'PENDING',
                 meta_id: v.message_template_id ? String(v.message_template_id) : undefined,
@@ -686,6 +692,11 @@ Deno.serve(async (req: Request) => {
       const r = await graph(integ, token, `${integ.waba_id}/message_templates?fields=name,status,id,rejected_reason,language,category&limit=200`)
       if (r.ok) {
         for (const t of (r.data.data as Array<Record<string, unknown>>) || []) {
+          const { data: wasUpgrade } = await svc.rpc('apply_template_upgrade', {
+            p_name: String(t.name || ''), p_status: String(t.status || ''), p_meta_id: String(t.id || ''),
+            p_reason: t.rejected_reason ? String(t.rejected_reason) : '',
+          })
+          if (wasUpgrade) continue
           await svc.from('message_templates').update({
             meta_status: String(t.status || ''), meta_id: String(t.id || ''),
             // Meta re-categorises during review (several of ours went
