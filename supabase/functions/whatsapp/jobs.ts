@@ -403,11 +403,9 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
     const { data: a } = await ctx.svc.from('profiles').select('phone').eq('role', 'admin').not('phone', 'is', null).limit(1).maybeSingle()
     contact = `ועד1${a?.phone ? ` · ${a.phone}` : ''}`
   }
-  let apt = ''
-  if (iss.unit_id) {
-    const { data: u } = await ctx.svc.from('units').select('number').eq('id', iss.unit_id).maybeSingle()
-    if (u?.number) apt = `, דירה ${u.number}`
-  }
+  // No apartment number: issue.unit_id is who REPORTED it, and most jobs are in
+  // common areas (the parking, a stairwell). Where exactly is in the description.
+  const apt = ''
   const address = addressOf(b)
   const link = briefLink(iss.brief_token)
   const out = { ok: true, winner: false, thanked: 0, notThanked: 0 }
