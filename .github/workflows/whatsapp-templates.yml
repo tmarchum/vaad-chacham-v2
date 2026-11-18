@@ -1,0 +1,20 @@
+name: WhatsApp template statuses
+
+# Every morning: pull the status Meta gave each WhatsApp template. A re-worded
+# template that was approved replaces the live one here; nothing is sent.
+on:
+  schedule:
+    - cron: "30 4 * * *" # 04:30 UTC = 06:30 / 07:30 Israel
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh template statuses
+        run: |
+          curl -fsS -X POST \
+            "https://stncskqjrmecjckxldvi.supabase.co/functions/v1/whatsapp" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"refresh-templates"}'

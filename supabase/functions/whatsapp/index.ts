@@ -553,14 +553,22 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── App actions: signed-in admin / committee only ─────────────────────
-    const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
-    const { data: userData } = await svc.auth.getUser(jwt)
-    const uid = userData?.user?.id
-    if (!uid) return json({ error: 'unauthorized' }, 401)
-    const { data: prof } = await svc.from('profiles').select('role').eq('id', uid).maybeSingle()
-    const role = prof?.role || ''
-    if (!['admin', 'committee'].includes(role)) return json({ error: 'forbidden' }, 403)
-    const isAdmin = role === 'admin'
+    // The daily scheduler may do exactly one thing: pull template statuses from Meta.
+    const cronSecret = Deno.env.get('CRON_SECRET') || ''
+    const isCron = !!cronSecret && timingSafeEqual(req.headers.get('x-cron-secret') || '', cronSecret)
+      && String(body.action || '') === 'refresh-templates'
+    let isAdmin = isCron
+    let uid = ''
+    if (!isCron) {
+      const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+      const { data: userData } = await svc.auth.getUser(jwt)
+      uid = userData?.user?.id || ''
+      if (!uid) return json({ error: 'unauthorized' }, 401)
+      const { data: prof } = await svc.from('profiles').select('role').eq('id', uid).maybeSingle()
+      const role = prof?.role || ''
+      if (!['admin', 'committee'].includes(role)) return json({ error: 'forbidden' }, 403)
+      isAdmin = role === 'admin'
+    }
 
     const action = String(body.action || '')
     let { integ, sec } = await loadConfig(svc)
@@ -695,6 +703,7 @@ Deno.serve(async (req: Request) => {
           const { data: wasUpgrade } = await svc.rpc('apply_template_upgrade', {
             p_name: String(t.name || ''), p_status: String(t.status || ''), p_meta_id: String(t.id || ''),
             p_reason: t.rejected_reason ? String(t.rejected_reason) : '',
+            p_category: t.category ? String(t.category) : null,
           })
           if (wasUpgrade) continue
           await svc.from('message_templates').update({
