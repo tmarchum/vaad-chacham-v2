@@ -2060,7 +2060,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     )
                   })()}
                   {issueQuotes.some((q) => ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date', 'submitted'].includes(q.stage)) && (
-                    <div className="mb-2 flex justify-end gap-2">
+                    <div className="mb-2 flex flex-wrap justify-end gap-2">
                       {isAdmin && issueQuotes.some((q) => q.stage === 'submitted') && !issueQuotes.some((q) => q.recommended || q.stage === 'won') && (
                         <Button size="sm" variant="outline" onClick={() => handlePickNow(iss)}>שלח לוועד את הזולה עכשיו</Button>
                       )}
@@ -2069,10 +2069,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   )}
                   <div className="space-y-2">
                     {issueQuotes.map((q) => (
-                      <div key={q.id} className="flex items-center justify-between p-2 rounded-lg bg-[var(--surface-hover)] text-sm">
-                        <div className="space-y-0.5">
+                      <div key={q.id} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[var(--surface-hover)] text-sm">
+                        <div className="space-y-0.5 min-w-0">
                           <p className="font-medium text-[var(--text-primary)]">{q.vendorName}</p>
-                          <div className="flex gap-2 text-xs text-[var(--text-secondary)]">
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-[var(--text-secondary)]">
                             {q.amount != null && <span>{formatCurrency(q.amount)} לפני מע"מ</span>}
                             <Badge variant={q.status === 'accepted' ? 'success' : ['rejected', 'declined', 'expired'].includes(q.status) ? 'danger' : q.stage === 'submitted' ? 'info' : 'warning'}>
                               {q.recommended && !q.committee_choice ? 'נשלחה לוועד' : (QUOTE_STAGE_LABELS[q.stage] || QUOTE_STATUS_LABELS[q.status] || q.status)}

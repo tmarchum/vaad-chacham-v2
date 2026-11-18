@@ -184,6 +184,12 @@ html {
   direction: rtl;
 }
 
+/* Never let the page pan sideways on a phone (clip, not hidden: no scroll
+   container, so sticky headers keep working). */
+html, body {
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   font-family: 'Rubik', 'Heebo', sans-serif;

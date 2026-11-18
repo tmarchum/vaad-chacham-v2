@@ -182,8 +182,10 @@ function Sidebar({ open, onClose, pulse = {} }) {
       <aside className={cn(
         'fixed top-0 right-0 z-50 flex h-full w-64 flex-col justify-between p-4 select-none',
         'bg-[var(--sidebar-bg)] border-l border-[var(--sidebar-border)]',
-        'transition-transform duration-300 ease-out lg:relative lg:translate-x-0',
-        open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+        'transition-[transform,visibility] duration-300 ease-out lg:relative lg:translate-x-0 lg:visible',
+        // Closed on a phone: hidden, not just moved off screen — an off-screen
+        // drawer lets mobile browsers pan the page sideways.
+        open ? 'translate-x-0 visible' : 'translate-x-full invisible lg:translate-x-0'
       )}>
         <div className="flex flex-col gap-4 min-h-0 flex-1">
           {/* Brand */}
