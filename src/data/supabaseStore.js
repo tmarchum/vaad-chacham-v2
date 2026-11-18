@@ -81,7 +81,9 @@ function normalizeRow(row) {
   if ('expiry_date' in row)    out.expiry_date  = row.expiry_date
   if ('issue_date' in row)     out.issue_date   = row.issue_date
   if ('document_number' in row) out.document_number = row.document_number
-  if ('vendor_name' in row)    out.vendor_name  = row.vendor_name
+  if ('vendor_name' in row)    { out.vendor_name = row.vendor_name; out.vendorName = row.vendor_name }
+  if ('issue_id' in row)       out.issueId      = row.issue_id
+  if ('vendor_id' in row)      out.vendorId     = row.vendor_id
   if ('install_date' in row)   out.installDate  = row.install_date
   if ('warranty_end' in row)   out.warrantyEnd  = row.warranty_end
   if ('last_service' in row)   out.lastService  = row.last_service
@@ -137,8 +139,18 @@ function normalizeRow(row) {
 }
 
 // Normalize an app data object → DB columns (camelCase → snake_case)
-function toDbRow(data) {
+// Per-table aliases for columns only some tables have. Without these, quotes
+// written from the screens lost their issue and vendor and never showed up.
+const TABLE_REMAP = {
+  quotes: { issueId: 'issue_id', vendorId: 'vendor_id', vendorName: 'vendor_name' },
+  work_orders: { issueId: 'issue_id', vendorId: 'vendor_id' },
+}
+
+function toDbRow(data, table) {
   const out = { ...data }
+  Object.entries(TABLE_REMAP[table] || {}).forEach(([camel, snake]) => {
+    if (camel in out) { if (!(snake in out)) out[snake] = out[camel]; delete out[camel] }
+  })
   // Remove app-only computed fields
   delete out.id
   delete out.createdAt
@@ -280,7 +292,7 @@ function createCollection(tableName) {
 
     // opts.silent skips the success toast — same reason as update() below.
     async create(itemData, opts = {}) {
-      const row = toDbRow(itemData)
+      const row = toDbRow(itemData, table)
       const { data, error } = await supabase.from(table).insert(row).select().single()
       if (error) { emitError('create', tableName, error); return null }
       if (!opts.silent) emitSuccess('נשמר בהצלחה ✓')
@@ -290,7 +302,7 @@ function createCollection(tableName) {
     // opts.silent skips the success toast — for bulk flows where one toast per
     // row floods the screen (the caller shows a single summary instead).
     async update(id, itemData, opts = {}) {
-      const row = toDbRow(itemData)
+      const row = toDbRow(itemData, table)
       row.updated_at = new Date().toISOString()
       const { data, error } = await supabase.from(table).update(row).eq('id', id).select().single()
       if (error) { emitError('update', tableName, error); return null }
@@ -302,7 +314,7 @@ function createCollection(tableName) {
     // a single round-trip and a single toast instead of N of each.
     async bulkUpdate(ids, itemData, opts = {}) {
       if (!ids?.length) return []
-      const row = toDbRow(itemData)
+      const row = toDbRow(itemData, table)
       row.updated_at = new Date().toISOString()
       const { data, error } = await supabase.from(table).update(row).in('id', ids).select()
       if (error) { emitError('bulkUpdate', tableName, error); return [] }

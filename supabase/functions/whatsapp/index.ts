@@ -10,6 +10,9 @@
 //                                                   rules WITHOUT the Meta keys (admin)
 //   { action: 'send', audience, to, templateKey, variables[], buildingId?, unitId?, vendorId?, confirmManual? }
 //   { action: 'send-text', audience, to, text, … } → free text (only inside Meta's 24h service window)
+//   { action: 'job-offer', issueId, kind: 'quote', vendorIds[] } → "יש עבודה חדשה" + buttons (see jobs.ts)
+//   { action: 'job-offer', issueId, kind: 'handyman' }          → the same to ועד1's handyman
+//   { action: 'quote-award', quoteId }            → the committee picked a quote: winner + thank-yous
 //
 // Webhook (no JWT; Meta authenticates):
 //   GET  ?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…  → echo challenge
@@ -27,6 +30,7 @@
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
+import { awardQuote, handleOfferButton, handleOfferText, sendJobOffers, type JobCtx } from './jobs.ts'
 
 const PROVIDER = 'whatsapp_cloud'
 const MANUAL_CONFIRM_TEMPLATES = new Set(['resident_payment_reminder'])
@@ -211,7 +215,7 @@ async function hmacHex(secret: string, raw: string) {
 async function findVendor(svc: SupabaseClient, phone: string) {
   const t = last9(phone)
   if (t.length < 9) return null
-  const { data } = await svc.from('vendors').select('id, name, phone, membership_status, category, specialties, notes')
+  const { data } = await svc.from('vendors').select('id, name, phone, membership_status, category, specialties, notes, is_internal')
   return (data || []).find((v) => last9(v.phone) === t) || null
 }
 
@@ -283,6 +287,19 @@ async function log(svc: SupabaseClient, row: Record<string, unknown>) {
   try { await svc.from('notification_log').insert({ channel: 'whatsapp', provider: PROVIDER, ...row }) } catch { /* */ }
 }
 
+// Everything jobs.ts needs to talk to Meta and write the log.
+function jobCtx(svc: SupabaseClient, integ: Integ | null, token: string | null): JobCtx {
+  const ready = !!(integ?.enabled && integ.phone_number_id && token)
+  return {
+    svc, ready, log: (row) => log(svc, row), toE164, cleanParam, render,
+    send: async (payload) => {
+      if (!ready) return { ok: false, wamid: null, error: 'integration_disabled' }
+      const r = await graph(integ, token as string, `${integ!.phone_number_id}/messages`, { method: 'POST', body: JSON.stringify(payload) })
+      return { ok: r.ok, wamid: ((r.data?.messages as Array<Record<string, unknown>>)?.[0]?.id as string) || null, error: r.ok ? null : graphError(r.data) }
+    },
+  }
+}
+
 // ── Webhook: inbound message from a vendor → membership reply handling ──────
 async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: string | null, msg: Record<string, unknown>) {
   const from = String(msg.from || '')
@@ -337,29 +354,17 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
         subject: `החלטת ועד בוואטסאפ: ${title.slice(0, 120)}`, body: reply,
         status: r.ok ? 'sent' : 'failed', error_message: r.ok ? null : graphError(r.data),
       })
-      // ועד1's handyman hears about the job at once.
+      // ועד1's handyman hears about the job at once — with "אגיע / לא יכול".
       if (res === 'ok' && action === 'vaad1' && iss) {
-        const { data: hm } = await svc.from('vendors').select('id, name, phone').eq('is_internal', true).limit(1).maybeSingle()
-        const { data: t } = await svc.from('message_templates').select('*').eq('key', 'vendor_issue_dispatch').maybeSingle()
-        const { data: b } = await svc.from('buildings').select('name, street, house_number, city').eq('id', iss.building_id).maybeSingle()
-        const to = toE164(String(hm?.phone || ''))
-        if (hm && to && t?.meta_status === 'APPROVED') {
-          const vars = [hm.name, [b?.street, b?.house_number, b?.city].filter(Boolean).join(' ') || String(b?.name || ''),
-            `${iss.description || iss.title}${iss.brief_token ? ` | פרטים ותמונות: https://app.vaad1.co.il/brief/${iss.brief_token}` : ''}`,
-            'ועד הבית'].map(cleanParam)
-          const g = await graph(integ, token, `${integ.phone_number_id}/messages`, {
-            method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', to, type: 'template',
-              template: { name: t.meta_name, language: { code: t.language || 'he' }, components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } }),
-          })
-          await log(svc, {
-            recipient: to, audience: 'vendor', vendor_id: hm.id, template_key: 'vendor_issue_dispatch', building_id: iss.building_id,
-            subject: t.title, body: render(t.body, vars), status: g.ok ? 'sent' : 'failed', delivery_status: g.ok ? 'sent' : null,
-            external_id: ((g.data?.messages as Array<Record<string, unknown>>)?.[0]?.id as string) || null,
-            error_message: g.ok ? null : graphError(g.data),
-          })
-        }
+        await sendJobOffers(jobCtx(svc, integ, token), { issueId: iss.id, kind: 'handyman', sentBy: null })
       }
     }
+    return
+  }
+
+  // Job offer: "offer:<quoteId>:yes|no" (vendor) or "hm:<issueId>:yes|no" (handyman).
+  if (payload.startsWith('offer:') || payload.startsWith('hm:')) {
+    await handleOfferButton(jobCtx(svc, integ, token), from, payload, vendor)
     return
   }
 
@@ -387,6 +392,8 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   }
 
   if (!vendor || !text) return
+  // An open job conversation (price, date, "ביקור") comes first.
+  if (await handleOfferText(jobCtx(svc, integ, token), from, text, vendor)) return
   await recordVendorDetails(svc, vendor, text).catch(() => {})
   const declineRe = /מסרב|סירוב|לא מעוניין|לא מתאים|הסר אותי|תסיר/
   // Whole words only: "כאשר אין מענה" and "לפני שאאשר" are not approvals.
@@ -790,6 +797,25 @@ Deno.serve(async (req: Request) => {
         }
       }
       return json({ ok: true, issues: issues.length, sent, skipped, failed, template: tpl?.meta_status || null })
+    }
+
+    // ── Job offers: vendors for a quote, or ועד1's handyman ─────────────────
+    if (action === 'job-offer' || action === 'quote-award') {
+      if (!integ?.enabled || !integ.phone_number_id || !token) return json({ ok: false, error: 'integration_disabled' })
+      const ctx = jobCtx(svc, integ, token)
+      let issueId = String(body.issueId || '')
+      if (action === 'quote-award') {
+        const { data: q } = await svc.from('quotes').select('issue_id').eq('id', String(body.quoteId || '')).maybeSingle()
+        issueId = String(q?.issue_id || '')
+      }
+      const { data: iss } = await svc.from('issues').select('building_id').eq('id', issueId).maybeSingle()
+      if (!iss) return json({ ok: false, error: 'not_found' }, 404)
+      if (!isAdmin && !(await callerBuildings(svc, uid)).has(iss.building_id)) return json({ error: 'forbidden' }, 403)
+      if (action === 'quote-award') return json(await awardQuote(ctx, String(body.quoteId), uid))
+      const kind = body.kind === 'handyman' ? 'handyman' : 'quote'
+      const vendorIds = Array.isArray(body.vendorIds) ? (body.vendorIds as unknown[]).map(String) : []
+      if (kind === 'quote' && !vendorIds.length) return json({ ok: false, error: 'no_vendors' }, 400)
+      return json(await sendJobOffers(ctx, { issueId, vendorIds, kind, sentBy: uid }))
     }
 
     // ── Committee: send an open poll to the building's residents on WhatsApp,

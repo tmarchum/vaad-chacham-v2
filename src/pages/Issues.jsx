@@ -99,6 +99,21 @@ const bucketInfo = (s) => BUCKET_MAP[bucketOf(s)] || STATUS_BUCKETS[0]
 // The stages that genuinely come before a quote exists. Spelled out rather
 // than derived by index, so a status missing from STATUSES can never be read
 // as "earlier than everything".
+// Where each vendor stands in the WhatsApp quote conversation.
+const QUOTE_STAGE_LABELS = {
+  offered: 'נשלחה פנייה',
+  awaiting_amount: 'מעוניין — ממתין לסכום',
+  visit_requested: 'ביקש ביקור לפני מחיר',
+  awaiting_date: 'נתן מחיר — ממתין למועד',
+  submitted: 'הגיש הצעה',
+  won: 'נבחר',
+  lost: 'לא נבחר',
+  declined: 'לא מעוניין',
+  expired: 'לא הגיש בזמן',
+}
+const QUOTE_STATUS_LABELS = { pending: 'ממתין', received: 'התקבל', accepted: 'נבחר', rejected: 'נדחה', declined: 'לא מעוניין', expired: 'לא הגיש בזמן' }
+const HANDYMAN_REPLY_LABELS = { offered: 'איש האחזקה טרם ענה', coming: 'איש האחזקה: אגיע', declined: 'איש האחזקה: לא יכול' }
+
 const PRE_QUOTE_STATUSES = ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes']
 
 const BUCKET_TO_STATUS = {
@@ -406,6 +421,8 @@ const IssueCard = React.memo(function IssueCard({
               <span className="text-[var(--text-secondary)]">
                 · מטפל: {HANDLER_LABELS[iss.handler]}{iss.handler_kind ? ` (${HANDLER_KIND_LABELS[iss.handler_kind]})` : ''}
                 {iss.stage && !isDone(iss.status) ? ` · ${STAGE_LABELS[iss.stage]}` : ''}
+                {iss.handler_kind === 'handyman' && iss.handyman_reply && !isDone(iss.status)
+                  ? ` · ${HANDYMAN_REPLY_LABELS[iss.handyman_reply]}${iss.handyman_eta ? `: ${iss.handyman_eta}` : ''}` : ''}
               </span>
             )}
             {accompanier
@@ -1124,24 +1141,25 @@ function Issues() {
       + (noPhone ? `\n${noPhone} ללא וואטסאפ — יידלגו.` : ''),
     )
     if (!ok) return 0
+    // The server writes one quote per vendor and sends "יש עבודה חדשה" with
+    // [מעוניין לתת הצעה] [לא מעוניין]; the price, the date and the deadline
+    // then come back on WhatsApp by themselves (see whatsapp/jobs.ts).
     setQuoteBulk({ running: true, done: 0, total: targets.length })
-    let sent = 0
-    for (const v of targets) {
-      const res = await systemSendWhatsapp(v.phone, buildVendorQuoteMessage(iss, v, building), {
-        ...(iss.photo_url ? { fileUrl: iss.photo_url, fileName: 'fault.jpg' } : {}),
-        audience: 'vendor', buildingId: iss.buildingId, template: quoteTemplate(iss, v, building),
-      })
-      if (res.sent) sent++
-      setQuoteBulk((b) => ({ ...b, done: b.done + 1 }))
-      await new Promise((r) => setTimeout(r, 1200))
-    }
+    const { data, error } = await supabase.functions.invoke('whatsapp', {
+      body: { action: 'job-offer', kind: 'quote', issueId: iss.id, vendorIds: targets.map((v) => v.id) },
+    })
     setQuoteBulk({ running: false, done: 0, total: 0 })
-    return sent
+    if (error || !data?.ok) { toastError('השליחה לספקים נכשלה'); return 0 }
+    const busy = (data.skipped || []).filter((x) => x.reason === 'in_progress').length
+    if (busy) toast(`${busy} ספקים כבר באמצע הגשת הצעה לתקלה הזאת — לא נשלח להם שוב`, 'info')
+    return data.sent || 0
   }
 
   const sendQuoteToAll = async (vendors, iss, building) => {
-    const sent = await dispatchQuoteRequests(vendors, iss, building, { requireAgreed: true })
-    if (sent) toast(`נשלחו ${sent} בקשות הצעה`)
+    // Three is enough to compare; more only floods vendors who then stop answering.
+    const agreed = vendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone)).slice(0, 3)
+    const sent = await dispatchQuoteRequests(agreed, iss, building, { requireAgreed: true })
+    if (sent) toast(`נשלחו ${sent} פניות לספקים — ההצעות יגיעו בוואטסאפ`)
   }
 
   // Generate committee notification message for an issue
@@ -1302,16 +1320,20 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     const iss = quoteDialogIssue
     const picked = allVendors.filter((v) => quoteSelectedVendors.includes(v.name))
     try {
-      for (const vendorName of quoteSelectedVendors) {
-        await createQuote({
-          issueId: iss.id,
-          vendorName,
-          amount: null,
-          status: 'pending',
-          description: quoteDescription,
-          requestedAt: new Date().toISOString(),
-          validUntil: null,
-        })
+      if (!send) {
+        for (const vendorName of quoteSelectedVendors) {
+          const v = picked.find((x) => x.name === vendorName)
+          await createQuote({
+            issueId: iss.id,
+            vendorId: v?.id || null,
+            vendorName,
+            buildingId: iss.buildingId,
+            amount: null,
+            status: 'pending',
+            description: quoteDescription,
+            validUntil: null,
+          }, { silent: true })
+        }
       }
       // Advance to "quoted" only from a stage that genuinely precedes it.
       //
@@ -1344,13 +1366,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   }
 
   const handleAcceptQuote = async (quote) => {
-    // Accept this quote, reject others for same issue
+    if (!window.confirm(`לבחור את ההצעה של ${quote.vendorName} (${formatCurrency(quote.amount)} לפני מע"מ)?\nהספק יקבל את פרטי איש הקשר בבניין, ושאר מי שהציעו יקבלו הודעת תודה.`)) return
+    // The server marks the quotes, updates the issue and messages the vendors.
+    const { data: res, error: awardErr } = await supabase.functions.invoke('whatsapp', { body: { action: 'quote-award', quoteId: quote.id } })
+    if (awardErr || !res?.ok) toastError('ההצעה נבחרה, אבל ההודעה לספק לא יצאה — כדאי להתקשר אליו')
+    else toast(`ההצעה נבחרה${res.winner ? ' · הספק קיבל את הפרטים' : ' · ההודעה לספק לא יצאה, כדאי להתקשר'}${res.thanked ? ` · ${res.thanked} קיבלו הודעת תודה` : ''}`)
+    // Mirror locally so the screen updates without a reload.
     const issueQuotes = quotesByIssue[quote.issueId] || []
     await Promise.all(issueQuotes.map((q) => {
       if (q.id === quote.id) {
-        return updateQuote(q.id, { status: 'accepted' })
+        return updateQuote(q.id, { status: 'accepted' }, { silent: true })
       } else if (q.status === 'pending' || q.status === 'received') {
-        return updateQuote(q.id, { status: 'rejected' })
+        return updateQuote(q.id, { status: 'rejected' }, { silent: true })
       }
       return Promise.resolve()
     }))
@@ -1460,10 +1487,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       } else {
         const fee = Number(transferPlan?.handle_fee) || 0
         let msg = { next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: `הועבר — ועד1 תטפל בספק${fee ? ` (₪${fee})` : ''}` }[transferMode]
-        // ועד1's own handyman gets the job on WhatsApp.
+        // ועד1's own handyman gets the job on WhatsApp, with "אגיע / לא יכול".
         if (transferMode === 'next_visit' || transferMode === 'urgent') {
-          const res = await notifyIssueDispatch(iss.id)
-          if (res?.reached?.length) msg += ' · נשלח להנדימן של ועד1'
+          const { data: hm } = await supabase.functions.invoke('whatsapp', { body: { action: 'job-offer', kind: 'handyman', issueId: iss.id } })
+          if (hm?.ok) msg += ' · נשלח לאיש האחזקה'
         }
         toast(msg)
       }
@@ -1993,14 +2020,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                         <div className="space-y-0.5">
                           <p className="font-medium text-[var(--text-primary)]">{q.vendorName}</p>
                           <div className="flex gap-2 text-xs text-[var(--text-secondary)]">
-                            {q.amount != null && <span>{formatCurrency(q.amount)}</span>}
-                            <Badge variant={q.status === 'accepted' ? 'success' : q.status === 'rejected' ? 'danger' : q.status === 'received' ? 'info' : 'warning'}>
-                              {q.status === 'pending' ? 'ממתין' : q.status === 'received' ? 'התקבל' : q.status === 'accepted' ? 'התקבל' : 'נדחה'}
+                            {q.amount != null && <span>{formatCurrency(q.amount)} לפני מע"מ</span>}
+                            <Badge variant={q.status === 'accepted' ? 'success' : ['rejected', 'declined', 'expired'].includes(q.status) ? 'danger' : q.stage === 'submitted' ? 'info' : 'warning'}>
+                              {QUOTE_STAGE_LABELS[q.stage] || QUOTE_STATUS_LABELS[q.status] || q.status}
                             </Badge>
+                            {q.available_when && <span>מועד: {q.available_when}</span>}
+                            {q.deadline && ['offered', 'awaiting_amount', 'visit_requested'].includes(q.stage) && (
+                              <span>עד {new Date(q.deadline).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                            )}
                             {q.validUntil && <span>בתוקף עד: {formatDate(q.validUntil)}</span>}
                           </div>
                         </div>
-                        {(q.status === 'received' || (q.status === 'pending' && q.amount != null)) && (
+                        {(q.status === 'received' || (q.status === 'pending' && q.amount != null && q.amount > 0)) && (
                           <Button size="sm" variant="outline" onClick={() => handleAcceptQuote(q)}>
                             <Check className="h-3 w-3" />
                             קבל הצעה
