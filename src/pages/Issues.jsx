@@ -1394,8 +1394,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // Close the request without picking anyone ("העבודה נתפסה"): every vendor
   // still in it gets a thank-you and stops being asked for a price.
   const handleCloseQuotes = async (iss) => {
-    if (!window.confirm('לסגור את הפנייה לספקים בלי לבחור הצעה?
-כל ספק שעדיין בתהליך יקבל הודעה שהעבודה נתפסה, עם תודה.')) return
+    if (!window.confirm('לסגור את הפנייה לספקים בלי לבחור הצעה? כל ספק שעדיין בתהליך יקבל הודעה שהעבודה נתפסה, עם תודה.')) return
     const { data, error } = await supabase.functions.invoke('whatsapp', { body: { action: 'quote-close', issueId: iss.id } })
     if (error || !data?.ok) { toastError('הסגירה נכשלה'); return }
     toast(`הפנייה נסגרה · ${data.told} ספקים קיבלו הודעה${data.notTold ? ` · ${data.notTold} לא קיבלו (לא ענו מעולם, ההודעה תצא אחרי אישור Meta)` : ''}`)
