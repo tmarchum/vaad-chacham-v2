@@ -18,6 +18,7 @@ import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
 import { rankVendorsForIssue } from '@/lib/vendorMatch'
+import { decideHandling } from '@/lib/handling'
 import { vendorDistanceKm, formatKm } from '@/lib/geo'
 import { IssueVendorDetails } from '@/components/issues/IssueVendorDetails'
 import { issueBriefLink } from '@/lib/issueBrief'
@@ -147,7 +148,7 @@ function flowFor(iss, svc) {
   if (!svc?.ready) return 'legacy'
   const s = iss.status
   const managed = svc.planOf?.(iss.buildingId) === 'managed'
-  if (!iss.handler && ['reported', 'pending_committee', 'acknowledged'].includes(s)) {
+  if (!iss.handler && ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes'].includes(s)) {
     if (managed) return svc.isAdmin ? 'manage' : 'watch'
     return 'triage'
   }
@@ -325,11 +326,11 @@ const IssueCard = React.memo(function IssueCard({
   const legacyOrManage = flow === 'legacy' || flow === 'manage'
   if (flow === 'triage') {
     actions.push(
-      <Button key="self" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onSelfHandle(iss) }}>
-        <Wrench className="h-3.5 w-3.5" /> אטפל בעצמי
-      </Button>,
       <Button key="transfer" size="sm" onClick={(e) => { e.stopPropagation(); onTransfer(iss) }}>
-        <ArrowRight className="h-3.5 w-3.5" /> העבר לטיפול
+        <ArrowRight className="h-3.5 w-3.5" /> ועד1 תטפל
+      </Button>,
+      <Button key="self" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onSelfHandle(iss) }}>
+        <Wrench className="h-3.5 w-3.5" /> הוועד מטפל
       </Button>,
       <Button key="nofix" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onCloseNoFix(iss) }}>
         <X className="h-3.5 w-3.5" /> סגור ללא טיפול
@@ -343,7 +344,7 @@ const IssueCard = React.memo(function IssueCard({
       </Button>
     )
   }
-  if ((s === 'reported' || s === 'acknowledged') && legacyOrManage) {
+  if ((s === 'reported' || s === 'acknowledged') && legacyOrManage && svc.isAdmin) {
     actions.push(
       <Button key="quote" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenQuoteDialog(iss) }}>
         <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
@@ -1476,7 +1477,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // routing rule says whether the building has a regular contractor for it.
   const handleTransfer = useCallback((iss) => {
     setTransferIssue(iss)
-    setTransferMode(iss.priority === 'urgent' ? 'urgent' : 'next_visit')
+    // ועד1 decides, like a management company's manager: the rule picks the
+    // handyman or vendor quotes (the lift goes to the building's lift company).
+    const decided = decideHandling(iss)
+    setTransferMode(decided === 'quotes' ? 'quotes' : decided === 'admin' ? 'admin' : iss.priority === 'urgent' ? 'urgent' : 'next_visit')
     setTransferBalance(null)
     setTransferRule(null)
     setTransferBilling(null)
@@ -1505,6 +1509,29 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setTransferBusy(true)
     try {
       const iss = transferIssue
+      // Licensed trade: ועד1 asks three vendors; the committee approves the cheapest.
+      if (transferMode === 'quotes') {
+        const { error } = await supabase.rpc('transfer_issue', { p_issue: iss.id, p_mode: 'vendor', p_vendor: null })
+        if (error) { toastError('ההעברה נכשלה'); return }
+        await update(iss.id, { handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: new Date().toISOString() })
+        const ranked = rankVendorsForIssue(iss, allVendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone)), { building: buildingOf(iss.buildingId) })
+          .slice(0, 3).map((r) => r.vendor.id)
+        const { data } = ranked.length
+          ? await supabase.functions.invoke('whatsapp', { body: { action: 'job-offer', kind: 'quote', issueId: iss.id, vendorIds: ranked } })
+          : { data: null }
+        if (data?.sent) toast(`ועד1 מטפלת · נשלח ל-${data.sent} ספקים, ההצעה הזולה תגיע אליכם לאישור`)
+        else toastError('ועד1 מטפלת, אבל לא נמצאו ספקים לשליחה — ועד1 תשלח ידנית')
+        await refreshQuotes()
+        setTransferIssue(null)
+        return
+      }
+      // The lift: the building's own lift company, routed by ועד1 by hand.
+      if (transferMode === 'admin') {
+        await update(iss.id, { handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: new Date().toISOString() })
+        toast('ועד1 מטפלת · תעביר לחברת המעליות של הבניין')
+        setTransferIssue(null)
+        return
+      }
       const vendor = transferMode === 'contractor' ? contractorName : null
       const { error } = await supabase.rpc('transfer_issue', { p_issue: iss.id, p_mode: transferMode, p_vendor: vendor })
       if (error) {
@@ -2110,30 +2137,22 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
               {/* Action buttons */}
               <div className="flex flex-wrap gap-2 pt-4">
-                <Button
-                  size="sm"
-                  onClick={() => openWorkflow(iss)}
-                  className="gap-1.5"
-                  style={{ background: 'var(--primary)', color: 'white' }}
-                >
-                  <ArrowRight className="h-3.5 w-3.5" />
-                  תהליך מלא
-                </Button>
                 {canSee('ai_analysis', { isAdmin, building: buildingMap[iss.buildingId] }) && <Button
                   size="sm"
+                  variant="outline"
                   onClick={() => openAiAnalysis(iss)}
-                  className="gap-1.5 bg-[var(--primary)] text-white hover:opacity-90"
+                  className="gap-1.5"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   ניתוח AI
                 </Button>}
                 {flowFor(iss, svc) === 'triage' && (
                   <>
-                    <Button variant="outline" size="sm" onClick={() => { handleSelfHandle(iss); setDetailIssue(null) }}>
-                      <Wrench className="h-3.5 w-3.5" /> אטפל בעצמי
-                    </Button>
                     <Button size="sm" onClick={() => { handleTransfer(iss); setDetailIssue(null) }}>
-                      <ArrowRight className="h-3.5 w-3.5" /> העבר לטיפול
+                      <ArrowRight className="h-3.5 w-3.5" /> ועד1 תטפל
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { handleSelfHandle(iss); setDetailIssue(null) }}>
+                      <Wrench className="h-3.5 w-3.5" /> הוועד מטפל
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => { setDetailIssue(null); handleOpenCloseNoFix(iss) }}>
                       <X className="h-3.5 w-3.5" /> סגור ללא טיפול
@@ -2150,7 +2169,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <Check className="h-3.5 w-3.5" /> אשר
                   </Button>
                 )}
-                {(iss.status === 'reported' || iss.status === 'acknowledged') && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
+                {isAdmin && (iss.status === 'reported' || iss.status === 'acknowledged') && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenQuoteDialog(iss)}>
                     <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
                   </Button>
@@ -2175,21 +2194,19 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <X className="h-3.5 w-3.5" /> סגור
                   </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={() => openEdit(iss)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  עריכה
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    setDetailIssue(null)
-                    setDeleteTarget(iss)
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  מחיקה
-                </Button>
+                {/* Rarely needed: kept out of the way, behind "⋯". */}
+                <details className="relative">
+                  <summary className="list-none cursor-pointer select-none rounded-md border border-[var(--border)] px-2.5 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]" aria-label="פעולות נוספות">⋯</summary>
+                  <div className="absolute bottom-full mb-1 left-0 z-10 min-w-[120px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg">
+                    <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-[var(--surface-hover)]" onClick={() => openEdit(iss)}>
+                      <Pencil className="h-3.5 w-3.5" /> עריכה
+                    </button>
+                    <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--danger)] hover:bg-[var(--surface-hover)]"
+                      onClick={() => { setDetailIssue(null); setDeleteTarget(iss) }}>
+                      <Trash2 className="h-3.5 w-3.5" /> מחיקה
+                    </button>
+                  </div>
+                </details>
               </div>
             </>
           )
@@ -2819,43 +2836,73 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       <Dialog open={!!transferIssue} onOpenChange={(o) => { if (!o) setTransferIssue(null) }}>
         <DialogContent className="w-full max-w-md">
           <DialogHeader>
-            <DialogTitle>למי להעביר את התקלה?</DialogTitle>
+            <DialogTitle>ועד1 תטפל</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm font-semibold">{transferIssue?.title}</p>
-            <p className="text-[13px] text-[var(--text-secondary)]">
-              יתרת שעות בכרטיסייה: <strong className={noPunches ? 'text-[var(--danger)]' : 'text-[var(--text-primary)]'}>{transferBalance == null ? '…' : transferBalance.balance}</strong>
-              {transferPlan ? ` · מסלול ${transferPlan.label}` : ''}
-            </p>
-            <div className="space-y-2" role="radiogroup">
-              {[
-                contractorName && { key: 'contractor', title: `שלח ל${contractorName}`, sub: 'הספק הקבוע של הבניין לקטגוריה הזו. יקבל את התקלה עכשיו, בערוץ שהוגדר לו. ללא חיוב.' },
-                { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `יטופל יחד עם שאר התקלות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים. משלמים על ביקור אחד, השעות יורדות מהכרטיסייה.`, needsPunch: true },
-                { key: 'urgent', title: 'איש אחזקה — דחוף', sub: 'ביקור נפרד בהקדם, לפחות שעה.', needsPunch: true },
-                // "ועד1 תטפל בספק" was withdrawn (2026-11-18): vendors go through
-                // "בקש הצעת מחיר" and the committee closes with the vendor itself.
-              ].filter(Boolean).map((o) => {
-                const off = o.needsPunch && noPunches
+            {(() => {
+              const quotesOff = transferMode === 'quotes' && transferPlan && !transferPlan.includes_auto_quotes
+              const hour = Number(transferPlan?.hour_price) || 0
+              const what = {
+                contractor: { t: `נעביר ל${contractorName}, הספק הקבוע של הבניין`, c: 'ללא חיוב מאיתנו.' },
+                next_visit: { t: 'איש האחזקה שלנו יגיע בביקור הבא', c: `שעה מהכרטיסייה (יתרה: ${transferBalance == null ? '…' : transferBalance.balance})${hour ? `, או ₪${hour} לפני מע"מ לשעה` : ''}.` },
+                urgent: { t: 'איש האחזקה שלנו יגיע בהקדם', c: `ביקור נפרד, לפחות שעה. שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה` : ''}.` },
+                quotes: { t: 'זו עבודה לספק מוסמך: נבקש הצעות מ-3 ספקים', c: 'תקבלו את ההצעה הזולה מספק שיכול לבצע בזמן, לאישורכם. שום דבר לא מוזמן בלי אישור.' },
+                admin: { t: 'נעביר לחברת המעליות של הבניין', c: 'לפי ההסכם של הבניין איתה.' },
+              }[transferMode]
+              if (quotesOff) {
                 return (
-                  <label key={o.key} className={`flex items-start gap-2 rounded-lg border p-3 ${off ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${transferMode === o.key ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
-                    <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]" disabled={off}
+                  <div className="rounded-lg border border-[var(--border)] p-3 text-[13px] space-y-1">
+                    <p className="font-semibold">התקלה דורשת ספק מוסמך</p>
+                    <p className="text-[var(--text-secondary)]">בקשת הצעות מספקים כלולה במסלול ליווי. במסלול שלכם פונים לספק בעצמכם — יש ספקים מאושרים מהמאגר במסך הספקים.</p>
+                  </div>
+                )
+              }
+              return what ? (
+                <div className="rounded-lg border-2 border-[var(--primary)] bg-[var(--primary-light,#eef4ff)] p-3 text-[13px] space-y-1">
+                  <p className="font-semibold text-[var(--text-primary)]">מה יקרה: {what.t}</p>
+                  <p className="text-[var(--text-secondary)]">{noPunches && ['next_visit', 'urgent'].includes(transferMode) ? 'הכרטיסייה נגמרה, והוועד בחר לעצור עד קניית כרטיסייה. אפשר לקנות כרטיסייה במסך "חשבון ועד1".' : what.c}</p>
+                </div>
+              ) : null
+            })()}
+            {/* ועד1 itself can override the rule. */}
+            {isAdmin && (
+            <div className="space-y-2" role="radiogroup">
+              <p className="text-[12px] font-semibold text-[var(--text-muted)]">ועד1 — לשנות את ההחלטה:</p>
+              {[
+                contractorName && { key: 'contractor', title: `הספק הקבוע: ${contractorName}`, sub: 'ללא חיוב.' },
+                { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `עם שאר התקלות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים.` },
+                { key: 'urgent', title: 'איש אחזקה — דחוף', sub: 'ביקור נפרד בהקדם, לפחות שעה.' },
+                { key: 'quotes', title: 'הצעות מספקים', sub: '3 ספקים מתאימים; הוועד מקבל את הזולה לאישור.' },
+                { key: 'admin', title: 'חברת המעליות / ידני', sub: 'ועד1 מעבירה בעצמה.' },
+              ].filter(Boolean).map((o) => {
+                return (
+                  <label key={o.key} className={`flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer ${transferMode === o.key ? 'border-[var(--primary)]' : 'border-[var(--border)]'}`}>
+                    <input type="radio" name="transfer-mode" className="mt-1 accent-[var(--primary)]"
                       checked={transferMode === o.key} onChange={() => setTransferMode(o.key)} />
                     <span><span className="font-semibold text-sm">{o.title}</span>
-                      <span className="block text-[12px] text-[var(--text-secondary)]">{off ? 'הכרטיסייה נגמרה, והוועד בחר לעצור עד קניית כרטיסייה. אפשר לקנות כרטיסייה במסך "חשבון ועד1".' : o.sub}</span></span>
+                      <span className="block text-[12px] text-[var(--text-secondary)]">{o.sub}</span></span>
                   </label>
                 )
               })}
             </div>
+            )}
             <details className="text-[12px] text-[var(--text-secondary)]">
               <summary className="cursor-pointer font-semibold">איך מחושב החיוב</summary>
               <ul className="mt-2 list-disc pr-4 space-y-1">
                 {punchRules(serviceCfg.settings, transferPlan, transferPolicy).map((r) => <li key={r}>{r}</li>)}
               </ul>
             </details>
-            <div className="flex gap-3">
-              <Button onClick={handleConfirmTransfer} disabled={transferBusy || transferBlocked}>
-                <ArrowRight className="h-4 w-4" />{transferBusy ? 'מעביר…' : 'העבר לטיפול'}
-              </Button>
+            <div className="flex flex-wrap gap-2">
+              {transferMode === 'quotes' && transferPlan && !transferPlan.includes_auto_quotes && !isAdmin ? (
+                <Button onClick={() => { const iss = transferIssue; setTransferIssue(null); handleSelfHandle(iss) }}>
+                  <Wrench className="h-4 w-4" />נטפל בעצמנו
+                </Button>
+              ) : (
+                <Button onClick={handleConfirmTransfer} disabled={transferBusy || transferBlocked}>
+                  <Check className="h-4 w-4" />{transferBusy ? 'רגע…' : 'אישור — ועד1 תטפל'}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setTransferIssue(null)}>ביטול</Button>
             </div>
           </div>

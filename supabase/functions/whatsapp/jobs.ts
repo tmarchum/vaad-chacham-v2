@@ -22,6 +22,8 @@
 // name on this number belongs to another business).
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { rankVendorsForIssue } from '../_shared/vendorMatch.js'
+import { decideHandling } from '../_shared/handling.js'
 
 const APP = 'https://app.vaad1.co.il'
 const OPEN_STAGES = ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date']
@@ -737,6 +739,81 @@ export async function sweepQuotes(ctx: JobCtx) {
   for (const id of ids) out.push({ issueId: id, ...(await pickBest(ctx, id, true)) })
   const alerted = await alertUnansweredQuestions(ctx)
   return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted }
+}
+
+// ── "ועד1 תטפל": decide who handles it and set it going ─────────────────────
+/** Three agreed vendors with a mobile, ranked for the issue — what the app's "send to all" picks. */
+export async function pickVendorsFor(svc: SupabaseClient, issueId: string, toE164: (p: string) => string | null) {
+  const { data: iss } = await svc.from('issues').select('id, title, category, priority, building_id, ai_category, ai_search_terms').eq('id', issueId).maybeSingle()
+  if (!iss) return []
+  const { data: b } = await svc.from('buildings').select('id, geo_lat, geo_lng').eq('id', iss.building_id).maybeSingle()
+  const { data: vendors } = await svc.from('vendors').select('*').eq('membership_status', 'agreed')
+  const usable = (vendors || []).filter((v) => /^9725\d{8}$/.test(toE164(String(v.phone || '')) || ''))
+  // deno-lint-ignore no-explicit-any
+  return (rankVendorsForIssue(iss, usable, { building: b }) as any[]).slice(0, 3).map((r) => r.vendor.id as string)
+}
+
+/**
+ * The committee said "ועד1 תטפל" (WhatsApp). ועד1 decides, like a management
+ * company's manager: the building's regular contractor, the handyman, or
+ * quotes from vendors. Returns the Hebrew line for the committee.
+ */
+export async function takeIssue(ctx: JobCtx, issueId: string, fromPhone: string): Promise<{ ok: boolean; text: string }> {
+  const { data: iss } = await ctx.svc.from('issues')
+    .select('id, title, category, priority, status, handler, building_id, ticket_no').eq('id', issueId).maybeSingle()
+  if (!iss) return { ok: false, text: 'התקלה לא נמצאה. אפשר להחליט באפליקציה.' }
+  if (!(await isCommitteePhone(ctx.svc, iss.building_id, fromPhone))) return { ok: false, text: 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.' }
+  if (iss.handler || DONE.includes(iss.status)) return { ok: false, text: `כבר התקבלה החלטה על "${iss.title}". אפשר לראות באפליקציה.` }
+  const title = String(iss.title)
+  const now = new Date().toISOString()
+  const urgent = iss.priority === 'urgent'
+
+  // 1. A regular contractor for this category (the lift company, the cleaner).
+  const { data: rule } = iss.category ? await ctx.svc.from('issue_routing_rules').select('vendor_name, send_to_vendor')
+    .eq('building_id', iss.building_id).eq('category', iss.category).eq('active', true).maybeSingle() : { data: null }
+  let mode = rule?.send_to_vendor && rule.vendor_name ? 'contractor' : decideHandling(iss)
+
+  if (mode === 'quotes') {
+    const { data: b } = await ctx.svc.from('buildings').select('service_plan').eq('id', iss.building_id).maybeSingle()
+    const { data: p } = await ctx.svc.from('service_plans').select('includes_auto_quotes').eq('key', b?.service_plan || 'basic').maybeSingle()
+    if (!p?.includes_auto_quotes) {
+      await ctx.svc.from('issues').update({ handler: 'committee', handler_kind: 'vendor', stage: null, status: 'in_progress', handled_at: now }).eq('id', iss.id)
+      return { ok: true, text: `"${title}" דורשת ספק מוסמך. במסלול שלכם פונים לספק בעצמכם — באפליקציה יש ספקים מאושרים מהמאגר לתחום הזה.` }
+    }
+    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
+    const ids = await pickVendorsFor(ctx.svc, iss.id, ctx.toE164)
+    const r = ids.length ? await sendJobOffers(ctx, { issueId: iss.id, vendorIds: ids, kind: 'quote', sentBy: null }) : { sent: 0 }
+    const sent = Number((r as Record<string, unknown>).sent) || 0
+    await emailAdmins(ctx.svc, `ועד1 תטפל → הצעות מספקים: ${title}`,
+      [sent ? `נשלח ל-${sent} ספקים. ההצעה הזולה תגיע לוועד לאישור.` : 'לא נמצאו ספקים מאושרים עם נייד לתחום הזה — צריך לשלוח ידנית ממסך התקלות.'], iss.building_id)
+    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}". זו עבודה לספק מוסמך, אז ביקשנו הצעות מספקים. תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${urgent ? 'היום' : 'בשבוע הקרוב'}, ושום דבר לא יוזמן בלי אישורכם.` }
+  }
+
+  if (mode === 'contractor') {
+    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', vendor_name: rule!.vendor_name, handled_at: now }).eq('id', iss.id)
+    await emailAdmins(ctx.svc, `ועד1 תטפל → הספק הקבוע: ${title}`, [`להעביר ל${rule!.vendor_name}, הספק הקבוע של הבניין לתחום הזה.`], iss.building_id)
+    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}" ומעבירה ל${rule!.vendor_name}, הספק הקבוע של הבניין. ללא חיוב מאיתנו.` }
+  }
+
+  if (mode === 'admin') {
+    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
+    await emailAdmins(ctx.svc, `ועד1 תטפל → מעלית: ${title}`, ['להעביר לחברת המעליות של הבניין (אין לבניין ספק קבוע מוגדר לתחום).'], iss.building_id)
+    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}" ומעבירה לחברת המעליות של הבניין. נעדכן אתכם.` }
+  }
+
+  // handyman
+  const { data: bb } = await ctx.svc.from('buildings').select('card_exhausted_policy').eq('id', iss.building_id).maybeSingle()
+  if (bb?.card_exhausted_policy === 'block') {
+    const { data: bal } = await ctx.svc.from('building_punch_balance').select('balance').eq('building_id', iss.building_id).maybeSingle()
+    const balance = Number(bal?.balance) || 0
+    if (balance < 1) return { ok: false, text: 'הכרטיסייה של הבניין נגמרה, ולכן איש האחזקה לא נשלח. אפשר לקנות כרטיסייה במסך "חשבון ועד1".' }
+  }
+  await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'handyman', stage: urgent ? 'awaiting_assignment' : 'queued_for_visit',
+    status: 'acknowledged', handled_at: now }).eq('id', iss.id)
+  await sendJobOffers(ctx, { issueId: iss.id, kind: 'handyman', sentBy: null })
+  const hour = await hourPrice(ctx, iss.building_id)
+  return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו ${urgent ? 'יגיע בהקדם' : 'יגיע בביקור הבא'}. `
+    + `שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה אם אין כרטיסייה` : ''}.` }
 }
 
 // ── A vendor's question before pricing ──────────────────────────────────────

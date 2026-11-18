@@ -32,22 +32,9 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
 import {
-  awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleCommitteeAnswer, handleOfferButton, handleOfferText,
+  awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleCommitteeAnswer, handleOfferButton, handleOfferText, takeIssue,
   pickBest, sendJobOffers, sweepQuotes, type JobCtx,
 } from './jobs.ts'
-// The same matching rules the app uses to suggest vendors.
-import { rankVendorsForIssue } from '../_shared/vendorMatch.js'
-
-/** Three agreed vendors with a mobile, ranked for the issue — what the app's "send to all" picks. */
-async function pickVendorsFor(svc: SupabaseClient, issueId: string) {
-  const { data: iss } = await svc.from('issues').select('id, title, category, priority, building_id, ai_category, ai_search_terms').eq('id', issueId).maybeSingle()
-  if (!iss) return []
-  const { data: b } = await svc.from('buildings').select('id, geo_lat, geo_lng').eq('id', iss.building_id).maybeSingle()
-  const { data: vendors } = await svc.from('vendors').select('*').eq('membership_status', 'agreed')
-  const usable = (vendors || []).filter((v) => /^9725\d{8}$/.test(toE164(String(v.phone || '')) || ''))
-  // deno-lint-ignore no-explicit-any
-  return (rankVendorsForIssue(iss, usable, { building: b }) as any[]).slice(0, 3).map((r) => r.vendor.id as string)
-}
 
 const PROVIDER = 'whatsapp_cloud'
 const MANUAL_CONFIRM_TEMPLATES = new Set(['resident_payment_reminder'])
@@ -346,54 +333,37 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
     ((msg.interactive as Record<string, unknown>)?.button_reply as Record<string, unknown>)?.id || '')
 
   // Committee decision on an open issue: "issue:<issueId>:<vaad1|vendor|self>".
+  // "ועד1 תטפל" (vaad1; "vendor" is the old template's button, same thing now):
+  // ועד1 decides between the regular contractor, the handyman and vendor
+  // quotes, the way a management company's manager does. "self" stays with them.
   if (payload.startsWith('issue:')) {
     const [, issueId, action] = payload.split(':')
-    const { data: res } = await svc.rpc('decide_issue_by_phone', { p_issue: issueId, p_phone: from, p_action: action })
-    const { data: iss } = await svc.from('issues')
-      .select('id, title, description, building_id, ticket_no, brief_token').eq('id', issueId).maybeSingle()
-    const title = String(iss?.title || 'התקלה')
-    // "הצעות מספקים": three vendors get the job now; the committee hears back
-    // with the cheapest one that can do it in time.
-    let vendorsAsked = 0
-    if (res === 'ok' && action === 'vendor' && iss) {
-      const ids = await pickVendorsFor(svc, iss.id)
-      if (ids.length) {
-        const r = await sendJobOffers(jobCtx(svc, integ, token), { issueId: iss.id, vendorIds: ids, kind: 'quote', sentBy: null })
-        vendorsAsked = Number((r as Record<string, unknown>).sent) || 0
-      }
+    let reply = ''
+    let buildingId: string | null = null
+    if (action === 'self') {
+      const { data: res } = await svc.rpc('decide_issue_by_phone', { p_issue: issueId, p_phone: from, p_action: 'self' })
+      const { data: iss } = await svc.from('issues').select('title, building_id').eq('id', issueId).maybeSingle()
+      buildingId = iss?.building_id || null
+      const title = String(iss?.title || 'התקלה')
+      reply = res === 'ok' ? `✅ נרשם: הוועד מטפל ב"${title}".`
+        : res === 'already_decided' ? `כבר התקבלה החלטה על "${title}". אפשר לראות באפליקציה.`
+        : res === 'forbidden' ? 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.'
+        : 'ההחלטה לא נקלטה. אפשר להחליט באפליקציה.'
+    } else {
+      const r = await takeIssue(jobCtx(svc, integ, token), issueId, from)
+      reply = r.text
+      const { data: iss } = await svc.from('issues').select('building_id').eq('id', issueId).maybeSingle()
+      buildingId = iss?.building_id || null
     }
-    const { data: pr } = await svc.from('issues').select('priority').eq('id', issueId).maybeSingle()
-    const when = pr?.priority === 'urgent' ? 'היום' : 'בשבוע הקרוב'
-    const OK: Record<string, string> = {
-      vaad1: `✅ נרשם: ועד1 תטפל ב"${title}" בביקור האחזקה הבא. השעות יירדו מהכרטיסייה או ייכנסו לחשבון החודשי.`,
-      vendor: vendorsAsked
-        ? `✅ נרשם: ביקשנו הצעות מ-${vendorsAsked} ספקים ל"${title}". תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${when}.`
-        : `✅ נרשם: נבקש הצעות מספקים ל"${title}". תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${when}.`,
-      self: `✅ נרשם: הוועד מטפל ב"${title}".`,
-    }
-    if (res === 'ok' && action === 'vendor' && !vendorsAsked) {
-      await log(svc, { recipient: from, audience: 'other', building_id: iss?.building_id || null, status: 'failed',
-        subject: `לא נמצאו ספקים מתאימים: ${title.slice(0, 120)}`, body: 'הוועד ביקש הצעות מספקים בוואטסאפ, ולא נמצאו 3 ספקים מאושרים עם נייד לתחום. צריך לשלוח ידנית.' })
-    }
-    const reply = res === 'ok' ? OK[action]
-      : res === 'already_decided' ? `כבר התקבלה החלטה על "${title}". אפשר לראות ולשנות באפליקציה.`
-      : res === 'not_in_plan' ? 'בקשת הצעות אוטומטית מספקים כלולה במסלול ליווי. אפשר לפנות לספקים מהמאגר דרך האפליקציה, או לבחור אפשרות אחרת.'
-      : res === 'no_punches' ? 'הכרטיסייה של הבניין נגמרה, ולכן ההעברה לא בוצעה. אפשר לקנות כרטיסייה במסך "חשבון ועד1" או לבחור אפשרות אחרת.'
-      : res === 'forbidden' ? 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.'
-      : 'ההחלטה לא נקלטה. אפשר להחליט באפליקציה.'
     if (integ?.enabled && integ.phone_number_id && token) {
       const r = await graph(integ, token, `${integ.phone_number_id}/messages`, {
         method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: reply } }),
       })
       await log(svc, {
-        recipient: from, audience: 'resident', building_id: iss?.building_id || null,
-        subject: `החלטת ועד בוואטסאפ: ${title.slice(0, 120)}`, body: reply,
+        recipient: from, audience: 'resident', building_id: buildingId,
+        subject: 'החלטת ועד בוואטסאפ', body: reply,
         status: r.ok ? 'sent' : 'failed', error_message: r.ok ? null : graphError(r.data),
       })
-      // ועד1's handyman hears about the job at once — with "אגיע / לא יכול".
-      if (res === 'ok' && action === 'vaad1' && iss) {
-        await sendJobOffers(jobCtx(svc, integ, token), { issueId: iss.id, kind: 'handyman', sentBy: null })
-      }
     }
     return
   }
@@ -829,15 +799,17 @@ Deno.serve(async (req: Request) => {
           const { data: recent } = await svc.from('notification_log').select('id')
             .eq('channel', 'whatsapp_in').eq('recipient', to).gte('created_at', since).limit(1)
           let payload: Record<string, unknown> | null = null
-          const text = `תקלה ב${b?.name || 'בניין'} ממתינה להחלטת הוועד:\n*${what}*\nפתוחה ${days} ימים.${iss.description ? `\n${String(iss.description).slice(0, 300)}` : ''}\n\nועד1 תטפל: איש האחזקה שלנו בביקור הבא, לפי שעות.\nהצעות מספקים: נבקש מחיר מספקים מהמאגר ונשלח לכם את הזול שיכול לבצע בזמן.\nהוועד יטפל: נשאר אצלכם.`
+          const text = `שלום, כאן ועד1.\nתקלה ב${b?.name || 'בניין'} ממתינה להחלטת הוועד:\n*${what}*\nפתוחה ${days} ימים.${iss.description ? `\n${String(iss.description).slice(0, 300)}` : ''}\n\nועד1 תטפל: אנחנו מחליטים אם לשלוח את איש האחזקה שלנו או לבקש הצעות מספקים, ומעדכנים אתכם. הצעת ספק מגיעה אליכם לאישור לפני כל הזמנה.\nהוועד יטפל: נשאר אצלכם.`
           if (recent?.length) {
             payload = { messaging_product: 'whatsapp', to, type: 'interactive', interactive: { type: 'button', body: { text },
-              action: { buttons: [['ועד1 תטפל', ids[0]], ['הצעות מספקים', ids[1]], ['הוועד יטפל', ids[2]]].map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } }
+              action: { buttons: [['ועד1 תטפל', ids[0]], ['הוועד יטפל', ids[2]]].map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } }
           } else if (tpl?.meta_status === 'APPROVED') {
             const vars = [cleanParam(b?.name || 'הבניין'), cleanParam(what), days]
+            // The two-button version (decision3) once Meta approves it; until then the three-button one.
+            const tplIds = String(tpl.meta_name || '').endsWith('decision3') ? [ids[0], ids[2]] : ids
             payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: tpl.meta_name, language: { code: tpl.language || 'he' },
               components: [{ type: 'body', parameters: vars.map((t) => ({ type: 'text', text: t })) },
-                ...buttonComponents(ids.map((id, index) => ({ type: 'quick_reply', index, payload: id })))] } }
+                ...buttonComponents(tplIds.map((id, index) => ({ type: 'quick_reply', index, payload: id })))] } }
           }
           if (!payload) { skipped++; continue }
           const g = await graph(integ, token, `${integ.phone_number_id}/messages`, { method: 'POST', body: JSON.stringify(payload) })
