@@ -163,7 +163,10 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
   const address = addressOf(b)
   const desc = ctx.cleanParam([iss.title, iss.description].filter(Boolean).join(' — ')).slice(0, 600)
   const link = briefLink(iss.brief_token)
-  const deadline = new Date(Date.now() + (iss.priority === 'urgent' ? 2 : 24) * 3600 * 1000)
+  // Time to answer: set in "מסלולים ותמחור" (urgent 3h, otherwise 24h by default).
+  const { data: ss } = await ctx.svc.from('service_settings').select('quote_hours_urgent, quote_hours_normal').maybeSingle()
+  const hours = iss.priority === 'urgent' ? Number(ss?.quote_hours_urgent) || 3 : Number(ss?.quote_hours_normal) || 24
+  const deadline = new Date(Date.now() + hours * 3600 * 1000)
   const { data: tpls } = await ctx.svc.from('message_templates').select('*')
     .in('key', ['vendor_job_offer', 'handyman_job_offer', 'vendor_quote_request', 'vendor_issue_dispatch'])
   const tpl = (k: string) => (tpls || []).find((t) => t.key === k && t.active && t.meta_status === 'APPROVED') || null

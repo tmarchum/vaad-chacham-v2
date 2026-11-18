@@ -98,6 +98,8 @@ export default function ServicePlans() {
       reopen_free_days: Number(settings.reopen_free_days) || 0,
       visit_min_punches: Math.max(1, Number(settings.visit_min_punches) || 1),
       batch_max_days: Number(settings.batch_max_days) || 0,
+      quote_hours_urgent: Math.min(72, Math.max(1, Number(settings.quote_hours_urgent) || 3)),
+      quote_hours_normal: Math.min(168, Math.max(1, Number(settings.quote_hours_normal) || 24)),
       updated_at: new Date().toISOString(),
     }).eq('id', true)
     setBusy('')
@@ -284,6 +286,8 @@ export default function ServicePlans() {
               ['reopen_free_days', 'ביקור חוזר ללא ניקוב (ימים)', 'number'],
               ['visit_min_punches', 'מינימום ניקובים לביקור', 'number'],
               ['batch_max_days', 'תקלה לא דחופה ממתינה לביקור עד (ימים)', 'number'],
+              ['quote_hours_urgent', 'זמן לספק להגיש הצעה — תקלה דחופה (שעות)', 'number'],
+              ['quote_hours_normal', 'זמן לספק להגיש הצעה — תקלה רגילה (שעות)', 'number'],
             ].map(([name, label, type]) => (
               <label key={name} className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5">
                 <span>{label}</span>
