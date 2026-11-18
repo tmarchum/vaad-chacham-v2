@@ -223,8 +223,13 @@ async function recordAmount(ctx: JobCtx, q: Record<string, any>, iss: Record<str
     await reply(ctx, to, 'ביקשנו את הסכום *לפני מע"מ*. כתוב שוב את הסכום לפני מע"מ, במספרים בלבד.', { vendor_id: q.vendor_id, building_id: q.building_id, subject: 'הצעת מחיר: בקשה לסכום לפני מע"מ' })
     return
   }
+  // A vendor who answered the old button-less request with a price straight
+  // away never saw the terms: say them now, with the amount.
+  const terms = q.stage === 'offered'
+    ? '\nחשוב: המחיר הוא לפני מע"מ וסופי לעבודה כפי שתוארה. אם בשטח יתגלה משהו שלא היה בתיאור, עוצרים ומדווחים לנו כאן, ותוספת אפשרית רק באישור הוועד. אם הסכום ששלחת כולל מע"מ, כתוב את הסכום לפני מע"מ.'
+    : ''
   await ctx.svc.from('quotes').update({ amount, stage: 'awaiting_date', status: 'pending', responded_at: new Date().toISOString() }).eq('id', q.id)
-  await reply(ctx, to, `קיבלנו: ${nis(amount)} לפני מע"מ, סופי לעבודה כפי שתוארה.\nמתי תוכל לבצע? כתוב יום ושעה משוערים.`,
+  await reply(ctx, to, `קיבלנו: ${nis(amount)} לפני מע"מ, סופי לעבודה כפי שתוארה.${terms}\nמתי תוכל לבצע? כתוב יום ושעה משוערים.`,
     { vendor_id: q.vendor_id, building_id: q.building_id, subject: `הצעת מחיר התקבלה: ${String(iss?.title || '').slice(0, 100)}` })
 }
 
@@ -326,7 +331,11 @@ export async function handleOfferText(ctx: JobCtx, from: string, text: string, v
     return true
   }
 
-  // awaiting_date: any text is the date.
+  // awaiting_date: a bare number corrects the price; anything else is the date.
+  if (amount != null && /^\s*₪?\s*[\d,.]+\s*(₪|ש"ח|שח|שקל|שקלים)?\s*$/.test(text)) {
+    await recordAmount(ctx, { ...q, stage: 'awaiting_amount' }, iss, from, text, amount)
+    return true
+  }
   const when = text.slice(0, 200)
   await ctx.svc.from('quotes').update({ available_when: when, stage: 'submitted' }).eq('id', q.id)
   const by = new Date(Math.max(Date.now(), q.deadline ? new Date(q.deadline).getTime() : 0) + 2 * 86400 * 1000)
