@@ -2859,7 +2859,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 )
               }
               return what ? (
-                <div className="rounded-lg border-2 border-[var(--primary)] bg-[var(--primary-light,#eef4ff)] p-3 text-[13px] space-y-1">
+                <div className="rounded-lg border-2 border-[var(--primary)] bg-[var(--surface-hover)] p-3 text-[13px] space-y-1">
                   <p className="font-semibold text-[var(--text-primary)]">מה יקרה: {what.t}</p>
                   <p className="text-[var(--text-secondary)]">{noPunches && ['next_visit', 'urgent'].includes(transferMode) ? 'הכרטיסייה נגמרה, והוועד בחר לעצור עד קניית כרטיסייה. אפשר לקנות כרטיסייה במסך "חשבון ועד1".' : what.c}</p>
                 </div>
