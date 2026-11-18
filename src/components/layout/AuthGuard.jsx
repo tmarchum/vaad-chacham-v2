@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { ResidentOnboarding } from './ResidentOnboarding'
 import { ResidentPortal } from './ResidentPortal'
 import { PendingApproval } from './PendingApproval'
+import { ResidentAccessGate } from '@/components/common/AccessGate'
 import { ResidentPreview } from './ResidentPreview'
 import { isResidentPreviewOn } from '@/lib/residentPreview'
 
@@ -29,7 +30,7 @@ export function AuthGuard() {
   if (!isCommittee && profile?.unit_id && profile.is_verified === false) return <PendingApproval />
 
   // Resident user (not admin/committee) who has been linked to a unit → dedicated portal
-  if (!isCommittee && profile?.unit_id) return <ResidentPortal />
+  if (!isCommittee && profile?.unit_id) return <ResidentAccessGate buildingId={profile.building_id}><ResidentPortal /></ResidentAccessGate>
 
   // Admin/committee "view as resident" preview (toggled from the sidebar menu)
   if (isCommittee && isResidentPreviewOn()) return <ResidentPreview />

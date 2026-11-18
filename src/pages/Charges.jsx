@@ -9,6 +9,7 @@ import { toast, toastError } from '@/lib/toast'
 import { useConfirm } from '@/lib/confirm'
 import { StatementsCard } from '@/components/billing/StatementsCard'
 import { BankMandateCard } from '@/components/billing/BankMandateCard'
+import { BuildingAccessCard } from '@/components/billing/BuildingAccessCard'
 import { cn } from '@/lib/utils'
 import {
   loadServiceConfig, loadBuildingBilling, loadPunchBalance, loadPriceLists, monthlyPrice, punchRules, itemPrice,
@@ -182,6 +183,7 @@ export default function Charges() {
 
       <StatementsCard key={`st-${mandateRev}`} buildingId={buildingId} buildingName={selectedBuilding?.name || ''} isAdmin={isAdmin} />
       <BankMandateCard buildingId={buildingId} isAdmin={isAdmin} onChange={() => setMandateRev((n) => n + 1)} />
+      {isAdmin && <BuildingAccessCard key={`acc-${mandateRev}`} buildingId={buildingId} onChange={() => setMandateRev((n) => n + 1)} />}
 
       {/* ── Committee choices ── */}
       <SectionCard icon={SlidersHorizontal} title="הגדרות חיוב של הוועד"

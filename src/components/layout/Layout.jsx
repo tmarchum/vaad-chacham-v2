@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { PageTabs } from '@/components/common/PageTabs'
 import { PlanGate } from '@/components/common/PlanGate'
 import { JoinRequests } from '@/components/common/JoinRequests'
+import { AccessGate } from '@/components/common/AccessGate'
 import { Outlet, useLocation, Link } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { AlertsPanel } from './AlertsPanel'
@@ -173,7 +174,7 @@ function Layout() {
           <div className="max-w-[1400px] mx-auto">
             <PageTabs />
             <JoinRequests buildingId={selectedBuilding?.id} />
-            <PlanGate><Outlet /></PlanGate>
+            <AccessGate><PlanGate><Outlet /></PlanGate></AccessGate>
           </div>
         </main>
       </div>
