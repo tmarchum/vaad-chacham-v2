@@ -23,7 +23,7 @@
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { rankVendorsForIssue } from '../_shared/vendorMatch.js'
-import { decideHandling, isDiagnosis } from '../_shared/handling.js'
+import { decideHandling, isDiagnosis, isUrgent, routeFor } from '../_shared/handling.js'
 
 const APP = 'https://app.vaad1.co.il'
 const OPEN_STAGES = ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date']
@@ -104,7 +104,7 @@ const DONE = ['completed', 'resolved', 'closed', 'rejected']
 
 // By when the work must be possible: today (Israel time) when urgent, else 7 days.
 function availabilityFor(priority: string | null) {
-  if (priority === 'urgent') {
+  if (isUrgent(priority)) {
     const ymd = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
     // 23:59 Israel time is 20:59 or 21:59 UTC; take the earlier, safe either way.
     return { by: new Date(`${ymd}T20:59:00Z`), text: 'היום' }
@@ -167,7 +167,7 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
   const link = briefLink(iss.brief_token)
   // Time to answer: set in "מסלולים ותמחור" (urgent 3h, otherwise 24h by default).
   const { data: ss } = await ctx.svc.from('service_settings').select('quote_hours_urgent, quote_hours_normal').maybeSingle()
-  const hours = iss.priority === 'urgent' ? Number(ss?.quote_hours_urgent) || 3 : Number(ss?.quote_hours_normal) || 24
+  const hours = isUrgent(iss.priority) ? Number(ss?.quote_hours_urgent) || 3 : Number(ss?.quote_hours_normal) || 24
   const deadline = new Date(Date.now() + hours * 3600 * 1000)
   const { data: tpls } = await ctx.svc.from('message_templates').select('*')
     .in('key', ['vendor_job_offer', 'handyman_job_offer', 'vendor_quote_request', 'vendor_issue_dispatch'])
@@ -752,7 +752,9 @@ export async function sweepQuotes(ctx: JobCtx) {
   for (const id of ids) out.push({ issueId: id, ...(await pickBest(ctx, id, true)) })
   const alerted = await alertUnansweredQuestions(ctx)
   const auto = await autoTakeIssues(ctx)
-  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto }
+  const closedNotified = await notifyClosed(ctx)
+  const reminded = await remindCommittee(ctx)
+  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto, closedNotified, reminded }
 }
 
 /** Tell the committee something (no buttons). Free text only inside the 24h window; else the app shows it. */
@@ -769,55 +771,403 @@ async function notifyCommittee(ctx: JobCtx, iss: Record<string, any>, text: stri
   return sent
 }
 
-const URGENT_WAIT_MIN = 60
-const VAAD1_MODE_WAIT_MIN = 2   // lets the resident's own emergency dispatch land first
+const URGENT_WAIT_MIN = 60        // an emergency the committee did not decide on → ועד1
+const HIGH_WAIT_MIN = 240         // "דחוף" the committee did not decide on → ועד1
+const VAAD1_DECIDE_MIN = 30       // דחוף/חירום ועד1 did not decide on → the suggestion goes out
+const REMIND_DAYS = 7             // an issue the committee took on, still open
+const ROUTE_GRACE_MIN = 3         // the trigger is the fast path; the scheduler catches what it missed
+
+const whatOf = (iss: Record<string, any>) => `${iss.ticket_no ? `#${iss.ticket_no} ` : ''}${iss.title}`
+const ISSUE_COLS = 'id, title, description, category, priority, status, handler, handler_kind, stage, building_id, unit_id, assigned_to, ticket_no, vendor_name, routed_at, route, vaad1_suggestion'
+
+/** Admin phones (ועד1) for decisions. */
+async function adminPhones(ctx: JobCtx) {
+  const { data } = await ctx.svc.from('profiles').select('phone').eq('role', 'admin')
+  return [...new Set((data || []).map((a) => ctx.toE164(String(a.phone || ''))).filter((x): x is string => !!x && /^9725\d{8}$/.test(x)))]
+}
+
+/** Interactive buttons inside the 24h window; else plain notice by template where one fits. */
+async function sendButtons(ctx: JobCtx, to: string, text: string, buttons: [string, string][], meta: Record<string, unknown>) {
+  if (!ctx.ready || !(await windowOpen(ctx.svc, to))) return false
+  const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'interactive', interactive: { type: 'button', body: { text: text.slice(0, 1024) },
+    action: { buttons: buttons.map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } })
+  await ctx.log({ recipient: to, audience: 'resident', body: text, status: r.ok ? 'sent' : 'failed',
+    delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error, ...meta })
+  return r.ok
+}
 
 /**
- * Scheduler: issues no one decided on that ועד1 takes by itself —
- *   - every new issue in a building set to "ועד1 מטפל";
- *   - an urgent issue (the resident's emergency list) the committee did not
- *     take within an hour, in any building.
- * Each is claimed once (auto_taken_at) before anything is sent.
+ * Tell the committee about an issue, with or without buttons. Inside the 24h
+ * window: free text (buttons if given). Outside: the approved
+ * committee_issue_opened template, its description line carrying the news.
  */
+async function tellCommittee(ctx: JobCtx, iss: Record<string, any>, text: string, line: string, subject: string, buttons?: [string, string][]) {
+  if (!ctx.ready) return 0
+  const { data: b } = await ctx.svc.from('buildings').select('name').eq('id', iss.building_id).maybeSingle()
+  const { data: tpl } = await ctx.svc.from('message_templates').select('*').eq('key', 'committee_issue_opened').maybeSingle()
+  const { data: u } = iss.unit_id ? await ctx.svc.from('units').select('number').eq('id', iss.unit_id).maybeSingle() : { data: null }
+  let sent = 0
+  for (const to of await committeePhones(ctx, iss)) {
+    let payload: Record<string, unknown> | null = null
+    let body = text
+    if (await windowOpen(ctx.svc, to)) {
+      payload = buttons?.length
+        ? { messaging_product: 'whatsapp', to, type: 'interactive', interactive: { type: 'button', body: { text: text.slice(0, 1024) },
+            action: { buttons: buttons.map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } }
+        : { messaging_product: 'whatsapp', to, type: 'text', text: { body: text.slice(0, 4096) } }
+    } else if (tpl?.active !== false && tpl?.meta_status === 'APPROVED') {
+      const { data: m } = await ctx.svc.from('unit_residents').select('last_name, phone, units!inner(building_id, board_member)')
+        .eq('units.building_id', iss.building_id).eq('units.board_member', true).eq('archived', false)
+      const me = (m || []).find((r) => ctx.toE164(String(r.phone || '')) === to)
+      const vars = [me?.last_name ? `משפחת ${me.last_name}` : 'חבר ועד', b?.name || 'הבניין', iss.category || 'כללי',
+        `${whatOf(iss)} — ${line}`, u?.number ? `דירה ${u.number}` : '—'].map(ctx.cleanParam)
+      body = ctx.render(tpl.body, vars)
+      payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: tpl.meta_name, language: { code: tpl.language || 'he' },
+        components: [{ type: 'body', parameters: vars.map((t) => ({ type: 'text', text: t })) }] } }
+    }
+    if (!payload) continue
+    const r = await ctx.send(payload)
+    if (r.ok) sent++
+    await ctx.log({ recipient: to, audience: 'resident', building_id: iss.building_id, subject, body,
+      status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error })
+    await new Promise((res) => setTimeout(res, 300))
+  }
+  return sent
+}
+
+// ── Opening route ───────────────────────────────────────────────────────────
+/**
+ * A new issue, once: by its category's route in the building.
+ *   vendor     straight to the standing contractor; committee + ועד1 told
+ *   committee  the committee gets "ועד1 תטפל" / "הוועד יטפל"
+ *   vaad1      ועד1 decides (handyman or quotes); the committee is told
+ */
+export async function routeNewIssue(ctx: JobCtx, issueId: string) {
+  const { data: claimed } = await ctx.svc.from('issues').update({ routed_at: new Date().toISOString() })
+    .eq('id', issueId).is('routed_at', null).select(ISSUE_COLS).maybeSingle()
+  if (!claimed) return { ok: true, state: 'already' }
+  const iss = claimed
+  if (DONE.includes(iss.status)) return { ok: true, state: 'closed' }
+  const { data: rule } = iss.category ? await ctx.svc.from('issue_routing_rules').select('route, vendor_name, notify_email, active')
+    .eq('building_id', iss.building_id).eq('category', iss.category).maybeSingle() : { data: null }
+  const { data: b } = await ctx.svc.from('buildings').select('name, street, house_number, city, handling_mode').eq('id', iss.building_id).maybeSingle()
+  const route = (iss.route as string) || routeFor(rule, b)
+  if (!iss.route) await ctx.svc.from('issues').update({ route }).eq('id', iss.id)
+  const what = whatOf(iss)
+
+  if (route === 'vendor') {
+    const vendorName = String(rule!.vendor_name)
+    // A resident's emergency may already have sent it (report_emergency); then only tell.
+    if (!iss.handler) {
+      await ctx.svc.from('issues').update({ handler: 'committee', handler_kind: 'contractor', stage: 'sent_to_vendor',
+        status: 'acknowledged', vendor_name: vendorName, handled_at: new Date().toISOString() }).eq('id', iss.id)
+    }
+    const how = await dispatchContractor(ctx, iss, b, vendorName, rule?.notify_email || null)
+    const line = `נותבה אוטומטית ל${vendorName}, הספק הקבוע של הבניין (${how}).`
+    await tellCommittee(ctx, iss, `שלום, כאן ועד1.\nנפתחה פנייה: *${what}*\n${line}\nכשהטיפול מסתיים, סמנו אותה כטופלה באפליקציה.`,
+      line, `נותבה לספק קבוע: ${what}`)
+    await emailAdmins(ctx.svc, `נותבה לספק הקבוע: ${what}`, [`${b?.name || ''} · ${iss.category || ''}`, line], iss.building_id)
+    return { ok: true, state: 'vendor', vendor: vendorName, how }
+  }
+
+  if (route === 'vaad1') {
+    const r = await askVaad1(ctx, iss, 'route')
+    await tellCommittee(ctx, iss, `שלום, כאן ועד1.\nנפתחה פנייה: *${what}*\nועד1 מטפלת בה: ${r.committeeLine}`,
+      `ועד1 מטפלת: ${r.committeeLine}`, `ועד1 מטפלת: ${what}`)
+    return { ok: true, state: 'vaad1', suggestion: r.suggestion }
+  }
+
+  // committee: the decision buttons, now.
+  const urgentNote = iss.priority === 'urgent' ? '\n⚠️ חירום: אם לא תחליטו תוך שעה, ועד1 מטפלת בעצמה.'
+    : iss.priority === 'high' ? '\nסומנה דחופה.' : ''
+  const text = `שלום, כאן ועד1.\nנפתחה פנייה ב${b?.name || 'בניין'}:\n*${what}*${iss.description ? `\n${String(iss.description).slice(0, 300)}` : ''}${urgentNote}\n\n`
+    + `ועד1 תטפל: אנחנו מחליטים אם לשלוח את איש האחזקה שלנו או לבקש הצעות מספקים. הצעת ספק מגיעה אליכם לאישור לפני כל הזמנה.\n`
+    + `הוועד יטפל: אתם מטפלים בעצמכם וסוגרים את הפנייה באפליקציה.\n`
+    + `לעריכת הפנייה לפני ההחלטה: ${APP}/issues`
+  const sent = await tellCommittee(ctx, iss, text, 'ממתינה להחלטת הוועד באפליקציה: ועד1 תטפל או הוועד יטפל.', `להחלטת הוועד: ${what}`,
+    [['ועד1 תטפל', `issue:${iss.id}:vaad1`], ['הוועד יטפל', `issue:${iss.id}:self`]])
+  return { ok: true, state: 'committee', sent }
+}
+
+/** Send a new issue to the building's standing contractor. Returns how it went out. */
+async function dispatchContractor(ctx: JobCtx, iss: Record<string, any>, b: Record<string, any> | null, vendorName: string, notifyEmail: string | null) {
+  const { data: v } = await ctx.svc.from('vendors').select('id, name, phone, email, contact_channel').eq('name', vendorName).maybeSingle()
+  const ways: string[] = []
+  // The category's standing address already got the opening email (analyze-issue).
+  if (notifyEmail) ways.push('במייל')
+  const channel = String(v?.contact_channel || 'auto')
+  const to = v ? ctx.toE164(String(v.phone || '')) : null
+  if (v && to && /^9725\d{8}$/.test(to) && ctx.ready && channel !== 'email' && channel !== 'phone') {
+    const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_issue_dispatch').maybeSingle()
+    const { data: ib } = await ctx.svc.from('issues').select('brief_token').eq('id', iss.id).maybeSingle()
+    const link = briefLink(ib?.brief_token || null)
+    const contact = await committeeContact(ctx, iss)
+    if (t?.meta_status === 'APPROVED') {
+      const vars = [v.name, addressOf(b), `${iss.priority === 'urgent' ? 'חירום — ' : ''}${[iss.title, iss.description].filter(Boolean).join(' — ')}${link ? ` | פרטים ותמונות: ${link}` : ''}`, contact].map(ctx.cleanParam)
+      const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
+        components: [{ type: 'body', parameters: vars.map((x) => ({ type: 'text', text: x })) }] } })
+      await ctx.log({ recipient: to, audience: 'vendor', vendor_id: v.id, building_id: iss.building_id, template_key: 'vendor_issue_dispatch',
+        subject: `קריאה לספק הקבוע: ${String(iss.title).slice(0, 120)}`, body: ctx.render(t.body, vars),
+        status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error })
+      if (r.ok) ways.push('בוואטסאפ')
+    }
+  }
+  if (!ways.length) {
+    await emailAdmins(ctx.svc, `לא הצלחנו לשלוח לספק הקבוע: ${iss.title}`,
+      [`לספק ${vendorName} אין מייל קטגוריה או נייד לוואטסאפ. צריך להעביר לו ידנית.`], iss.building_id)
+    return 'צריך להעביר ידנית — ועד1 עודכנה'
+  }
+  return ways.join(' ו')
+}
+
+/** Who the contractor calls to get in: the member in charge — surname + phone. */
+async function committeeContact(ctx: JobCtx, iss: Record<string, any>) {
+  if (iss.assigned_to) {
+    const { data: m } = await ctx.svc.from('unit_residents').select('last_name, phone').eq('id', iss.assigned_to).maybeSingle()
+    if (m) return [m.last_name ? `משפחת ${m.last_name}` : 'ועד הבית', m.phone].filter(Boolean).join(' ')
+  }
+  return 'ועד הבית'
+}
+
+// ── ועד1 decides ────────────────────────────────────────────────────────────
+const SUGGEST_LABEL: Record<string, string> = { handyman: 'איש האחזקה', quotes: 'הצעות מספקים', admin: 'חברת המעליות של הבניין' }
+
+/**
+ * The issue is ועד1's (the committee said "ועד1 תטפל", the category routes to
+ * ועד1, or nobody answered an emergency). The lift goes on at once; anything
+ * else waits for the admin's choice (handyman / quotes), with a suggestion.
+ */
+async function askVaad1(ctx: JobCtx, iss: Record<string, any>, why: 'route' | 'committee' | 'no_answer') {
+  const suggestion = decideHandling(iss)
+  if (suggestion === 'admin') {
+    await ctx.svc.from('issues').update({ handler: null, stage: null }).eq('id', iss.id)
+    const r = await executeHandling(ctx, iss.id, 'admin')
+    return { suggestion, committeeLine: r.text.replace(/^✅ /, ''), text: r.text }
+  }
+  const now = new Date().toISOString()
+  await ctx.svc.from('issues').update({ handler: 'management', handler_kind: null, stage: 'awaiting_vaad1', status: 'acknowledged',
+    handled_at: now, vaad1_suggestion: suggestion, vaad1_asked_at: now }).eq('id', iss.id)
+  const urgent = isUrgent(iss.priority)
+  const { data: b } = await ctx.svc.from('buildings').select('name').eq('id', iss.building_id).maybeSingle()
+  const why_he = why === 'committee' ? 'הוועד ביקש שוועד1 תטפל' : why === 'no_answer' ? 'חירום בלי החלטת ועד שעה' : 'התחום מנותב לוועד1'
+  const text = `ועד1 — החלטה נדרשת (${why_he})\n${b?.name || ''}: *${whatOf(iss)}*${iss.description ? `\n${String(iss.description).slice(0, 300)}` : ''}\n`
+    + `${iss.category ? `תחום: ${iss.category}\n` : ''}${urgent ? `${iss.priority === 'urgent' ? 'חירום' : 'דחוף'}: אם לא תחליט תוך ${VAAD1_DECIDE_MIN} דקות, יוצא לפי ההמלצה.\n` : ''}`
+    + `המלצה: ${SUGGEST_LABEL[suggestion]}.`
+  let sent = 0
+  for (const to of await adminPhones(ctx)) {
+    if (await sendButtons(ctx, to, text, [['איש אחזקה', `v1:${iss.id}:handyman`], ['הצעות מספקים', `v1:${iss.id}:quotes`]],
+      { building_id: iss.building_id, subject: `החלטת ועד1: ${whatOf(iss)}` })) sent++
+  }
+  await emailAdmins(ctx.svc, `${urgent ? '[דחוף] ' : ''}החלטה נדרשת: ${whatOf(iss)}`,
+    [why_he, `${b?.name || ''} · ${iss.category || ''}`, `המלצה: ${SUGGEST_LABEL[suggestion]}.`,
+      sent ? 'נשלחו לך כפתורים בוואטסאפ.' : 'אין חלון וואטסאפ פתוח — אפשר להחליט במסך התקלות.', `${APP}/issues`], iss.building_id)
+  const committeeLine = `נחליט אם לשלוח את איש האחזקה שלנו או לבקש הצעות מספקים, ונעדכן אתכם${urgent ? ' בתוך חצי שעה' : ''}. הצעת ספק תגיע אליכם לאישור לפני כל הזמנה.`
+  return { suggestion, committeeLine, text: `✅ ועד1 מטפלת ב"${iss.title}". ${committeeLine}` }
+}
+
+/** The admin's choice (WhatsApp button, the app, or the 30-minute default). */
+export async function vaad1Decide(ctx: JobCtx, issueId: string, mode: 'handyman' | 'quotes', by: 'admin' | 'timeout') {
+  const { data: iss } = await ctx.svc.from('issues').select(ISSUE_COLS).eq('id', issueId).maybeSingle()
+  if (!iss) return { ok: false, text: 'התקלה לא נמצאה.' }
+  if (iss.stage !== 'awaiting_vaad1') return { ok: false, text: `כבר הוחלט על "${iss.title}".` }
+  // Claim it so a button and the timeout cannot both act.
+  const { data: mine } = await ctx.svc.from('issues').update({ handler: null, handler_kind: null, stage: null })
+    .eq('id', iss.id).eq('stage', 'awaiting_vaad1').select('id').maybeSingle()
+  if (!mine) return { ok: false, text: `כבר הוחלט על "${iss.title}".` }
+  const r = await executeHandling(ctx, iss.id, mode)
+  const lead = by === 'timeout' ? 'לא התקבלה החלטה בזמן, אז יצא לפי ההמלצה. ' : ''
+  await tellCommittee(ctx, iss, `שלום, כאן ועד1.\n${r.text}`, r.text.replace(/^✅ /, ''), `ועד1 החליטה: ${whatOf(iss)}`,
+    r.ok ? undefined : [['הוועד יטפל', `issue:${iss.id}:self`]])
+  if (by === 'timeout') await emailAdmins(ctx.svc, `יצא לפי ההמלצה (${SUGGEST_LABEL[mode]}): ${iss.title}`, [lead + r.text], iss.building_id)
+  return { ok: r.ok, text: `${lead}${r.text}` }
+}
+
+// ── Committee buttons ───────────────────────────────────────────────────────
+/** The committee said "ועד1 תטפל" (WhatsApp). It lands with ועד1 to decide. */
+export async function takeIssue(ctx: JobCtx, issueId: string, fromPhone: string | null): Promise<{ ok: boolean; text: string }> {
+  const { data: iss } = await ctx.svc.from('issues').select(ISSUE_COLS).eq('id', issueId).maybeSingle()
+  if (!iss) return { ok: false, text: 'התקלה לא נמצאה. אפשר להחליט באפליקציה.' }
+  if (fromPhone !== null && !(await isCommitteePhone(ctx.svc, iss.building_id, fromPhone))) return { ok: false, text: 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.' }
+  if (iss.handler || DONE.includes(iss.status)) return { ok: false, text: `כבר התקבלה החלטה על "${iss.title}". אפשר לראות באפליקציה.` }
+  const r = await askVaad1(ctx, iss, fromPhone === null ? 'no_answer' : 'committee')
+  return { ok: true, text: r.text }
+}
+
+/** Set the chosen handling going: quotes, the standing contractor, the lift, or the handyman. */
+async function executeHandling(ctx: JobCtx, issueId: string, mode: string): Promise<{ ok: boolean; text: string }> {
+  const { data: iss } = await ctx.svc.from('issues').select(ISSUE_COLS).eq('id', issueId).maybeSingle()
+  if (!iss) return { ok: false, text: 'התקלה לא נמצאה.' }
+  const title = String(iss.title)
+  const now = new Date().toISOString()
+  const urgent = isUrgent(iss.priority)
+
+  if (mode === 'quotes') {
+    const { data: b } = await ctx.svc.from('buildings').select('service_plan').eq('id', iss.building_id).maybeSingle()
+    const { data: p } = await ctx.svc.from('service_plans').select('includes_auto_quotes').eq('key', b?.service_plan || 'basic').maybeSingle()
+    if (!p?.includes_auto_quotes) {
+      // Not in the plan: back to the committee's decision, and ועד1 knows.
+      await ctx.svc.from('issues').update({ handler: null, handler_kind: null, stage: null, status: 'reported' }).eq('id', iss.id)
+      await emailAdmins(ctx.svc, `צריך ספק מוסמך, הבניין במסלול בסיס: ${title}`,
+        ['הצעות מספקים דרך ועד1 כלולות רק במסלול ליווי. הוועד עודכן ויכול לשדרג או לטפל בעצמו.'], iss.building_id)
+      return { ok: false, text: `"${title}" דורשת ספק מוסמך. הצעות מספקים דרך ועד1 כלולות במסלול ליווי — אפשר לשדרג במסך "חשבון ועד1". עד אז ההחלטה אצל הוועד.` }
+    }
+    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
+    const ids = await pickVendorsFor(ctx.svc, iss.id, ctx.toE164)
+    const r = ids.length ? await sendJobOffers(ctx, { issueId: iss.id, vendorIds: ids, kind: 'quote', sentBy: null }) : { sent: 0 }
+    const sent = Number((r as Record<string, unknown>).sent) || 0
+    await emailAdmins(ctx.svc, `ועד1 → הצעות מספקים: ${title}`,
+      [sent ? `נשלח ל-${sent} ספקים. ההצעה הזולה תגיע לוועד לאישור.` : 'לא נמצאו ספקים מאושרים עם נייד לתחום הזה — צריך לשלוח ידנית ממסך התקלות.'], iss.building_id)
+    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}". זו עבודה לספק מוסמך, אז ביקשנו הצעות מספקים. תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${urgent ? 'היום' : 'בשבוע הקרוב'}, ושום דבר לא יוזמן בלי אישורכם.` }
+  }
+
+  if (mode === 'admin') {
+    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
+    await emailAdmins(ctx.svc, `ועד1 → מעלית: ${title}`, ['להעביר לחברת המעליות של הבניין (אין לבניין ספק קבוע מוגדר לתחום).'], iss.building_id)
+    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}" ומעבירה לחברת המעליות של הבניין. נעדכן אתכם.` }
+  }
+
+  // handyman
+  const { data: bb } = await ctx.svc.from('buildings').select('card_exhausted_policy').eq('id', iss.building_id).maybeSingle()
+  if (bb?.card_exhausted_policy === 'block') {
+    const { data: bal } = await ctx.svc.from('building_punch_balance').select('balance').eq('building_id', iss.building_id).maybeSingle()
+    if ((Number(bal?.balance) || 0) < 1) {
+      await ctx.svc.from('issues').update({ handler: null, handler_kind: null, stage: null, status: 'reported' }).eq('id', iss.id)
+      return { ok: false, text: 'הכרטיסייה של הבניין נגמרה, ולכן איש האחזקה לא נשלח. אפשר לקנות כרטיסייה במסך "חשבון ועד1".' }
+    }
+  }
+  await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'handyman', stage: urgent ? 'awaiting_assignment' : 'queued_for_visit',
+    status: 'acknowledged', handled_at: now }).eq('id', iss.id)
+  await sendJobOffers(ctx, { issueId: iss.id, kind: 'handyman', sentBy: null })
+  const hour = await hourPrice(ctx, iss.building_id)
+  const cost = `שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה (או חלק ממנה) אם אין כרטיסייה` : ''}.`
+  if (isDiagnosis(iss) && !urgent) {
+    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו יבדוק קודם בביקור הבא. `
+      + `רוב התקלות האלה הוא מתקן במקום. אם צריך ספק מוסמך, נבקש הצעות ותקבלו את הזולה לאישור.\n${cost}` }
+  }
+  return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו ${urgent ? 'יגיע בהקדם' : 'יגיע בביקור הבא'}. ${cost}` }
+}
+
+// ── Scheduler pieces ────────────────────────────────────────────────────────
+/** What the opening trigger missed, emergencies nobody decided on, and ועד1's 30 minutes. */
 async function autoTakeIssues(ctx: JobCtx) {
   const now = Date.now()
   const open = `(${DONE.join(',')})`
-  const { data: urgent } = await ctx.svc.from('issues').select('id, building_id')
-    .is('handler', null).is('auto_taken_at', null).eq('priority', 'urgent').not('status', 'in', open)
-    .lte('created_at', new Date(now - URGENT_WAIT_MIN * 60000).toISOString())
-    .gte('created_at', new Date(now - 24 * 3600000).toISOString())   // an old forgotten one is not an emergency now
-    .limit(20)
-  const { data: modeB } = await ctx.svc.from('buildings').select('id, handling_mode_since').eq('handling_mode', 'vaad1')
-  const fresh: { id: string; building_id: string }[] = []
-  for (const b of modeB || []) {
-    const { data } = await ctx.svc.from('issues').select('id, building_id')
-      .eq('building_id', b.id).is('handler', null).is('auto_taken_at', null).not('status', 'in', open)
-      .gte('created_at', b.handling_mode_since || new Date(now - 86400000).toISOString())
-      .lte('created_at', new Date(now - VAAD1_MODE_WAIT_MIN * 60000).toISOString()).limit(20)
-    fresh.push(...(data || []))
-  }
-  const jobs = new Map<string, string>()
-  for (const i of fresh) jobs.set(i.id, 'vaad1_mode')
-  for (const i of urgent || []) jobs.set(i.id, 'urgent_no_answer')   // urgent wins the wording
-
   const out: Record<string, unknown>[] = []
-  for (const [id, reason] of jobs) {
-    const { data: claimed } = await ctx.svc.from('issues').update({ auto_taken_at: new Date().toISOString(), auto_taken_reason: reason })
-      .eq('id', id).is('auto_taken_at', null).is('handler', null).select('id, title, ticket_no, building_id, assigned_to').maybeSingle()
-    if (!claimed) continue
-    const r = await takeIssue(ctx, id, null)
-    const what = `${claimed.ticket_no ? `#${claimed.ticket_no} ` : ''}${claimed.title}`
-    const head = reason === 'urgent_no_answer'
-      ? `שלום, כאן ועד1.\nהתקלה הדחופה *${what}* חיכתה שעה בלי החלטה, אז ועד1 לקחה אותה.\n`
-      : 'שלום, כאן ועד1.\n'
-    await notifyCommittee(ctx, claimed, head + r.text, reason === 'urgent_no_answer' ? `דחוף נלקח אוטומטית: ${what}` : `ועד1 מטפלת: ${what}`)
-    if (reason === 'urgent_no_answer') {
-      await emailAdmins(ctx.svc, `דחוף בלי החלטת ועד שעה — ועד1 לקחה: ${claimed.title}`,
-        [`התקלה הדחופה "${claimed.title}" לא קיבלה החלטה תוך שעה.`, `מה נעשה: ${r.text}`, 'כדאי לוודא שמישהו בדרך.'], claimed.building_id)
+
+  // 1. Not routed yet (the trigger failed): route now. New ones only.
+  const { data: missed } = await ctx.svc.from('issues').select('id').is('routed_at', null).not('status', 'in', open)
+    .lte('created_at', new Date(now - ROUTE_GRACE_MIN * 60000).toISOString())
+    .gte('created_at', new Date(now - 86400000).toISOString()).limit(20)
+  for (const i of missed || []) out.push({ issueId: i.id, reason: 'route', ...(await routeNewIssue(ctx, i.id)) })
+
+  // 2. The committee did not decide: an emergency after an hour, "דחוף" after four.
+  for (const [prio, wait] of [['urgent', URGENT_WAIT_MIN], ['high', HIGH_WAIT_MIN]] as const) {
+    const { data: rows } = await ctx.svc.from('issues').select('id')
+      .is('handler', null).is('auto_taken_at', null).eq('priority', prio).not('status', 'in', open)
+      .lte('created_at', new Date(now - wait * 60000).toISOString())
+      .gte('created_at', new Date(now - 86400000).toISOString()).limit(20)   // an old forgotten one is not urgent now
+    for (const i of rows || []) {
+      const { data: claimed } = await ctx.svc.from('issues').update({ auto_taken_at: new Date().toISOString(), auto_taken_reason: `${prio}_no_answer` })
+        .eq('id', i.id).is('auto_taken_at', null).is('handler', null).select(ISSUE_COLS).maybeSingle()
+      if (!claimed) continue
+      const r = await askVaad1(ctx, claimed, 'no_answer')
+      const what = whatOf(claimed)
+      const hours = prio === 'urgent' ? 'שעה' : 'ארבע שעות'
+      await tellCommittee(ctx, claimed, `שלום, כאן ועד1.\nהתקלה ה${prio === 'urgent' ? 'דחופה (חירום)' : 'דחופה'} *${what}* חיכתה ${hours} בלי החלטה, אז ועד1 לקחה אותה.\n${r.committeeLine}`,
+        `חיכתה ${hours} בלי החלטה, ועד1 לקחה אותה.`, `דחוף נלקח אוטומטית: ${what}`)
+      out.push({ issueId: i.id, reason: `${prio}_no_answer` })
     }
-    out.push({ issueId: id, reason, ok: r.ok })
+  }
+
+  // 3. ועד1 did not decide a דחוף/חירום within 30 minutes: the suggestion goes out.
+  const { data: waiting } = await ctx.svc.from('issues').select('id, vaad1_suggestion').eq('stage', 'awaiting_vaad1')
+    .in('priority', ['urgent', 'high']).lte('vaad1_asked_at', new Date(now - VAAD1_DECIDE_MIN * 60000).toISOString()).limit(20)
+  for (const i of waiting || []) {
+    const mode = i.vaad1_suggestion === 'quotes' ? 'quotes' : 'handyman'
+    out.push({ issueId: i.id, reason: 'vaad1_timeout', ...(await vaad1Decide(ctx, i.id, mode, 'timeout')) })
   }
   return out
+}
+
+/** The resident who reported it hears on WhatsApp when it closes (once per closing). */
+async function notifyClosed(ctx: JobCtx) {
+  if (!ctx.ready) return 0
+  const { data: rows } = await ctx.svc.from('issues').select('id, title, ticket_no, status, unit_id, building_id, closed_notified_at, reopened_at, close_reason')
+    .in('status', DONE).gte('updated_at', new Date(Date.now() - 2 * 86400000).toISOString()).limit(50)
+  const due = (rows || []).filter((i) => !i.closed_notified_at || (i.reopened_at && new Date(i.reopened_at) > new Date(i.closed_notified_at)))
+  const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'resident_issue_update').maybeSingle()
+  let sent = 0
+  for (const i of due) {
+    const { data: mine } = await ctx.svc.from('issues').update({ closed_notified_at: new Date().toISOString() })
+      .eq('id', i.id).eq('status', i.status).select('id').maybeSingle()
+    if (!mine || !i.unit_id || t?.meta_status !== 'APPROVED') continue
+    const { data: residents } = await ctx.svc.from('unit_residents').select('last_name, phone, is_primary').eq('unit_id', i.unit_id).eq('archived', false)
+    const r = (residents || []).find((x) => x.is_primary && x.phone) || (residents || []).find((x) => x.phone)
+    const to = ctx.toE164(String(r?.phone || ''))
+    if (!to || !/^9725\d{8}$/.test(to)) continue
+    const news = i.status === 'rejected'
+      ? `הפנייה נסגרה ללא טיפול${i.close_reason ? `: ${i.close_reason}` : ''}. לשאלות אפשר לפנות לוועד הבית. ועד1`
+      : 'הפנייה טופלה ונסגרה. אם התקלה חזרה, אפשר לפתוח אותה מחדש באפליקציה. ועד1'
+    const vars = [r?.last_name ? `משפחת ${r.last_name}` : 'דייר/ת', String(i.ticket_no || '—'), String(i.title || ''), news].map(ctx.cleanParam)
+    const s = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
+      components: [{ type: 'body', parameters: vars.map((x) => ({ type: 'text', text: x })) }] } })
+    if (s.ok) sent++
+    await ctx.log({ recipient: to, audience: 'resident', building_id: i.building_id, template_key: 'resident_issue_update',
+      subject: `הפנייה נסגרה: ${String(i.title).slice(0, 120)}`, body: ctx.render(t.body, vars),
+      status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
+  }
+  return sent
+}
+
+/** An issue the committee took on (or passed to its contractor), open a week: "טופל?" */
+async function remindCommittee(ctx: JobCtx) {
+  const cutoff = new Date(Date.now() - REMIND_DAYS * 86400000).toISOString()
+  const { data: rows } = await ctx.svc.from('issues').select(ISSUE_COLS + ', handled_at, committee_reminded_at')
+    .or('handler.eq.committee,handler_kind.eq.contractor').not('status', 'in', `(${DONE.join(',')})`)
+    .lte('handled_at', cutoff).or(`committee_reminded_at.is.null,committee_reminded_at.lte.${cutoff}`).limit(30)
+  let sent = 0
+  for (const i of rows || []) {
+    const { data: mine } = await ctx.svc.from('issues').update({ committee_reminded_at: new Date().toISOString() })
+      .eq('id', i.id).select('id').maybeSingle()
+    if (!mine) continue
+    const days = Math.floor((Date.now() - new Date(i.handled_at).getTime()) / 86400000)
+    const who = i.handler_kind === 'contractor' && i.vendor_name ? ` (אצל ${i.vendor_name})` : ''
+    sent += await tellCommittee(ctx, i, `שלום, כאן ועד1.\nהפנייה *${whatOf(i)}*${who} פתוחה ${days} ימים. טופלה?`,
+      `פתוחה ${days} ימים${who}. טופלה? אפשר לסמן באפליקציה.`, `תזכורת לוועד: ${whatOf(i)}`,
+      [['טופל', `cr:${i.id}:done`], ['עדיין בטיפול', `cr:${i.id}:open`]])
+  }
+  return sent
+}
+
+/** The 7-day reminder's buttons. */
+export async function handleReminderButton(ctx: JobCtx, from: string, payload: string) {
+  const [, issueId, action] = payload.split(':')
+  let text = ''
+  if (action === 'done') {
+    const { data: res } = await ctx.svc.rpc('close_issue_by_phone', { p_issue: issueId, p_phone: from })
+    text = res === 'ok' ? '✅ נרשם שהפנייה טופלה ונסגרה. הדייר שדיווח יקבל עדכון.'
+      : res === 'already_closed' ? 'הפנייה כבר סגורה.' : res === 'forbidden' ? 'רק חברי ועד הבניין יכולים לסגור פנייה.' : 'לא הצלחנו לסגור. אפשר לסגור באפליקציה.'
+  } else {
+    text = 'רשמנו. נזכיר שוב בעוד שבוע.'
+  }
+  if (!ctx.ready) return
+  const s = await ctx.send({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: text } })
+  await ctx.log({ recipient: from, audience: 'resident', subject: 'תזכורת לוועד — תשובה', body: text,
+    status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
+}
+
+/** The admin's WhatsApp buttons on a "החלטה נדרשת". */
+export async function handleVaad1Button(ctx: JobCtx, from: string, payload: string) {
+  const [, issueId, mode] = payload.split(':')
+  const admins = await adminPhones(ctx)
+  const me = ctx.toE164(from)
+  const r = me && admins.includes(me) && (mode === 'handyman' || mode === 'quotes')
+    ? await vaad1Decide(ctx, issueId, mode, 'admin')
+    : { ok: false, text: 'ההחלטה הזאת שמורה לוועד1.' }
+  if (!ctx.ready) return
+  const s = await ctx.send({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: r.text } })
+  await ctx.log({ recipient: from, audience: 'resident', subject: 'החלטת ועד1', body: r.text,
+    status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
 }
 
 // ── "ועד1 תטפל": decide who handles it and set it going ─────────────────────
@@ -830,74 +1180,6 @@ export async function pickVendorsFor(svc: SupabaseClient, issueId: string, toE16
   const usable = (vendors || []).filter((v) => /^9725\d{8}$/.test(toE164(String(v.phone || '')) || ''))
   // deno-lint-ignore no-explicit-any
   return (rankVendorsForIssue(iss, usable, { building: b }) as any[]).slice(0, 3).map((r) => r.vendor.id as string)
-}
-
-/**
- * The committee said "ועד1 תטפל" (WhatsApp). ועד1 decides, like a management
- * company's manager: the building's regular contractor, the handyman, or
- * quotes from vendors. Returns the Hebrew line for the committee.
- */
-export async function takeIssue(ctx: JobCtx, issueId: string, fromPhone: string | null): Promise<{ ok: boolean; text: string }> {
-  const { data: iss } = await ctx.svc.from('issues')
-    .select('id, title, category, priority, status, handler, building_id, ticket_no').eq('id', issueId).maybeSingle()
-  if (!iss) return { ok: false, text: 'התקלה לא נמצאה. אפשר להחליט באפליקציה.' }
-  // fromPhone null = the scheduler (building in "ועד1 מטפל", or an urgent issue nobody took).
-  if (fromPhone !== null && !(await isCommitteePhone(ctx.svc, iss.building_id, fromPhone))) return { ok: false, text: 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.' }
-  if (iss.handler || DONE.includes(iss.status)) return { ok: false, text: `כבר התקבלה החלטה על "${iss.title}". אפשר לראות באפליקציה.` }
-  const title = String(iss.title)
-  const now = new Date().toISOString()
-  const urgent = iss.priority === 'urgent'
-
-  // 1. A regular contractor for this category (the lift company, the cleaner).
-  const { data: rule } = iss.category ? await ctx.svc.from('issue_routing_rules').select('vendor_name, send_to_vendor')
-    .eq('building_id', iss.building_id).eq('category', iss.category).eq('active', true).maybeSingle() : { data: null }
-  let mode = rule?.send_to_vendor && rule.vendor_name ? 'contractor' : decideHandling(iss)
-
-  if (mode === 'quotes') {
-    const { data: b } = await ctx.svc.from('buildings').select('service_plan').eq('id', iss.building_id).maybeSingle()
-    const { data: p } = await ctx.svc.from('service_plans').select('includes_auto_quotes').eq('key', b?.service_plan || 'basic').maybeSingle()
-    if (!p?.includes_auto_quotes) {
-      await ctx.svc.from('issues').update({ handler: 'committee', handler_kind: 'vendor', stage: null, status: 'in_progress', handled_at: now }).eq('id', iss.id)
-      return { ok: true, text: `"${title}" דורשת ספק מוסמך. במסלול שלכם פונים לספק בעצמכם — באפליקציה יש ספקים מאושרים מהמאגר לתחום הזה.` }
-    }
-    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
-    const ids = await pickVendorsFor(ctx.svc, iss.id, ctx.toE164)
-    const r = ids.length ? await sendJobOffers(ctx, { issueId: iss.id, vendorIds: ids, kind: 'quote', sentBy: null }) : { sent: 0 }
-    const sent = Number((r as Record<string, unknown>).sent) || 0
-    await emailAdmins(ctx.svc, `ועד1 תטפל → הצעות מספקים: ${title}`,
-      [sent ? `נשלח ל-${sent} ספקים. ההצעה הזולה תגיע לוועד לאישור.` : 'לא נמצאו ספקים מאושרים עם נייד לתחום הזה — צריך לשלוח ידנית ממסך התקלות.'], iss.building_id)
-    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}". זו עבודה לספק מוסמך, אז ביקשנו הצעות מספקים. תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${urgent ? 'היום' : 'בשבוע הקרוב'}, ושום דבר לא יוזמן בלי אישורכם.` }
-  }
-
-  if (mode === 'contractor') {
-    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', vendor_name: rule!.vendor_name, handled_at: now }).eq('id', iss.id)
-    await emailAdmins(ctx.svc, `ועד1 תטפל → הספק הקבוע: ${title}`, [`להעביר ל${rule!.vendor_name}, הספק הקבוע של הבניין לתחום הזה.`], iss.building_id)
-    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}" ומעבירה ל${rule!.vendor_name}, הספק הקבוע של הבניין. ללא חיוב מאיתנו.` }
-  }
-
-  if (mode === 'admin') {
-    await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
-    await emailAdmins(ctx.svc, `ועד1 תטפל → מעלית: ${title}`, ['להעביר לחברת המעליות של הבניין (אין לבניין ספק קבוע מוגדר לתחום).'], iss.building_id)
-    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}" ומעבירה לחברת המעליות של הבניין. נעדכן אתכם.` }
-  }
-
-  // handyman
-  const { data: bb } = await ctx.svc.from('buildings').select('card_exhausted_policy').eq('id', iss.building_id).maybeSingle()
-  if (bb?.card_exhausted_policy === 'block') {
-    const { data: bal } = await ctx.svc.from('building_punch_balance').select('balance').eq('building_id', iss.building_id).maybeSingle()
-    const balance = Number(bal?.balance) || 0
-    if (balance < 1) return { ok: false, text: 'הכרטיסייה של הבניין נגמרה, ולכן איש האחזקה לא נשלח. אפשר לקנות כרטיסייה במסך "חשבון ועד1".' }
-  }
-  await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'handyman', stage: urgent ? 'awaiting_assignment' : 'queued_for_visit',
-    status: 'acknowledged', handled_at: now }).eq('id', iss.id)
-  await sendJobOffers(ctx, { issueId: iss.id, kind: 'handyman', sentBy: null })
-  const hour = await hourPrice(ctx, iss.building_id)
-  const cost = `שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה אם אין כרטיסייה` : ''}.`
-  if (isDiagnosis(iss)) {
-    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו יבדוק קודם (עד שעה) ${urgent ? 'בהקדם' : 'בביקור הבא'}. `
-      + `רוב התקלות האלה הוא מתקן במקום. אם צריך ספק מוסמך, נבקש הצעות ותקבלו את הזולה לאישור.\n${cost}` }
-  }
-  return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו ${urgent ? 'יגיע בהקדם' : 'יגיע בביקור הבא'}. ${cost}` }
 }
 
 // ── A vendor's question before pricing ──────────────────────────────────────

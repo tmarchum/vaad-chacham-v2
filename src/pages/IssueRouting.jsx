@@ -10,6 +10,7 @@ import { StatCard } from '@/components/common/StatCard'
 import { FormField, FormSelect } from '@/components/common/FormField'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+import { ROUTES } from '@/lib/handling'
 import { GitBranch, Plus, Pencil, Trash2, Power, Mail, UserCheck, Wrench, Info, Zap, LayoutGrid } from 'lucide-react'
 
 const CATEGORY_OPTIONS = ISSUE_CATEGORIES.map((c) => ({ value: c, label: c }))
@@ -22,8 +23,13 @@ const EMPTY_FORM = {
   notify_email: '',
   auto_acknowledge: false,
   send_to_vendor: false,
+  route: 'committee',
   active: true,
 }
+
+const ROUTE_OPTIONS = ROUTES.map((r) => ({ value: r.key, label: r.label }))
+const routeOf = (r) => r.route || (r.send_to_vendor && r.vendor_name ? 'vendor' : 'committee')
+const ROUTE_LABEL = Object.fromEntries(ROUTES.map((r) => [r.key, r.label]))
 
 const ICON_BTN = 'p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--surface-secondary)]'
 const Dash = () => <span className="text-[var(--text-muted)]">—</span>
@@ -125,6 +131,7 @@ function IssueRouting() {
       notify_email: r.notify_email || '',
       auto_acknowledge: !!r.auto_acknowledge,
       send_to_vendor: !!r.send_to_vendor,
+      route: routeOf(r),
       active: r.active !== false,
     })
     setEditingId(r.id); setError(''); setFormOpen(true)
@@ -134,7 +141,8 @@ function IssueRouting() {
   const save = async () => {
     if (!form.category) return setError('יש לבחור קטגוריה')
     if (usedCategories.has(form.category)) return setError('כבר קיים כלל לקטגוריה הזו — ערכו אותו במקום')
-    if (!form.assigned_to && !form.vendor_name && !form.notify_email) {
+    if (form.route === 'vendor' && !form.vendor_name) return setError('ניתוב לספק קבוע דורש לבחור ספק')
+    if (form.route === 'committee' && !form.assigned_to && !form.vendor_name && !form.notify_email) {
       return setError('כלל צריך לפחות פעולה אחת: מלווה, ספק או מייל לעדכון')
     }
     if (form.notify_email && !EMAIL_RE.test(form.notify_email.trim())) {
@@ -147,7 +155,8 @@ function IssueRouting() {
       vendor_name: form.vendor_name.trim() || null,
       notify_email: form.notify_email.trim() || null,
       auto_acknowledge: !!form.auto_acknowledge,
-      send_to_vendor: !!form.send_to_vendor && !!form.vendor_name,
+      send_to_vendor: form.route === 'vendor' && !!form.vendor_name,
+      route: form.route,
       active: !!form.active,
     }
     const res = editingId ? await update(editingId, payload) : await create(payload)
@@ -204,7 +213,8 @@ function IssueRouting() {
       <div className="flex items-start gap-3 p-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)]">
         <span className="p-1.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] text-[var(--primary)] shrink-0"><Info className="h-4 w-4" /></span>
         <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-          כשדייר (או הוועד) פותח פנייה בקטגוריה שמוגדר לה כלל, המערכת מבצעת אוטומטית, כבר ברגע הפתיחה:
+          לכל קטגוריה בוחרים מי מטפל בפנייה חדשה: <b className="text-[var(--text-primary)]">הוועד מחליט</b> (כפתורים בוואטסאפ: ועד1 תטפל / הוועד יטפל), <b className="text-[var(--text-primary)]">ועד1 מטפלת</b> (ועד1 מחליטה על איש אחזקה או ספק והוועד מעודכן), או <b className="text-[var(--text-primary)]">ספק קבוע</b> (נשלח אליו מיד, והוועד וועד1 מעודכנים).
+          <br />בנוסף, כבר ברגע הפתיחה המערכת:
           משייכת <b className="text-[var(--text-primary)]">מלווה אחראי</b>, קובעת <b className="text-[var(--text-primary)]">ספק מועדף</b>, שולחת <b className="text-[var(--text-primary)]">עדכון במייל</b> לגורם המטפל —
           ואם מסומן, מעבירה את הפנייה ישירות לסטטוס «התקבלה» (דילוג על שלב האישור הידני).
           <br />הניתוב נאכף בצד השרת, כך שהוא חל על כל פנייה — מהפורטל, מהאפליקציה או מהמערכת.
@@ -239,7 +249,7 @@ function IssueRouting() {
             <div className="overflow-x-auto">
               <table className="ds-table">
                 <thead>
-                  <tr><th>קטגוריה</th><th>מלווה אחראי</th><th>ספק מועדף</th><th>עדכון במייל</th><th>אישור</th><th>סטטוס</th><th></th></tr>
+                  <tr><th>קטגוריה</th><th>פנייה חדשה</th><th>מלווה אחראי</th><th>ספק מועדף</th><th>עדכון במייל</th><th>אישור</th><th>סטטוס</th><th></th></tr>
                 </thead>
                 <tbody>
                   {visible.map((r) => (
@@ -250,6 +260,7 @@ function IssueRouting() {
                           <span className="text-[13px] font-semibold">{r.category}</span>
                         </div>
                       </td>
+                      <td className="whitespace-nowrap text-[12px] font-semibold">{ROUTE_LABEL[routeOf(r)]}</td>
                       <td className="whitespace-nowrap text-[12px]">
                         {r.assigned_to ? <span className="inline-flex items-center gap-1"><UserCheck className="h-3.5 w-3.5 text-[var(--text-muted)]" />{memberNameById[r.assigned_to] || 'חבר ועד'}</span> : <Dash />}
                       </td>
@@ -287,6 +298,7 @@ function IssueRouting() {
                   </div>
                 </div>
                 <div className="text-[12px] text-[var(--text-secondary)] flex items-center gap-3 flex-wrap">
+                  <span className="font-semibold text-[var(--text-primary)]">{ROUTE_LABEL[routeOf(r)]}</span>
                   {r.assigned_to && <span className="inline-flex items-center gap-1"><UserCheck className="h-3 w-3" />{memberNameById[r.assigned_to] || 'חבר ועד'}</span>}
                   {r.vendor_name && <span className="inline-flex items-center gap-1"><Wrench className="h-3 w-3" />{r.vendor_name}</span>}
                   {r.notify_email && <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{r.notify_email}</span>}
@@ -339,16 +351,13 @@ function IssueRouting() {
               />
               אישור אוטומטי — הפנייה תעבור ישירות לסטטוס «התקבלה»
             </label>
-            <label className={`flex items-center gap-2 text-sm cursor-pointer ${form.vendor_name ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)] opacity-60'}`}>
-              <input
-                type="checkbox"
-                disabled={!form.vendor_name}
-                checked={!!form.send_to_vendor && !!form.vendor_name}
-                onChange={(e) => setForm((f) => ({ ...f, send_to_vendor: e.target.checked }))}
-                className="h-4 w-4 rounded border-[var(--outline-variant)] accent-[var(--primary)]"
-              />
-              ספק קבוע — כשהוועד מאשר, התקלה נשלחת אליו אוטומטית בערוץ הקשר שלו — מייל, וואטסאפ או טלפון (ללא ניקוב)
-            </label>
+            <FormSelect
+              label="פנייה חדשה בקטגוריה — מי מטפל?"
+              value={form.route}
+              onChange={setField('route')}
+              options={ROUTE_OPTIONS}
+            />
+            <p className="text-xs text-[var(--text-muted)] -mt-2">{ROUTES.find((r) => r.key === form.route)?.hint}</p>
             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
               <input
                 type="checkbox"

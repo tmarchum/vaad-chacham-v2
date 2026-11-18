@@ -533,6 +533,52 @@ const IssueRow = React.memo(function IssueRow({ iss, unit, onOpen, onAction, svc
 // Component
 // ---------------------------------------------------------------------------
 
+// ועד1's queue: issues waiting for ועד1 to choose handyman or vendor quotes
+// (the committee said "ועד1 תטפל", the category routes to ועד1, or an
+// emergency nobody answered). Admin only; the same choice as the WhatsApp buttons.
+const SUGGEST_HE = { handyman: 'איש האחזקה', quotes: 'הצעות מספקים' }
+function Vaad1Decisions() {
+  const [rows, setRows] = useState([])
+  const [busy, setBusy] = useState('')
+  const load = useCallback(() => {
+    supabase.from('issues').select('id, title, ticket_no, priority, category, vaad1_suggestion, vaad1_asked_at, buildings(name)')
+      .eq('stage', 'awaiting_vaad1').order('vaad1_asked_at')
+      .then(({ data }) => setRows(data || []), () => {})
+  }, [])
+  useEffect(() => { load() }, [load])
+  const decide = async (id, mode) => {
+    setBusy(id + mode)
+    const { data, error } = await supabase.functions.invoke('whatsapp', { body: { action: 'vaad1-decide', issueId: id, mode } })
+    setBusy('')
+    if (error || !data?.ok) toastError(data?.text || 'הפעולה נכשלה')
+    else toast(mode === 'quotes' ? 'נשלח לספקים להצעות' : 'נשלח לאיש האחזקה')
+    load()
+  }
+  if (!rows.length) return null
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--warning,#d97706)] bg-[var(--surface)] p-4 space-y-3">
+      <p className="text-[14px] font-bold">ממתינות להחלטת ועד1 ({rows.length})</p>
+      {rows.map((r) => (
+        <div key={r.id} className="flex flex-col sm:flex-row sm:items-center gap-2 justify-between border-t border-[var(--border-light)] pt-2">
+          <div className="min-w-0 text-[13px]">
+            <p className="font-semibold truncate">
+              {r.priority === 'urgent' ? '🚨 ' : r.priority === 'high' ? '⚠️ ' : ''}{r.ticket_no ? `#${r.ticket_no} ` : ''}{r.title}
+            </p>
+            <p className="text-[12px] text-[var(--text-secondary)]">
+              {r.buildings?.name || ''}{r.category ? ` · ${r.category}` : ''} · המלצה: {SUGGEST_HE[r.vaad1_suggestion] || '—'}
+              {['urgent', 'high'].includes(r.priority) ? ' · יוצא לפי ההמלצה אחרי 30 דקות' : ''}
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant={r.vaad1_suggestion === 'handyman' ? 'default' : 'outline'} disabled={!!busy} onClick={() => decide(r.id, 'handyman')}>איש אחזקה</Button>
+            <Button size="sm" variant={r.vaad1_suggestion === 'quotes' ? 'default' : 'outline'} disabled={!!busy} onClick={() => decide(r.id, 'quotes')}>הצעות מספקים</Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Issues() {
   const { buildings, selectedBuilding } = useBuildingContext()
   // Building-scoped SERVER-SIDE (vendors/supervisors stay global); unselected building yields [].
@@ -1856,6 +1902,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           <Button onClick={openCreate}><Plus className="h-4 w-4" />תקלה חדשה</Button>
         </div>
       </div>
+
+      {isAdmin && <Vaad1Decisions />}
 
       {upgradeHint?.show && (
         <div className="rounded-[var(--radius)] border border-[var(--primary)] bg-[var(--surface-hover)] p-4 text-[13px] flex flex-col sm:flex-row sm:items-center gap-3 justify-between">

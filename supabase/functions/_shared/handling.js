@@ -25,9 +25,15 @@ const VENDOR_CATEGORIES = ['חשמל ותאורה', 'בטיחות וביטחון
 // Urgent ones skip the visit and go straight to quotes (done the same day).
 export const DIAGNOSIS_CATEGORIES = ['אינסטלציה ומים', 'שערים, דלתות וחניה']
 
+// "דחוף" (high — the resident's own choice) and an emergency from the closed
+// list (urgent) both shorten every timeline: quotes 3h, work today, the
+// handyman now, no look-first visit. Only an emergency also escalates when
+// the committee does not answer within an hour.
+export const isUrgent = (priority) => priority === 'urgent' || priority === 'high'
+
 export function decideHandling(issue) {
   const title = String(issue?.title || '')
-  const urgent = issue?.priority === 'urgent'
+  const urgent = isUrgent(issue?.priority)
   if (issue?.category === 'מעלית' || /מעלית/.test(title)) return 'admin'
   if (LICENSED_WORDS.test(title)) return 'quotes'
   if (HANDYMAN_WORDS.test(title)) return 'handyman'
@@ -51,6 +57,21 @@ export const EMERGENCIES = [
   { key: 'electric_danger', label: 'סכנת חשמל (ניצוצות, חוט חשוף, עשן מלוח)', category: 'חשמל ותאורה' },
   { key: 'power_out', label: 'אין חשמל בכל הבניין', category: 'חשמל ותאורה' },
 ]
+
+// How a category's new issues are routed in a building (issue_routing_rules.route).
+export const ROUTES = [
+  { key: 'committee', label: 'הוועד מחליט', hint: 'הוועד מקבל כפתורים: ועד1 תטפל / הוועד יטפל' },
+  { key: 'vaad1', label: 'ועד1 מטפלת', hint: 'ועד1 מחליטה: איש אחזקה או הצעות מספקים. הוועד מקבל עדכון' },
+  { key: 'vendor', label: 'ספק קבוע — ישר אליו', hint: 'נשלח מיד לספק הקבוע. הוועד וועד1 מקבלים עדכון' },
+]
+
+/** The route a new issue takes: a standing contractor, ועד1, or the committee. */
+export function routeFor(rule, building) {
+  if (rule?.active !== false && rule?.route === 'vendor' && rule?.vendor_name) return 'vendor'
+  if (rule?.active !== false && rule?.route === 'vaad1') return 'vaad1'
+  if (building?.handling_mode === 'vaad1') return 'vaad1'
+  return 'committee'
+}
 
 export const HANDLING_LABELS = {
   contractor: 'הספק הקבוע של הבניין',

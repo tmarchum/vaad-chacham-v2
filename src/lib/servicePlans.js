@@ -15,6 +15,7 @@ export const STAGE_LABELS = {
   awaiting_quote_approval: 'ממתין לאישור הצעת מחיר',
   scheduled: 'תואם מועד',
   done_awaiting_confirmation: 'בוצע, ממתין לאישור',
+  awaiting_vaad1: 'ועד1 מחליטה: איש אחזקה או ספק',
 }
 
 export const HANDLER_LABELS = { committee: 'הוועד', management: 'ועד1' }

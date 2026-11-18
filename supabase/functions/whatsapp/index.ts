@@ -33,7 +33,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
 import {
   awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleCommitteeAnswer, handleOfferButton, handleOfferText, takeIssue,
-  pickBest, sendJobOffers, sweepQuotes, type JobCtx,
+  pickBest, sendJobOffers, sweepQuotes, routeNewIssue, vaad1Decide, handleVaad1Button, handleReminderButton, type JobCtx,
 } from './jobs.ts'
 
 const PROVIDER = 'whatsapp_cloud'
@@ -368,6 +368,16 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
     return
   }
 
+  // ועד1's decision: "v1:<issueId>:handyman|quotes". The 7-day reminder: "cr:<issueId>:done|open".
+  if (payload.startsWith('v1:')) {
+    await handleVaad1Button(jobCtx(svc, integ, token), from, payload)
+    return
+  }
+  if (payload.startsWith('cr:')) {
+    await handleReminderButton(jobCtx(svc, integ, token), from, payload)
+    return
+  }
+
   // Committee on the recommended quote: "bq:<quoteId>:take|coord|no".
   if (payload.startsWith('bq:')) {
     await handleBestQuoteButton(jobCtx(svc, integ, token), from, payload)
@@ -583,6 +593,16 @@ Deno.serve(async (req: Request) => {
       if (!sweepSecret || !timingSafeEqual(req.headers.get('x-sweep-secret') || '', sweepSecret)) return json({ error: 'unauthorized' }, 401)
       const { integ: si, sec: ss } = await loadConfig(svc)
       return json(await sweepQuotes(jobCtx(svc, si, ss?.api_token || null)))
+    }
+
+    // ── A new issue (DB trigger trg_route_issue): route it by its category.
+    // The internal secret the analyze-issue trigger uses; nothing else. ──
+    if (body.action === 'issue-route') {
+      const provided = (req.headers.get('x-internal-secret') || '').trim()
+      const { data: isec } = await svc.from('messaging_secrets').select('api_token').eq('provider', 'edge-internal').maybeSingle()
+      if (!provided || !isec?.api_token || !timingSafeEqual(provided, isec.api_token)) return json({ error: 'unauthorized' }, 401)
+      const { integ: ri, sec: rs } = await loadConfig(svc)
+      return json(await routeNewIssue(jobCtx(svc, ri, rs?.api_token || null), String(body.issueId || '')))
     }
 
     // ── App actions: signed-in admin / committee only ─────────────────────
@@ -825,6 +845,14 @@ Deno.serve(async (req: Request) => {
         }
       }
       return json({ ok: true, issues: issues.length, sent, skipped, failed, template: tpl?.meta_status || null })
+    }
+
+    // ── ועד1 decides an issue waiting for it (admin, from the app) ──────────
+    if (action === 'vaad1-decide') {
+      if (!isAdmin) return json({ error: 'forbidden' }, 403)
+      const mode = body.mode === 'quotes' ? 'quotes' : body.mode === 'handyman' ? 'handyman' : null
+      if (!mode) return json({ ok: false, error: 'bad_mode' }, 400)
+      return json(await vaad1Decide(jobCtx(svc, integ, token), String(body.issueId || ''), mode, 'admin'))
     }
 
     // ── Job offers: vendors for a quote, or ועד1's handyman ─────────────────

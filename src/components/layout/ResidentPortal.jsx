@@ -968,11 +968,15 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
               value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
               className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
-              <option value="low">דחיפות נמוכה</option>
-              <option value="medium">דחיפות רגילה</option>
+              <option value="medium">רגיל</option>
               <option value="high">דחוף</option>
             </select>
           </div>
+          {form.priority === 'high' && !emergency && (
+            <p className="text-xs text-slate-600 -mt-1">
+              דחוף מקצר את לוחות הזמנים: הצעות מספקים תוך 3 שעות, ביצוע היום, איש האחזקה בהקדם. הוועד יכול לשנות את הדחיפות.
+            </p>
+          )}
           {/* Emergency — a closed list, so "urgent" means the same thing in
               every building. With a standing contractor for the category it
               goes straight to them; otherwise the committee is alerted now and

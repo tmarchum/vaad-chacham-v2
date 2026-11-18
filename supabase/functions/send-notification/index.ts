@@ -317,7 +317,7 @@ function issueOpenedHtml(
 async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, issueId: string) {
   const { data: issue } = await svc
     .from('issues')
-    .select('id, building_id, unit_id, title, description, category, priority, vendor_id, vendor_name, assigned_to, reported_by, ticket_no, scheduled_date, photo_url, brief_token')
+    .select('id, building_id, unit_id, title, description, category, priority, vendor_id, vendor_name, assigned_to, reported_by, ticket_no, scheduled_date, photo_url, brief_token, route')
     .eq('id', issueId)
     .maybeSingle()
   if (!issue) return null
@@ -342,6 +342,9 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
   }
 
   const parties: Party[] = []
+  // A routed issue (migration 072): the WhatsApp server tells the committee and
+  // the standing contractor itself, so this fan-out is the reporter's only.
+  const serverRouted = !!issue.route
   const ticket = String(issue.ticket_no || '').trim() || '—'
 
   // An emergency is the one issue a resident can send straight to the
@@ -392,7 +395,7 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
     if (m) {
       memberName = fullName(m) || 'חבר ועד'
       memberPhone = m.phone || ''
-      parties.push({
+      if (!serverRouted) parties.push({
         id: 'committee', role: 'חבר ועד אחראי',
         name: memberName, phone: m.phone || '', email: m.email || '',
         audience: 'resident', templateKey: 'committee_issue_opened',
@@ -403,7 +406,7 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
     }
   }
   // A standing address for the category (e.g. the management company) — email only.
-  if (rule?.notify_email) {
+  if (rule?.notify_email && !serverRouted) {
     parties.push({
       id: 'routing_email', role: 'כתובת עדכון לקטגוריה',
       name: String(rule.notify_email), phone: '', email: String(rule.notify_email),
@@ -428,7 +431,7 @@ async function buildIssueOpenedParties(svc: ReturnType<typeof serviceClient>, is
     if (!hErr && h?.handler === 'management' && h?.handler_kind === 'handyman') handledByVaad1 = true
   }
   let vendor: Record<string, unknown> | null = null
-  if (awaitingDecision) {
+  if (awaitingDecision || issue.route === 'vendor') {
     // no contractor yet
   } else if (handledByVaad1) {
     // Handed to ועד1's own handling: dispatch to ועד1's handyman.
