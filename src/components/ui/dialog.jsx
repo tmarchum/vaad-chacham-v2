@@ -25,7 +25,7 @@ function Dialog({ open, onOpenChange, children }) {
   if (!open) return null
 
   return createPortal(
-    <div dir="rtl" className="fixed inset-0 z-50 flex items-center justify-center">
+    <div dir="rtl" className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-[#0b1c30]/40 premium-dialog-overlay transition-opacity"
@@ -41,8 +41,10 @@ const DialogContent = forwardRef(({ className, children, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      'relative z-50 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-xl)]',
-      'mx-4 animate-fade-in-up',
+      // Width comes from the overlay's padding, not margins: w-full + mx-4 was
+      // 32px wider than a phone screen and let every dialog pan sideways.
+      'relative z-50 w-full min-w-0 max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[var(--shadow-xl)]',
+      'animate-fade-in-up',
       className
     )}
     {...props}

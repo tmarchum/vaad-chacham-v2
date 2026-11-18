@@ -2683,7 +2683,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 )}
                 <div className="space-y-2 max-h-48 overflow-y-auto border border-[var(--border)] rounded-lg p-2">
                   {quoteVendors.list.map((v) => (
-                    <label key={v.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-[var(--surface-hover)] p-1 rounded">
+                    <label key={v.id} className="flex items-start gap-2 text-sm cursor-pointer hover:bg-[var(--surface-hover)] p-1 rounded min-w-0 break-words [overflow-wrap:anywhere]">
                       <input
                         type="checkbox"
                         checked={quoteSelectedVendors.includes(v.name)}
@@ -2694,9 +2694,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                             setQuoteSelectedVendors((prev) => prev.filter((n) => n !== v.name))
                           }
                         }}
-                        className="rounded"
+                        className="rounded mt-1 shrink-0"
                       />
-                      <span className="text-[var(--text-primary)]">{v.name}</span>
+                      <span className="text-[var(--text-primary)] min-w-0">{v.name}</span>
                       {v.category && <span className="text-xs text-[var(--text-muted)]">({v.category})</span>}
                       {v.membership_status !== 'agreed' && (
                         <span className="text-[10px] text-[var(--text-muted)]">· טרם אישר הצטרפות</span>
@@ -2713,7 +2713,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 value={quoteDescription}
                 onChange={(e) => setQuoteDescription(e.target.value)}
               />
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 <Button onClick={() => handleSendQuoteRequests(true)} disabled={quoteSelectedVendors.length === 0}>
                   <Send className="h-4 w-4" />
                   רשום ושלח ({quoteSelectedVendors.length})
