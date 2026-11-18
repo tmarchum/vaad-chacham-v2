@@ -13,16 +13,44 @@
 // Words in the title that make it a handyman job whatever the category.
 const HANDYMAN_WORDS = /נורה|נורות|מנורה|ציר|צירים|ידית|מחזיר שמן|בורג|מדף|שלט|ברז|ניאגרה|סיפון|צבע|כתם|מנעול|צילינדר|תיבת דואר|ספסל|עציץ|מראה|וו |תלייה/
 
+// Licensed trades: always a certified vendor, whatever else the title says.
+const LICENSED_WORDS = /גז|כיבוי|מטפה|ספרינקלר|גלאי עשן|לוח חשמל|הארקה|מאגר מים|משאבת|גנרטור/
+
 // Categories that need a licensed vendor unless the title says otherwise.
-const VENDOR_CATEGORIES = ['חשמל ותאורה', 'אינסטלציה ומים', 'שערים, דלתות וחניה', 'בטיחות וביטחון']
+const VENDOR_CATEGORIES = ['חשמל ותאורה', 'בטיחות וביטחון']
+
+// Categories where the handyman looks first (up to an hour, on the building):
+// most "plumbing" and "gate" calls are a tap or a hinge, and three plumbers
+// should not be sent to a drip. If he finds it needs a vendor, quotes follow.
+// Urgent ones skip the visit and go straight to quotes (done the same day).
+export const DIAGNOSIS_CATEGORIES = ['אינסטלציה ומים', 'שערים, דלתות וחניה']
 
 export function decideHandling(issue) {
   const title = String(issue?.title || '')
+  const urgent = issue?.priority === 'urgent'
   if (issue?.category === 'מעלית' || /מעלית/.test(title)) return 'admin'
+  if (LICENSED_WORDS.test(title)) return 'quotes'
   if (HANDYMAN_WORDS.test(title)) return 'handyman'
+  if (DIAGNOSIS_CATEGORIES.includes(issue?.category)) return urgent ? 'quotes' : 'handyman'
   if (VENDOR_CATEGORIES.includes(issue?.category)) return 'quotes'
   return 'handyman'
 }
+
+/** A handyman job that is really a look-first visit (plumbing, gates). */
+export function isDiagnosis(issue) {
+  const title = String(issue?.title || '')
+  return DIAGNOSIS_CATEGORIES.includes(issue?.category) && !HANDYMAN_WORDS.test(title) && !LICENSED_WORDS.test(title)
+}
+
+// The closed list a resident picks from for a real emergency. Anything else is
+// "דחוף" at most and waits for the committee like every other issue.
+export const EMERGENCIES = [
+  { key: 'lift_trapped', label: 'אדם תקוע במעלית', category: 'מעלית' },
+  { key: 'flood', label: 'הצפה / פיצוץ צנרת', category: 'אינסטלציה ומים' },
+  { key: 'gas', label: 'ריח גז', category: 'בטיחות וביטחון' },
+  { key: 'electric_danger', label: 'סכנת חשמל (ניצוצות, חוט חשוף, עשן מלוח)', category: 'חשמל ותאורה' },
+  { key: 'power_out', label: 'אין חשמל בכל הבניין', category: 'חשמל ותאורה' },
+]
 
 export const HANDLING_LABELS = {
   contractor: 'הספק הקבוע של הבניין',

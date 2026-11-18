@@ -23,7 +23,7 @@
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { rankVendorsForIssue } from '../_shared/vendorMatch.js'
-import { decideHandling } from '../_shared/handling.js'
+import { decideHandling, isDiagnosis } from '../_shared/handling.js'
 
 const APP = 'https://app.vaad1.co.il'
 const OPEN_STAGES = ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date']
@@ -608,6 +608,19 @@ export async function pickBest(ctx: JobCtx, issueId: string, force: boolean): Pr
   const best = candidates[0]
   await ctx.svc.from('quotes').update({ recommended: true }).eq('id', best.id)
   await ctx.svc.from('issues').update({ stage: 'awaiting_quote_approval' }).eq('id', iss.id)
+
+  // "ועד1 מטפל" and within the committee's cap: approve it ourselves, coordinate, and tell them.
+  const { data: mode } = await ctx.svc.from('buildings').select('handling_mode, vendor_auto_limit').eq('id', iss.building_id).maybeSingle()
+  const cap = Number(mode?.vendor_auto_limit) || 0
+  if (mode?.handling_mode === 'vaad1' && cap > 0 && Number(best.amount) <= cap) {
+    const r = await committeeChoice(ctx, best.id, 'coordinate', { uid: null })
+    const what = `${iss.ticket_no ? `#${iss.ticket_no} ` : ''}${iss.title}`
+    await notifyCommittee(ctx, iss, `שלום, כאן ועד1.\nההצעה לתקלה *${what}*: ${best.vendor_name} · ${nis(best.amount)} לפני מע"מ, `
+      + `בתוך התקרה שהגדרתם (${nis(cap)}), אז אישרנו אותה.\n${r.text}`, `אושר אוטומטית: ${what}`)
+    await emailAdmins(ctx.svc, `אושר אוטומטית (עד ${nis(cap)}): ${best.vendor_name} · ${nis(best.amount)} · ${iss.title}`,
+      [`בניין במצב "ועד1 מטפל". ההצעה בתוך התקרה ואושרה בלי הוועד.`, `לתאם את ${best.vendor_name} ואת הליווי.`], iss.building_id)
+    return { ok: true, state: 'auto_approved', quoteId: best.id }
+  }
   const sent = await sendBestToCommittee(ctx, { ...best, recommended: true }, iss, b, candidates.length)
   await emailAdmins(ctx.svc, `הצעה נשלחה לוועד: ${best.vendor_name} · ${nis(best.amount)} · ${iss.title}`,
     [`עבודה: ${iss.title} (${addressOf(b)})`, `ההצעה הזולה: ${best.vendor_name} · ${nis(best.amount)} לפני מע"מ · ביצוע ${availText(best)}`,
@@ -738,7 +751,73 @@ export async function sweepQuotes(ctx: JobCtx) {
   const out: Record<string, unknown>[] = []
   for (const id of ids) out.push({ issueId: id, ...(await pickBest(ctx, id, true)) })
   const alerted = await alertUnansweredQuestions(ctx)
-  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted }
+  const auto = await autoTakeIssues(ctx)
+  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto }
+}
+
+/** Tell the committee something (no buttons). Free text only inside the 24h window; else the app shows it. */
+async function notifyCommittee(ctx: JobCtx, iss: Record<string, any>, text: string, subject: string) {
+  if (!ctx.ready) return 0
+  let sent = 0
+  for (const to of await committeePhones(ctx, iss)) {
+    if (!(await windowOpen(ctx.svc, to))) continue
+    const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'text', text: { body: text.slice(0, 4096) } })
+    if (r.ok) sent++
+    await ctx.log({ recipient: to, audience: 'resident', building_id: iss.building_id, subject, body: text,
+      status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error })
+  }
+  return sent
+}
+
+const URGENT_WAIT_MIN = 60
+const VAAD1_MODE_WAIT_MIN = 2   // lets the resident's own emergency dispatch land first
+
+/**
+ * Scheduler: issues no one decided on that ועד1 takes by itself —
+ *   - every new issue in a building set to "ועד1 מטפל";
+ *   - an urgent issue (the resident's emergency list) the committee did not
+ *     take within an hour, in any building.
+ * Each is claimed once (auto_taken_at) before anything is sent.
+ */
+async function autoTakeIssues(ctx: JobCtx) {
+  const now = Date.now()
+  const open = `(${DONE.join(',')})`
+  const { data: urgent } = await ctx.svc.from('issues').select('id, building_id')
+    .is('handler', null).is('auto_taken_at', null).eq('priority', 'urgent').not('status', 'in', open)
+    .lte('created_at', new Date(now - URGENT_WAIT_MIN * 60000).toISOString())
+    .gte('created_at', new Date(now - 24 * 3600000).toISOString())   // an old forgotten one is not an emergency now
+    .limit(20)
+  const { data: modeB } = await ctx.svc.from('buildings').select('id, handling_mode_since').eq('handling_mode', 'vaad1')
+  const fresh: { id: string; building_id: string }[] = []
+  for (const b of modeB || []) {
+    const { data } = await ctx.svc.from('issues').select('id, building_id')
+      .eq('building_id', b.id).is('handler', null).is('auto_taken_at', null).not('status', 'in', open)
+      .gte('created_at', b.handling_mode_since || new Date(now - 86400000).toISOString())
+      .lte('created_at', new Date(now - VAAD1_MODE_WAIT_MIN * 60000).toISOString()).limit(20)
+    fresh.push(...(data || []))
+  }
+  const jobs = new Map<string, string>()
+  for (const i of fresh) jobs.set(i.id, 'vaad1_mode')
+  for (const i of urgent || []) jobs.set(i.id, 'urgent_no_answer')   // urgent wins the wording
+
+  const out: Record<string, unknown>[] = []
+  for (const [id, reason] of jobs) {
+    const { data: claimed } = await ctx.svc.from('issues').update({ auto_taken_at: new Date().toISOString(), auto_taken_reason: reason })
+      .eq('id', id).is('auto_taken_at', null).is('handler', null).select('id, title, ticket_no, building_id, assigned_to').maybeSingle()
+    if (!claimed) continue
+    const r = await takeIssue(ctx, id, null)
+    const what = `${claimed.ticket_no ? `#${claimed.ticket_no} ` : ''}${claimed.title}`
+    const head = reason === 'urgent_no_answer'
+      ? `שלום, כאן ועד1.\nהתקלה הדחופה *${what}* חיכתה שעה בלי החלטה, אז ועד1 לקחה אותה.\n`
+      : 'שלום, כאן ועד1.\n'
+    await notifyCommittee(ctx, claimed, head + r.text, reason === 'urgent_no_answer' ? `דחוף נלקח אוטומטית: ${what}` : `ועד1 מטפלת: ${what}`)
+    if (reason === 'urgent_no_answer') {
+      await emailAdmins(ctx.svc, `דחוף בלי החלטת ועד שעה — ועד1 לקחה: ${claimed.title}`,
+        [`התקלה הדחופה "${claimed.title}" לא קיבלה החלטה תוך שעה.`, `מה נעשה: ${r.text}`, 'כדאי לוודא שמישהו בדרך.'], claimed.building_id)
+    }
+    out.push({ issueId: id, reason, ok: r.ok })
+  }
+  return out
 }
 
 // ── "ועד1 תטפל": decide who handles it and set it going ─────────────────────
@@ -758,11 +837,12 @@ export async function pickVendorsFor(svc: SupabaseClient, issueId: string, toE16
  * company's manager: the building's regular contractor, the handyman, or
  * quotes from vendors. Returns the Hebrew line for the committee.
  */
-export async function takeIssue(ctx: JobCtx, issueId: string, fromPhone: string): Promise<{ ok: boolean; text: string }> {
+export async function takeIssue(ctx: JobCtx, issueId: string, fromPhone: string | null): Promise<{ ok: boolean; text: string }> {
   const { data: iss } = await ctx.svc.from('issues')
     .select('id, title, category, priority, status, handler, building_id, ticket_no').eq('id', issueId).maybeSingle()
   if (!iss) return { ok: false, text: 'התקלה לא נמצאה. אפשר להחליט באפליקציה.' }
-  if (!(await isCommitteePhone(ctx.svc, iss.building_id, fromPhone))) return { ok: false, text: 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.' }
+  // fromPhone null = the scheduler (building in "ועד1 מטפל", or an urgent issue nobody took).
+  if (fromPhone !== null && !(await isCommitteePhone(ctx.svc, iss.building_id, fromPhone))) return { ok: false, text: 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.' }
   if (iss.handler || DONE.includes(iss.status)) return { ok: false, text: `כבר התקבלה החלטה על "${iss.title}". אפשר לראות באפליקציה.` }
   const title = String(iss.title)
   const now = new Date().toISOString()
@@ -812,8 +892,12 @@ export async function takeIssue(ctx: JobCtx, issueId: string, fromPhone: string)
     status: 'acknowledged', handled_at: now }).eq('id', iss.id)
   await sendJobOffers(ctx, { issueId: iss.id, kind: 'handyman', sentBy: null })
   const hour = await hourPrice(ctx, iss.building_id)
-  return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו ${urgent ? 'יגיע בהקדם' : 'יגיע בביקור הבא'}. `
-    + `שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה אם אין כרטיסייה` : ''}.` }
+  const cost = `שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה אם אין כרטיסייה` : ''}.`
+  if (isDiagnosis(iss)) {
+    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו יבדוק קודם (עד שעה) ${urgent ? 'בהקדם' : 'בביקור הבא'}. `
+      + `רוב התקלות האלה הוא מתקן במקום. אם צריך ספק מוסמך, נבקש הצעות ותקבלו את הזולה לאישור.\n${cost}` }
+  }
+  return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו ${urgent ? 'יגיע בהקדם' : 'יגיע בביקור הבא'}. ${cost}` }
 }
 
 // ── A vendor's question before pricing ──────────────────────────────────────

@@ -576,6 +576,13 @@ function Issues() {
   const { isAdmin, isCommittee: isCommitteeUser, profile } = useAuth()
   const [serviceCfg, setServiceCfg] = useState({ ready: false, plans: [], settings: null })
   useEffect(() => { loadServiceConfig().then(setServiceCfg).catch(() => {}) }, [])
+  // Basic-plan building handing many issues to ועד1: suggest the assisted plan.
+  const [upgradeHint, setUpgradeHint] = useState(null)
+  useEffect(() => {
+    setUpgradeHint(null)
+    if (!selectedBuilding?.id) return
+    supabase.rpc('upgrade_hint', { p_building: selectedBuilding.id }).then(({ data }) => setUpgradeHint(data || null), () => {})
+  }, [selectedBuilding?.id])
   const svcBase = useMemo(() => ({ ready: serviceCfg.ready, isAdmin, settings: serviceCfg.settings }), [serviceCfg, isAdmin])
   const [closeNoFixIssue, setCloseNoFixIssue] = useState(null)
   const [closeReason, setCloseReason] = useState('')
@@ -1849,6 +1856,16 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           <Button onClick={openCreate}><Plus className="h-4 w-4" />תקלה חדשה</Button>
         </div>
       </div>
+
+      {upgradeHint?.show && (
+        <div className="rounded-[var(--radius)] border border-[var(--primary)] bg-[var(--surface-hover)] p-4 text-[13px] flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <p className="min-w-0">
+            <strong>העברתם לוועד1 יותר מ-3 תקלות בכל אחד משלושת החודשים האחרונים</strong> ({(upgradeHint.counts || []).join(' · ')}).
+            {' '}במסלול ליווי הצעות מספקים כלולות ושעת אחזקה זולה יותר — כנראה ישתלם לכם.
+          </p>
+          <Link to="/charges" className="shrink-0 h-[34px] px-3 rounded-[var(--radius)] bg-[var(--primary)] text-white text-[13px] font-semibold inline-flex items-center">לפרטים</Link>
+        </div>
+      )}
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

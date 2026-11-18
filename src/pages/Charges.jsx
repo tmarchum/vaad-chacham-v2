@@ -15,7 +15,7 @@ import {
   loadServiceConfig, loadBuildingBilling, loadPunchBalance, loadPriceLists, monthlyPrice, punchRules, itemPrice,
   CARD_POLICY_LABELS, CHARGE_TYPE_LABELS, APPROVAL_LABELS, UNIT_LABELS,
 } from '@/lib/servicePlans'
-import { Receipt, CheckCircle2, XCircle, Ticket, SlidersHorizontal, ListChecks, ShieldCheck } from 'lucide-react'
+import { Receipt, CheckCircle2, XCircle, Ticket, SlidersHorizontal, ListChecks, ShieldCheck, Wrench } from 'lucide-react'
 
 // "חשבון ועד1" — what the building owes ועד1 this month, what is waiting for
 // the committee's approval, and the committee's own billing choices. Every
@@ -39,6 +39,7 @@ export default function Charges() {
   const [items, setItems] = useState([])
   const [charges, setCharges] = useState([])
   const [prefs, setPrefs] = useState({ limit: 0, policy: 'bill_hourly' })
+  const [handling, setHandling] = useState({ mode: 'committee', cap: 0 })
   const [busy, setBusy] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -59,6 +60,7 @@ export default function Charges() {
     setItems(lists.items.filter((x) => x.active !== false))
     setCharges(ch.error ? [] : ch.data || [])
     setPrefs({ limit: Number(b?.auto_approve_limit) || 0, policy: b?.card_exhausted_policy || 'bill_hourly' })
+    setHandling({ mode: b?.handling_mode || 'committee', cap: Number(b?.vendor_auto_limit) || 0 })
     setLoading(false)
   }, [buildingId])
 
@@ -88,6 +90,16 @@ export default function Charges() {
     setBusy('')
     if (error) toastError('שמירת ההגדרות נכשלה')
     else { toast('ההגדרות נשמרו'); load() }
+  }
+
+  const saveHandling = async () => {
+    setBusy('handling')
+    const { error } = await supabase.rpc('set_building_handling', {
+      p_building: buildingId, p_mode: handling.mode, p_vendor_limit: Number(handling.cap) || 0,
+    })
+    setBusy('')
+    if (error) toastError('שמירת ההגדרה נכשלה')
+    else { toast('ההגדרה נשמרה'); load() }
   }
 
   const buyCard = async () => {
@@ -185,6 +197,32 @@ export default function Charges() {
       <BankMandateCard buildingId={buildingId} isAdmin={isAdmin} onChange={() => setMandateRev((n) => n + 1)} />
       {isAdmin && <BuildingAccessCard key={`acc-${mandateRev}`} buildingId={buildingId} onChange={() => setMandateRev((n) => n + 1)} />}
 
+      {/* ── Who handles issues ── */}
+      <SectionCard icon={Wrench} title="מי מטפל בתקלות"
+        actions={<Button size="sm" onClick={saveHandling} disabled={!!busy}>{busy === 'handling' ? 'שומר...' : 'שמירה'}</Button>}>
+        <div className="p-4 space-y-3" role="radiogroup">
+          {[
+            ['committee', 'הוועד מחליט על כל תקלה', 'כל תקלה חדשה מגיעה אליכם עם שני כפתורים: "ועד1 תטפל" או "הוועד יטפל".'],
+            ['vaad1', 'ועד1 מטפלת בכל התקלות', 'כל תקלה חדשה עוברת לוועד1 אוטומטית, ואתם מקבלים עדכון. ועד1 מחליטה אם לשלוח את איש האחזקה או לבקש הצעות מספקים. אינסטלציה ושערים: קודם בדיקה של איש האחזקה.'],
+          ].map(([key, label, help]) => (
+            <label key={key} className="flex items-start gap-2 cursor-pointer text-[13px]">
+              <input type="radio" name="handling-mode" className="mt-1 accent-[var(--primary)]"
+                checked={handling.mode === key} onChange={() => setHandling((h) => ({ ...h, mode: key }))} />
+              <span><strong>{label}</strong><span className="block text-[12px] text-[var(--text-muted)]">{help}</span></span>
+            </label>
+          ))}
+          {handling.mode === 'vaad1' && (
+            <label className="block max-w-xs text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5 pr-6">
+              <span>הצעת ספק עד הסכום הזה מאושרת בלי לשאול אתכם (₪, לפני מע"מ)</span>
+              <input type="number" min="0" dir="ltr" className={field} value={handling.cap}
+                onChange={(e) => setHandling((h) => ({ ...h, cap: e.target.value }))} />
+              <span className="block font-normal text-[var(--text-muted)]">מעל הסכום, ההצעה הזולה מגיעה אליכם לאישור. 0 = כל הצעה מגיעה לאישור. שעות אחזקה נספרות לפי הכרטיסייה.</span>
+            </label>
+          )}
+          <p className="text-[12px] text-[var(--text-muted)]">בכל מצב: מקרה חירום מהרשימה שאף אחד לא טיפל בו תוך שעה, ועד1 מטפלת בו בעצמה.</p>
+        </div>
+      </SectionCard>
+
       {/* ── Committee choices ── */}
       <SectionCard icon={SlidersHorizontal} title="הגדרות חיוב של הוועד"
         actions={<Button size="sm" onClick={savePrefs} disabled={!!busy}>{busy === 'prefs' ? 'שומר...' : 'שמירה'}</Button>}>
@@ -214,7 +252,7 @@ export default function Charges() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
             <p>שעת אחזקה: <strong>{nis(plan.hour_price)}</strong></p>
             <p>כרטיסייה: <strong>{nis(plan.card_price)}</strong> · {plan.card_punches} שעות{Number(plan.card_bonus_punches) ? ` + ${plan.card_bonus_punches} בונוס` : ''}</p>
-            <p>"ועד1 תטפל" בספק: <strong>{nis(plan.handle_fee)}</strong> לעבודה</p>
+            <p>הצעות מספקים דרך ועד1: <strong>{plan.includes_auto_quotes ? 'כלול במסלול' : 'לא במסלול'}</strong></p>
             {items.map((x) => {
               const price = itemPrice(x, plan.key)
               return price == null ? null : (

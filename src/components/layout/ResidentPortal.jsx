@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { formatCurrency, formatDate, calcUnitFee, sanitizePhone, isValidPhone } from '@/lib/utils'
 import { hebrewMonthLabel, ISSUE_CATEGORIES } from '@/lib/constants'
+import { EMERGENCIES } from '@/lib/handling'
 import { notifyIssueOpened } from '@/lib/notify'
 import { ResidentBooking } from './ResidentBooking'
 import { BrandLogo } from '@/components/common/BrandLogo'
@@ -797,8 +798,16 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
   // Categories where this building has a standing contractor, so an emergency
   // can go straight out instead of waiting for the committee (migration 034).
   const [emergencyCats, setEmergencyCats] = useState([])
-  const [emergency, setEmergency] = useState(false)
+  // The closed emergency list: picking one makes the issue urgent. The
+  // committee is alerted at once; if no one takes it within an hour, ועד1 does.
+  const [emergencyKey, setEmergencyKey] = useState('')
+  const emergency = !!emergencyKey
   const [dispatched, setDispatched] = useState(null)
+  const pickEmergency = (key) => {
+    setEmergencyKey(key)
+    const em = EMERGENCIES.find((x) => x.key === key)
+    if (em) setForm((f) => ({ ...f, category: em.category, title: f.title.trim() ? f.title : em.label }))
+  }
 
   useEffect(() => {
     if (!profile?.building_id) return
@@ -840,7 +849,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
       title: form.title.trim(),
       description: form.description.trim(),
       category: form.category,
-      priority: wantEmergency ? 'high' : form.priority,
+      priority: emergency ? 'urgent' : form.priority,
       reported_by: user?.id || null,
       status: 'reported',
       photo_url: photoUrl,
@@ -869,7 +878,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
     setDispatched(sentTo)
     setForm({ title: '', description: '', category: '', priority: 'medium' })
     setPhoto(null)
-    setEmergency(false)
+    setEmergencyKey('')
     onCreated()
   }
 
@@ -949,7 +958,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.category}
-              onChange={e => { setForm({ ...form, category: e.target.value }); setEmergency(false) }}
+              onChange={e => setForm({ ...form, category: e.target.value })}
               className="px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="">קטגוריה</option>
@@ -964,29 +973,28 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
               <option value="high">דחוף</option>
             </select>
           </div>
-          {/* Emergency — only where the building has a standing contractor for
-              this category. A fault report waits for the committee; a person
-              shut in a lift cannot. */}
-          {canEmergency && (
-            <label className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors ${
-              emergency ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200 hover:border-red-200'
-            }`}>
-              <input
-                type="checkbox" checked={emergency}
-                onChange={e => setEmergency(e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-red-600 shrink-0"
-              />
-              <span className="min-w-0">
-                <span className="block text-sm font-bold text-red-700">סכנה מיידית — מישהו לכוד או בסכנה</span>
-                <span className="block text-xs text-slate-500 mt-0.5">
-                  סמנו רק במקרה חירום אמיתי. התקלה תישלח מיד לספק הקבוע של הבניין, בלי להמתין לאישור הוועד, והוועד יקבל התראה במקביל.
+          {/* Emergency — a closed list, so "urgent" means the same thing in
+              every building. With a standing contractor for the category it
+              goes straight to them; otherwise the committee is alerted now and
+              ועד1 takes it if no one has within an hour. */}
+          <div className={`p-3 rounded-lg border transition-colors ${emergency ? 'bg-red-50 border-red-300' : 'bg-white border-slate-200'}`}>
+            <label className="block text-sm font-bold text-red-700 mb-1.5" htmlFor="emergency-pick">מקרה חירום?</label>
+            <select id="emergency-pick" value={emergencyKey} onChange={e => pickEmergency(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400">
+              <option value="">לא — תקלה רגילה</option>
+              {EMERGENCIES.map(em => <option key={em.key} value={em.key}>{em.label}</option>)}
+            </select>
+            {emergency && (
+              <span className="block text-xs text-slate-600 mt-2 space-y-1">
+                <span className="block">
+                  {canEmergency
+                    ? 'התקלה תישלח מיד לספק הקבוע של הבניין, בלי להמתין לוועד, והוועד יקבל התראה במקביל.'
+                    : 'התקלה תסומן דחופה והוועד יקבל התראה מיד. אם אף אחד לא מטפל תוך שעה, ועד1 מטפלת בעצמה.'}
                 </span>
-                <span className="block text-xs font-semibold text-slate-600 mt-1">
-                  בסכנת חיים חייגו קודם 101 (מד״א) או 102 (כבאות).
-                </span>
+                <span className="block font-semibold">בסכנת חיים חייגו קודם 101 (מד״א) או 102 (כבאות). בריח גז: 102 וסגירת הברז הראשי.</span>
               </span>
-            </label>
-          )}
+            )}
+          </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button
             type="submit" disabled={saving || !form.title.trim()}
@@ -995,7 +1003,7 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
             }`}
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {emergency && canEmergency ? 'שליחה דחופה לספק' : 'שליחת תקלה'}
+            {emergency && canEmergency ? 'שליחה דחופה לספק' : emergency ? 'שליחה דחופה' : 'שליחת תקלה'}
           </button>
         </form>
       )}

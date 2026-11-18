@@ -164,7 +164,7 @@ export async function loadPriceLists() {
 export async function loadBuildingBilling(buildingId) {
   if (!buildingId) return null
   const { data, error } = await supabase.from('buildings')
-    .select('id, name, total_units, service_plan, plan_price_override, auto_approve_limit, card_exhausted_policy')
+    .select('id, name, total_units, service_plan, plan_price_override, auto_approve_limit, card_exhausted_policy, handling_mode, vendor_auto_limit')
     .eq('id', buildingId).maybeSingle()
   if (error) return null
   return data || null
