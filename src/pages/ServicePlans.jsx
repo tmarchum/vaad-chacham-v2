@@ -10,7 +10,7 @@ import { toast, toastError } from '@/lib/toast'
 import { HandymanLedgerCard } from '@/components/billing/HandymanLedgerCard'
 import { cn } from '@/lib/utils'
 import { DAY_LABELS, loadServiceConfig, monthlyPrice, activePlans, loadPriceLists, UNIT_LABELS } from '@/lib/servicePlans'
-import { BadgeDollarSign, Clock, Building2, Ticket, History, Save, Plus, ListChecks, Package, Handshake } from 'lucide-react'
+import { BadgeDollarSign, Clock, Building2, Ticket, History, Save, Plus, ListChecks, Package, Handshake, Ban } from 'lucide-react'
 
 // Plans, prices, business hours and punch cards — the commercial settings of
 // the management side. Everything a price depends on is edited here rather
@@ -37,6 +37,7 @@ export default function ServicePlans() {
   const [items, setItems] = useState([])
   const [parts, setParts] = useState([])
   const [referral, setReferral] = useState({ fee: 0, active: false })
+  const [graceDays, setGraceDays] = useState(14)
 
   const load = useCallback(async () => {
     const cfg = await loadServiceConfig()
@@ -52,7 +53,8 @@ export default function ServicePlans() {
     ])
     setPlans(cfg.plans)
     setSettings(cfg.settings)
-    const ref = await supabase.from('billing_settings').select('vendor_call_fee, vendor_referral_active').eq('id', 'default').maybeSingle()
+    const ref = await supabase.from('billing_settings').select('vendor_call_fee, vendor_referral_active, access_grace_days').eq('id', 'default').maybeSingle()
+    setGraceDays(ref.data?.access_grace_days ?? 14)
     setReferral({ fee: Number(ref.data?.vendor_call_fee) || 0, active: !!ref.data?.vendor_referral_active })
     setBuildings(b.data || [])
     setBalances(Object.fromEntries((bal.data || []).map((x) => [x.building_id, x])))
@@ -110,6 +112,14 @@ export default function ServicePlans() {
     }).eq('id', 'default')
     setBusy('')
     if (error) toastError('השמירה נכשלה'); else toast(referral.active ? 'דמי ההפניה פעילים' : 'דמי ההפניה נשמרו, כבויים')
+  }
+
+  const saveGrace = async () => {
+    setBusy('grace')
+    const days = Math.min(120, Math.max(0, Math.round(Number(graceDays) || 0)))
+    const { error } = await supabase.from('billing_settings').update({ access_grace_days: days, updated_at: new Date().toISOString() }).eq('id', 'default')
+    setBusy('')
+    if (error) toastError('השמירה נכשלה'); else { setGraceDays(days); toast('נשמר') }
   }
 
   const toggleDay = (d) => setSettings((s) => {
@@ -276,6 +286,20 @@ export default function ServicePlans() {
               </label>
             ))}
           </div>
+        </div>
+      </SectionCard>
+
+      {/* ── Blocking a building that does not pay ── */}
+      <SectionCard icon={Ban} title="חסימת בניין שלא משלם"
+        subtitle="בניין נחסם אם הוראת הקבע בוטלה, או אם חשבון חודשי לא סומן כחויב אחרי מספר הימים שכאן. חשבון שהגזבר ערער עליו לא חוסם"
+        actions={<Button size="sm" onClick={saveGrace} disabled={!!busy}><Save className="h-4 w-4" />{busy === 'grace' ? 'שומר...' : 'שמירה'}</Button>}>
+        <div className="p-4 flex flex-wrap items-end gap-4">
+          <label className="text-[12px] font-semibold text-[var(--text-secondary)] space-y-1.5">
+            <span>ימים אחרי מועד החיוב עד החסימה</span>
+            <input type="number" min={0} max={120} dir="ltr" className={field + ' max-w-[140px]'} value={graceDays}
+              onChange={(e) => setGraceDays(e.target.value)} />
+          </label>
+          <p className="text-[12px] text-[var(--text-muted)] pb-2">לבניין מסוים אפשר לקבוע "פתוח תמיד" או "מושהה" במסך חשבון ועד1.</p>
         </div>
       </SectionCard>
 

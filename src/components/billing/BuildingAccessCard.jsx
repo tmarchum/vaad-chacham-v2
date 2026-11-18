@@ -6,7 +6,7 @@ import { useBuildingAccess, ACCESS_REASON } from '@/lib/buildingAccess'
 import { ShieldAlert } from 'lucide-react'
 
 const OPTIONS = [
-  ['', 'אוטומטי — נחסם אם הוראת הקבע בוטלה או שחשבון לא שולם 14 יום אחרי מועד החיוב'],
+  ['', 'אוטומטי — לפי הכללים במסלולים ותמחור'],
   ['active', 'פתוח תמיד (למשל: הבניין משלם בדרך אחרת)'],
   ['suspended', 'מושהה — לחסום עכשיו'],
 ]

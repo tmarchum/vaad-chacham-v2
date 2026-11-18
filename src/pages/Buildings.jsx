@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
+import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -147,6 +148,8 @@ function Buildings() {
   const { data: buildings, create, update, remove, isSaving, isLoading } = useCollection('buildings')
   const { refreshBuildings, selectedBuilding: activeBuilding, setSelectedBuilding } = useBuildingContext()
   const { data: allUnits } = useCollection('units')
+  // Only the system admin creates a building (enforced in the database too).
+  const { isAdmin } = useAuth()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all') // all | complete | incomplete
   const [selectedId, setSelectedId] = useState(null)
@@ -353,7 +356,7 @@ function Buildings() {
           <p className="text-[13px] text-[var(--text-secondary)] mt-1">כל הבניינים בניהולך — נתוני בסיס, תעריפי ועד, פרטי בנק וגבייה צפויה</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={openCreate}><Plus className="h-4 w-4" />בניין חדש</Button>
+          {isAdmin && <Button onClick={openCreate}><Plus className="h-4 w-4" />בניין חדש</Button>}
         </div>
       </div>
 
@@ -396,7 +399,7 @@ function Buildings() {
       {filtered.length === 0 ? (
         <EmptyState icon={Building2} title="אין בניינים"
           description={search || statusFilter !== 'all' ? 'לא נמצאו תוצאות' : 'הוסף בניין ראשון כדי להתחיל'}
-          actionLabel={!search && statusFilter === 'all' ? 'הוסף בניין' : undefined} onAction={!search && statusFilter === 'all' ? openCreate : undefined} />
+          actionLabel={isAdmin && !search && statusFilter === 'all' ? 'הוסף בניין' : undefined} onAction={!search && statusFilter === 'all' ? openCreate : undefined} />
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           {/* Ledger */}
