@@ -423,13 +423,25 @@ export async function handleOfferText(ctx: JobCtx, from: string, text: string, v
         [`${vendor.name} (${vendor.phone}) רוצה לראות את המקום לפני שייתן מחיר.`, `עבודה: ${iss?.title || ''}`, `כתובת: ${addressOf(loaded?.b || null)}`], q.building_id)
       return true
     }
+    // A question before pricing goes to the committee (checked before the
+    // amount: "חניות 174–175?" is not a price).
+    if (isQuestion(text) && !isBareAmount(text)) {
+      if (q.stage === 'offered') await ctx.svc.from('quotes').update({ stage: 'awaiting_amount' }).eq('id', q.id)
+      await askCommittee(ctx, q, iss, loaded?.b || null, vendor, from, text)
+      return true
+    }
     if (amount != null) { await recordAmount(ctx, q, iss, from, text, amount); return true }
     if (q.stage === 'offered') {
       // A typed "yes" to the first message.
       if (/(^|[^א-ת])(מעוניין|מעוניינת|כן|מאשר|אשמח)(?![א-ת])/.test(text)) { await handleOfferButton(ctx, from, `offer:${q.id}:yes`, vendor); return true }
       return false
     }
-    await reply(ctx, from, 'לא זיהינו סכום. כתוב רק את הסכום במספרים, לפני מע"מ (למשל 850).\nצריך לראות את המקום קודם? כתוב "ביקור".', { ...meta, subject: 'הצעת מחיר: לא זוהה סכום' })
+    // Anything else ("אבדוק ואחזור", "אני בדרך לשם"): answer like a person.
+    const short = text.length <= 12
+    await reply(ctx, from, short
+      ? 'לא הבנו. כדי להגיש הצעה, כתוב את הסכום במספרים, לפני מע"מ (למשל 850).\nיש לך שאלה על העבודה? כתוב אותה כאן ונעביר לוועד הבית.\nצריך לראות את המקום קודם? כתוב "ביקור".'
+      : `רשמנו, תודה. כשיש לך מחיר, כתוב כאן את הסכום לפני מע"מ.${q.deadline ? ` אפשר להגיש עד ${ilWhen(new Date(q.deadline))}.` : ''}\nיש לך שאלה על העבודה? כתוב אותה עם סימן שאלה ונעביר לוועד הבית.`,
+      { ...meta, subject: 'הצעת מחיר: הודעה מהספק' })
     return true
   }
 
@@ -476,6 +488,7 @@ async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, 
 export async function closeQuotes(ctx: JobCtx, issueId: string, sentBy: string | null) {
   const loaded = await loadIssue(ctx.svc, issueId)
   if (!loaded) return { ok: false, error: 'not_found' }
+  await ctx.svc.from('quote_questions').update({ status: 'closed' }).eq('issue_id', issueId).eq('status', 'pending')
   const { data: open } = await ctx.svc.from('quotes').select('*').eq('issue_id', issueId)
     .in('stage', OPEN_STAGES.concat('submitted'))
   let told = 0, notTold = 0
@@ -502,6 +515,7 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
     if (Object.keys(patch).length) await ctx.svc.from('quotes').update(patch).eq('id', o.id)
   }
   await ctx.svc.from('issues').update({ vendor_id: q.vendor_id, vendor_name: q.vendor_name, estimated_cost: q.amount, status: 'approved' }).eq('id', iss.id)
+  await ctx.svc.from('quote_questions').update({ status: 'closed' }).eq('issue_id', iss.id).eq('status', 'pending')
 
   // Who the vendor calls: the member who chose, else the one who owns the
   // issue. When ועד1 coordinates, nobody: we write to him here.
@@ -721,5 +735,109 @@ export async function sweepQuotes(ctx: JobCtx) {
   const ids = [...new Set((data || []).map((x) => x.issue_id as string))]
   const out: Record<string, unknown>[] = []
   for (const id of ids) out.push({ issueId: id, ...(await pickBest(ctx, id, true)) })
-  return { ok: true, issues: ids.length, results: out }
+  const alerted = await alertUnansweredQuestions(ctx)
+  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted }
+}
+
+// ── A vendor's question before pricing ──────────────────────────────────────
+const QWORD = /^(האם|מה|מהו|מהי|כמה|איפה|היכן|איך|כיצד|מתי|למה|מדוע|איזה|איזו|אילו|באיזה|באיזו|יש |אפשר|ניתן|מי )/
+export const isQuestion = (t: string) => /[?？]/.test(t) || QWORD.test(String(t || '').trim())
+const isBareAmount = (t: string) => /^\s*₪?\s*[\d,.]+\s*(₪|ש"ח|שח|שקל|שקלים)?\s*$/.test(t)
+const QUESTION_HOURS = 6
+
+/** Relay the question to the committee member in charge; tell the vendor; give him time. */
+async function askCommittee(ctx: JobCtx, q: Record<string, any>, iss: Record<string, any> | null, b: Record<string, any> | null,
+  vendor: Record<string, any>, from: string, text: string) {
+  const meta = { vendor_id: q.vendor_id, building_id: q.building_id }
+  const question = text.slice(0, 600)
+  const phones = iss ? await committeePhones(ctx, iss) : []
+  const { data: row } = await ctx.svc.from('quote_questions').insert({
+    quote_id: q.id, issue_id: q.issue_id, building_id: q.building_id, vendor_id: q.vendor_id, question, committee_phones: phones,
+  }).select('id').single()
+  // Waiting for an answer must not cost him the job.
+  const until = new Date(Date.now() + QUESTION_HOURS * 3600 * 1000)
+  if (!q.deadline || new Date(q.deadline) < until) await ctx.svc.from('quotes').update({ deadline: until.toISOString() }).eq('id', q.id)
+
+  const what = `${iss?.ticket_no ? `#${iss.ticket_no} ` : ''}${iss?.title || ''}`
+  const text1 = `שלום, כאן ועד1.\nספק ששוקל לתת הצעה לתקלה *${what}* שואל:\n"${question}"\n\nכתבו כאן את התשובה, ונעביר אותה אליו. הפרטים שלכם לא מועברים.`
+  let relayed = 0
+  const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'committee_vendor_question').maybeSingle()
+  for (const to of phones) {
+    let payload: Record<string, unknown> | null = null
+    let body = text1
+    if (await windowOpen(ctx.svc, to)) {
+      payload = { messaging_product: 'whatsapp', to, type: 'text', text: { body: text1 } }
+    } else if (t?.active && t.meta_status === 'APPROVED') {
+      const vars = [what, question].map(ctx.cleanParam)
+      body = ctx.render(t.body, vars)
+      payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
+        components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } }
+    }
+    if (!payload) continue
+    const r = await ctx.send(payload)
+    if (r.ok) relayed++
+    await ctx.log({ recipient: to, audience: 'resident', building_id: q.building_id, template_key: 'committee_vendor_question',
+      subject: `שאלה מספק: ${what.slice(0, 120)}`, body, status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null,
+      external_id: r.wamid, error_message: r.error })
+  }
+  if (row) await ctx.svc.from('quote_questions').update({ relayed: relayed > 0 }).eq('id', row.id)
+  await reply(ctx, from, `השאלה הועברה לוועד הבית, והתשובה תגיע אליך כאן.\nאם אפשר לתת מחיר גם בלי התשובה, כתוב את הסכום לפני מע"מ.`,
+    { ...meta, subject: `שאלה הועברה לוועד: ${what.slice(0, 100)}` })
+  await emailAdmins(ctx.svc, `ספק שאל שאלה: ${iss?.title || ''}`,
+    [`${vendor.name} (${vendor.phone}) שאל על "${iss?.title || ''}" (${addressOf(b)}):`, `"${question}"`,
+      relayed ? 'השאלה הועברה לחבר הוועד האחראי בוואטסאפ.' : 'לא הצלחנו להעביר לוועד בוואטסאפ (אין חלון שיחה פתוח ואין תבנית מאושרת). כדאי לענות לספק או לעדכן את הוועד.',
+      `אם לא תהיה תשובה תוך ${QUESTION_HOURS} שעות, תקבל תזכורת.`], q.building_id)
+}
+
+/**
+ * A committee member wrote to us. If a vendor question is waiting for this
+ * phone, this is the answer: pass it on. True when it was handled here.
+ */
+export async function handleCommitteeAnswer(ctx: JobCtx, from: string, text: string) {
+  if (!text) return false
+  const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+  const { data: rows } = await ctx.svc.from('quote_questions').select('*')
+    .eq('status', 'pending').contains('committee_phones', [from]).gte('asked_at', since)
+    .order('asked_at', { ascending: false }).limit(1)
+  const qq = rows?.[0]
+  if (!qq) return false
+  await ctx.svc.from('quote_questions').update({ status: 'answered', answer: text.slice(0, 1000), answered_at: new Date().toISOString(), answered_by: from }).eq('id', qq.id)
+  const c = await quoteContext(ctx, qq.quote_id)
+  const meta = { building_id: qq.building_id }
+  if (!c) return true
+  const { q, iss } = c
+  const until = new Date(Date.now() + QUESTION_HOURS * 3600 * 1000)
+  const deadline = !q.deadline || new Date(q.deadline) < until ? until : new Date(q.deadline)
+  if (BEFORE_AMOUNT.includes(q.stage)) await ctx.svc.from('quotes').update({ deadline: deadline.toISOString() }).eq('id', q.id)
+
+  const { data: v } = await ctx.svc.from('vendors').select('phone').eq('id', q.vendor_id).maybeSingle()
+  const to = ctx.toE164(String(v?.phone || ''))
+  let ok = false
+  if (to) {
+    const r = await reply(ctx, to, `תשובת ועד הבית לשאלה שלך על "${iss?.title || ''}":\n${text.slice(0, 1000)}\n\n`
+      + `כדי להגיש הצעה, כתוב כאן את הסכום לפני מע"מ, סופי לעבודה כפי שתוארה. אפשר להגיש עד ${ilWhen(deadline)}.`,
+      { vendor_id: q.vendor_id, building_id: q.building_id, subject: `תשובת הוועד לשאלה: ${String(iss?.title || '').slice(0, 100)}` })
+    ok = r.ok
+  }
+  const ack = ok ? '✅ התשובה הועברה לספק. תודה!' : 'רשמנו את התשובה, אבל לא הצלחנו להעביר אותה לספק כרגע. ועד1 תדאג שתגיע אליו.'
+  const s = await ctx.send({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: ack } })
+  await ctx.log({ recipient: from, audience: 'resident', ...meta, subject: 'אישור העברת תשובה לספק', body: ack,
+    status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
+  if (!ok) await emailAdmins(ctx.svc, `תשובת ועד לא הגיעה לספק: ${iss?.title || ''}`,
+    [`הוועד ענה: "${text.slice(0, 500)}"`, 'ההודעה לספק לא יצאה. צריך להעביר לו ידנית.'], qq.building_id)
+  return true
+}
+
+/** Questions the committee did not answer within QUESTION_HOURS: tell ועד1 once. */
+async function alertUnansweredQuestions(ctx: JobCtx) {
+  const before = new Date(Date.now() - QUESTION_HOURS * 3600 * 1000).toISOString()
+  const { data: rows } = await ctx.svc.from('quote_questions').select('*')
+    .eq('status', 'pending').eq('admin_alerted', false).lte('asked_at', before).limit(50)
+  for (const qq of rows || []) {
+    const c = await quoteContext(ctx, qq.quote_id)
+    await emailAdmins(ctx.svc, `שאלת ספק בלי תשובה ${QUESTION_HOURS} שעות: ${c?.iss?.title || ''}`,
+      [`הספק ${c?.q?.vendor_name || ''} שאל: "${qq.question}"`, 'הוועד עוד לא ענה. כדאי להזכיר לו, או לענות לספק בעצמך.'], qq.building_id)
+    await ctx.svc.from('quote_questions').update({ admin_alerted: true }).eq('id', qq.id)
+  }
+  return (rows || []).length
 }

@@ -32,7 +32,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
 import {
-  awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleOfferButton, handleOfferText,
+  awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleCommitteeAnswer, handleOfferButton, handleOfferText,
   pickBest, sendJobOffers, sweepQuotes, type JobCtx,
 } from './jobs.ts'
 // The same matching rules the app uses to suggest vendors.
@@ -432,6 +432,9 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
     }
     return
   }
+
+  // A committee member answering a vendor's question.
+  if (!vendor && text && await handleCommitteeAnswer(jobCtx(svc, integ, token), from, text)) return
 
   if (!vendor || !text) return
   // An open job conversation (price, date, "ביקור") comes first.
