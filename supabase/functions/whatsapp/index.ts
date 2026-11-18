@@ -13,6 +13,7 @@
 //   { action: 'job-offer', issueId, kind: 'quote', vendorIds[] } → "יש עבודה חדשה" + buttons (see jobs.ts)
 //   { action: 'job-offer', issueId, kind: 'handyman' }          → the same to ועד1's handyman
 //   { action: 'quote-award', quoteId }            → the committee picked a quote: winner + thank-yous
+//   { action: 'quote-close', issueId }            → close without picking: "העבודה נתפסה, תודה" to all
 //
 // Webhook (no JWT; Meta authenticates):
 //   GET  ?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…  → echo challenge
@@ -30,7 +31,7 @@
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
-import { awardQuote, handleOfferButton, handleOfferText, sendJobOffers, type JobCtx } from './jobs.ts'
+import { awardQuote, closeQuotes, handleOfferButton, handleOfferText, sendJobOffers, type JobCtx } from './jobs.ts'
 
 const PROVIDER = 'whatsapp_cloud'
 const MANUAL_CONFIRM_TEMPLATES = new Set(['resident_payment_reminder'])
@@ -801,7 +802,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Job offers: vendors for a quote, or ועד1's handyman ─────────────────
-    if (action === 'job-offer' || action === 'quote-award') {
+    if (action === 'job-offer' || action === 'quote-award' || action === 'quote-close') {
       if (!integ?.enabled || !integ.phone_number_id || !token) return json({ ok: false, error: 'integration_disabled' })
       const ctx = jobCtx(svc, integ, token)
       let issueId = String(body.issueId || '')
@@ -813,6 +814,7 @@ Deno.serve(async (req: Request) => {
       if (!iss) return json({ ok: false, error: 'not_found' }, 404)
       if (!isAdmin && !(await callerBuildings(svc, uid)).has(iss.building_id)) return json({ error: 'forbidden' }, 403)
       if (action === 'quote-award') return json(await awardQuote(ctx, String(body.quoteId), uid))
+      if (action === 'quote-close') return json(await closeQuotes(ctx, issueId, uid))
       const kind = body.kind === 'handyman' ? 'handyman' : 'quote'
       const vendorIds = Array.isArray(body.vendorIds) ? (body.vendorIds as unknown[]).map(String) : []
       if (kind === 'quote' && !vendorIds.length) return json({ ok: false, error: 'no_vendors' }, 400)

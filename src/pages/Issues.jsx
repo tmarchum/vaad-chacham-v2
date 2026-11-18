@@ -1391,6 +1391,19 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setDetailIssue((prev) => prev ? { ...prev, estimatedCost: quote.amount, vendor_name: quote.vendorName, status: 'approved' } : null)
   }
 
+  // Close the request without picking anyone ("העבודה נתפסה"): every vendor
+  // still in it gets a thank-you and stops being asked for a price.
+  const handleCloseQuotes = async (iss) => {
+    if (!window.confirm('לסגור את הפנייה לספקים בלי לבחור הצעה?
+כל ספק שעדיין בתהליך יקבל הודעה שהעבודה נתפסה, עם תודה.')) return
+    const { data, error } = await supabase.functions.invoke('whatsapp', { body: { action: 'quote-close', issueId: iss.id } })
+    if (error || !data?.ok) { toastError('הסגירה נכשלה'); return }
+    toast(`הפנייה נסגרה · ${data.told} ספקים קיבלו הודעה${data.notTold ? ` · ${data.notTold} לא קיבלו (לא ענו מעולם, ההודעה תצא אחרי אישור Meta)` : ''}`)
+    const issueQuotes = quotesByIssue[iss.id] || []
+    await Promise.all(issueQuotes.filter((q) => ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date', 'submitted'].includes(q.stage))
+      .map((q) => updateQuote(q.id, { status: 'rejected', stage: 'lost' }, { silent: true })))
+  }
+
   const handleAssignVendor = async () => {
     if (!vendorAssignIssue || !selectedVendorName) return
     await update(vendorAssignIssue.id, { vendor_name: selectedVendorName })
@@ -2014,6 +2027,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                       </div>
                     )
                   })()}
+                  {issueQuotes.some((q) => ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date', 'submitted'].includes(q.stage)) && (
+                    <div className="mb-2 flex justify-end">
+                      <Button size="sm" variant="ghost" onClick={() => handleCloseQuotes(iss)}>סגירת הפנייה — העבודה נתפסה</Button>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     {issueQuotes.map((q) => (
                       <div key={q.id} className="flex items-center justify-between p-2 rounded-lg bg-[var(--surface-hover)] text-sm">

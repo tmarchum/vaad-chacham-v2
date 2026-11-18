@@ -337,6 +337,44 @@ export async function handleOfferText(ctx: JobCtx, from: string, text: string, v
   return true
 }
 
+// "העבודה נתפסה, תודה" — to a vendor we approached and did not pick. Free text
+// inside the 24h window; otherwise the vendor_job_closed template once Meta
+// approved it; otherwise nothing (counted, so the screen can say so).
+async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, offered: boolean, sentBy: string | null) {
+  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+  const to = ctx.toE164(String(v?.phone || ''))
+  if (!to || !ctx.ready) return false
+  const meta = { vendor_id: q.vendor_id, building_id: q.building_id, subject: `העבודה נתפסה: ${title.slice(0, 100)}`, sent_by: sentBy }
+  if (await windowOpen(ctx.svc, to)) {
+    const text = offered
+      ? `תודה על ההצעה ל"${title}". הפעם העבודה נתפסה. נפנה אליך שוב בעבודה הבאה.`
+      : `העבודה "${title}" כבר נתפסה. תודה על הזמינות, נפנה אליך שוב בעבודה הבאה.`
+    return (await reply(ctx, to, text, meta)).ok
+  }
+  const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_job_closed').maybeSingle()
+  if (!t?.active || t.meta_status !== 'APPROVED') return false
+  const vars = [v?.name, title].map(ctx.cleanParam)
+  const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
+    components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } })
+  await ctx.log({ recipient: to, audience: 'vendor', template_key: 'vendor_job_closed', body: ctx.render(t.body, vars),
+    status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error, ...meta })
+  return r.ok
+}
+
+/** Close the request without picking anyone: every vendor still in it hears the job was taken. */
+export async function closeQuotes(ctx: JobCtx, issueId: string, sentBy: string | null) {
+  const loaded = await loadIssue(ctx.svc, issueId)
+  if (!loaded) return { ok: false, error: 'not_found' }
+  const { data: open } = await ctx.svc.from('quotes').select('*').eq('issue_id', issueId)
+    .in('stage', OPEN_STAGES.concat('submitted'))
+  let told = 0, notTold = 0
+  for (const q of open || []) {
+    await ctx.svc.from('quotes').update({ stage: 'lost', status: 'rejected' }).eq('id', q.id)
+    if (await sendJobTaken(ctx, q, String(loaded.iss.title), q.amount != null && Number(q.amount) > 0, sentBy)) told++; else notTold++
+  }
+  return { ok: true, closed: (open || []).length, told, notTold }
+}
+
 // ── The committee picks a quote ─────────────────────────────────────────────
 export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | null) {
   const c = await quoteContext(ctx, quoteId)
@@ -400,16 +438,12 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
     }
   }
 
-  // A thank-you to everyone else who actually offered a price.
+  // Everyone else still in the request hears the job was taken.
   for (const o of others || []) {
-    if (!o.stage || !['submitted', 'awaiting_date'].includes(o.stage)) continue
-    const { data: ov } = await ctx.svc.from('vendors').select('phone').eq('id', o.vendor_id).maybeSingle()
-    const oto = ctx.toE164(String(ov?.phone || ''))
-    if (oto && ctx.ready && await windowOpen(ctx.svc, oto)) {
-      const r = await reply(ctx, oto, `תודה על ההצעה ל"${iss.title}". הפעם הוועד בחר הצעה אחרת. נפנה אליך שוב בעבודה הבאה.`,
-        { vendor_id: o.vendor_id, building_id: iss.building_id, subject: `לא נבחר: ${String(iss.title).slice(0, 100)}`, sent_by: sentBy })
-      if (r.ok) out.thanked++; else out.notThanked++
-    } else out.notThanked++
+    if (!o.stage || !OPEN_STAGES.concat('submitted').includes(o.stage)) continue
+    const { data: full } = await ctx.svc.from('quotes').select('*').eq('id', o.id).maybeSingle()
+    if (full && await sendJobTaken(ctx, full, String(iss.title), full.amount != null && Number(full.amount) > 0, sentBy)) out.thanked++
+    else out.notThanked++
   }
   return out
 }
