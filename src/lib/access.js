@@ -90,6 +90,6 @@ export const committeeHandlesIssues = (building) => building?.service_plan !== '
 
 /** One line per plan for the upgrade screen. */
 export const PLAN_PITCH = {
-  assisted: 'הזרמת בנק אוטומטית, מאגר ספקים מדורג, תיקי גבייה ומכתבים, רגולציה ובדיקות חובה, ביקור אחזקה חודשי, וואטסאפ רשמי ודוחות.',
+  assisted: 'הזרמת בנק אוטומטית, מאגר ספקים מדורג, תיקי גבייה ומכתבים, רגולציה ובדיקות חובה, הצעות מחיר מספקים בוואטסאפ (הזולה שזמינה בזמן), וואטסאפ רשמי ודוחות.',
   managed: 'כל מה שבמסלול ליווי.',
 }

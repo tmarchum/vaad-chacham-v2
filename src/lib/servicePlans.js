@@ -18,7 +18,7 @@ export const STAGE_LABELS = {
 }
 
 export const HANDLER_LABELS = { committee: 'הוועד', management: 'ועד1' }
-export const HANDLER_KIND_LABELS = { handyman: 'איש אחזקה', vendor: 'ספק בטיפול ועד1', contractor: 'הספק הקבוע של הבניין' }
+export const HANDLER_KIND_LABELS = { handyman: 'איש אחזקה', vendor: 'ספק מהצעות ועד1', contractor: 'הספק הקבוע של הבניין' }
 
 // What happens when a building's punch card runs out — the committee chooses.
 export const CARD_POLICY_LABELS = {

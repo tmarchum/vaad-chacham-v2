@@ -5,10 +5,16 @@
 //      no contacts. A deadline: 24h, or 2h for an urgent issue.
 //   2. Interested → link to details and photos, ask for the price BEFORE VAT,
 //      final for the job as described; "ביקור" asks to see the place first.
-//   3. A number → recorded as the quote; ask when they can do it.
-//   4. The answer → "ההצעה הועברה לוועד הבית".
-//   5. The committee picks one (award): the winner gets the contact, the
-//      apartment and the rules; whoever else offered gets a thank-you.
+//   3. A number → the quote, which holds the availability the offer asked for:
+//      today for an urgent issue, within 7 days otherwise. No date haggling.
+//   4. When every vendor answered (or the deadline passed) the CHEAPEST quote
+//      is marked recommended and only that one goes to the committee, with
+//      [סוגרים איתו] [תאמו ולוו אותנו] [לא מתאים]. ועד1 sees all of them.
+//   5. "סוגרים איתו": the committee gets the vendor's phone and coordinates
+//      directly; the vendor gets the committee member. "תאמו ולוו אותנו":
+//      ועד1 coordinates and the handyman accompanies (a handyman hour).
+//      "לא מתאים": the next cheapest goes to the committee.
+//      Everyone not chosen hears the job was taken.
 // Handyman:
 //   "עבודה חדשה" + [אגיע] [לא יכול] → when he will come.
 //
@@ -92,6 +98,62 @@ async function loadIssue(svc: SupabaseClient, id: string) {
 }
 
 const PRE_QUOTE = ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes']
+const DONE = ['completed', 'resolved', 'closed', 'rejected']
+
+// By when the work must be possible: today (Israel time) when urgent, else 7 days.
+function availabilityFor(priority: string | null) {
+  if (priority === 'urgent') {
+    const ymd = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+    // 23:59 Israel time is 20:59 or 21:59 UTC; take the earlier, safe either way.
+    return { by: new Date(`${ymd}T20:59:00Z`), text: 'היום' }
+  }
+  const by = new Date(Date.now() + 7 * 86400 * 1000)
+  return { by, text: `עד ${ilDay(by)}` }
+}
+const availText = (q: Record<string, any>) =>
+  q.available_by ? (q.available_when || `עד ${ilDay(new Date(q.available_by))}`) : (q.available_when || '')
+
+/** Is this phone a committee member of the building (or ועד1 admin)? */
+async function isCommitteePhone(svc: SupabaseClient, buildingId: string, phone: string) {
+  const t = String(phone || '').replace(/\D/g, '').slice(-9)
+  if (t.length < 9) return null
+  const { data: rows } = await svc.from('unit_residents')
+    .select('id, last_name, phone, units!inner(number, building_id, board_member)')
+    .eq('units.building_id', buildingId).eq('units.board_member', true).eq('archived', false)
+  const r = (rows || []).find((x) => String(x.phone || '').replace(/\D/g, '').slice(-9) === t)
+  if (r) return { id: r.id, last_name: r.last_name, phone: r.phone, number: (r.units as unknown as { number?: string })?.number || '' }
+  const { data: admins } = await svc.from('profiles').select('id, phone').eq('role', 'admin')
+  if ((admins || []).some((a) => String(a.phone || '').replace(/\D/g, '').slice(-9) === t)) return { id: null, last_name: 'ועד1', phone, number: '' }
+  return null
+}
+
+/** Phones of the committee for an issue: the member it is assigned to, else the whole committee. */
+async function committeePhones(ctx: JobCtx, iss: Record<string, any>) {
+  if (iss.assigned_to) {
+    const { data: r } = await ctx.svc.from('unit_residents').select('phone').eq('id', iss.assigned_to).maybeSingle()
+    const one = ctx.toE164(String(r?.phone || ''))
+    if (one && /^9725\d{8}$/.test(one)) return [one]
+  }
+  const { data: rows } = await ctx.svc.from('unit_residents')
+    .select('phone, units!inner(building_id, board_member)')
+    .eq('units.building_id', iss.building_id).eq('units.board_member', true).eq('archived', false)
+  return [...new Set((rows || []).map((r) => ctx.toE164(String(r.phone || ''))).filter((x): x is string => !!x && /^9725\d{8}$/.test(x)))]
+}
+
+/** Other open issues in the building — for "while he is here". */
+async function otherOpen(ctx: JobCtx, iss: Record<string, any>, sameCategory: boolean) {
+  let q = ctx.svc.from('issues').select('id, title, category, ticket_no, handler_kind, stage')
+    .eq('building_id', iss.building_id).neq('id', iss.id).not('status', 'in', `(${DONE.join(',')})`)
+  if (sameCategory && iss.category) q = q.eq('category', iss.category)
+  const { data } = await q.order('created_at').limit(5)
+  return data || []
+}
+
+async function hourPrice(ctx: JobCtx, buildingId: string) {
+  const { data: b } = await ctx.svc.from('buildings').select('service_plan').eq('id', buildingId).maybeSingle()
+  const { data: p } = await ctx.svc.from('service_plans').select('hour_price').eq('key', b?.service_plan || 'basic').maybeSingle()
+  return Number(p?.hour_price) || 0
+}
 
 // ── Send ────────────────────────────────────────────────────────────────────
 export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendorIds?: string[]; kind: 'quote' | 'handyman'; sentBy: string | null }) {
@@ -149,6 +211,9 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
     return { ok: r.ok, sent: r.ok ? 1 : 0, error: r.error }
   }
 
+  // The price must hold this availability; it is part of the job, not a later question.
+  const avail = availabilityFor(iss.priority)
+  const jobDesc = ctx.cleanParam(`${desc} | נדרש ביצוע ${avail.text}`).slice(0, 700)
   const { data: vendors } = await ctx.svc.from('vendors')
     .select('id, name, phone, is_blacklisted, is_internal').in('id', (opts.vendorIds || []).slice(0, 10))
   let sent = 0, failed = 0
@@ -162,16 +227,17 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
     if (prev && ['awaiting_amount', 'visit_requested', 'awaiting_date', 'submitted', 'won'].includes(prev.stage)) {
       skipped.push({ name: v.name, reason: 'in_progress' }); continue
     }
-    const fields = { stage: 'offered', status: 'pending', amount: null, available_when: null, visit_requested: false,
+    const fields = { stage: 'offered', status: 'pending', amount: null, available_when: avail.text, available_by: avail.by.toISOString(),
+      visit_requested: false, recommended: false, committee_choice: null, committee_choice_at: null,
       deadline: deadline.toISOString(), sent_at: new Date().toISOString(), responded_at: null }
     const { data: q } = prev
       ? await ctx.svc.from('quotes').update(fields).eq('id', prev.id).select('id').single()
       : await ctx.svc.from('quotes').insert({ ...fields, issue_id: iss.id, vendor_id: v.id, building_id: iss.building_id,
           vendor_name: v.name, description: iss.title }).select('id').single()
     if (!q) { failed++; continue }
-    const msg = await build(to, 'vendor_job_offer', [v.name, iss.category || 'כללי', desc, address].map(ctx.cleanParam),
+    const msg = await build(to, 'vendor_job_offer', [v.name, iss.category || 'כללי', jobDesc, address].map(ctx.cleanParam),
       [`offer:${q.id}:yes`, `offer:${q.id}:no`], ['מעוניין לתת הצעה', 'לא מעוניין'],
-      'vendor_quote_request', [v.name, address, `${desc}${link ? ` | פרטים ותמונות: ${link}` : ''}`, 'ועד1'].map(ctx.cleanParam))
+      'vendor_quote_request', [v.name, address, `${jobDesc}${link ? ` | פרטים ותמונות: ${link}` : ''}`, 'ועד1'].map(ctx.cleanParam))
     if (!msg) { failed++; continue }
     const r = await ctx.send(msg.payload)
     if (r.ok) sent++; else failed++
@@ -188,9 +254,10 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
 }
 
 // ── Vendor messages ─────────────────────────────────────────────────────────
-const askAmountText = (link: string, deadline: Date | null) =>
+const askAmountText = (link: string, deadline: Date | null, avail = '') =>
   `תודה!${link ? ` הפרטים והתמונות כאן: ${link}` : ''}\n\n`
-  + 'כדי להגיש הצעה, כתוב כאן את הסכום הכולל בשקלים, *לפני מע"מ*: עבודה וחלקים.\n\n'
+  + 'כדי להגיש הצעה, כתוב כאן את הסכום הכולל בשקלים, *לפני מע"מ*: עבודה וחלקים.\n'
+  + (avail ? `הגשת הצעה היא התחייבות לבצע את העבודה ${avail}.\n\n` : '\n')
   + 'חשוב: הסכום שתיתן הוא סופי לעבודה כפי שתוארה, ואי אפשר להוסיף עליו מול הבניין אחרי שהעבודה מתחילה. '
   + 'אם בשטח יתגלה משהו שלא היה בתיאור, עוצרים ומדווחים לנו כאן, ותוספת אפשרית רק באישור הוועד.\n\n'
   + 'צריך לראות את המקום לפני שמתחייבים למחיר? כתוב "ביקור" ונתאם.'
@@ -228,9 +295,26 @@ async function recordAmount(ctx: JobCtx, q: Record<string, any>, iss: Record<str
   const terms = q.stage === 'offered'
     ? '\nחשוב: המחיר הוא לפני מע"מ וסופי לעבודה כפי שתוארה. אם בשטח יתגלה משהו שלא היה בתיאור, עוצרים ומדווחים לנו כאן, ותוספת אפשרית רק באישור הוועד. אם הסכום ששלחת כולל מע"מ, כתוב את הסכום לפני מע"מ.'
     : ''
-  await ctx.svc.from('quotes').update({ amount, stage: 'awaiting_date', status: 'pending', responded_at: new Date().toISOString() }).eq('id', q.id)
-  await reply(ctx, to, `קיבלנו: ${nis(amount)} לפני מע"מ, סופי לעבודה כפי שתוארה.${terms}\nמתי תוכל לבצע? כתוב יום ושעה משוערים.`,
-    { vendor_id: q.vendor_id, building_id: q.building_id, subject: `הצעת מחיר התקבלה: ${String(iss?.title || '').slice(0, 100)}` })
+  // A quote from the old flow (no availability window) still asks for a date.
+  if (!q.available_by) {
+    await ctx.svc.from('quotes').update({ amount, stage: 'awaiting_date', status: 'pending', responded_at: new Date().toISOString() }).eq('id', q.id)
+    await reply(ctx, to, `קיבלנו: ${nis(amount)} לפני מע"מ, סופי לעבודה כפי שתוארה.${terms}\nמתי תוכל לבצע? כתוב יום ושעה משוערים.`,
+      { vendor_id: q.vendor_id, building_id: q.building_id, subject: `הצעת מחיר התקבלה: ${String(iss?.title || '').slice(0, 100)}` })
+    return
+  }
+  const fix = q.stage === 'submitted'
+  await ctx.svc.from('quotes').update({ amount, stage: 'submitted', status: 'received', responded_at: new Date().toISOString() }).eq('id', q.id)
+  const by = new Date(Math.max(Date.now(), q.deadline ? new Date(q.deadline).getTime() : 0) + 86400 * 1000)
+  await reply(ctx, to, `${fix ? 'עדכנו' : 'קיבלנו'}: ${nis(amount)} לפני מע"מ, סופי לעבודה כפי שתוארה, עם ביצוע ${availText(q)}.${terms}\n`
+    + `ההצעה הוגשה. נעדכן אותך בכל מקרה עד ${ilDay(by)}.\nטעית בסכום? כתוב את הסכום הנכון במספרים.`,
+    { vendor_id: q.vendor_id, building_id: q.building_id, subject: `הצעת מחיר ${fix ? 'עודכנה' : 'התקבלה'}: ${String(iss?.title || '').slice(0, 100)}` })
+  if (!fix) {
+    const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+    await emailAdmins(ctx.svc, `הצעת מחיר חדשה: ${v?.name || ''} · ${nis(amount)} · ${iss?.title || ''}`,
+      [`ספק: ${v?.name || ''} (${v?.phone || ''})`, `עבודה: ${iss?.title || ''}`, `סכום: ${nis(amount)} לפני מע"מ`, `ביצוע: ${availText(q)}`,
+        'כשכל הספקים יענו, או כשמועד ההגשה יעבור, הזולה תישלח לוועד.'], q.building_id)
+  }
+  if (q.issue_id) await pickBest(ctx, q.issue_id, false)
 }
 
 /** A tap on a job-offer button. Payload "offer:<quoteId>:yes|no" or "hm:<issueId>:yes|no". */
@@ -267,6 +351,7 @@ export async function handleOfferButton(ctx: JobCtx, from: string, payload: stri
   if (!yes) {
     await ctx.svc.from('quotes').update({ stage: 'declined', status: 'declined', responded_at: new Date().toISOString() }).eq('id', q.id)
     await reply(ctx, from, 'תודה על התשובה. לא נפנה אליך שוב בעבודה הזאת.', { vendor_id: q.vendor_id, building_id: q.building_id, subject: `לא מעוניין: ${String(iss?.title || '').slice(0, 100)}` })
+    if (q.issue_id) await pickBest(ctx, q.issue_id, false)
     return
   }
   if (q.stage === 'awaiting_date') {
@@ -274,7 +359,7 @@ export async function handleOfferButton(ctx: JobCtx, from: string, payload: stri
     return
   }
   await ctx.svc.from('quotes').update({ stage: 'awaiting_amount' }).eq('id', q.id)
-  await reply(ctx, from, askAmountText(briefLink(iss?.brief_token || null), q.deadline ? new Date(q.deadline) : null),
+  await reply(ctx, from, askAmountText(briefLink(iss?.brief_token || null), q.deadline ? new Date(q.deadline) : null, availText(q)),
     { vendor_id: q.vendor_id, building_id: q.building_id, subject: `מעוניין לתת הצעה: ${String(iss?.title || '').slice(0, 100)}` })
 }
 
@@ -302,9 +387,23 @@ export async function handleOfferText(ctx: JobCtx, from: string, text: string, v
   }
 
   const { data: q } = await ctx.svc.from('quotes').select('*')
-    .eq('vendor_id', vendor.id).in('stage', OPEN_STAGES).gte('sent_at', since)
+    .eq('vendor_id', vendor.id).in('stage', OPEN_STAGES.concat('submitted')).gte('sent_at', since)
     .order('updated_at', { ascending: false }).limit(1).maybeSingle()
   if (!q) return false
+  // A submitted quote: only a bare number (a corrected price) is ours, and
+  // only until it went to the committee.
+  if (q.stage === 'submitted') {
+    const bare = /^\s*₪?\s*[\d,.]+\s*(₪|ש"ח|שח|שקל|שקלים)?\s*$/.test(text)
+    const n = parseAmount(text)
+    if (!bare || n == null || !q.available_by) return false
+    if (q.recommended || q.committee_choice) {
+      await reply(ctx, from, 'ההצעה כבר הועברה לוועד הבית, ואי אפשר לשנות אותה עכשיו.', { vendor_id: q.vendor_id, building_id: q.building_id, subject: 'הצעת מחיר: ניסיון עדכון אחרי העברה לוועד' })
+      return true
+    }
+    const loadedS = q.issue_id ? await loadIssue(ctx.svc, q.issue_id) : null
+    await recordAmount(ctx, q, loadedS?.iss || null, from, text, n)
+    return true
+  }
   if (AUTO_REPLY.test(text)) return true
   if (await expireIfLate(ctx, q, from)) return true
   const loaded = q.issue_id ? await loadIssue(ctx.svc, q.issue_id) : null
@@ -385,7 +484,7 @@ export async function closeQuotes(ctx: JobCtx, issueId: string, sentBy: string |
 }
 
 // ── The committee picks a quote ─────────────────────────────────────────────
-export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | null) {
+export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | null, opts: { contact?: string; coordinate?: boolean } = {}) {
   const c = await quoteContext(ctx, quoteId)
   if (!c || !c.iss) return { ok: false, error: 'not_found' }
   const { q, iss, b } = c
@@ -401,17 +500,15 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
   }
   await ctx.svc.from('issues').update({ vendor_id: q.vendor_id, vendor_name: q.vendor_name, estimated_cost: q.amount, status: 'approved' }).eq('id', iss.id)
 
-  // Who the vendor calls: the committee member who owns the issue, else ועד1.
-  let contact = ''
-  if (iss.assigned_to) {
+  // Who the vendor calls: the member who chose, else the one who owns the
+  // issue. When ועד1 coordinates, nobody: we write to him here.
+  let contact = opts.coordinate ? 'ועד1 — ניצור איתך קשר כאן בוואטסאפ לתיאום מועד' : (opts.contact || '')
+  if (!contact && iss.assigned_to) {
     const { data: r } = await ctx.svc.from('unit_residents').select('last_name, phone, units(number)').eq('id', iss.assigned_to).maybeSingle()
     const u = (r?.units as unknown as { number?: string } | null)
     if (r) contact = [r.last_name, u?.number ? `דירה ${u.number}` : '', r.phone].filter(Boolean).join(' · ')
   }
-  if (!contact) {
-    const { data: a } = await ctx.svc.from('profiles').select('phone').eq('role', 'admin').not('phone', 'is', null).limit(1).maybeSingle()
-    contact = `ועד1${a?.phone ? ` · ${a.phone}` : ''}`
-  }
+  if (!contact) contact = 'ועד הבית — ניצור איתך קשר כאן בוואטסאפ'
   // No apartment number: issue.unit_id is who REPORTED it, and most jobs are in
   // common areas (the parking, a stairwell). Where exactly is in the description.
   const apt = ''
@@ -423,9 +520,10 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
   const to = ctx.toE164(String(v?.phone || ''))
   if (to && ctx.ready) {
     const text = `ההצעה שלך נבחרה ✅\nעבודה: ${iss.title}\nכתובת: ${address}${apt}\nאיש קשר בבניין: ${contact}\n`
-      + `${q.available_when ? `מועד שציינת: ${q.available_when}\n` : ''}`
+      + `${availText(q) ? `ביצוע: ${availText(q)}, כפי שהתחייבת\n` : ''}`
       + `מחיר סגור: ${nis(q.amount)} לפני מע"מ, לעבודה כפי שתוארה.\n\n`
       + 'אם בשטח מתגלה משהו שלא היה בתיאור, עצור ודווח לנו כאן לפני כל עבודה נוספת. תוספת אפשרית רק באישור הוועד דרך ועד1, ולא מול הדיירים או חברי הוועד.\n'
+      + 'בסיום העבודה שלח כאן תמונה של העבודה וצילום של החשבונית.\n'
       + `התשלום ישירות מהבניין, לפי חשבונית.${link ? `\nפרטים ותמונות: ${link}` : ''}`
     if (await windowOpen(ctx.svc, to)) {
       const r = await reply(ctx, to, text, { vendor_id: q.vendor_id, building_id: iss.building_id, subject: `הצעתך נבחרה: ${String(iss.title).slice(0, 100)}`, sent_by: sentBy })
@@ -434,7 +532,7 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
       const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_job_assignment').maybeSingle()
       if (t?.active && t.meta_status === 'APPROVED') {
         const vars = [v?.name, `${address}${apt}`, `${iss.title} · מחיר סגור ${nis(q.amount)} לפני מע"מ, לעבודה כפי שתוארה`,
-          q.available_when || 'יתואם איתך', contact].map(ctx.cleanParam)
+          availText(q) || 'יתואם איתך', contact].map(ctx.cleanParam)
         const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
           components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } })
         await ctx.log({ recipient: to, audience: 'vendor', vendor_id: q.vendor_id, building_id: iss.building_id, template_key: 'vendor_job_assignment',
@@ -453,4 +551,172 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
     else out.notThanked++
   }
   return out
+}
+
+// ── The committee gets ONE quote: the cheapest that holds the availability ──
+/**
+ * Once every vendor answered (or, with force, once the deadline passed), mark
+ * the cheapest submitted quote as recommended and send it to the committee.
+ * Idempotent: nothing happens while a quote is recommended or chosen.
+ */
+export async function pickBest(ctx: JobCtx, issueId: string, force: boolean): Promise<Record<string, unknown>> {
+  const { data: all } = await ctx.svc.from('quotes').select('*').eq('issue_id', issueId).not('stage', 'is', null)
+  const rows = all || []
+  if (!rows.length) return { ok: true, state: 'none' }
+  if (rows.some((q) => (q.recommended && !q.committee_choice) || q.stage === 'won')) return { ok: true, state: 'already' }
+  const now = Date.now()
+  const waiting = rows.filter((q) => BEFORE_AMOUNT.includes(q.stage) && q.deadline && new Date(q.deadline).getTime() > now)
+  if (waiting.length && !force) return { ok: true, state: 'waiting' }
+  for (const q of rows.filter((q) => BEFORE_AMOUNT.includes(q.stage) && (!q.deadline || new Date(q.deadline).getTime() <= now))) {
+    await ctx.svc.from('quotes').update({ stage: 'expired', status: 'expired' }).eq('id', q.id)
+  }
+  if (waiting.length) return { ok: true, state: 'waiting' }
+
+  const loaded = await loadIssue(ctx.svc, issueId)
+  if (!loaded) return { ok: false, error: 'not_found' }
+  const { iss, b } = loaded
+  const candidates = rows.filter((q) => q.stage === 'submitted' && Number(q.amount) > 0 && q.committee_choice !== 'reject')
+    .sort((a, z) => Number(a.amount) - Number(z.amount))
+  if (!candidates.length) {
+    // Tell ועד1 once: after this every quote is closed, so nothing calls again.
+    if (!rows.some((q) => q.committee_choice === 'reject')) {
+      await emailAdmins(ctx.svc, `לא התקבלה הצעה בזמן: ${iss.title}`,
+        [`אף ספק לא הגיש הצעה לעבודה "${iss.title}" (${addressOf(b)}) בזמן.`,
+          `נשלח ל-${rows.length} ספקים. אפשר לשלוח לספקים נוספים ממסך התקלות.`], iss.building_id)
+    }
+    return { ok: true, state: 'no_quotes' }
+  }
+  const best = candidates[0]
+  await ctx.svc.from('quotes').update({ recommended: true }).eq('id', best.id)
+  await ctx.svc.from('issues').update({ stage: 'awaiting_quote_approval' }).eq('id', iss.id)
+  const sent = await sendBestToCommittee(ctx, { ...best, recommended: true }, iss, b, candidates.length)
+  await emailAdmins(ctx.svc, `הצעה נשלחה לוועד: ${best.vendor_name} · ${nis(best.amount)} · ${iss.title}`,
+    [`עבודה: ${iss.title} (${addressOf(b)})`, `ההצעה הזולה: ${best.vendor_name} · ${nis(best.amount)} לפני מע"מ · ביצוע ${availText(best)}`,
+      ...candidates.slice(1).map((c) => `הצעה נוספת: ${c.vendor_name} · ${nis(c.amount)}`),
+      sent ? 'הוועד קיבל אותה בוואטסאפ עם כפתורים.' : 'לא הצלחנו לשלוח לוועד בוואטסאפ (אין חלון שיחה פתוח ואין תבנית מאושרת). הוועד רואה אותה באפליקציה, כדאי לעדכן אותו.'],
+    iss.building_id)
+  return { ok: true, state: 'sent_to_committee', quoteId: best.id, whatsapp: sent }
+}
+
+async function sendBestToCommittee(ctx: JobCtx, q: Record<string, any>, iss: Record<string, any>, b: Record<string, any> | null, count: number) {
+  const phones = await committeePhones(ctx, iss)
+  if (!phones.length || !ctx.ready) return 0
+  const hour = await hourPrice(ctx, iss.building_id)
+  const more = await otherOpen(ctx, iss, true)
+  const what = `${iss.ticket_no ? `#${iss.ticket_no} ` : ''}${iss.title}`
+  const text = `שלום, כאן ועד1.\nהתקבלה הצעה לתקלה *${what}* ב${b?.name || 'בניין'}:\n`
+    + `${q.vendor_name} · ${nis(q.amount)} לפני מע"מ, סופי לעבודה כפי שתוארה.\nביצוע: ${availText(q)}.\n`
+    + `${count > 1 ? `זו ההצעה הזולה מבין ${count} ספקים שזמינים בזמן.\n` : ''}`
+    + (more.length ? `\nבזמן שהוא בבניין, אפשר לבקש ממנו לטפל גם ב: ${more.map((m) => m.title).join(' · ')}\n` : '')
+    + '\nסוגרים איתו? תקבלו את הטלפון שלו ותתאמו ישירות.'
+    + `\nלא תוכלו להיות בבניין? ועד1 תתאם, ואיש האחזקה ילווה את הספק${hour ? ` (שעת אחזקה ₪${hour} לפני מע"מ, או שעה מהכרטיסייה)` : ''}.`
+  const ids = ['take', 'coord', 'no'].map((a) => `bq:${q.id}:${a}`)
+  const titles = ['סוגרים איתו', 'תאמו ולוו אותנו', 'לא מתאים']
+  const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'committee_best_quote').maybeSingle()
+  let sent = 0
+  for (const to of phones) {
+    let payload: Record<string, unknown> | null = null
+    let body = text
+    if (await windowOpen(ctx.svc, to)) {
+      payload = { messaging_product: 'whatsapp', to, type: 'interactive', interactive: { type: 'button', body: { text: text.slice(0, 1024) },
+        action: { buttons: ids.map((id, i) => ({ type: 'reply', reply: { id, title: titles[i] } })) } } }
+    } else if (t?.active && t.meta_status === 'APPROVED') {
+      const vars = [what, `${q.vendor_name} · ${nis(q.amount)} לפני מע"מ`, availText(q),
+        hour ? `₪${hour} לפני מע"מ, או שעה מהכרטיסייה` : 'לפי המחירון'].map(ctx.cleanParam)
+      body = ctx.render(t.body, vars)
+      payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
+        components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) },
+          ...ids.map((id, index) => ({ type: 'button', sub_type: 'quick_reply', index: String(index), parameters: [{ type: 'payload', payload: id }] }))] } }
+    }
+    if (!payload) continue
+    const r = await ctx.send(payload)
+    if (r.ok) sent++
+    await ctx.log({ recipient: to, audience: 'resident', building_id: iss.building_id, template_key: 'committee_best_quote',
+      subject: `הצעה לוועד: ${String(what).slice(0, 120)}`, body,
+      status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error })
+  }
+  return sent
+}
+
+/**
+ * The committee's answer to the recommended quote, from a WhatsApp button or
+ * the app. take: they close with the vendor themselves; coordinate: ועד1
+ * coordinates and the handyman accompanies; reject: the next cheapest.
+ */
+export async function committeeChoice(ctx: JobCtx, quoteId: string, choice: 'take' | 'coordinate' | 'reject',
+  actor: { phone?: string; uid?: string | null }): Promise<Record<string, any>> {
+  const c = await quoteContext(ctx, quoteId)
+  if (!c || !c.iss) return { ok: false, error: 'not_found', text: 'ההצעה לא נמצאה.' }
+  const { q, iss, b } = c
+  let member: Awaited<ReturnType<typeof isCommitteePhone>> = null
+  if (actor.phone) {
+    member = await isCommitteePhone(ctx.svc, iss.building_id, actor.phone)
+    if (!member) return { ok: false, error: 'forbidden', text: 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.' }
+  }
+  if (q.committee_choice || q.stage === 'won') return { ok: false, error: 'already', text: `כבר התקבלה החלטה על ההצעה של ${q.vendor_name}. אפשר לראות באפליקציה.` }
+  if (!q.recommended) return { ok: false, error: 'not_recommended', text: 'ההצעה הזאת כבר לא פתוחה להחלטה.' }
+  await ctx.svc.from('quotes').update({ committee_choice: choice, committee_choice_at: new Date().toISOString() }).eq('id', q.id)
+
+  if (choice === 'reject') {
+    await ctx.svc.from('quotes').update({ recommended: false, stage: 'lost', status: 'rejected' }).eq('id', q.id)
+    await sendJobTaken(ctx, q, String(iss.title), true, actor.uid || null)
+    const next = await pickBest(ctx, iss.id, true)
+    if (next.state === 'sent_to_committee') return { ok: true, next: true, text: 'רשמנו. שלחנו לכם את ההצעה הבאה בתור.' }
+    await emailAdmins(ctx.svc, `הוועד דחה את ההצעה ואין הצעה נוספת: ${iss.title}`,
+      [`הוועד דחה את ההצעה של ${q.vendor_name} (${nis(q.amount)}) ל"${iss.title}".`, 'אין הצעה נוספת. צריך לשלוח לספקים נוספים.'], iss.building_id)
+    return { ok: true, next: false, text: 'רשמנו. אין כרגע הצעה נוספת, ונבקש הצעות מספקים נוספים.' }
+  }
+
+  // Whoever tapped is the vendor's contact (apartment number + surname only).
+  const contact = choice === 'take' && member?.id
+    ? [member.last_name, member.number ? `דירה ${member.number}` : '', member.phone].filter(Boolean).join(' · ') : ''
+  const res = await awardQuote(ctx, q.id, actor.uid || null, { contact, coordinate: choice === 'coordinate' })
+  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+  const e164 = ctx.toE164(String(v?.phone || '')) || ''
+
+  if (choice === 'take') {
+    await ctx.svc.from('issues').update({ handler: 'committee', handler_kind: 'vendor', stage: 'scheduled', status: 'in_progress' }).eq('id', iss.id)
+    const hello = encodeURIComponent(`שלום, כאן ועד הבית ב${addressOf(b)}. קיבלנו את ההצעה שלך דרך ועד1 ל"${iss.title}". מתי נוח לך להגיע?`)
+    return { ...res, ok: true, vendor: v, wa: e164 ? `https://wa.me/${e164}?text=${hello}` : null,
+      text: `✅ סגרנו עם ${q.vendor_name}.\nטלפון: ${v?.phone || ''}${e164 ? `\nלתיאום בוואטסאפ: https://wa.me/${e164}?text=${hello}` : ''}\n`
+        + `מחיר סגור: ${nis(q.amount)} לפני מע"מ, ביצוע ${availText(q)}.\n\n`
+        + 'הספק קיבל את פרטי הקשר שלך. אם הוא יבקש תוספת, הוא מדווח לנו ואנחנו שולחים לכם לאישור. לא משלמים תוספת שלא אושרה כך.\n'
+        + 'בסיום נבקש מכם לאשר שהעבודה בוצעה.' }
+  }
+
+  // coordinate
+  await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'vendor', stage: 'awaiting_assignment', status: 'in_progress' }).eq('id', iss.id)
+  const hour = await hourPrice(ctx, iss.building_id)
+  const queued = (await otherOpen(ctx, iss, false)).filter((m) => m.handler_kind === 'handyman')
+  await emailAdmins(ctx.svc, `לתאם ספק וליווי: ${iss.title}`,
+    [`הוועד ביקש שוועד1 תתאם את ${q.vendor_name} (${v?.phone || ''}) ושאיש האחזקה ילווה אותו.`,
+      `עבודה: ${iss.title} · ${addressOf(b)}`, `מחיר סגור: ${nis(q.amount)} לפני מע"מ · ביצוע ${availText(q)}`,
+      ...(queued.length ? [`באותו ביקור איש האחזקה יכול לטפל גם ב: ${queued.map((m) => m.title).join(' · ')}`] : [])], iss.building_id)
+  return { ...res, ok: true, vendor: v,
+    text: `✅ ועד1 תתאם עם ${q.vendor_name}, ואיש האחזקה ילווה אותו בבניין.\n`
+      + `${hour ? `שעת אחזקה: ₪${hour} לפני מע"מ, או שעה מהכרטיסייה. נרשמת אחרי הביקור.\n` : ''}`
+      + (queued.length ? `באותו ביקור איש האחזקה יטפל גם ב: ${queued.map((m) => m.title).join(' · ')}\n` : '')
+      + 'נעדכן אתכם כשייקבע מועד.' }
+}
+
+/** Committee tapped a button on the recommended quote: "bq:<quoteId>:take|coord|no". */
+export async function handleBestQuoteButton(ctx: JobCtx, from: string, payload: string) {
+  const [, id, a] = payload.split(':')
+  const choice = a === 'take' ? 'take' : a === 'coord' ? 'coordinate' : 'reject'
+  const r = await committeeChoice(ctx, id, choice, { phone: from })
+  const { data: q } = await ctx.svc.from('quotes').select('building_id').eq('id', id).maybeSingle()
+  if (!ctx.ready) return
+  const s = await ctx.send({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: String(r.text) } })
+  await ctx.log({ recipient: from, audience: 'resident', building_id: q?.building_id || null, subject: 'החלטת ועד על הצעת מחיר', body: String(r.text),
+    status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
+}
+
+/** Scheduler: requests whose deadline passed go to the committee with what came in. */
+export async function sweepQuotes(ctx: JobCtx) {
+  const { data } = await ctx.svc.from('quotes').select('issue_id')
+    .in('stage', BEFORE_AMOUNT).lte('deadline', new Date().toISOString()).not('issue_id', 'is', null).limit(200)
+  const ids = [...new Set((data || []).map((x) => x.issue_id as string))]
+  const out: Record<string, unknown>[] = []
+  for (const id of ids) out.push({ issueId: id, ...(await pickBest(ctx, id, true)) })
+  return { ok: true, issues: ids.length, results: out }
 }

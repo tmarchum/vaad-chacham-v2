@@ -112,6 +112,7 @@ const QUOTE_STAGE_LABELS = {
   expired: 'לא הגיש בזמן',
 }
 const QUOTE_STATUS_LABELS = { pending: 'ממתין', received: 'התקבל', accepted: 'נבחר', rejected: 'נדחה', declined: 'לא מעוניין', expired: 'לא הגיש בזמן' }
+const QUOTE_CHOICE_LABELS = { take: 'הוועד סגר עם הספק', coordinate: 'ועד1 מתאמת, איש האחזקה מלווה', reject: 'הוועד דחה' }
 const HANDYMAN_REPLY_LABELS = { offered: 'איש האחזקה טרם ענה', coming: 'איש האחזקה: אגיע', declined: 'איש האחזקה: לא יכול' }
 
 const PRE_QUOTE_STATUSES = ['reported', 'pending_committee', 'acknowledged', 'approved_for_quotes']
@@ -542,7 +543,7 @@ function Issues() {
   // ועד1's own handyman is reached through "טיפול ועד1", not picked as a pool vendor.
   const allVendors = useMemo(() => vendorRows.filter((v) => !v.is_internal), [vendorRows])
   const { data: supervisors } = useCollection('supervisors')
-  const { data: allQuotes, create: createQuote, update: updateQuote } = useCollection('quotes', scope)
+  const { data: allQuotes, create: createQuote, update: updateQuote, refresh: refreshQuotes } = useCollection('quotes', scope)
 
   // State
   const [search, setSearch] = useState('')
@@ -1149,6 +1150,7 @@ function Issues() {
       body: { action: 'job-offer', kind: 'quote', issueId: iss.id, vendorIds: targets.map((v) => v.id) },
     })
     setQuoteBulk({ running: false, done: 0, total: 0 })
+    if (data?.error === 'not_in_plan') { toast('בקשת הצעות אוטומטית מספקים כלולה במסלול ליווי. אפשר לפנות לספקים מהמאגר ישירות.', 'info'); return 0 }
     if (error || !data?.ok) { toastError('השליחה לספקים נכשלה'); return 0 }
     const busy = (data.skipped || []).filter((x) => x.reason === 'in_progress').length
     if (busy) toast(`${busy} ספקים כבר באמצע הגשת הצעה לתקלה הזאת — לא נשלח להם שוב`, 'info')
@@ -1391,6 +1393,36 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setDetailIssue((prev) => prev ? { ...prev, estimatedCost: quote.amount, vendor_name: quote.vendorName, status: 'approved' } : null)
   }
 
+  // The committee's answer to the one quote it was sent (the cheapest that can
+  // do it in time): close with him, ask ועד1 to coordinate, or not this one.
+  const handleQuoteChoice = async (quote, choice) => {
+    const ask = {
+      take: `לסגור עם ${quote.vendorName} (${formatCurrency(quote.amount)} לפני מע"מ)?\nתקבלו את הטלפון שלו ותתאמו איתו ישירות.`,
+      coordinate: `לבקש מוועד1 לתאם עם ${quote.vendorName}, ושאיש האחזקה ילווה אותו בבניין?\nתחויב שעת אחזקה לפי המסלול, או שעה מהכרטיסייה.`,
+      reject: `ההצעה של ${quote.vendorName} לא מתאימה?\nנשלח לכם את ההצעה הבאה בתור, אם יש.`,
+    }[choice]
+    if (!window.confirm(ask)) return
+    const { data, error } = await supabase.functions.invoke('whatsapp', { body: { action: 'quote-choice', quoteId: quote.id, choice } })
+    if (error || !data?.ok) { toastError(data?.text || 'הפעולה נכשלה'); return }
+    if (choice === 'take' && data.vendor?.phone) {
+      toast(`סגרתם עם ${quote.vendorName} · טלפון ${data.vendor.phone}`)
+      if (data.wa) window.open(data.wa, '_blank', 'noopener')
+    } else {
+      toast(String(data.text || 'נרשם').split('\n')[0])
+    }
+    await refreshQuotes()
+  }
+
+  // ועד1: send the best quote to the committee now, without waiting for the deadline.
+  const handlePickNow = async (iss) => {
+    if (!window.confirm('לשלוח עכשיו לוועד את ההצעה הזולה שהתקבלה? ספקים שעוד לא ענו ייסגרו.')) return
+    const { data, error } = await supabase.functions.invoke('whatsapp', { body: { action: 'quote-pick', issueId: iss.id } })
+    if (error || !data?.ok) { toastError('השליחה נכשלה'); return }
+    toast(data.state === 'sent_to_committee' ? `נשלח לוועד${data.whatsapp ? ' בוואטסאפ' : ' (באפליקציה בלבד — אין חלון וואטסאפ פתוח)'}`
+      : data.state === 'no_quotes' ? 'לא התקבלה אף הצעה' : 'כבר נשלחה הצעה לוועד')
+    await refreshQuotes()
+  }
+
   // Close the request without picking anyone ("העבודה נתפסה"): every vendor
   // still in it gets a thank-you and stops being asked for a price.
   const handleCloseQuotes = async (iss) => {
@@ -1497,8 +1529,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         if (res.reached.length) toast(`הועבר ל${vendor} · ${line}`)
         else toastError(`הועבר ל${vendor}, אבל ההודעה לא יצאה — ${line || 'חסרים פרטי קשר לספק'}`)
       } else {
-        const fee = Number(transferPlan?.handle_fee) || 0
-        let msg = { next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף', vendor: `הועבר — ועד1 תטפל בספק${fee ? ` (₪${fee})` : ''}` }[transferMode]
+        let msg = { next_visit: 'הועבר — יטופל בביקור הבא', urgent: 'הועבר לטיפול דחוף' }[transferMode] || 'הועבר'
         // ועד1's own handyman gets the job on WhatsApp, with "אגיע / לא יכול".
         if (transferMode === 'next_visit' || transferMode === 'urgent') {
           const { data: hm } = await supabase.functions.invoke('whatsapp', { body: { action: 'job-offer', kind: 'handyman', issueId: iss.id } })
@@ -2014,6 +2045,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   {(() => {
                     const a = analyzeQuotes(issueQuotes.map(q => ({ ...q, valid_until: q.validUntil, amount: q.amount })), { requireMin: 3 })
                     if (a.count === 0) return null
+                    // From the WhatsApp flow the committee sees one quote; a comparison box means nothing to them.
+                    if (!isAdmin && issueQuotes.some((q) => q.stage)) return null
                     return (
                       <div className="mb-3 rounded-lg bg-[var(--bg-secondary)] p-2.5 text-xs space-y-1">
                         <div className="flex items-center justify-between">
@@ -2027,7 +2060,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     )
                   })()}
                   {issueQuotes.some((q) => ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date', 'submitted'].includes(q.stage)) && (
-                    <div className="mb-2 flex justify-end">
+                    <div className="mb-2 flex justify-end gap-2">
+                      {isAdmin && issueQuotes.some((q) => q.stage === 'submitted') && !issueQuotes.some((q) => q.recommended || q.stage === 'won') && (
+                        <Button size="sm" variant="outline" onClick={() => handlePickNow(iss)}>שלח לוועד את הזולה עכשיו</Button>
+                      )}
                       <Button size="sm" variant="ghost" onClick={() => handleCloseQuotes(iss)}>סגירת הפנייה — העבודה נתפסה</Button>
                     </div>
                   )}
@@ -2039,16 +2075,28 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                           <div className="flex gap-2 text-xs text-[var(--text-secondary)]">
                             {q.amount != null && <span>{formatCurrency(q.amount)} לפני מע"מ</span>}
                             <Badge variant={q.status === 'accepted' ? 'success' : ['rejected', 'declined', 'expired'].includes(q.status) ? 'danger' : q.stage === 'submitted' ? 'info' : 'warning'}>
-                              {QUOTE_STAGE_LABELS[q.stage] || QUOTE_STATUS_LABELS[q.status] || q.status}
+                              {q.recommended && !q.committee_choice ? 'נשלחה לוועד' : (QUOTE_STAGE_LABELS[q.stage] || QUOTE_STATUS_LABELS[q.status] || q.status)}
                             </Badge>
-                            {q.available_when && <span>מועד: {q.available_when}</span>}
+                            {q.committee_choice && <span>{QUOTE_CHOICE_LABELS[q.committee_choice]}</span>}
+                            {q.available_when && <span>{q.available_by ? 'ביצוע' : 'מועד'}: {q.available_when}</span>}
                             {q.deadline && ['offered', 'awaiting_amount', 'visit_requested'].includes(q.stage) && (
                               <span>עד {new Date(q.deadline).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
                             )}
                             {q.validUntil && <span>בתוקף עד: {formatDate(q.validUntil)}</span>}
                           </div>
                         </div>
-                        {(q.status === 'received' || (q.status === 'pending' && q.amount != null && q.amount > 0)) && (
+                        {q.recommended && !q.committee_choice && q.stage === 'submitted' && (
+                          <div className="flex flex-wrap gap-1.5 justify-end">
+                            <Button size="sm" onClick={() => handleQuoteChoice(q, 'take')} style={{ background: 'var(--primary)', color: 'white' }}>
+                              <Check className="h-3 w-3" />
+                              סוגרים איתו
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handleQuoteChoice(q, 'coordinate')}>תאמו ולוו אותנו</Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleQuoteChoice(q, 'reject')}>לא מתאים</Button>
+                          </div>
+                        )}
+                        {/* Quotes the committee recorded itself (not from the WhatsApp flow) are accepted directly. */}
+                        {!q.stage && (q.status === 'received' || (q.status === 'pending' && q.amount != null && q.amount > 0)) && (
                           <Button size="sm" variant="outline" onClick={() => handleAcceptQuote(q)}>
                             <Check className="h-3 w-3" />
                             קבל הצעה
@@ -2784,7 +2832,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 contractorName && { key: 'contractor', title: `שלח ל${contractorName}`, sub: 'הספק הקבוע של הבניין לקטגוריה הזו. יקבל את התקלה עכשיו, בערוץ שהוגדר לו. ללא חיוב.' },
                 { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `יטופל יחד עם שאר התקלות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים. משלמים על ביקור אחד, השעות יורדות מהכרטיסייה.`, needsPunch: true },
                 { key: 'urgent', title: 'איש אחזקה — דחוף', sub: 'ביקור נפרד בהקדם, לפחות שעה.', needsPunch: true },
-                { key: 'vendor', title: 'ועד1 תטפל בספק', sub: `ועד1 מבקשת הצעות, מתאמת ומוודאת ביצוע. הוועד בוחר את ההצעה.${Number(transferPlan?.handle_fee) ? ` ₪${Number(transferPlan.handle_fee)} לעבודה.` : ''} את הספק הבניין משלם ישירות.` },
+                // "ועד1 תטפל בספק" was withdrawn (2026-11-18): vendors go through
+                // "בקש הצעת מחיר" and the committee closes with the vendor itself.
               ].filter(Boolean).map((o) => {
                 const off = o.needsPunch && noPunches
                 return (

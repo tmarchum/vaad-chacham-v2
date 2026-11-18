@@ -77,8 +77,8 @@ export default function ServicePlans() {
     const results = await Promise.all(plans.map((p) => supabase.from('service_plans').update({
       price_per_unit: num(p.price_per_unit), min_per_building: num(p.min_per_building),
       card_price: num(p.card_price), card_punches: Math.max(1, num(p.card_punches)),
-      card_bonus_punches: num(p.card_bonus_punches), hour_price: num(p.hour_price), handle_fee: num(p.handle_fee),
-      included_punches: num(p.included_punches), updated_at: new Date().toISOString(),
+      card_bonus_punches: num(p.card_bonus_punches), hour_price: num(p.hour_price),
+      includes_auto_quotes: !!p.includes_auto_quotes, updated_at: new Date().toISOString(),
     }).eq('key', p.key)))
     setBusy('')
     if (results.some((r) => r.error)) toastError('שמירת המסלולים נכשלה')
@@ -207,7 +207,7 @@ export default function ServicePlans() {
     <div className="space-y-6">
       <div>
         <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">מסלולים ותמחור</h1>
-        <p className="text-[13px] text-[var(--text-secondary)]">שני מסלולים — כניסה וליווי. מחיר לדירה ומינימום, שעת אחזקה וכרטיסייה, דמי "ועד1 תטפל", מחירון תוספות וחלקים, והמסלול של כל בניין</p>
+        <p className="text-[13px] text-[var(--text-secondary)]">שני מסלולים — כניסה וליווי. מחיר לדירה ומינימום, שעת אחזקה וכרטיסייה, בקשת הצעות מספקים, מחירון תוספות וחלקים, והמסלול של כל בניין</p>
       </div>
 
       {/* ── Plans ── */}
@@ -223,25 +223,32 @@ export default function ServicePlans() {
               <th className={th}>כרטיסייה (₪)</th>
               <th className={th}>שעות בכרטיסייה</th>
               <th className={th}>שעות בונוס</th>
-              <th className={th}>"ועד1 תטפל" (₪)</th>
-              <th className={th}>שעות כלולות בחודש</th>
+              <th className={th}>בקשת הצעות אוטומטית</th>
             </tr></thead>
             <tbody>
               {activePlans(plans).map((p) => (
                 <tr key={p.key} className="border-t border-[var(--border-light)]">
                   <td className={cn(td, 'font-bold whitespace-nowrap')}>{p.label}</td>
-                  {['price_per_unit', 'min_per_building', 'hour_price', 'card_price', 'card_punches', 'card_bonus_punches', 'handle_fee', 'included_punches'].map((name) => (
+                  {['price_per_unit', 'min_per_building', 'hour_price', 'card_price', 'card_punches', 'card_bonus_punches'].map((name) => (
                     <td key={name} className={td}>
                       <input type="number" min="0" dir="ltr" className={field} value={p[name] ?? ''}
                         onChange={(e) => setPlanField(p.key, name, e.target.value)} />
                     </td>
                   ))}
+                  <td className={td}>
+                    <label className="flex items-center gap-1.5 text-[12px] whitespace-nowrap">
+                      <input type="checkbox" checked={!!p.includes_auto_quotes}
+                        onChange={(e) => setPlanField(p.key, 'includes_auto_quotes', e.target.checked)} />
+                      כלולה
+                    </label>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
           <p className="text-[11px] text-[var(--text-muted)] px-2 pt-2">
-            השעות הכלולות בליווי הן ביקור הליקויים החודשי. חלקים מחויבים בנפרד. ספקים — הבניין משלם להם ישירות.
+            אין שעות כלולות: בניין קונה שעה או כרטיסייה. חלקים מחויבים בנפרד. ספקים — הבניין משלם להם ישירות.
+            בקשת הצעות אוטומטית: ועד1 שולחת לספקים, והוועד מקבל את הזולה שיכולה לבצע בזמן.
           </p>
         </div>
       </SectionCard>

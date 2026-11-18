@@ -31,7 +31,23 @@
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
-import { awardQuote, closeQuotes, handleOfferButton, handleOfferText, sendJobOffers, type JobCtx } from './jobs.ts'
+import {
+  awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleOfferButton, handleOfferText,
+  pickBest, sendJobOffers, sweepQuotes, type JobCtx,
+} from './jobs.ts'
+// The same matching rules the app uses to suggest vendors.
+import { rankVendorsForIssue } from '../_shared/vendorMatch.js'
+
+/** Three agreed vendors with a mobile, ranked for the issue — what the app's "send to all" picks. */
+async function pickVendorsFor(svc: SupabaseClient, issueId: string) {
+  const { data: iss } = await svc.from('issues').select('id, title, category, priority, building_id, ai_category, ai_search_terms').eq('id', issueId).maybeSingle()
+  if (!iss) return []
+  const { data: b } = await svc.from('buildings').select('id, geo_lat, geo_lng').eq('id', iss.building_id).maybeSingle()
+  const { data: vendors } = await svc.from('vendors').select('*').eq('membership_status', 'agreed')
+  const usable = (vendors || []).filter((v) => /^9725\d{8}$/.test(toE164(String(v.phone || '')) || ''))
+  // deno-lint-ignore no-explicit-any
+  return (rankVendorsForIssue(iss, usable, { building: b }) as any[]).slice(0, 3).map((r) => r.vendor.id as string)
+}
 
 const PROVIDER = 'whatsapp_cloud'
 const MANUAL_CONFIRM_TEMPLATES = new Set(['resident_payment_reminder'])
@@ -336,13 +352,32 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
     const { data: iss } = await svc.from('issues')
       .select('id, title, description, building_id, ticket_no, brief_token').eq('id', issueId).maybeSingle()
     const title = String(iss?.title || 'התקלה')
+    // "הצעות מספקים": three vendors get the job now; the committee hears back
+    // with the cheapest one that can do it in time.
+    let vendorsAsked = 0
+    if (res === 'ok' && action === 'vendor' && iss) {
+      const ids = await pickVendorsFor(svc, iss.id)
+      if (ids.length) {
+        const r = await sendJobOffers(jobCtx(svc, integ, token), { issueId: iss.id, vendorIds: ids, kind: 'quote', sentBy: null })
+        vendorsAsked = Number((r as Record<string, unknown>).sent) || 0
+      }
+    }
+    const { data: pr } = await svc.from('issues').select('priority').eq('id', issueId).maybeSingle()
+    const when = pr?.priority === 'urgent' ? 'היום' : 'בשבוע הקרוב'
     const OK: Record<string, string> = {
       vaad1: `✅ נרשם: ועד1 תטפל ב"${title}" בביקור האחזקה הבא. השעות יירדו מהכרטיסייה או ייכנסו לחשבון החודשי.`,
-      vendor: `✅ נרשם: ועד1 תתאם ספק ל"${title}". דמי הטיפול הקבועים נכנסו לחשבון החודשי, והצעת המחיר של הספק תגיע אליכם לאישור.`,
+      vendor: vendorsAsked
+        ? `✅ נרשם: ביקשנו הצעות מ-${vendorsAsked} ספקים ל"${title}". תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${when}.`
+        : `✅ נרשם: נבקש הצעות מספקים ל"${title}". תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${when}.`,
       self: `✅ נרשם: הוועד מטפל ב"${title}".`,
+    }
+    if (res === 'ok' && action === 'vendor' && !vendorsAsked) {
+      await log(svc, { recipient: from, audience: 'other', building_id: iss?.building_id || null, status: 'failed',
+        subject: `לא נמצאו ספקים מתאימים: ${title.slice(0, 120)}`, body: 'הוועד ביקש הצעות מספקים בוואטסאפ, ולא נמצאו 3 ספקים מאושרים עם נייד לתחום. צריך לשלוח ידנית.' })
     }
     const reply = res === 'ok' ? OK[action]
       : res === 'already_decided' ? `כבר התקבלה החלטה על "${title}". אפשר לראות ולשנות באפליקציה.`
+      : res === 'not_in_plan' ? 'בקשת הצעות אוטומטית מספקים כלולה במסלול ליווי. אפשר לפנות לספקים מהמאגר דרך האפליקציה, או לבחור אפשרות אחרת.'
       : res === 'no_punches' ? 'הכרטיסייה של הבניין נגמרה, ולכן ההעברה לא בוצעה. אפשר לקנות כרטיסייה במסך "חשבון ועד1" או לבחור אפשרות אחרת.'
       : res === 'forbidden' ? 'ההחלטה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.'
       : 'ההחלטה לא נקלטה. אפשר להחליט באפליקציה.'
@@ -360,6 +395,12 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
         await sendJobOffers(jobCtx(svc, integ, token), { issueId: iss.id, kind: 'handyman', sentBy: null })
       }
     }
+    return
+  }
+
+  // Committee on the recommended quote: "bq:<quoteId>:take|coord|no".
+  if (payload.startsWith('bq:')) {
+    await handleBestQuoteButton(jobCtx(svc, integ, token), from, payload)
     return
   }
 
@@ -559,6 +600,16 @@ Deno.serve(async (req: Request) => {
         works = r.ok
       }
       return json({ ok: true, stored: { access_token: !!accessToken, app_secret: !!appSecret }, token_works: works })
+    }
+
+    // ── Scheduler (pg_cron, every 10 minutes): quote requests whose deadline
+    // passed go to the committee with what came in. Its own secret; it can
+    // do nothing else.
+    if (body.action === 'quotes-sweep') {
+      const sweepSecret = Deno.env.get('SWEEP_SECRET') || ''
+      if (!sweepSecret || !timingSafeEqual(req.headers.get('x-sweep-secret') || '', sweepSecret)) return json({ error: 'unauthorized' }, 401)
+      const { integ: si, sec: ss } = await loadConfig(svc)
+      return json(await sweepQuotes(jobCtx(svc, si, ss?.api_token || null)))
     }
 
     // ── App actions: signed-in admin / committee only ─────────────────────
@@ -775,10 +826,10 @@ Deno.serve(async (req: Request) => {
           const { data: recent } = await svc.from('notification_log').select('id')
             .eq('channel', 'whatsapp_in').eq('recipient', to).gte('created_at', since).limit(1)
           let payload: Record<string, unknown> | null = null
-          const text = `תקלה ב${b?.name || 'בניין'} ממתינה להחלטת הוועד:\n*${what}*\nפתוחה ${days} ימים.${iss.description ? `\n${String(iss.description).slice(0, 300)}` : ''}\n\nועד1 תטפל: איש האחזקה שלנו בביקור הבא, לפי שעות.\nספק דרך ועד1: אנחנו מתאמים ספק, בדמי טיפול קבועים.\nהוועד יטפל: נשאר אצלכם.`
+          const text = `תקלה ב${b?.name || 'בניין'} ממתינה להחלטת הוועד:\n*${what}*\nפתוחה ${days} ימים.${iss.description ? `\n${String(iss.description).slice(0, 300)}` : ''}\n\nועד1 תטפל: איש האחזקה שלנו בביקור הבא, לפי שעות.\nהצעות מספקים: נבקש מחיר מספקים מהמאגר ונשלח לכם את הזול שיכול לבצע בזמן.\nהוועד יטפל: נשאר אצלכם.`
           if (recent?.length) {
             payload = { messaging_product: 'whatsapp', to, type: 'interactive', interactive: { type: 'button', body: { text },
-              action: { buttons: [['ועד1 תטפל', ids[0]], ['ספק דרך ועד1', ids[1]], ['הוועד יטפל', ids[2]]].map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } }
+              action: { buttons: [['ועד1 תטפל', ids[0]], ['הצעות מספקים', ids[1]], ['הוועד יטפל', ids[2]]].map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } }
           } else if (tpl?.meta_status === 'APPROVED') {
             const vars = [cleanParam(b?.name || 'הבניין'), cleanParam(what), days]
             payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: tpl.meta_name, language: { code: tpl.language || 'he' },
@@ -802,11 +853,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Job offers: vendors for a quote, or ועד1's handyman ─────────────────
-    if (action === 'job-offer' || action === 'quote-award' || action === 'quote-close') {
+    if (action === 'job-offer' || action === 'quote-award' || action === 'quote-close' || action === 'quote-choice' || action === 'quote-pick') {
       if (!integ?.enabled || !integ.phone_number_id || !token) return json({ ok: false, error: 'integration_disabled' })
       const ctx = jobCtx(svc, integ, token)
       let issueId = String(body.issueId || '')
-      if (action === 'quote-award') {
+      if (action === 'quote-award' || action === 'quote-choice') {
         const { data: q } = await svc.from('quotes').select('issue_id').eq('id', String(body.quoteId || '')).maybeSingle()
         issueId = String(q?.issue_id || '')
       }
@@ -815,7 +866,23 @@ Deno.serve(async (req: Request) => {
       if (!isAdmin && !(await callerBuildings(svc, uid)).has(iss.building_id)) return json({ error: 'forbidden' }, 403)
       if (action === 'quote-award') return json(await awardQuote(ctx, String(body.quoteId), uid))
       if (action === 'quote-close') return json(await closeQuotes(ctx, issueId, uid))
+      if (action === 'quote-choice') {
+        const choice = ['take', 'coordinate', 'reject'].includes(String(body.choice)) ? String(body.choice) as 'take' | 'coordinate' | 'reject' : null
+        if (!choice) return json({ ok: false, error: 'bad_choice' }, 400)
+        return json(await committeeChoice(ctx, String(body.quoteId), choice, { uid }))
+      }
+      // Admin: send the best quote to the committee now, without waiting for the deadline.
+      if (action === 'quote-pick') {
+        if (!isAdmin) return json({ error: 'forbidden' }, 403)
+        return json(await pickBest(ctx, issueId, true))
+      }
       const kind = body.kind === 'handyman' ? 'handyman' : 'quote'
+      // Automatic quote requests are a plan feature (ליווי for now). ועד1 itself may always send.
+      if (kind === 'quote' && !isAdmin) {
+        const { data: bp } = await svc.from('buildings').select('service_plan').eq('id', iss.building_id).maybeSingle()
+        const { data: pl } = await svc.from('service_plans').select('includes_auto_quotes').eq('key', bp?.service_plan || 'basic').maybeSingle()
+        if (!pl?.includes_auto_quotes) return json({ ok: false, error: 'not_in_plan' })
+      }
       const vendorIds = Array.isArray(body.vendorIds) ? (body.vendorIds as unknown[]).map(String) : []
       if (kind === 'quote' && !vendorIds.length) return json({ ok: false, error: 'no_vendors' }, 400)
       return json(await sendJobOffers(ctx, { issueId, vendorIds, kind, sentBy: uid }))
