@@ -454,7 +454,8 @@ Deno.serve(async (req: Request) => {
       }
       // Pass it on while we process our own copy — "אות" must not lose events
       // because something in our handling was slow or threw.
-      const forwarded = forwardWebhook(svc, integ?.forward_webhook_url, raw,
+      // A signed test event (X-Vaad1-Test) is ours alone and is not passed on to אות.
+      const forwarded = req.headers.get('X-Vaad1-Test') === '1' ? Promise.resolve() : forwardWebhook(svc, integ?.forward_webhook_url, raw,
         req.headers.get('X-Hub-Signature-256') || '')
       for (const entry of (body.entry as Array<Record<string, unknown>>) || []) {
         for (const ch of (entry.changes as Array<Record<string, unknown>>) || []) {
