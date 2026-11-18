@@ -456,8 +456,10 @@ function nextAction(iss, svc) {
   if (flow === 'watch') return null
   if (flow === 'manage') return { key: 'finish', label: 'סיום טיפול', icon: CheckCircle2 }
   if (s === 'reported') return { key: 'ack', label: 'אשר', icon: Check }
-  if (s === 'acknowledged') return { key: 'quote', label: 'בקש הצעה', icon: FileText }
-  if (!iss.vendor_name && ['quoted', 'approved'].includes(s)) return { key: 'vendor', label: 'קבע ספק', icon: Users }
+  // The vendor pool is ועד1's: a committee handling it itself has no vendor actions.
+  if (s === 'acknowledged' && svc.isAdmin) return { key: 'quote', label: 'בקש הצעה', icon: FileText }
+  if (!iss.vendor_name && ['quoted', 'approved'].includes(s) && svc.isAdmin) return { key: 'vendor', label: 'קבע ספק', icon: Users }
+  if (!svc.isAdmin && ['acknowledged', 'quoted', 'approved'].includes(s)) return { key: 'complete', label: 'סמן כבוצע', icon: CheckCircle2 }
   if (s === 'approved') return { key: 'sched', label: 'תזמן', icon: Calendar }
   if (['scheduled', 'in_progress'].includes(s)) return { key: 'complete', label: 'סמן כבוצע', icon: CheckCircle2 }
   if (s === 'completed') return { key: 'close', label: 'סגור', icon: X }
@@ -669,7 +671,10 @@ function Issues() {
 
   // Memoized handlers for IssueCard
   const handleOpenDetail = useCallback((iss) => setDetailIssue(iss), [])
-  const handleOpenVendorAssign = useCallback((iss) => { setVendorAssignIssue(iss); setSelectedVendorName('') }, [])
+  const handleOpenVendorAssign = useCallback((iss) => {
+    if (!isAdmin) { toast('הוועד מטפל בעצמו ללא מאגר הספקים. לספק דרך ועד1 — בחרו "ועד1 תטפל"', 'info'); return }
+    setVendorAssignIssue(iss); setSelectedVendorName('')
+  }, [isAdmin])
   const handleOpenSchedule = useCallback((iss) => { setScheduleDialogIssue(iss); setScheduleDate('') }, [])
   const handleOpenComplete = useCallback((iss) => { setCompleteDialogIssue(iss); setCompleteCost(iss.estimatedCost ?? '') }, [])
 
@@ -1333,10 +1338,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   }, [update])
 
   const handleOpenQuoteDialog = useCallback((iss) => {
+    if (!isAdmin) { toast('הוועד מטפל בעצמו ללא מאגר הספקים. לספק דרך ועד1 — בחרו "ועד1 תטפל"', 'info'); return }
     setQuoteDialogIssue(iss)
     setQuoteSelectedVendors([])
     setQuoteDescription(iss.description || '')
-  }, [])
+  }, [isAdmin])
 
   // Who the quote dialog may offer.
   //
@@ -2239,7 +2245,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
                   </Button>
                 )}
-                {!iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(iss.status) && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
+                {isAdmin && !iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(iss.status) && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenVendorAssign(iss)}>
                     <Users className="h-3.5 w-3.5" /> קבע ספק
                   </Button>
@@ -3261,7 +3267,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 <span className="text-xs text-red-600">{emergencyVendor.phone} ›</span>
               </a>
             )}
-            {suggestedVendors.length > 0 && (
+            {isAdmin && suggestedVendors.length > 0 && (
               <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
                 <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לתקלה זו</p>
                 <div className="space-y-1.5">
@@ -3287,13 +3293,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               options={memberOptions}
               placeholder="שייך חבר ועד מלווה"
             />
-            <FormSelect
+            {isAdmin && <FormSelect
               label="ספק"
               value={form.vendor_name}
               onChange={setField('vendor_name')}
               options={vendorOptions}
               placeholder="בחר ספק"
-            />
+            />}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 label="עלות משוערת"
