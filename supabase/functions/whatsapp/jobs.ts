@@ -22,7 +22,7 @@
 // name on this number belongs to another business).
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { rankVendorsForIssue } from '../_shared/vendorMatch.js'
+import { rankVendorsForIssue, QUOTE_FANOUT } from '../_shared/vendorMatch.js'
 import { decideHandling, isDiagnosis, isUrgent, routeFor } from '../_shared/handling.js'
 
 const APP = 'https://app.vaad1.co.il'
@@ -1179,7 +1179,7 @@ export async function handleVaad1Button(ctx: JobCtx, from: string, payload: stri
 }
 
 // ── "ועד1 תטפל": decide who handles it and set it going ─────────────────────
-/** Three agreed vendors with a mobile, ranked for the issue — what the app's "send to all" picks. */
+/** Up to QUOTE_FANOUT agreed vendors with a mobile, ranked for the issue — what the app's "send to all" picks. */
 export async function pickVendorsFor(svc: SupabaseClient, issueId: string, toE164: (p: string) => string | null) {
   const { data: iss } = await svc.from('issues').select('id, title, category, priority, building_id, ai_category, ai_search_terms').eq('id', issueId).maybeSingle()
   if (!iss) return []
@@ -1187,7 +1187,7 @@ export async function pickVendorsFor(svc: SupabaseClient, issueId: string, toE16
   const { data: vendors } = await svc.from('vendors').select('*').eq('membership_status', 'agreed')
   const usable = (vendors || []).filter((v) => /^9725\d{8}$/.test(toE164(String(v.phone || '')) || ''))
   // deno-lint-ignore no-explicit-any
-  return (rankVendorsForIssue(iss, usable, { building: b }) as any[]).slice(0, 3).map((r) => r.vendor.id as string)
+  return (rankVendorsForIssue(iss, usable, { building: b }) as any[]).slice(0, QUOTE_FANOUT).map((r) => r.vendor.id as string)
 }
 
 // ── A vendor's question before pricing ──────────────────────────────────────

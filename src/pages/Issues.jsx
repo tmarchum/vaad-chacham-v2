@@ -17,7 +17,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
-import { rankVendorsForIssue } from '@/lib/vendorMatch'
+import { rankVendorsForIssue, QUOTE_FANOUT } from '@/lib/vendorMatch'
 import { decideHandling } from '@/lib/handling'
 import { vendorDistanceKm, formatKm } from '@/lib/geo'
 import { IssueVendorDetails } from '@/components/issues/IssueVendorDetails'
@@ -1217,8 +1217,8 @@ function Issues() {
   }
 
   const sendQuoteToAll = async (vendors, iss, building) => {
-    // Three is enough to compare; more only floods vendors who then stop answering.
-    const agreed = vendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone)).slice(0, 3)
+    // A few to compare; many more only floods vendors who then stop answering.
+    const agreed = vendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone)).slice(0, QUOTE_FANOUT)
     const sent = await dispatchQuoteRequests(agreed, iss, building, { requireAgreed: true })
     if (sent) toast(`נשלחו ${sent} פניות לספקים — ההצעות יגיעו בוואטסאפ`)
   }
@@ -1574,7 +1574,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         if (error) { toastError('ההעברה נכשלה'); return }
         await update(iss.id, { handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: new Date().toISOString() })
         const ranked = rankVendorsForIssue(iss, allVendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone)), { building: buildingOf(iss.buildingId) })
-          .slice(0, 3).map((r) => r.vendor.id)
+          .slice(0, QUOTE_FANOUT).map((r) => r.vendor.id)
         const { data } = ranked.length
           ? await supabase.functions.invoke('whatsapp', { body: { action: 'job-offer', kind: 'quote', issueId: iss.id, vendorIds: ranked } })
           : { data: null }

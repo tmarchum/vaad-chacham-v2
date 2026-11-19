@@ -95,10 +95,12 @@ export function scoreVendorForIssue(issue, vendor, { urgent = false, building = 
   // Distance from the building (when both locations are known).
   if (building) {
     const km = vendorDistanceKm(vendor, building)
-    // A vendor known only by service area (no address) is never ranked as "near".
-    const band = vendor.geo_source === 'area' && distanceBand(km) === 'near' ? 'ok' : distanceBand(km)
+    // A vendor known only by service area (no address) is "in the area": less
+    // certain than an address nearby, but ahead of an address in another city.
+    const band = vendor.geo_source === 'area' && distanceBand(km) === 'near' ? 'area' : distanceBand(km)
     const label = formatKm(km)
     if (band === 'near') { score += 15; reasons.push(`קרוב · ${label}`) }
+    else if (band === 'area') { score += 12; reasons.push('עובד באזור') }
     else if (band === 'ok') { score += 6; reasons.push(label) }
     else if (band === 'far') { score -= 12; warnings.push(`רחוק · ${label}`) }
     else if (band === 'too_far') { score -= 35; warnings.push(`רחוק מאוד · ${label}`) }
@@ -110,6 +112,9 @@ export function scoreVendorForIssue(issue, vendor, { urgent = false, building = 
 
   return { vendor, score: Math.round(score), matched, reasons, warnings }
 }
+
+/** How many agreed vendors a quote request goes to automatically. */
+export const QUOTE_FANOUT = 5
 
 export function rankVendorsForIssue(issue, vendors, opts = {}) {
   const urgent = opts.urgent ?? ['high', 'urgent'].includes(issue?.priority)
