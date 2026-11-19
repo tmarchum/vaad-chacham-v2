@@ -880,7 +880,7 @@ export async function routeNewIssue(ctx: JobCtx, issueId: string) {
 
   if (route === 'vaad1') {
     const r = await askVaad1(ctx, iss, 'route')
-    await tellCommittee(ctx, iss, `שלום, כאן ועד1.\nנפתחה פנייה: *${what}*\nועד1 מטפלת בה: ${r.committeeLine}`,
+    await tellCommittee(ctx, iss, `שלום, כאן ועד1.\nנפתחה פנייה: *${what}*\nועד1 מטפלת בה — ${r.committeeLine}`,
       `ועד1 מטפלת: ${r.committeeLine}`, `ועד1 מטפלת: ${what}`)
     return { ok: true, state: 'vaad1', suggestion: r.suggestion }
   }
@@ -969,8 +969,8 @@ async function askVaad1(ctx: JobCtx, iss: Record<string, any>, why: 'route' | 'c
   await emailAdmins(ctx.svc, `${urgent ? '[דחוף] ' : ''}החלטה נדרשת: ${whatOf(iss)}`,
     [why_he, `${b?.name || ''} · ${iss.category || ''}`, `המלצה: ${SUGGEST_LABEL[suggestion]}.`,
       sent ? 'נשלחו לך כפתורים בוואטסאפ.' : 'אין חלון וואטסאפ פתוח — אפשר להחליט במסך התקלות.', `${APP}/issues`], iss.building_id)
-  const committeeLine = `נחליט אם לשלוח את איש האחזקה שלנו או לבקש הצעות מספקים, ונעדכן אתכם${urgent ? ' בתוך חצי שעה' : ''}. הצעת ספק תגיע אליכם לאישור לפני כל הזמנה.`
-  return { suggestion, committeeLine, text: `✅ ועד1 מטפלת ב"${iss.title}". ${committeeLine}` }
+  const committeeLine = `נעדכן בהמשך${urgent ? ' (תוך חצי שעה)' : ''}.`
+  return { suggestion, committeeLine, text: `✅ התקבל. ועד1 מטפלת ב"${iss.title}" — ${committeeLine}` }
 }
 
 /** The admin's choice (WhatsApp button, the app, or the 30-minute default). */
@@ -984,7 +984,7 @@ export async function vaad1Decide(ctx: JobCtx, issueId: string, mode: 'handyman'
   if (!mine) return { ok: false, text: `כבר הוחלט על "${iss.title}".` }
   const r = await executeHandling(ctx, iss.id, mode)
   const lead = by === 'timeout' ? 'לא התקבלה החלטה בזמן, אז יצא לפי ההמלצה. ' : ''
-  await tellCommittee(ctx, iss, `שלום, כאן ועד1.\n${r.text}`, r.text.replace(/^✅ /, ''), `ועד1 החליטה: ${whatOf(iss)}`,
+  await tellCommittee(ctx, iss, r.text, r.text.replace(/^✅ /, ''), `ועד1 החליטה: ${whatOf(iss)}`,
     r.ok ? undefined : [['הוועד יטפל', `issue:${iss.id}:self`]])
   if (by === 'timeout') await emailAdmins(ctx.svc, `יצא לפי ההמלצה (${SUGGEST_LABEL[mode]}): ${iss.title}`, [lead + r.text], iss.building_id)
   return { ok: r.ok, text: `${lead}${r.text}` }
@@ -1025,13 +1025,13 @@ async function executeHandling(ctx: JobCtx, issueId: string, mode: string): Prom
     const sent = Number((r as Record<string, unknown>).sent) || 0
     await emailAdmins(ctx.svc, `ועד1 → הצעות מספקים: ${title}`,
       [sent ? `נשלח ל-${sent} ספקים. ההצעה הזולה תגיע לוועד לאישור.` : 'לא נמצאו ספקים מאושרים עם נייד לתחום הזה — צריך לשלוח ידנית ממסך התקלות.'], iss.building_id)
-    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}". זו עבודה לספק מוסמך, אז ביקשנו הצעות מספקים. תקבלו כאן את ההצעה הזולה מספק שיכול לבצע ${urgent ? 'היום' : 'בשבוע הקרוב'}, ושום דבר לא יוזמן בלי אישורכם.` }
+    return { ok: true, text: `ועד1 ביקשה הצעות מספקים ל"${title}". ההצעה הזולה תגיע אליכם לאישור — שום דבר לא יוזמן בלעדיכם.` }
   }
 
   if (mode === 'admin') {
     await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
     await emailAdmins(ctx.svc, `ועד1 → מעלית: ${title}`, ['להעביר לחברת המעליות של הבניין (אין לבניין ספק קבוע מוגדר לתחום).'], iss.building_id)
-    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}" ומעבירה לחברת המעליות של הבניין. נעדכן אתכם.` }
+    return { ok: true, text: `ועד1 מעבירה את "${title}" לחברת המעליות של הבניין. נעדכן בהמשך.` }
   }
 
   // handyman
@@ -1049,10 +1049,9 @@ async function executeHandling(ctx: JobCtx, issueId: string, mode: string): Prom
   const hour = await hourPrice(ctx, iss.building_id)
   const cost = `שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה (או חלק ממנה) אם אין כרטיסייה` : ''}.`
   if (isDiagnosis(iss) && !urgent) {
-    return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו יבדוק קודם בביקור הבא. `
-      + `רוב התקלות האלה הוא מתקן במקום. אם צריך ספק מוסמך, נבקש הצעות ותקבלו את הזולה לאישור.\n${cost}` }
+    return { ok: true, text: `איש האחזקה של ועד1 יבדוק את "${title}" בביקור הבא. אם צריך ספק מוסמך, תקבלו הצעה לאישור.\n${cost}` }
   }
-  return { ok: true, text: `✅ ועד1 מטפלת ב"${title}": איש האחזקה שלנו ${urgent ? 'יגיע בהקדם' : 'יגיע בביקור הבא'}. ${cost}` }
+  return { ok: true, text: `איש האחזקה של ועד1 יגיע ל"${title}" ${urgent ? 'בהקדם' : 'בביקור הבא'}. ${cost}` }
 }
 
 // ── Scheduler pieces ────────────────────────────────────────────────────────
