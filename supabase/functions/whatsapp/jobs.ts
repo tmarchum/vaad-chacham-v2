@@ -780,10 +780,18 @@ const ROUTE_GRACE_MIN = 3         // the trigger is the fast path; the scheduler
 const whatOf = (iss: Record<string, any>) => `${iss.ticket_no ? `#${iss.ticket_no} ` : ''}${iss.title}`
 const ISSUE_COLS = 'id, title, description, category, priority, status, handler, handler_kind, stage, building_id, unit_id, assigned_to, ticket_no, vendor_name, routed_at, route, vaad1_suggestion'
 
-/** Admin phones (ועד1) for decisions. */
-async function adminPhones(ctx: JobCtx) {
+/**
+ * Phones that receive ועד1's decision buttons. billing_settings.vaad1_decision_phone
+ * wins when set (the admin profile phone may be the handyman's); otherwise
+ * every admin profile. With `all`, both — for checking who may press a button.
+ */
+async function adminPhones(ctx: JobCtx, all = false) {
+  const valid = (p: unknown) => { const x = ctx.toE164(String(p || '')); return x && /^9725\d{8}$/.test(x) ? x : null }
+  const { data: bs } = await ctx.svc.from('billing_settings').select('vaad1_decision_phone').eq('id', 'default').maybeSingle()
+  const fixed = valid(bs?.vaad1_decision_phone)
+  if (fixed && !all) return [fixed]
   const { data } = await ctx.svc.from('profiles').select('phone').eq('role', 'admin')
-  return [...new Set((data || []).map((a) => ctx.toE164(String(a.phone || ''))).filter((x): x is string => !!x && /^9725\d{8}$/.test(x)))]
+  return [...new Set([fixed, ...(data || []).map((a) => valid(a.phone))].filter((x): x is string => !!x))]
 }
 
 /** Interactive buttons inside the 24h window; else plain notice by template where one fits. */
@@ -1159,7 +1167,7 @@ export async function handleReminderButton(ctx: JobCtx, from: string, payload: s
 /** The admin's WhatsApp buttons on a "החלטה נדרשת". */
 export async function handleVaad1Button(ctx: JobCtx, from: string, payload: string) {
   const [, issueId, mode] = payload.split(':')
-  const admins = await adminPhones(ctx)
+  const admins = await adminPhones(ctx, true)
   const me = ctx.toE164(from)
   const r = me && admins.includes(me) && (mode === 'handyman' || mode === 'quotes')
     ? await vaad1Decide(ctx, issueId, mode, 'admin')
