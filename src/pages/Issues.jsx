@@ -26,7 +26,6 @@ import { waLink, telHref, isWhatsappable, waNumber } from '@/lib/phone'
 import { sendOrOpen, isWhatsappSystemEnabled, systemSendWhatsapp } from '@/lib/whatsapp'
 import { notifyIssueStatus, notifyIssueOpened, notifyIssueDispatch, describeIssueNotified } from '@/lib/notify'
 import { useAuth } from '@/hooks/useAuth'
-import { canSee } from '@/lib/access'
 import {
   loadServiceConfig, loadPunchBalance, punchesFor, isOffHours, punchRules,
   loadBuildingBilling, loadPriceLists, partLineTotal,
@@ -449,11 +448,15 @@ const IssueCard = React.memo(function IssueCard({
 // without opening it.
 // ---------------------------------------------------------------------------
 
+/** A ועד1 quote round still collecting / awaiting the committee — nothing to finish yet. */
+const inQuoteRound = (iss) => iss.handler_kind === 'vendor' && ['acknowledged', 'quoted'].includes(iss.status)
+
 function nextAction(iss, svc) {
   const s = iss.status
   const flow = flowFor(iss, svc)
   if (flow === 'triage') return { key: 'open', label: 'בחר טיפול', icon: ArrowRight }
   if (flow === 'watch') return null
+  if (flow === 'manage' && inQuoteRound(iss)) return { key: 'open', label: 'הצעות מחיר', icon: FileText }
   if (flow === 'manage') return { key: 'finish', label: 'סיום טיפול', icon: CheckCircle2 }
   if (s === 'reported') return { key: 'ack', label: 'אשר', icon: Check }
   // The vendor pool is ועד1's: a committee handling it itself has no vendor actions.
@@ -2157,12 +2160,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                       </div>
                     )
                   })()}
-                  {issueQuotes.some((q) => ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date', 'submitted'].includes(q.stage)) && (
+                  {isAdmin && issueQuotes.some((q) => q.stage === 'submitted') && !issueQuotes.some((q) => q.recommended || q.stage === 'won') && (
                     <div className="mb-2 flex flex-wrap justify-end gap-2">
-                      {isAdmin && issueQuotes.some((q) => q.stage === 'submitted') && !issueQuotes.some((q) => q.recommended || q.stage === 'won') && (
-                        <Button size="sm" variant="outline" onClick={() => handlePickNow(iss)}>שלח לוועד את הזולה עכשיו</Button>
-                      )}
-                      <Button size="sm" variant="ghost" onClick={() => handleCloseQuotes(iss)}>סגירת הפנייה — העבודה נתפסה</Button>
+                      <Button size="sm" variant="outline" onClick={() => handlePickNow(iss)}>שלח לוועד את הזולה עכשיו</Button>
                     </div>
                   )}
                   <div className="space-y-2">
@@ -2208,15 +2208,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
               {/* Action buttons */}
               <div className="flex flex-wrap gap-2 pt-4">
-                {canSee('ai_analysis', { isAdmin, building: buildingMap[iss.buildingId] }) && <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openAiAnalysis(iss)}
-                  className="gap-1.5"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  ניתוח AI
-                </Button>}
+                {/* One button per step. The AI analysis runs by itself when the issue opens. */}
                 {flowFor(iss, svc) === 'triage' && (
                   <>
                     <Button size="sm" onClick={() => { handleTransfer(iss); setDetailIssue(null) }}>
@@ -2230,9 +2222,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     </Button>
                   </>
                 )}
-                {flowFor(iss, svc) === 'manage' && (
+                {flowFor(iss, svc) === 'manage' && !inQuoteRound(iss) && (
                   <Button size="sm" onClick={() => { setDetailIssue(null); handleOpenFinish(iss) }}>
-                    <CheckCircle2 className="h-3.5 w-3.5" /> סיום טיפול וניקוב
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {iss.handler_kind === 'handyman' ? 'סיום טיפול וניקוב' : 'סיום טיפול'}
                   </Button>
                 )}
                 {iss.status === 'reported' && flowFor(iss, svc) === 'legacy' && (
@@ -2241,12 +2233,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </Button>
                 )}
                 {/* Also while a quote round is open: ועד1 may add another vendor to it. */}
-                {isAdmin && ['reported', 'acknowledged', 'quoted'].includes(iss.status) && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
+                {isAdmin && (inQuoteRound(iss) || (flowFor(iss, svc) === 'legacy' && ['reported', 'acknowledged'].includes(iss.status))) && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenQuoteDialog(iss)}>
                     <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
                   </Button>
                 )}
-                {isAdmin && !iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(iss.status) && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
+                {/* Direct assignment bypasses quotes: only outside the ועד1 flow. */}
+                {isAdmin && !iss.vendor_name && ['reported','acknowledged','quoted','approved'].includes(iss.status) && flowFor(iss, svc) === 'legacy' && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenVendorAssign(iss)}>
                     <Users className="h-3.5 w-3.5" /> קבע ספק
                   </Button>
@@ -2273,6 +2266,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-[var(--surface-hover)]" onClick={() => openEdit(iss)}>
                       <Pencil className="h-3.5 w-3.5" /> עריכה
                     </button>
+                    {issueQuotes.some((q) => ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date', 'submitted'].includes(q.stage)) && (
+                      <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-[var(--surface-hover)]" onClick={() => handleCloseQuotes(iss)}>
+                        <X className="h-3.5 w-3.5" /> עצור את סבב ההצעות
+                      </button>
+                    )}
                     <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--danger)] hover:bg-[var(--surface-hover)]"
                       onClick={() => { setDetailIssue(null); setDeleteTarget(iss) }}>
                       <Trash2 className="h-3.5 w-3.5" /> מחיקה
