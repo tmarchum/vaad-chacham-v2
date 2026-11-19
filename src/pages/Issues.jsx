@@ -673,7 +673,8 @@ function Issues() {
   const [quoteRequestCopied, setQuoteRequestCopied] = useState(null)
 
   // Memoized handlers for IssueCard
-  const handleOpenDetail = useCallback((iss) => setDetailIssue(iss), [])
+  // Vendors answer on WhatsApp, not here: reload quotes each time an issue opens.
+  const handleOpenDetail = useCallback((iss) => { setDetailIssue(iss); refreshQuotes?.() }, [refreshQuotes])
   const handleOpenVendorAssign = useCallback((iss) => {
     if (!isAdmin) { toast('הוועד מטפל בעצמו ללא מאגר הספקים. לספק דרך ועד1 — בחרו "ועד1 תטפל"', 'info'); return }
     setVendorAssignIssue(iss); setSelectedVendorName('')
@@ -1214,6 +1215,7 @@ function Issues() {
     setQuoteBulk({ running: false, done: 0, total: 0 })
     if (data?.error === 'not_in_plan') { toast('בקשת הצעות אוטומטית מספקים כלולה במסלול ליווי. אפשר לפנות לספקים מהמאגר ישירות.', 'info'); return 0 }
     if (error || !data?.ok) { toastError('השליחה לספקים נכשלה'); return 0 }
+    await refreshQuotes()
     const busy = (data.skipped || []).filter((x) => x.reason === 'in_progress').length
     if (busy) toast(`${busy} ספקים כבר באמצע הגשת הצעה לתקלה הזאת — לא נשלח להם שוב`, 'info')
     return data.sent || 0
@@ -2260,9 +2262,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </Button>
                 )}
                 {/* Rarely needed: kept out of the way, behind "⋯". */}
-                <details className="relative">
-                  <summary className="list-none cursor-pointer select-none rounded-md border border-[var(--border)] px-2.5 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]" aria-label="פעולות נוספות">⋯</summary>
-                  <div className="absolute bottom-full mb-1 left-0 z-10 min-w-[120px] rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg">
+                {/* Opens in the flow, not as a popover: a popover got clipped by the modal's edge. */}
+                <details className="basis-full">
+                  <summary className="inline-block list-none cursor-pointer select-none rounded-md border border-[var(--border)] px-2.5 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]" aria-label="פעולות נוספות">⋯ עוד</summary>
+                  <div className="mt-2 flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
                     <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-[var(--surface-hover)]" onClick={() => openEdit(iss)}>
                       <Pencil className="h-3.5 w-3.5" /> עריכה
                     </button>
