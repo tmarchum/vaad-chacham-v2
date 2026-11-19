@@ -1117,34 +1117,6 @@ function Issues() {
     })
   }
 
-  // Open full workflow for an issue
-  const openWorkflow = async (iss) => {
-    setWorkflowIssue(iss)
-    setWorkflowStep(1)
-    setQuoteRequestCopied(null)
-
-    // Load committee members for this building — primary residents of
-    // board_member units.
-    const { data: residents } = await supabase
-      .from('unit_residents')
-      .select('id, first_name, last_name, email, phone, units!inner(building_id, board_member)')
-      .eq('units.board_member', true)
-      .eq('units.building_id', iss.buildingId)
-      .eq('is_primary', true)
-      .not('archived', 'is', true)
-    setCommitteeMembers((residents ?? []).map((r) => ({
-      id: r.id,
-      user_id: r.id,
-      role: 'committee',
-      profiles: { first_name: r.first_name, last_name: r.last_name, email: r.email, phone: r.phone },
-    })))
-
-    // If no AI analysis yet, trigger it
-    if (!aiAnalysisResult || aiAnalysisIssue?.id !== iss.id) {
-      openAiAnalysis(iss)
-    }
-  }
-
   // WhatsApp link when the number supports it, otherwise a tel: call link —
   // gas/national-service numbers (*3626, 1-800…) can't use WhatsApp.
   const buildContactLink = (phone, message) => waLink(phone, message) || telHref(phone)
