@@ -2240,7 +2240,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     <Check className="h-3.5 w-3.5" /> אשר
                   </Button>
                 )}
-                {isAdmin && (iss.status === 'reported' || iss.status === 'acknowledged') && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
+                {/* Also while a quote round is open: ועד1 may add another vendor to it. */}
+                {isAdmin && ['reported', 'acknowledged', 'quoted'].includes(iss.status) && ['legacy', 'manage'].includes(flowFor(iss, svc)) && (
                   <Button variant="outline" size="sm" onClick={() => handleOpenQuoteDialog(iss)}>
                     <FileText className="h-3.5 w-3.5" /> בקש הצעת מחיר
                   </Button>
