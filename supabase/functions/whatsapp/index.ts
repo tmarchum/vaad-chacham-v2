@@ -33,7 +33,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
 import {
   awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleCommitteeAnswer, handleOfferButton, handleOfferText, takeIssue,
-  pickBest, sendJobOffers, sweepQuotes, routeNewIssue, vaad1Decide, handleVaad1Button, handleReminderButton, type JobCtx,
+  pickBest, sendJobOffers, sweepQuotes, routeNewIssue, vaad1Decide, handleVaad1Button, handleReminderButton, handleVisitButton, type JobCtx,
 } from './jobs.ts'
 
 const PROVIDER = 'whatsapp_cloud'
@@ -371,6 +371,11 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   // ועד1's decision: "v1:<issueId>:handyman|quotes". The 7-day reminder: "cr:<issueId>:done|open".
   if (payload.startsWith('v1:')) {
     await handleVaad1Button(jobCtx(svc, integ, token), from, payload)
+    return
+  }
+  // ועד1 on a vendor who asked to visit first: "vv:<quoteId>:yes|no".
+  if (payload.startsWith('vv:')) {
+    await handleVisitButton(jobCtx(svc, integ, token), from, payload)
     return
   }
   if (payload.startsWith('cr:')) {

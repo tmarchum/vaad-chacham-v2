@@ -363,7 +363,7 @@ export async function handleOfferButton(ctx: JobCtx, from: string, payload: stri
     await reply(ctx, from, 'כבר קיבלנו את הסכום שלך. מתי תוכל לבצע? כתוב יום ושעה משוערים.', { vendor_id: q.vendor_id, building_id: q.building_id, subject: 'הצעת מחיר: ממתין למועד' })
     return
   }
-  await ctx.svc.from('quotes').update({ stage: 'awaiting_amount' }).eq('id', q.id)
+  await ctx.svc.from('quotes').update({ stage: 'awaiting_amount', interested_at: q.interested_at || new Date().toISOString() }).eq('id', q.id)
   await reply(ctx, from, askAmountText(briefLink(iss?.brief_token || null), q.deadline ? new Date(q.deadline) : null, availText(q)),
     { vendor_id: q.vendor_id, building_id: q.building_id, subject: `מעוניין לתת הצעה: ${String(iss?.title || '').slice(0, 100)}` })
 }
@@ -428,7 +428,7 @@ export async function handleOfferText(ctx: JobCtx, from: string, text: string, v
     // A question before pricing goes to the committee (checked before the
     // amount: "חניות 174–175?" is not a price).
     if (isQuestion(text) && !isBareAmount(text)) {
-      if (q.stage === 'offered') await ctx.svc.from('quotes').update({ stage: 'awaiting_amount' }).eq('id', q.id)
+      if (q.stage === 'offered') await ctx.svc.from('quotes').update({ stage: 'awaiting_amount', interested_at: new Date().toISOString() }).eq('id', q.id)
       await askCommittee(ctx, q, iss, loaded?.b || null, vendor, from, text)
       return true
     }
@@ -465,15 +465,29 @@ export async function handleOfferText(ctx: JobCtx, from: string, text: string, v
 // "העבודה נתפסה, תודה" — to a vendor we approached and did not pick. Free text
 // inside the 24h window; otherwise the vendor_job_closed template once Meta
 // approved it; otherwise nothing (counted, so the screen can say so).
-async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, offered: boolean, sentBy: string | null) {
+/**
+ * How a losing price compares with the winner, in words the vendor can use
+ * next time — rounded to 10% so the exact winning amount stays private.
+ */
+function lossLine(mine: number, winner: number | null) {
+  if (!(winner && winner > 0) || !(mine > 0)) return 'הפעם העבודה נתפסה.'
+  if (mine <= winner) return 'הפעם הוועד בחר הצעה אחרת.'
+  const pct = ((mine - winner) / mine) * 100
+  if (pct < 5) return 'ההצעה שלך הייתה קרובה מאוד לזוכה.'
+  return `הפעם נבחרה הצעה נמוכה בכ-${Math.max(10, Math.round(pct / 10) * 10)}% משלך.`
+}
+
+async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, offered: boolean, sentBy: string | null,
+  opts: { ticketNo?: unknown; winnerAmount?: number | null } = {}) {
   const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
   const to = ctx.toE164(String(v?.phone || ''))
   if (!to || !ctx.ready) return false
   const meta = { vendor_id: q.vendor_id, building_id: q.building_id, subject: `העבודה נתפסה: ${title.slice(0, 100)}`, sent_by: sentBy }
   if (await windowOpen(ctx.svc, to)) {
+    const tno = opts.ticketNo ? ` (#${opts.ticketNo})` : ''
     const text = offered
-      ? `תודה על ההצעה ל"${title}". הפעם העבודה נתפסה. נפנה אליך שוב בעבודה הבאה.`
-      : `העבודה "${title}" כבר נתפסה. תודה על הזמינות, נפנה אליך שוב בעבודה הבאה.`
+      ? `תודה על ההצעה ל"${title}"${tno}. ${lossLine(Number(q.amount), opts.winnerAmount ?? null)} נשמח לפנות אליך שוב.`
+      : `העבודה "${title}"${tno} כבר נתפסה. תודה על הזמינות, נפנה אליך שוב בעבודה הבאה.`
     return (await reply(ctx, to, text, meta)).ok
   }
   const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_job_closed').maybeSingle()
@@ -496,7 +510,7 @@ export async function closeQuotes(ctx: JobCtx, issueId: string, sentBy: string |
   let told = 0, notTold = 0
   for (const q of open || []) {
     await ctx.svc.from('quotes').update({ stage: 'lost', status: 'rejected' }).eq('id', q.id)
-    if (await sendJobTaken(ctx, q, String(loaded.iss.title), q.amount != null && Number(q.amount) > 0, sentBy)) told++; else notTold++
+    if (await sendJobTaken(ctx, q, String(loaded.iss.title), q.amount != null && Number(q.amount) > 0, sentBy, { ticketNo: loaded.iss.ticket_no })) told++; else notTold++
   }
   return { ok: true, closed: (open || []).length, told, notTold }
 }
@@ -566,7 +580,8 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
   for (const o of others || []) {
     if (!o.stage || !OPEN_STAGES.concat('submitted').includes(o.stage)) continue
     const { data: full } = await ctx.svc.from('quotes').select('*').eq('id', o.id).maybeSingle()
-    if (full && await sendJobTaken(ctx, full, String(iss.title), full.amount != null && Number(full.amount) > 0, sentBy)) out.thanked++
+    if (full && await sendJobTaken(ctx, full, String(iss.title), full.amount != null && Number(full.amount) > 0, sentBy,
+      { ticketNo: iss.ticket_no, winnerAmount: Number(q.amount) })) out.thanked++
     else out.notThanked++
   }
   return out
@@ -597,6 +612,13 @@ export async function pickBest(ctx: JobCtx, issueId: string, force: boolean): Pr
   const candidates = rows.filter((q) => q.stage === 'submitted' && Number(q.amount) > 0 && q.committee_choice !== 'reject')
     .sort((a, z) => Number(a.amount) - Number(z.amount))
   if (!candidates.length) {
+    // Nobody priced it, but someone asked to see the place first: offer ועד1
+    // to invite him (once per request).
+    const visit = rows.find((q) => q.visit_requested && !q.visit_invited_at && ['visit_requested', 'expired'].includes(q.stage))
+    if (visit && !rows.some((q) => q.visit_invited_at)) {
+      await offerVisit(ctx, visit, iss, b, rows.length)
+      return { ok: true, state: 'visit_offered', quoteId: visit.id }
+    }
     // Tell ועד1 once: after this every quote is closed, so nothing calls again.
     if (!rows.some((q) => q.committee_choice === 'reject')) {
       await emailAdmins(ctx.svc, `לא התקבלה הצעה בזמן: ${iss.title}`,
@@ -754,7 +776,112 @@ export async function sweepQuotes(ctx: JobCtx) {
   const auto = await autoTakeIssues(ctx)
   const closedNotified = await notifyClosed(ctx)
   const reminded = await remindCommittee(ctx)
-  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto, closedNotified, reminded }
+  const vendorsReminded = await remindVendors(ctx)
+  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto, closedNotified, reminded, vendorsReminded }
+}
+
+// ── A vendor said "interested" and sent no amount ───────────────────────────
+const AMOUNT_REMIND_HOURS = 3
+
+/** One reminder, AMOUNT_REMIND_HOURS after "interested", while there is still an hour to answer. */
+async function remindVendors(ctx: JobCtx) {
+  if (!ctx.ready) return 0
+  const now = Date.now()
+  const { data: rows } = await ctx.svc.from('quotes').select('*')
+    .eq('stage', 'awaiting_amount').is('amount_reminded_at', null).not('issue_id', 'is', null)
+    .lte('interested_at', new Date(now - AMOUNT_REMIND_HOURS * 3600 * 1000).toISOString())
+    .gt('deadline', new Date(now + 3600 * 1000).toISOString()).limit(50)
+  let sent = 0
+  for (const q of rows || []) {
+    // Claim first, so two sweeps cannot both send.
+    const { data: mine } = await ctx.svc.from('quotes').update({ amount_reminded_at: new Date().toISOString() })
+      .eq('id', q.id).is('amount_reminded_at', null).select('id').maybeSingle()
+    if (!mine) continue
+    const loaded = await loadIssue(ctx.svc, q.issue_id)
+    const { data: v } = await ctx.svc.from('vendors').select('phone').eq('id', q.vendor_id).maybeSingle()
+    const to = ctx.toE164(String(v?.phone || ''))
+    // Free text only: he wrote to us lately; outside the window there is no fitting template.
+    if (!loaded || !to || !(await windowOpen(ctx.svc, to))) continue
+    const { iss } = loaded
+    const text = `שלום, כאן ועד1. מחכים להצעת המחיר שלך ל"${iss.title}"${iss.ticket_no ? ` (#${iss.ticket_no})` : ''}. `
+      + `ההגשה נסגרת ב-${ilWhen(new Date(q.deadline))}. אפשר פשוט לענות כאן עם הסכום לפני מע"מ.`
+    if ((await reply(ctx, to, text, { vendor_id: q.vendor_id, building_id: q.building_id, subject: `תזכורת להגשת הצעה: ${whatOf(iss).slice(0, 100)}` })).ok) sent++
+  }
+  return sent
+}
+
+// ── Nobody priced it, but a vendor asked to see the place first ─────────────
+const VISIT_HOURS = 72   // to visit and send a price
+
+async function offerVisit(ctx: JobCtx, q: Record<string, any>, iss: Record<string, any>, b: Record<string, any> | null, count: number) {
+  const text = `ועד1 — לא התקבלה הצעת מחיר ל*${whatOf(iss)}*${b?.name ? ` (${b.name})` : ''} מ-${count} ספקים.\n`
+    + `${q.vendor_name} ביקש לראות את המקום לפני שייתן מחיר. להזמין אותו לביקור?`
+  let sent = 0
+  for (const to of await adminPhones(ctx)) {
+    if (await sendButtons(ctx, to, text, [['להזמין לביקור', `vv:${q.id}:yes`], ['לא צריך', `vv:${q.id}:no`]],
+      { building_id: iss.building_id, subject: `ביקור לפני מחיר: ${whatOf(iss)}` })) sent++
+  }
+  await emailAdmins(ctx.svc, `לא התקבלה הצעה, ספק מבקש ביקור: ${iss.title}`,
+    [`אף ספק לא הגיש מחיר לעבודה "${iss.title}" (${addressOf(b)}).`, `${q.vendor_name} ביקש לראות את המקום לפני שייתן מחיר.`,
+      sent ? 'נשלחו לך כפתורים בוואטסאפ: להזמין לביקור / לא צריך.' : `אין חלון וואטסאפ פתוח. אפשר לשלוח מכאן "ביקור" לספק ידנית, או לשלוח לספקים נוספים ממסך התקלות. ${APP}/issues`],
+    iss.building_id)
+}
+
+/** ועד1's answer on a visit: "vv:<quoteId>:yes|no". */
+export async function handleVisitButton(ctx: JobCtx, from: string, payload: string) {
+  const [, quoteId, answer] = payload.split(':')
+  const me = ctx.toE164(from)
+  const answerAdmin = async (text: string) => {
+    if (!ctx.ready) return
+    const s = await ctx.send({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: text } })
+    await ctx.log({ recipient: from, audience: 'resident', subject: 'ביקור לפני מחיר — תשובה', body: text,
+      status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
+  }
+  if (!me || !(await adminPhones(ctx, true)).includes(me)) return answerAdmin('ההחלטה הזאת שמורה לוועד1.')
+  const c = await quoteContext(ctx, quoteId)
+  if (!c?.iss) return answerAdmin('הבקשה לא נמצאה.')
+  const { q, b } = c
+  if (q.visit_invited_at) return answerAdmin(`${q.vendor_name} כבר הוזמן לביקור.`)
+  const { data: iss } = await ctx.svc.from('issues').select(ISSUE_COLS).eq('id', q.issue_id).maybeSingle()
+  if (!iss || DONE.includes(iss.status)) return answerAdmin('התקלה כבר נסגרה.')
+  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+  const to = ctx.toE164(String(v?.phone || ''))
+  const open = !!to && ctx.ready && await windowOpen(ctx.svc, to)
+  const meta = { vendor_id: q.vendor_id, building_id: q.building_id }
+
+  if (answer !== 'yes') {
+    if (open) await reply(ctx, to!, `תודה על הנכונות להגיע ל"${iss.title}". הפעם לא נצטרך ביקור. נפנה אליך שוב בעבודה הבאה.`,
+      { ...meta, subject: `ביקור לא נדרש: ${whatOf(iss).slice(0, 100)}` })
+    return answerAdmin(`רשמנו: אין ביקור ל-${whatOf(iss)}. אפשר לשלוח לספקים נוספים ממסך התקלות.`)
+  }
+
+  // Who the vendor arranges the visit with depends on the track.
+  const vaad1 = iss.handler === 'management'
+  let contact = ''
+  if (!vaad1 && iss.assigned_to) {
+    const { data: r } = await ctx.svc.from('unit_residents').select('last_name, phone, units(number)').eq('id', iss.assigned_to).maybeSingle()
+    const u = (r?.units as unknown as { number?: string } | null)
+    if (r) contact = [r.last_name, u?.number ? `דירה ${u.number}` : '', r.phone].filter(Boolean).join(' · ')
+  }
+  if (!contact) contact = vaad1 ? 'ועד1 — נתאם איתך כאן בוואטסאפ' : 'ועד הבית — ניצור איתך קשר כאן בוואטסאפ'
+
+  const deadline = new Date(Date.now() + VISIT_HOURS * 3600 * 1000)
+  await ctx.svc.from('quotes').update({ stage: 'awaiting_amount', status: 'pending', deadline: deadline.toISOString(),
+    visit_invited_at: new Date().toISOString(), amount_reminded_at: new Date().toISOString() }).eq('id', q.id)
+
+  const link = briefLink(c.iss.brief_token)
+  const text = `שלום, כאן ועד1. נשמח שתגיע לראות את המקום לפני שתיתן מחיר.\nעבודה: ${iss.title}${iss.ticket_no ? ` (#${iss.ticket_no})` : ''}\n`
+    + `כתובת: ${addressOf(b)}\nתיאום הביקור: ${contact}\n\n`
+    + `אחרי הביקור כתוב כאן את הסכום לפני מע"מ, סופי לעבודה כפי שתוארה. אפשר להגיש עד ${ilWhen(deadline)}.${link ? `\nפרטים ותמונות: ${link}` : ''}`
+  const delivered = open ? (await reply(ctx, to!, text, { ...meta, subject: `הוזמן לביקור: ${whatOf(iss).slice(0, 100)}` })).ok : false
+
+  if (!vaad1) {
+    await notifyCommittee(ctx, iss, `שלום, כאן ועד1.\n${q.vendor_name} יגיע לראות את המקום לתקלה *${whatOf(iss)}* לפני שייתן מחיר. הוא ייצור איתכם קשר לתיאום.`,
+      `ספק יגיע לביקור: ${whatOf(iss)}`)
+  }
+  const reach = delivered ? '' : `\nההודעה לספק לא יצאה (אין חלון שיחה פתוח). צריך להתקשר אליו: ${v?.phone || ''}.`
+  return answerAdmin(`✅ ${q.vendor_name} הוזמן לביקור ל-${whatOf(iss)}. יש לו עד ${ilWhen(deadline)} לשלוח מחיר.`
+    + (vaad1 ? `\nתאם איתו את הביקור: ${v?.phone || ''}.` : '\nהוא יתאם עם הוועד.') + reach)
 }
 
 /** Tell the committee something (no buttons). Free text only inside the 24h window; else the app shows it. */
