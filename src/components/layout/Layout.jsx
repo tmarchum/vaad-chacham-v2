@@ -12,6 +12,9 @@ import { cn, formatCurrency } from '@/lib/utils'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { useBuildingPulse } from '@/hooks/useBuildingPulse'
 import { BrandLogo } from '@/components/common/BrandLogo'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
+import { isNewBuildAvailable, reloadForNewBuild } from '@/lib/appVersion'
+import { prefetchCommonScreens } from '@/lib/prefetch'
 
 // Monotonic toast ids — Date.now() collides when a bulk flow fires several
 // toasts inside the same millisecond.
@@ -92,6 +95,14 @@ function Layout() {
     window.addEventListener('app-toast', handler)
     return () => window.removeEventListener('app-toast', handler)
   }, [])
+
+  useEffect(() => { prefetchCommonScreens() }, [])
+
+  // A deploy happened since this tab loaded: the move to this screen becomes a
+  // full load of the same address, so the new version is what renders.
+  useEffect(() => {
+    if (isNewBuildAvailable()) reloadForNewBuild()
+  }, [location.pathname])
 
   const balance = selectedBuilding?.balance
   const statusOk = pulse.urgentIssues === 0
@@ -174,7 +185,9 @@ function Layout() {
           <div className="max-w-[1400px] mx-auto">
             <PageTabs />
             <JoinRequests buildingId={selectedBuilding?.id} />
-            <AccessGate><PlanGate><Outlet /></PlanGate></AccessGate>
+            <ErrorBoundary resetKey={location.pathname}>
+              <AccessGate><PlanGate><Outlet /></PlanGate></AccessGate>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

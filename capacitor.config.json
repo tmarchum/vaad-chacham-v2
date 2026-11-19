@@ -3,6 +3,7 @@
   "appName": "ועד1",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "url": "https://app.vaad1.co.il"
   }
 }

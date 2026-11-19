@@ -13,6 +13,25 @@ const AuthContext = createContext(null)
 // localStorage key per user: remembers that onboarding was completed
 const ONBOARDING_KEY = (uid) => `vc_onboarding_done_${uid}`
 
+// The last profile seen on this device. On the next visit the app opens on it
+// at once and re-reads the real one in the background, instead of holding the
+// whole screen on a database round trip. Access is still enforced by RLS on
+// every read, so a stale copy can only mislabel the menu for a moment.
+const PROFILE_CACHE = 'vc_profile_cache'
+export const BUILDINGS_CACHE = 'vc_buildings_cache'
+function readProfileCache(uid) {
+  try {
+    const c = JSON.parse(localStorage.getItem(PROFILE_CACHE) || 'null')
+    return c?.id === uid ? c.profile : null
+  } catch { return null }
+}
+function writeProfileCache(uid, profile) {
+  try { localStorage.setItem(PROFILE_CACHE, JSON.stringify({ id: uid, profile })) } catch { /* full or blocked */ }
+}
+function clearCaches() {
+  try { localStorage.removeItem(PROFILE_CACHE); localStorage.removeItem(BUILDINGS_CACHE) } catch { /* */ }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -28,11 +47,18 @@ export function AuthProvider({ children }) {
   const loadedFor = useRef(null)
 
   const loadProfile = useCallback(async (userId, userEmail) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single()
+
+    // A failed read (network, timeout) must not replace a good saved profile
+    // with nothing — that would drop a known user into the onboarding wizard.
+    if (error && !data) {
+      const saved = readProfileCache(userId)
+      if (saved) { setProfile(saved); setOnboardingChecked(true); return }
+    }
 
     let resolved = data
 
@@ -61,12 +87,14 @@ export function AuthProvider({ children }) {
     setProfile(resolved)
     setOnboardingChecked(true)
     loadedFor.current = userId
+    if (resolved) writeProfileCache(userId, resolved)
   }, [])
 
   const fetchProfile = useCallback(async (userId, userEmail) => {
     if (!userId) {
       setProfile(null); setOnboardingChecked(false)
       loadedFor.current = null; inFlight.current.clear()
+      clearCaches()
       return
     }
     const pending = inFlight.current.get(userId)
@@ -81,6 +109,10 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const u = session?.user ?? null
       setUser(u)
+      const cached = u?.id ? readProfileCache(u.id) : null
+      if (cached) {
+        setProfile(cached); setOnboardingChecked(true); setLoading(false)
+      }
       fetchProfile(u?.id, u?.email).finally(() => setLoading(false))
       if (u?.id) registerPush(u.id)
     })
@@ -145,6 +177,7 @@ export function AuthProvider({ children }) {
     }
     setUser(null)
     setProfile(null)
+    clearCaches()
     // Hard-redirect to the login screen so the Google sign-in button is always
     // reachable after logout, regardless of re-render timing.
     window.location.assign('/login')

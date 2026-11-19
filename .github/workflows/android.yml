@@ -7,8 +7,10 @@ name: Build Android APK
 # The APK is a SIGNED RELEASE build — the keystore comes from repo secrets
 # (the old committed keystore was burned and replaced on 2026-10-05).
 
-# The APK BUNDLES the web assets (no remote server.url), so web changes go
-# stale on installed phones unless the APK is rebuilt — hence src/** etc.
+# Since 2026-11-20 the app loads the live site (server.url in
+# capacitor.config.json), so a web deploy reaches installed phones at once.
+# The bundled web assets are only a fallback; rebuilding on src/** changes
+# keeps that fallback current.
 on:
   workflow_dispatch:
   push:

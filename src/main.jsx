@@ -1,10 +1,13 @@
-import { StrictMode, Component, lazy, Suspense } from 'react'
+import { StrictMode, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import { initTheme } from '@/lib/theme'
 import { initTextSize } from '@/lib/textSize'
 import { capturePollFromUrl } from '@/lib/polls'
+import { installGlobalErrorLog } from '@/lib/errorLog'
+import { startVersionWatch, reloadForNewBuild } from '@/lib/appVersion'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 capturePollFromUrl()
 
@@ -23,58 +26,12 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   })
 }
 
-// After a new deploy, an open tab still points at the old hashed chunks, which no
-// longer exist. Reload once to pick up the new build instead of showing a crash.
-const isChunkError = (err) => /dynamically imported module|Importing a module script failed|Loading chunk|error loading dynamically/i.test(err?.message || '')
-function reloadForNewBuild() {
-  try {
-    const last = Number(sessionStorage.getItem('chunk-reload-at') || 0)
-    if (Date.now() - last < 30000) return false
-    sessionStorage.setItem('chunk-reload-at', String(Date.now()))
-  } catch { /* storage blocked — reload anyway */ }
-  window.location.reload()
-  return true
-}
+// Crashes and failed loads go to public.client_errors (see lib/errorLog.js).
+installGlobalErrorLog()
+// Notice a new deploy in the background so moving between screens never hits
+// a chunk that no longer exists (see lib/appVersion.js).
+startVersionWatch()
 window.addEventListener('vite:preloadError', (e) => { if (reloadForNewBuild()) e.preventDefault() })
-
-class ErrorBoundary extends Component {
-  constructor(props) { super(props); this.state = { error: null } }
-  // A missing chunk means a new version was deployed: show a quiet
-  // "updating" screen while the page reloads, not the crash screen.
-  static getDerivedStateFromError(error) { return { error, updating: isChunkError(error) } }
-  componentDidCatch(error, info) {
-    if (isChunkError(error)) {
-      if (reloadForNewBuild()) return
-      this.setState({ updating: false })
-    }
-    console.error('App crash:', error, info); Sentry.captureException(error)
-  }
-  render() {
-    if (this.state.error && this.state.updating) {
-      return (
-        <div dir="rtl" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f8fafc', color: '#475569', fontSize: 14 }}>
-          מעדכן לגרסה חדשה...
-        </div>
-      )
-    }
-    if (this.state.error) {
-      return (
-        <div dir="rtl" style={{ padding: 40, textAlign: 'center', color: '#fff', background: '#1e293b', minHeight: '100vh' }}>
-          <h1>שגיאה בטעינת האפליקציה</h1>
-          <pre style={{ color: '#f87171', marginTop: 20, textAlign: 'left', direction: 'ltr', whiteSpace: 'pre-wrap' }}>
-            {this.state.error.message}
-            {'\n'}
-            {this.state.error.stack}
-          </pre>
-          <button onClick={() => window.location.reload()} style={{ marginTop: 20, padding: '10px 24px', background: '#14b8a6', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' }}>
-            נסה שוב
-          </button>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
 
 import { AuthProvider } from '@/hooks/useAuth'
 import { ConfirmProvider } from '@/components/ui/confirm'
@@ -138,7 +95,7 @@ import './index.css'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <ErrorBoundary>
+    <ErrorBoundary full>
     <BrowserRouter>
       <AuthProvider>
         <ConfirmProvider>

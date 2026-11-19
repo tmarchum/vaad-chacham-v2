@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { logError } from '@/lib/errorLog'
 
 // camelCase ↔ snake_case field mappings per table
 // Most fields map directly (supabase returns snake_case, we keep as-is for now)
@@ -231,6 +232,7 @@ function toDbRow(data, table) {
 function emitError(operation, tableName, error) {
   const msg = error?.message || String(error)
   console.error(`[store.${tableName}.${operation}]`, error)
+  logError({ message: `[store.${tableName}.${operation}] ${msg}`, stack: error?.details || error?.hint || "" }, "store")
   // Map common Postgres/Supabase error codes to Hebrew. A failed read was
   // reported as "שגיאה בשמירת נתונים", which sends you hunting for a save that
   // never happened — say which way the data was going.
@@ -330,7 +332,7 @@ function createCollection(tableName) {
 
     async bulkCreate(items) {
       if (!items?.length) return []
-      const rows = items.map(toDbRow)
+      const rows = items.map((it) => toDbRow(it, table))
       const { data, error } = await supabase.from(table).insert(rows).select()
       if (error) { emitError('bulkCreate', tableName, error); return [] }
       return (data || []).map(normalizeRow)

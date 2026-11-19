@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import store from '@/data/supabaseStore'
 import { supabase } from '@/lib/supabase'
 import { TABLE_MAP } from '@/data/supabaseStore'
+import { useAuth, BUILDINGS_CACHE } from '@/hooks/useAuth'
 
 export function useCollection(collectionName, filters = {}) {
   const collection = store[collectionName]
@@ -109,7 +110,10 @@ export function useRealtimeCollection(collectionName, filters = {}) {
 
   useEffect(() => {
     const tableName = TABLE_MAP[collectionName] || collectionName
-    const channelName = `rt-${tableName}-${filtersKey}`
+    // A unique name per mount: two screens (or a quick back-and-forth) asking for
+    // the same table used to share one channel, and the first one's cleanup
+    // tore down the second one's live updates.
+    const channelName = `rt-${tableName}-${filtersKey}-${Math.random().toString(36).slice(2, 8)}`
     // Scope the realtime subscription to the building when one is given —
     // otherwise every change in any building re-fetches the table for every
     // connected client.
@@ -133,7 +137,24 @@ const BuildingContext = createContext(null)
 const SELECTED_BUILDING_KEY = 'vc_selectedBuilding'
 
 export function BuildingProvider({ children }) {
-  const { data: buildings, isLoading, refresh: refreshBuildings } = useCollection('buildings')
+  const { user } = useAuth()
+  const { data: fresh, isLoading: loadingFresh, refresh: refreshBuildings } = useCollection('buildings')
+
+  // The buildings list from the last visit on this device, shown at once while
+  // the real list loads (one round trip less before any screen can start).
+  const [saved] = useState(() => {
+    try {
+      const c = JSON.parse(localStorage.getItem(BUILDINGS_CACHE) || 'null')
+      return c?.uid && c.uid === user?.id && Array.isArray(c.rows) ? c.rows : null
+    } catch { return null }
+  })
+  useEffect(() => {
+    if (loadingFresh || !user?.id) return
+    try { localStorage.setItem(BUILDINGS_CACHE, JSON.stringify({ uid: user.id, rows: fresh })) } catch { /* full or blocked */ }
+  }, [fresh, loadingFresh, user?.id])
+  // Once the real list has rows it always wins (a later refresh keeps them).
+  const buildings = fresh.length || !saved || !loadingFresh ? fresh : saved
+  const isLoading = loadingFresh && !fresh.length && !saved
   const [selectedBuildingId, setSelectedBuildingId] = useState(() => {
     return localStorage.getItem(SELECTED_BUILDING_KEY) || null
   })
