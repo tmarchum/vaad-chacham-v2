@@ -970,7 +970,7 @@ async function askVaad1(ctx: JobCtx, iss: Record<string, any>, why: 'route' | 'c
     [why_he, `${b?.name || ''} · ${iss.category || ''}`, `המלצה: ${SUGGEST_LABEL[suggestion]}.`,
       sent ? 'נשלחו לך כפתורים בוואטסאפ.' : 'אין חלון וואטסאפ פתוח — אפשר להחליט במסך התקלות.', `${APP}/issues`], iss.building_id)
   const committeeLine = `נעדכן בהמשך${urgent ? ' (תוך חצי שעה)' : ''}.`
-  return { suggestion, committeeLine, text: `✅ התקבל. ועד1 מטפלת ב"${iss.title}" — ${committeeLine}` }
+  return { suggestion, committeeLine, text: `✅ התקבל. ועד1 מטפלת ב"${iss.title}"${iss.ticket_no ? ` (#${iss.ticket_no})` : ''} — ${committeeLine}` }
 }
 
 /** The admin's choice (WhatsApp button, the app, or the 30-minute default). */
@@ -1006,6 +1006,7 @@ async function executeHandling(ctx: JobCtx, issueId: string, mode: string): Prom
   const { data: iss } = await ctx.svc.from('issues').select(ISSUE_COLS).eq('id', issueId).maybeSingle()
   if (!iss) return { ok: false, text: 'התקלה לא נמצאה.' }
   const title = String(iss.title)
+  const tno = iss.ticket_no ? ` (#${iss.ticket_no})` : ''
   const now = new Date().toISOString()
   const urgent = isUrgent(iss.priority)
 
@@ -1017,7 +1018,7 @@ async function executeHandling(ctx: JobCtx, issueId: string, mode: string): Prom
       await ctx.svc.from('issues').update({ handler: null, handler_kind: null, stage: null, status: 'reported' }).eq('id', iss.id)
       await emailAdmins(ctx.svc, `צריך ספק מוסמך, הבניין במסלול בסיס: ${title}`,
         ['הצעות מספקים דרך ועד1 כלולות רק במסלול ליווי. הוועד עודכן ויכול לשדרג או לטפל בעצמו.'], iss.building_id)
-      return { ok: false, text: `"${title}" דורשת ספק מוסמך. הצעות מספקים דרך ועד1 כלולות במסלול ליווי — אפשר לשדרג במסך "חשבון ועד1". עד אז ההחלטה אצל הוועד.` }
+      return { ok: false, text: `"${title}"${tno} דורשת ספק מוסמך. הצעות מספקים דרך ועד1 כלולות במסלול ליווי — אפשר לשדרג במסך "חשבון ועד1". עד אז ההחלטה אצל הוועד.` }
     }
     await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
     const ids = await pickVendorsFor(ctx.svc, iss.id, ctx.toE164)
@@ -1025,13 +1026,13 @@ async function executeHandling(ctx: JobCtx, issueId: string, mode: string): Prom
     const sent = Number((r as Record<string, unknown>).sent) || 0
     await emailAdmins(ctx.svc, `ועד1 → הצעות מספקים: ${title}`,
       [sent ? `נשלח ל-${sent} ספקים. ההצעה הזולה תגיע לוועד לאישור.` : 'לא נמצאו ספקים מאושרים עם נייד לתחום הזה — צריך לשלוח ידנית ממסך התקלות.'], iss.building_id)
-    return { ok: true, text: `ועד1 ביקשה הצעות מספקים ל"${title}". ההצעה הזולה תגיע אליכם לאישור — שום דבר לא יוזמן בלעדיכם.` }
+    return { ok: true, text: `ועד1 ביקשה הצעות מספקים ל"${title}"${tno}. ההצעה הזולה תגיע אליכם לאישור — שום דבר לא יוזמן בלעדיכם.` }
   }
 
   if (mode === 'admin') {
     await ctx.svc.from('issues').update({ handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: now }).eq('id', iss.id)
     await emailAdmins(ctx.svc, `ועד1 → מעלית: ${title}`, ['להעביר לחברת המעליות של הבניין (אין לבניין ספק קבוע מוגדר לתחום).'], iss.building_id)
-    return { ok: true, text: `ועד1 מעבירה את "${title}" לחברת המעליות של הבניין. נעדכן בהמשך.` }
+    return { ok: true, text: `ועד1 מעבירה את "${title}"${tno} לחברת המעליות של הבניין. נעדכן בהמשך.` }
   }
 
   // handyman
@@ -1049,9 +1050,9 @@ async function executeHandling(ctx: JobCtx, issueId: string, mode: string): Prom
   const hour = await hourPrice(ctx, iss.building_id)
   const cost = `שעה מהכרטיסייה${hour ? `, או ₪${hour} לפני מע"מ לשעה (או חלק ממנה) אם אין כרטיסייה` : ''}.`
   if (isDiagnosis(iss) && !urgent) {
-    return { ok: true, text: `איש האחזקה של ועד1 יבדוק את "${title}" בביקור הבא. אם צריך ספק מוסמך, תקבלו הצעה לאישור.\n${cost}` }
+    return { ok: true, text: `איש האחזקה של ועד1 יבדוק את "${title}"${tno} בביקור הבא. אם צריך ספק מוסמך, תקבלו הצעה לאישור.\n${cost}` }
   }
-  return { ok: true, text: `איש האחזקה של ועד1 יגיע ל"${title}" ${urgent ? 'בהקדם' : 'בביקור הבא'}. ${cost}` }
+  return { ok: true, text: `איש האחזקה של ועד1 יגיע ל"${title}"${tno} ${urgent ? 'בהקדם' : 'בביקור הבא'}. ${cost}` }
 }
 
 // ── Scheduler pieces ────────────────────────────────────────────────────────
