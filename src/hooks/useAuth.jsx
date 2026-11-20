@@ -4,6 +4,7 @@ import { Browser } from '@capacitor/browser'
 import { App } from '@capacitor/app'
 import { supabase } from '@/lib/supabase'
 import { registerPush } from '@/lib/push'
+import { clearListCache } from '@/lib/listCache'
 
 // Deep link the OAuth redirect comes back to inside the native app.
 const NATIVE_REDIRECT = 'vaadplus://auth-callback'
@@ -29,6 +30,7 @@ function writeProfileCache(uid, profile) {
   try { localStorage.setItem(PROFILE_CACHE, JSON.stringify({ id: uid, profile })) } catch { /* full or blocked */ }
 }
 function clearCaches() {
+  clearListCache()
   try { localStorage.removeItem(PROFILE_CACHE); localStorage.removeItem(BUILDINGS_CACHE) } catch { /* */ }
 }
 

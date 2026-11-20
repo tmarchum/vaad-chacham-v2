@@ -1,31 +1,63 @@
-import { useState, useEffect, useCallback, createContext, useContext } from 'react'
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react'
 import store from '@/data/supabaseStore'
 import { supabase } from '@/lib/supabase'
 import { TABLE_MAP } from '@/data/supabaseStore'
 import { useAuth, BUILDINGS_CACHE } from '@/hooks/useAuth'
+import { listCacheGet, listCacheHas, listCachePut } from '@/lib/listCache'
+
+// Coming back to a screen shows the rows it had last time at once, while a
+// fresh copy loads in the background — every round trip to the database is
+// slow, and re-downloading a list you saw a moment ago was most of the wait.
+// Local changes write through to the memory (lib/listCache).
+const listCache = { get: listCacheGet, has: listCacheHas }
+const cachePut = listCachePut
 
 export function useCollection(collectionName, filters = {}) {
   const collection = store[collectionName]
-  const [data, setData] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
+  const filtersKey = JSON.stringify(filters)
+  const key = `${collectionName}|${filtersKey}`
+  const keyRef = useRef(key)
+  keyRef.current = key
+  const [data, setDataState] = useState(() => listCache.get(key) || [])
+  const [isLoading, setIsLoading] = useState(() => !listCache.has(key))
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  // Every local change goes to the shared memory too, so the next visit
+  // does not show rows from before the change.
+  const setData = useCallback((next) => {
+    setDataState((prev) => {
+      const value = typeof next === 'function' ? next(prev) : next
+      cachePut(keyRef.current, value)
+      return value
+    })
+  }, [])
+
   const refresh = useCallback(async () => {
     if (!collection) { setIsLoading(false); return }
-    setIsLoading(true)
+    const k = key
+    const cached = listCache.get(k)
+    if (cached) setDataState(cached)
+    else setIsLoading(true)
     try {
-      const items = await collection.list(filters)
-      setData(items)
+      let items = await collection.list(filters)
+      // Nothing changed since last time: keep the same array, so screens that
+      // react to new data (forms, selections) are not reset under the user.
+      if (cached && JSON.stringify(cached) === JSON.stringify(items)) items = cached
+      cachePut(k, items)
+      // An answer for filters that already changed must not overwrite the screen.
+      if (keyRef.current !== k) return
+      setDataState(items)
       setError(null)
     } catch(e) {
       console.error('useCollection error:', e)
-      setData([])
+      if (keyRef.current !== k) return
+      if (!cached) setDataState([])
       setError(e)
     } finally {
-      setIsLoading(false)
+      if (keyRef.current === k) setIsLoading(false)
     }
-  }, [collection, JSON.stringify(filters)])
+  }, [collection, key])
 
   useEffect(() => { refresh() }, [refresh])
 
