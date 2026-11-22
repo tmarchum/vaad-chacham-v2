@@ -20,7 +20,10 @@ const SYNONYMS = [
   ['דוד שמש', 'שמש', 'קולט', 'סולארי', 'דוד'],
   ['שער', 'חניה', 'חנייה', 'מחסום', 'אוטומטי'],
   ['בטיחות', 'כיבוי', 'אש', 'גילוי', 'מטף'],
-  ['דלת', 'חלון', 'מסגרות', 'מסגר', 'זגג', 'זגגות', 'זכוכית'],
+  // Glass only. A window that won't close or an entrance door off its hinges is
+  // aluminium work (next group), not a glazier's.
+  ['זגג', 'זגגות', 'זכוכית', 'שמשה', 'ויטרינה'],
+  ['אלומיניום', 'חלון', 'תריס', 'מסגרות', 'מסגר', 'משקוף', 'מסילה'],
   ['אינטרקום', 'קודן', 'דלתון', 'בקרת גישה'],
   ['מצלמ', 'אזעק', 'אבטחה'],
   ['מנעול', 'מנעולן', 'פריצה', 'צילינדר', 'מחזיר שמן', 'מחזיר', 'בולם', 'דלת', 'ציר', 'ידית', 'פלדלת'],
@@ -78,6 +81,10 @@ export function scoreVendorForIssue(issue, vendor, { urgent = false, building = 
   let score = 0
   const matched = categoryMatch(issueTokens, vendorTokens)
   if (matched) { score += 50; reasons.push('התמחות מתאימה') }
+  // The trade chosen for the fault goes ahead of trades that only share a word
+  // with it ("דלת" reaches locksmiths, gate companies and aluminium alike).
+  const chosen = norm(issue?.ai_category)
+  if (chosen && chosen === norm(vendor?.category)) { score += 25; reasons.push('התחום שנבחר לתקלה') }
 
   const rating = Number(vendor.rating) || 0
   if (rating > 0) { score += rating * 6; reasons.push(`דירוג ${rating}/5`) }
