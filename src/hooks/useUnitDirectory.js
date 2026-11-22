@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { sortByUnitNumber } from '@/lib/utils'
+import { listCacheGet, listCachePut } from '@/lib/listCache'
 
 // One source of truth for "unit + who lives there". Family names are NOT a
 // units column — they live in unit_residents — so any picker that reads
@@ -10,34 +11,65 @@ import { sortByUnitNumber } from '@/lib/utils'
 // first name: the committee screens are shared, printed and exported, and a
 // household is one payer, one debtor, one booking — not a person. So `name`
 // here is the family name, and `label` is the ready "דירה 12 — כהן".
+//
+// Almost every screen needs this, so it is loaded in ONE round trip (units
+// with their residents embedded — it used to be two, one after the other),
+// shared between everything on screen that asks at the same moment, and
+// remembered between screens (lib/listCache, cleared on sign-out).
+const inFlight = new Map()
+const cacheKey = (buildingId) => `unitDirectory|${buildingId}`
+
+function fetchDirectory(buildingId) {
+  if (inFlight.has(buildingId)) return inFlight.get(buildingId)
+  const p = (async () => {
+    const { data, error } = await supabase
+      .from('units')
+      .select('id, number, floor, building_id, custom_fields, unit_residents(unit_id, last_name, phone, email, is_primary, resident_type)')
+      .eq('building_id', buildingId)
+      .eq('unit_residents.archived', false)
+    if (error) throw error
+    const units = []
+    const residents = []
+    for (const { unit_residents: rs, ...u } of data || []) {
+      units.push(u)
+      for (const r of rs || []) residents.push(r)
+    }
+    const value = { units, residents }
+    const prev = listCacheGet(cacheKey(buildingId))
+    // Unchanged: keep the same object so screens do not re-render for nothing.
+    const out = prev && JSON.stringify(prev) === JSON.stringify(value) ? prev : value
+    listCachePut(cacheKey(buildingId), out)
+    return out
+  })().finally(() => inFlight.delete(buildingId))
+  inFlight.set(buildingId, p)
+  return p
+}
+
+const EMPTY = { units: [], residents: [] }
+
 export function useUnitDirectory(buildingId) {
-  const [units, setUnits] = useState([])
-  const [residents, setResidents] = useState([])
-  const [loading, setLoading] = useState(!!buildingId)
+  const [state, setState] = useState(() => ({
+    buildingId,
+    value: (buildingId && listCacheGet(cacheKey(buildingId))) || null,
+    failed: false,
+  }))
 
   useEffect(() => {
-    if (!buildingId) { setUnits([]); setResidents([]); setLoading(false); return }
+    if (!buildingId) return
     let active = true
-    setLoading(true)
-    ;(async () => {
-      const { data: u } = await supabase
-        .from('units').select('id, number, floor, building_id, custom_fields')
-        .eq('building_id', buildingId)
-      const ids = (u || []).map((x) => x.id)
-      const { data: r } = ids.length
-        ? await supabase
-          .from('unit_residents')
-          .select('unit_id, last_name, phone, email, is_primary, resident_type')
-          .in('unit_id', ids)
-          .eq('archived', false)
-        : { data: [] }
-      if (!active) return
-      setUnits(u || [])
-      setResidents(r || [])
-      setLoading(false)
-    })()
+    const cached = listCacheGet(cacheKey(buildingId)) || null
+    setState((s) => (s.buildingId === buildingId && s.value === cached ? s : { buildingId, value: cached, failed: false }))
+    fetchDirectory(buildingId).then(
+      (value) => { if (active) setState((s) => (s.buildingId === buildingId && s.value === value ? s : { buildingId, value, failed: false })) },
+      () => { if (active) setState((s) => ({ ...s, buildingId, failed: true })) },
+    )
     return () => { active = false }
   }, [buildingId])
+
+  // Rows that belong to another building must never show, even for one render.
+  const current = buildingId && state.buildingId === buildingId ? state.value : null
+  const loading = !!buildingId && !current && !(state.buildingId === buildingId && state.failed)
+  const { units, residents } = current || EMPTY
 
   return useMemo(() => {
     const primary = {}
