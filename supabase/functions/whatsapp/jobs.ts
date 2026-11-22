@@ -485,24 +485,32 @@ function lossLine(mine: number, winner: number | null) {
 const engagedExpired = (q: Record<string, any>) => q.stage === 'expired' && (!!q.interested_at || !!q.visit_requested)
 
 async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, offered: boolean, sentBy: string | null,
-  opts: { ticketNo?: unknown; winnerAmount?: number | null } = {}) {
+  opts: { ticketNo?: unknown; winnerAmount?: number | null; awarded?: boolean } = {}) {
   const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
   const to = ctx.toE164(String(v?.phone || ''))
   if (!to || !ctx.ready) return false
   const meta = { vendor_id: q.vendor_id, building_id: q.building_id, subject: `העבודה נתפסה: ${title.slice(0, 100)}`, sent_by: sentBy }
   if (await windowOpen(ctx.svc, to)) {
     const tno = opts.ticketNo ? ` (#${opts.ticketNo})` : ''
-    const text = offered
-      ? `תודה על ההצעה ל"${title}"${tno}. ${lossLine(Number(q.amount), opts.winnerAmount ?? null)} נשמח לפנות אליך שוב.`
-      : `העבודה "${title}"${tno} כבר נתפסה. תודה על הזמינות, נפנה אליך שוב בעבודה הבאה.`
+    // Always ends looking forward: he is someone we want to answer next time too.
+    const text = 'שלום, כאן ועד1.\n' + (offered
+      ? `תודה על ההצעה ל"${title}"${tno}. ${lossLine(Number(q.amount), opts.winnerAmount ?? null)} מקווים לעבוד יחד בעבודה הבאה.`
+      : opts.awarded
+        ? `העבודה "${title}"${tno} נסגרה הפעם עם ספק אחר, שהגיש הצעה שהתאימה יותר לוועד הבית. תודה על הזמינות, מקווים לעבוד יחד בעבודה הבאה.`
+        : `העבודה "${title}"${tno} כבר נתפסה. תודה על הזמינות, מקווים לעבוד יחד בעבודה הבאה.`)
     return (await reply(ctx, to, text, meta)).ok
   }
-  const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_job_closed').maybeSingle()
-  if (!t?.active || t.meta_status !== 'APPROVED') return false
+  // Another vendor was chosen: the warmer wording, once Meta approved it.
+  let t: Record<string, any> | null = null
+  for (const key of opts.awarded ? ['vendor_job_other_chosen', 'vendor_job_closed'] : ['vendor_job_closed']) {
+    const { data } = await ctx.svc.from('message_templates').select('*').eq('key', key).maybeSingle()
+    if (data?.active && data.meta_status === 'APPROVED') { t = data; break }
+  }
+  if (!t) return false
   const vars = [v?.name, title].map(ctx.cleanParam)
   const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
     components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } })
-  await ctx.log({ recipient: to, audience: 'vendor', template_key: 'vendor_job_closed', body: ctx.render(t.body, vars),
+  await ctx.log({ recipient: to, audience: 'vendor', template_key: t.key, body: ctx.render(t.body, vars),
     status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error, ...meta })
   return r.ok
 }
@@ -591,7 +599,7 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
     if (!toTell.has(o.id)) continue
     const { data: full } = await ctx.svc.from('quotes').select('*').eq('id', o.id).maybeSingle()
     if (full && await sendJobTaken(ctx, full, String(iss.title), full.amount != null && Number(full.amount) > 0, sentBy,
-      { ticketNo: iss.ticket_no, winnerAmount: Number(q.amount) })) out.thanked++
+      { ticketNo: iss.ticket_no, winnerAmount: Number(q.amount), awarded: true })) out.thanked++
     else out.notThanked++
   }
   return out
