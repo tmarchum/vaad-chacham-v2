@@ -477,6 +477,13 @@ function lossLine(mine: number, winner: number | null) {
   return `הפעם נבחרה הצעה נמוכה בכ-${Math.max(10, Math.round(pct / 10) * 10)}% משלך.`
 }
 
+/**
+ * A vendor who answered (interested, or asked to see the place) and whose
+ * deadline passed before he priced it. He was told we would get back to him,
+ * so he hears when the job closes like everyone still in the request.
+ */
+const engagedExpired = (q: Record<string, any>) => q.stage === 'expired' && (!!q.interested_at || !!q.visit_requested)
+
 async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, offered: boolean, sentBy: string | null,
   opts: { ticketNo?: unknown; winnerAmount?: number | null } = {}) {
   const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
@@ -505,14 +512,15 @@ export async function closeQuotes(ctx: JobCtx, issueId: string, sentBy: string |
   const loaded = await loadIssue(ctx.svc, issueId)
   if (!loaded) return { ok: false, error: 'not_found' }
   await ctx.svc.from('quote_questions').update({ status: 'closed' }).eq('issue_id', issueId).eq('status', 'pending')
-  const { data: open } = await ctx.svc.from('quotes').select('*').eq('issue_id', issueId)
-    .in('stage', OPEN_STAGES.concat('submitted'))
+  const { data: all } = await ctx.svc.from('quotes').select('*').eq('issue_id', issueId)
+    .in('stage', OPEN_STAGES.concat('submitted', 'expired'))
+  const open = (all || []).filter((q) => q.stage !== 'expired' || engagedExpired(q))
   let told = 0, notTold = 0
-  for (const q of open || []) {
+  for (const q of open) {
     await ctx.svc.from('quotes').update({ stage: 'lost', status: 'rejected' }).eq('id', q.id)
     if (await sendJobTaken(ctx, q, String(loaded.iss.title), q.amount != null && Number(q.amount) > 0, sentBy, { ticketNo: loaded.iss.ticket_no })) told++; else notTold++
   }
-  return { ok: true, closed: (open || []).length, told, notTold }
+  return { ok: true, closed: open.length, told, notTold }
 }
 
 // ── The committee picks a quote ─────────────────────────────────────────────
@@ -522,12 +530,14 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
   const { q, iss, b } = c
   if (q.amount == null) return { ok: false, error: 'no_amount' }
 
-  const { data: others } = await ctx.svc.from('quotes').select('id, vendor_id, stage, status').eq('issue_id', iss.id).neq('id', q.id)
+  const { data: others } = await ctx.svc.from('quotes').select('id, vendor_id, stage, status, interested_at, visit_requested').eq('issue_id', iss.id).neq('id', q.id)
+  // Told below: still in the request, or answered and ran out of time.
+  const toTell = new Set((others || []).filter((o) => (o.stage && OPEN_STAGES.concat('submitted').includes(o.stage)) || engagedExpired(o)).map((o) => o.id))
   await ctx.svc.from('quotes').update({ status: 'accepted', stage: q.stage ? 'won' : null }).eq('id', q.id)
   for (const o of others || []) {
     const patch: Record<string, unknown> = {}
     if (['pending', 'received'].includes(o.status)) patch.status = 'rejected'
-    if (o.stage && OPEN_STAGES.concat('submitted').includes(o.stage)) patch.stage = 'lost'
+    if (toTell.has(o.id)) patch.stage = 'lost'
     if (Object.keys(patch).length) await ctx.svc.from('quotes').update(patch).eq('id', o.id)
   }
   await ctx.svc.from('issues').update({ vendor_id: q.vendor_id, vendor_name: q.vendor_name, estimated_cost: q.amount, status: 'approved' }).eq('id', iss.id)
@@ -578,7 +588,7 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
 
   // Everyone else still in the request hears the job was taken.
   for (const o of others || []) {
-    if (!o.stage || !OPEN_STAGES.concat('submitted').includes(o.stage)) continue
+    if (!toTell.has(o.id)) continue
     const { data: full } = await ctx.svc.from('quotes').select('*').eq('id', o.id).maybeSingle()
     if (full && await sendJobTaken(ctx, full, String(iss.title), full.amount != null && Number(full.amount) > 0, sentBy,
       { ticketNo: iss.ticket_no, winnerAmount: Number(q.amount) })) out.thanked++
@@ -777,7 +787,95 @@ export async function sweepQuotes(ctx: JobCtx) {
   const closedNotified = await notifyClosed(ctx)
   const reminded = await remindCommittee(ctx)
   const vendorsReminded = await remindVendors(ctx)
-  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto, closedNotified, reminded, vendorsReminded }
+  const coordinationReminded = await remindCoordination(ctx)
+  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto, closedNotified, reminded, vendorsReminded, coordinationReminded }
+}
+
+// ── ועד1 coordinates the chosen vendor ──────────────────────────────────────
+const COORDINATE_REMIND_HOURS = 24
+
+/**
+ * The committee chose "תאמו ולוו אותנו" and no date was set: ועד1 hears once a
+ * day until one is. Email to ועד1 only; nobody in the building is written to.
+ */
+async function remindCoordination(ctx: JobCtx) {
+  const cutoff = new Date(Date.now() - COORDINATE_REMIND_HOURS * 3600 * 1000).toISOString()
+  const { data: rows } = await ctx.svc.from('issues')
+    .select('id, title, ticket_no, building_id, vendor_id, vendor_name, estimated_cost, coordination_reminded_at')
+    .eq('handler', 'management').eq('handler_kind', 'vendor').eq('stage', 'awaiting_assignment')
+    .is('scheduled_date', null).not('vendor_id', 'is', null).not('status', 'in', `(${DONE.join(',')})`)
+    .or(`coordination_reminded_at.is.null,coordination_reminded_at.lte.${cutoff}`).limit(30)
+  let sent = 0
+  for (const i of rows || []) {
+    const { data: won } = await ctx.svc.from('quotes').select('committee_choice_at, available_by, available_when')
+      .eq('issue_id', i.id).eq('stage', 'won').maybeSingle()
+    if (!won?.committee_choice_at || new Date(won.committee_choice_at).getTime() > new Date(cutoff).getTime()) continue
+    // Claim first, so two sweeps cannot both send.
+    let claim = ctx.svc.from('issues').update({ coordination_reminded_at: new Date().toISOString() }).eq('id', i.id)
+    claim = i.coordination_reminded_at ? claim.eq('coordination_reminded_at', i.coordination_reminded_at) : claim.is('coordination_reminded_at', null)
+    const { data: mine } = await claim.select('id').maybeSingle()
+    if (!mine) continue
+    const { data: v } = await ctx.svc.from('vendors').select('phone').eq('id', i.vendor_id).maybeSingle()
+    const { data: b } = await ctx.svc.from('buildings').select('id, name, street, house_number, city').eq('id', i.building_id).maybeSingle()
+    const days = Math.max(1, Math.floor((Date.now() - new Date(won.committee_choice_at).getTime()) / 86400000))
+    await emailAdmins(ctx.svc, `ממתין לתיאום מועד ${days} ימים: ${whatOf(i)}`,
+      ['הוועד ביקש שוועד1 תתאם, ועוד לא נקבע מועד.',
+        `עבודה: ${whatOf(i)} · ${addressOf(b)}`,
+        `ספק: ${i.vendor_name || ''} (${v?.phone || ''}) · ${nis(i.estimated_cost)} לפני מע"מ${availText(won) ? ` · התחייב לביצוע ${availText(won)}` : ''}`,
+        'אחרי התיאום עם הספק: "קבע מועד" במסך התקלות. הוועד והספק יקבלו את המועד בוואטסאפ.'], i.building_id)
+    sent++
+  }
+  return sent
+}
+
+/**
+ * A date was set for a job ועד1 coordinates: the committee was promised
+ * "נעדכן אתכם כשייקבע מועד", and the vendor needs it in writing. Each change
+ * of date goes out again — it is the new answer to "when".
+ */
+export async function jobScheduled(ctx: JobCtx, issueId: string, sentBy: string | null) {
+  const { data } = await ctx.svc.from('issues').select(ISSUE_COLS + ', vendor_id, scheduled_date, estimated_cost').eq('id', issueId).maybeSingle()
+  const iss = data as Record<string, any> | null
+  if (!iss) return { ok: false, error: 'not_found' }
+  if (iss.handler !== 'management' || iss.handler_kind !== 'vendor' || !iss.vendor_id || !iss.scheduled_date) return { ok: true, skipped: true, committee: 0, vendor: false }
+  if (iss.stage !== 'scheduled') await ctx.svc.from('issues').update({ stage: 'scheduled' }).eq('id', iss.id)
+  const { data: b } = await ctx.svc.from('buildings').select('id, name, street, house_number, city').eq('id', iss.building_id).maybeSingle()
+  const when = new Date(`${String(iss.scheduled_date).slice(0, 10)}T12:00:00Z`)
+    .toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem', weekday: 'long', day: '2-digit', month: '2-digit' })
+  const what = whatOf(iss)
+
+  const committee = await tellCommittee(ctx, iss,
+    `שלום, כאן ועד1.\nנקבע מועד לתקלה *${what}*: ${iss.vendor_name} יגיע ב${when}.\nאיש האחזקה של ועד1 ילווה אותו בבניין. נעדכן כשהעבודה תסתיים.`,
+    `נקבע מועד: ${iss.vendor_name} יגיע ב${when}, בליווי איש האחזקה של ועד1`, `נקבע מועד: ${what}`)
+
+  let vendor = false
+  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', iss.vendor_id).maybeSingle()
+  const to = ctx.toE164(String(v?.phone || ''))
+  if (to && ctx.ready) {
+    const meta = { vendor_id: iss.vendor_id, building_id: iss.building_id, subject: `נקבע מועד: ${what.slice(0, 100)}`, sent_by: sentBy }
+    const address = addressOf(b)
+    if (await windowOpen(ctx.svc, to)) {
+      vendor = (await reply(ctx, to, `שלום, כאן ועד1.\nנקבע מועד לעבודה "${iss.title}"${iss.ticket_no ? ` (#${iss.ticket_no})` : ''} ב${address}: ${when}.\n`
+        + 'איש האחזקה של ועד1 ילווה אותך בבניין. אם המועד לא מתאים, כתוב לנו כאן.', meta)).ok
+    } else {
+      const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_job_assignment').maybeSingle()
+      if (t?.active && t.meta_status === 'APPROVED') {
+        const vars = [v?.name, address, `${iss.title}${Number(iss.estimated_cost) > 0 ? ` · מחיר סגור ${nis(iss.estimated_cost)} לפני מע"מ` : ''}`,
+          when, 'ועד1 — איש האחזקה שלנו ילווה אותך בבניין'].map(ctx.cleanParam)
+        const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
+          components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } })
+        await ctx.log({ recipient: to, audience: 'vendor', template_key: 'vendor_job_assignment', body: ctx.render(t.body, vars),
+          status: r.ok ? 'sent' : 'failed', delivery_status: r.ok ? 'sent' : null, external_id: r.wamid, error_message: r.error, ...meta })
+        vendor = r.ok
+      }
+    }
+  }
+  if (!committee || !vendor) {
+    await emailAdmins(ctx.svc, `המועד נקבע, אבל לא כולם עודכנו: ${what}`,
+      [`מועד: ${when}`, committee ? 'הוועד עודכן בוואטסאפ.' : 'הוועד לא קיבל הודעה בוואטסאפ. צריך לעדכן אותו.',
+        vendor ? 'הספק עודכן בוואטסאפ.' : `הספק ${iss.vendor_name || ''} (${v?.phone || ''}) לא קיבל הודעה בוואטסאפ. צריך לעדכן אותו.`], iss.building_id)
+  }
+  return { ok: true, committee, vendor }
 }
 
 // ── A vendor said "interested" and sent no amount ───────────────────────────

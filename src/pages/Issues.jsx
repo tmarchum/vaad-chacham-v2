@@ -29,7 +29,7 @@ import { useAuth } from '@/hooks/useAuth'
 import {
   loadServiceConfig, loadPunchBalance, punchesFor, isOffHours, punchRules,
   loadBuildingBilling, loadPriceLists, partLineTotal,
-  HANDLER_LABELS, HANDLER_KIND_LABELS, STAGE_LABELS,
+  HANDLER_LABELS, HANDLER_KIND_LABELS, stageLabel,
 } from '@/lib/servicePlans'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
@@ -421,7 +421,7 @@ const IssueCard = React.memo(function IssueCard({
             {iss.handler && (
               <span className="text-[var(--text-secondary)]">
                 · מטפל: {HANDLER_LABELS[iss.handler]}{iss.handler_kind ? ` (${HANDLER_KIND_LABELS[iss.handler_kind]})` : ''}
-                {iss.stage && !isDone(iss.status) ? ` · ${STAGE_LABELS[iss.stage]}` : ''}
+                {iss.stage && !isDone(iss.status) ? ` · ${stageLabel(iss)}` : ''}
                 {iss.handler_kind === 'handyman' && iss.handyman_reply && !isDone(iss.status)
                   ? ` · ${HANDYMAN_REPLY_LABELS[iss.handyman_reply]}${iss.handyman_eta ? `: ${iss.handyman_eta}` : ''}` : ''}
               </span>
@@ -451,12 +451,17 @@ const IssueCard = React.memo(function IssueCard({
 /** A ועד1 quote round still collecting / awaiting the committee — nothing to finish yet. */
 const inQuoteRound = (iss) => iss.handler_kind === 'vendor' && ['acknowledged', 'quoted'].includes(iss.status)
 
+/** The committee chose a vendor and asked ועד1 to coordinate: what is missing is a date. */
+const awaitingDate = (iss) => iss.handler === 'management' && iss.handler_kind === 'vendor'
+  && iss.stage === 'awaiting_assignment' && !!iss.vendor_name
+
 function nextAction(iss, svc) {
   const s = iss.status
   const flow = flowFor(iss, svc)
   if (flow === 'triage') return { key: 'open', label: 'בחר טיפול', icon: ArrowRight }
   if (flow === 'watch') return null
   if (flow === 'manage' && inQuoteRound(iss)) return { key: 'open', label: 'הצעות מחיר', icon: FileText }
+  if (flow === 'manage' && awaitingDate(iss)) return { key: 'sched', label: 'קבע מועד', icon: Calendar }
   if (flow === 'manage') return { key: 'finish', label: 'סיום טיפול', icon: CheckCircle2 }
   if (s === 'reported') return { key: 'ack', label: 'אשר', icon: Check }
   // The vendor pool is ועד1's: a committee handling it itself has no vendor actions.
@@ -1511,11 +1516,21 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
   const handleSchedule = async () => {
     if (!scheduleDialogIssue || !scheduleDate) return
-    await update(scheduleDialogIssue.id, { scheduledDate: scheduleDate, status: 'scheduled' })
+    const iss = scheduleDialogIssue
+    // A job ועד1 coordinates for the committee: they were promised the date,
+    // and the vendor needs it in writing. One toast says who was told.
+    const coordinated = iss.handler === 'management' && iss.handler_kind === 'vendor' && !!iss.vendor_name
+    await update(iss.id, { scheduledDate: scheduleDate, status: 'scheduled', ...(iss.stage ? { stage: 'scheduled' } : {}) }, { silent: coordinated })
     // The resident asked when someone is coming — this is the answer.
-    notifyIssueStatus(scheduleDialogIssue.id, 'scheduled')
+    notifyIssueStatus(iss.id, 'scheduled')
     setScheduleDialogIssue(null)
     setScheduleDate('')
+    if (coordinated) {
+      const { data, error } = await supabase.functions.invoke('whatsapp', { body: { action: 'job-scheduled', issueId: iss.id } })
+      if (error || !data?.ok) toastError('המועד נשמר, אבל ההודעה לוועד ולספק לא יצאה. צריך לעדכן אותם.')
+      else if (data.committee && data.vendor) toast('המועד נקבע · הוועד והספק עודכנו בוואטסאפ')
+      else toast(`המועד נקבע · ${data.committee ? 'הוועד עודכן' : 'הוועד לא עודכן'} · ${data.vendor ? 'הספק עודכן' : 'הספק לא עודכן'} (פירוט במייל)`)
+    }
   }
 
   const handleComplete = async () => {
@@ -2226,8 +2241,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     </Button>
                   </>
                 )}
+                {/* ועד1 coordinates the chosen vendor: the date goes to the committee and the vendor. */}
+                {flowFor(iss, svc) === 'manage' && iss.handler_kind === 'vendor' && iss.vendor_name && ['awaiting_assignment', 'scheduled'].includes(iss.stage) && (
+                  <Button variant={awaitingDate(iss) ? 'default' : 'outline'} size="sm" onClick={() => { setDetailIssue(null); handleOpenSchedule(iss) }}>
+                    <Calendar className="h-3.5 w-3.5" /> {awaitingDate(iss) ? 'קבע מועד' : 'שנה מועד'}
+                  </Button>
+                )}
                 {flowFor(iss, svc) === 'manage' && !inQuoteRound(iss) && (
-                  <Button size="sm" onClick={() => { setDetailIssue(null); handleOpenFinish(iss) }}>
+                  <Button variant={awaitingDate(iss) ? 'outline' : 'default'} size="sm" onClick={() => { setDetailIssue(null); handleOpenFinish(iss) }}>
                     <CheckCircle2 className="h-3.5 w-3.5" /> {iss.handler_kind === 'handyman' ? 'סיום טיפול וניקוב' : 'סיום טיפול'}
                   </Button>
                 )}
@@ -2866,6 +2887,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               onChange={(e) => setScheduleDate(e.target.value)}
               required
             />
+            {scheduleDialogIssue?.handler === 'management' && scheduleDialogIssue?.handler_kind === 'vendor' && scheduleDialogIssue?.vendor_name && (
+              <p className="text-[12px] text-[var(--text-secondary)]">
+                עם השמירה, הוועד ו{scheduleDialogIssue.vendor_name} יקבלו את המועד בוואטסאפ. לקבוע רק אחרי שתיאמת עם הספק.
+              </p>
+            )}
             <div className="flex gap-3">
               <Button onClick={handleSchedule} disabled={!scheduleDate}>
                 <Calendar className="h-4 w-4" />

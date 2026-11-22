@@ -18,7 +18,14 @@ export const STAGE_LABELS = {
   awaiting_vaad1: 'ועד1 מחליטה: איש אחזקה או ספק',
 }
 
-export const HANDLER_LABELS = { committee: 'הוועד', management: 'ועד1' }
+// "ממתין לשיבוץ" means nobody was picked yet. Once the committee chose a vendor
+// and asked ועד1 to coordinate, what is missing is a date, not a vendor.
+export function stageLabel(iss) {
+  if (iss?.stage === 'awaiting_assignment' && iss.handler_kind === 'vendor' && iss.vendor_name) return 'ממתין לתיאום מועד'
+  return STAGE_LABELS[iss?.stage] || ''
+}
+
+export const HANDLER_LABELS ={ committee: 'הוועד', management: 'ועד1' }
 export const HANDLER_KIND_LABELS = { handyman: 'איש אחזקה', vendor: 'ספק מהצעות ועד1', contractor: 'הספק הקבוע של הבניין' }
 
 // What happens when a building's punch card runs out — the committee chooses.

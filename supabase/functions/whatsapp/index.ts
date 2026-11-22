@@ -33,7 +33,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
 import {
   awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleCommitteeAnswer, handleOfferButton, handleOfferText, takeIssue,
-  pickBest, sendJobOffers, sweepQuotes, routeNewIssue, vaad1Decide, handleVaad1Button, handleReminderButton, handleVisitButton, type JobCtx,
+  pickBest, sendJobOffers, sweepQuotes, routeNewIssue, vaad1Decide, handleVaad1Button, handleReminderButton, handleVisitButton, jobScheduled, type JobCtx,
 } from './jobs.ts'
 
 const PROVIDER = 'whatsapp_cloud'
@@ -861,7 +861,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Job offers: vendors for a quote, or ועד1's handyman ─────────────────
-    if (action === 'job-offer' || action === 'quote-award' || action === 'quote-close' || action === 'quote-choice' || action === 'quote-pick') {
+    if (action === 'job-offer' || action === 'quote-award' || action === 'quote-close' || action === 'quote-choice' || action === 'quote-pick' || action === 'job-scheduled') {
       if (!integ?.enabled || !integ.phone_number_id || !token) return json({ ok: false, error: 'integration_disabled' })
       const ctx = jobCtx(svc, integ, token)
       let issueId = String(body.issueId || '')
@@ -874,6 +874,7 @@ Deno.serve(async (req: Request) => {
       if (!isAdmin && !(await callerBuildings(svc, uid)).has(iss.building_id)) return json({ error: 'forbidden' }, 403)
       if (action === 'quote-award') return json(await awardQuote(ctx, String(body.quoteId), uid))
       if (action === 'quote-close') return json(await closeQuotes(ctx, issueId, uid))
+      if (action === 'job-scheduled') return json(await jobScheduled(ctx, issueId, uid))
       if (action === 'quote-choice') {
         const choice = ['take', 'coordinate', 'reject'].includes(String(body.choice)) ? String(body.choice) as 'take' | 'coordinate' | 'reject' : null
         if (!choice) return json({ ok: false, error: 'bad_choice' }, 400)
