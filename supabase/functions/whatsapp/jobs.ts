@@ -1042,13 +1042,18 @@ async function sendButtons(ctx: JobCtx, to: string, text: string, buttons: [stri
 /**
  * Tell the committee about an issue, with or without buttons. Inside the 24h
  * window: free text (buttons if given). Outside: the approved
- * committee_issue_opened template, its description line carrying the news.
+ * committee_issue_opened template, its description line carrying the news —
+ * or `alt`, a template of the message's own (with its quick-reply buttons),
+ * once Meta has approved it.
  */
-async function tellCommittee(ctx: JobCtx, iss: Record<string, any>, text: string, line: string, subject: string, buttons?: [string, string][]) {
+type AltTpl = { key: string; vars: (greet: string, building: string) => string[]; ids: string[] }
+async function tellCommittee(ctx: JobCtx, iss: Record<string, any>, text: string, line: string, subject: string, buttons?: [string, string][], alt?: AltTpl) {
   if (!ctx.ready) return 0
   const { data: b } = await ctx.svc.from('buildings').select('name').eq('id', iss.building_id).maybeSingle()
   const { data: tpl } = await ctx.svc.from('message_templates').select('*').eq('key', 'committee_issue_opened').maybeSingle()
   const { data: u } = iss.unit_id ? await ctx.svc.from('units').select('number').eq('id', iss.unit_id).maybeSingle() : { data: null }
+  const { data: altRow } = alt ? await ctx.svc.from('message_templates').select('*').eq('key', alt.key).maybeSingle() : { data: null }
+  const own = alt && altRow?.active !== false && altRow?.meta_status === 'APPROVED' ? altRow : null
   let sent = 0
   for (const to of await committeePhones(ctx, iss)) {
     let payload: Record<string, unknown> | null = null
@@ -1058,15 +1063,18 @@ async function tellCommittee(ctx: JobCtx, iss: Record<string, any>, text: string
         ? { messaging_product: 'whatsapp', to, type: 'interactive', interactive: { type: 'button', body: { text: text.slice(0, 1024) },
             action: { buttons: buttons.map(([title, id]) => ({ type: 'reply', reply: { id, title } })) } } }
         : { messaging_product: 'whatsapp', to, type: 'text', text: { body: text.slice(0, 4096) } }
-    } else if (tpl?.active !== false && tpl?.meta_status === 'APPROVED') {
+    } else if (own || (tpl?.active !== false && tpl?.meta_status === 'APPROVED')) {
       const { data: m } = await ctx.svc.from('unit_residents').select('last_name, phone, units!inner(building_id, board_member)')
         .eq('units.building_id', iss.building_id).eq('units.board_member', true).eq('archived', false)
       const me = (m || []).find((r) => ctx.toE164(String(r.phone || '')) === to)
-      const vars = [me?.last_name ? `משפחת ${me.last_name}` : 'חבר ועד', b?.name || 'הבניין', iss.category || 'כללי',
-        `${whatOf(iss)} — ${line}`, u?.number ? `דירה ${u.number}` : '—'].map(ctx.cleanParam)
-      body = ctx.render(tpl.body, vars)
-      payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: tpl.meta_name, language: { code: tpl.language || 'he' },
-        components: [{ type: 'body', parameters: vars.map((t) => ({ type: 'text', text: t })) }] } }
+      const greet = me?.last_name ? `משפחת ${me.last_name}` : 'חבר ועד'
+      const use = own || tpl
+      const vars = (own ? alt!.vars(greet, b?.name || 'הבניין') : [greet, b?.name || 'הבניין', iss.category || 'כללי',
+        `${whatOf(iss)} — ${line}`, u?.number ? `דירה ${u.number}` : '—']).map(ctx.cleanParam)
+      body = ctx.render(use.body, vars)
+      payload = { messaging_product: 'whatsapp', to, type: 'template', template: { name: use.meta_name, language: { code: use.language || 'he' },
+        components: [{ type: 'body', parameters: vars.map((t) => ({ type: 'text', text: t })) },
+          ...(own ? alt!.ids.map((id, index) => ({ type: 'button', sub_type: 'quick_reply', index: String(index), parameters: [{ type: 'payload', payload: id }] })) : [])] } }
     }
     if (!payload) continue
     const r = await ctx.send(payload)
@@ -1458,7 +1466,14 @@ async function remindTasks(ctx: JobCtx) {
     const pseudo = { building_id: t.building_id, assigned_to: await taskOwner(ctx, t.building_id, cat), category: cat, title: t.title, unit_id: null, ticket_no: null }
     sent += await tellCommittee(ctx, pseudo, text,
       `משימה תקופתית${law}. ${when} להזמנת ספק או הצעות מחיר: ${APP}/recurring-tasks`,
-      `${stage === 'overdue' ? 'משימה תקופתית באיחור' : 'תזכורת משימה תקופתית'}: ${t.title}`, buttons)
+      `${stage === 'overdue' ? 'משימה תקופתית באיחור' : 'תזכורת משימה תקופתית'}: ${t.title}`, buttons,
+      // Outside the 24h window: the reminder's own template. Its three buttons
+      // are fixed, so a task with no regular vendor (or a lift, for quotes)
+      // gets the explanation when the button is pressed.
+      { key: 'committee_task_reminder', ids: [`rt:${t.id}:vendor`, `rt:${t.id}:quotes`, `rt:${t.id}:done`],
+        vars: (greet, building) => [greet, building, `${t.title}${law}`,
+          stage === 'overdue' ? `עבר ב-${dm(String(t.next_due_date))}, לפני ${-days} ימים` : days === 0 ? 'היום' : `עד ${dm(String(t.next_due_date))}, בעוד ${days} ימים`,
+          v?.name || (lift ? 'חברת המעליות של הבניין' : 'לא הוגדר')] })
   }
   return sent
 }
