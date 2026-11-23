@@ -1361,7 +1361,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // This used to be `v.category === issue.category`, and that could never
   // match anything: issue categories and vendor categories are two separate
   // vocabularies — "שערים, דלתות וחניה" vs "שערים ודלתות אוטומטיות",
-  // "חשמל ותאורה" vs "חשמל", "ניקיון ותחזוקה" vs "ניקיון". Every vendor row
+  // "חשמל ותאורה" vs "חשמל", "תחזוקה כללית" vs "אחזקה כללית". Every vendor row
   // has a category, so the `!v.category` escape hatch never fired either and
   // the list came out empty for EVERY issue: no checkboxes, "שלח בקשה"
   // permanently disabled, the dialog unusable.
