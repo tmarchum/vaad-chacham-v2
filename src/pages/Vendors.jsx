@@ -559,6 +559,9 @@ function Vendors() {
     const data = {
       ...form,
       rating: Number(form.rating),
+      // Optional: an empty date input is '', which Postgres rejects for a date
+      // column, so a vendor without an insurance date could not be saved.
+      insurance_expiry: form.insurance_expiry || null,
     }
     if (editingId) {
       await update(editingId, data)
