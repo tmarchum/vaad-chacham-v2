@@ -22,7 +22,7 @@
 // name on this number belongs to another business).
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { rankVendorsForIssue, QUOTE_FANOUT } from '../_shared/vendorMatch.js'
+import { rankVendorsForIssue, QUOTE_FANOUT, vendorGreeting } from '../_shared/vendorMatch.js'
 import { decideHandling, isDiagnosis, isUrgent, routeFor } from '../_shared/handling.js'
 
 const APP = 'https://app.vaad1.co.il'
@@ -199,7 +199,7 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
   }
 
   if (opts.kind === 'handyman') {
-    const { data: hm } = await ctx.svc.from('vendors').select('id, name, phone').eq('is_internal', true).limit(1).maybeSingle()
+    const { data: hm } = await ctx.svc.from('vendors').select('id, name, contact_name, phone').eq('is_internal', true).limit(1).maybeSingle()
     const to = ctx.toE164(String(hm?.phone || ''))
     if (!hm || !to) return { ok: false, error: 'no_handyman' }
     const msg = await build(to, 'handyman_job_offer', [hm.name, desc, address].map(ctx.cleanParam),
@@ -220,7 +220,7 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
   const avail = availabilityFor(iss.priority)
   const jobDesc = ctx.cleanParam(`${desc} | נדרש ביצוע ${avail.text}`).slice(0, 700)
   const { data: vendors } = await ctx.svc.from('vendors')
-    .select('id, name, phone, is_blacklisted, is_internal').in('id', (opts.vendorIds || []).slice(0, 10))
+    .select('id, name, contact_name, phone, is_blacklisted, is_internal').in('id', (opts.vendorIds || []).slice(0, 10))
   let sent = 0, failed = 0
   const skipped: { name: string; reason: string }[] = []
   for (const v of vendors || []) {
@@ -240,9 +240,9 @@ export async function sendJobOffers(ctx: JobCtx, opts: { issueId: string; vendor
       : await ctx.svc.from('quotes').insert({ ...fields, issue_id: iss.id, vendor_id: v.id, building_id: iss.building_id,
           vendor_name: v.name, description: iss.title }).select('id').single()
     if (!q) { failed++; continue }
-    const msg = await build(to, 'vendor_job_offer', [v.name, iss.category || 'כללי', jobDesc, address].map(ctx.cleanParam),
+    const msg = await build(to, 'vendor_job_offer', [vendorGreeting(v), iss.category || 'כללי', jobDesc, address].map(ctx.cleanParam),
       [`offer:${q.id}:yes`, `offer:${q.id}:no`], ['מעוניין לתת הצעה', 'לא מעוניין'],
-      'vendor_quote_request', [v.name, address, `${jobDesc}${link ? ` | פרטים ותמונות: ${link}` : ''}`, 'ועד1'].map(ctx.cleanParam))
+      'vendor_quote_request', [vendorGreeting(v), address, `${jobDesc}${link ? ` | פרטים ותמונות: ${link}` : ''}`, 'ועד1'].map(ctx.cleanParam))
     if (!msg) { failed++; continue }
     const r = await ctx.send(msg.payload)
     if (r.ok) sent++; else failed++
@@ -314,7 +314,7 @@ async function recordAmount(ctx: JobCtx, q: Record<string, any>, iss: Record<str
     + `ההצעה הוגשה. נעדכן אותך בכל מקרה עד ${ilDay(by)}.\nטעית בסכום? כתוב את הסכום הנכון במספרים.`,
     { vendor_id: q.vendor_id, building_id: q.building_id, subject: `הצעת מחיר ${fix ? 'עודכנה' : 'התקבלה'}: ${String(iss?.title || '').slice(0, 100)}` })
   if (!fix) {
-    const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+    const { data: v } = await ctx.svc.from('vendors').select('name, contact_name, phone').eq('id', q.vendor_id).maybeSingle()
     await emailAdmins(ctx.svc, `הצעת מחיר חדשה: ${v?.name || ''} · ${nis(amount)} · ${iss?.title || ''}`,
       [`ספק: ${v?.name || ''} (${v?.phone || ''})`, `עבודה: ${iss?.title || ''}`, `סכום: ${nis(amount)} לפני מע"מ`, `ביצוע: ${availText(q)}`,
         'כשכל הספקים יענו, או כשמועד ההגשה יעבור, הזולה תישלח לוועד.'], q.building_id)
@@ -486,7 +486,7 @@ const engagedExpired = (q: Record<string, any>) => q.stage === 'expired' && (!!q
 
 async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, offered: boolean, sentBy: string | null,
   opts: { ticketNo?: unknown; winnerAmount?: number | null; awarded?: boolean } = {}) {
-  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+  const { data: v } = await ctx.svc.from('vendors').select('name, contact_name, phone').eq('id', q.vendor_id).maybeSingle()
   const to = ctx.toE164(String(v?.phone || ''))
   if (!to || !ctx.ready) return false
   const meta = { vendor_id: q.vendor_id, building_id: q.building_id, subject: `העבודה נתפסה: ${title.slice(0, 100)}`, sent_by: sentBy }
@@ -507,7 +507,7 @@ async function sendJobTaken(ctx: JobCtx, q: Record<string, any>, title: string, 
     if (data?.active && data.meta_status === 'APPROVED') { t = data; break }
   }
   if (!t) return false
-  const vars = [v?.name, title].map(ctx.cleanParam)
+  const vars = [vendorGreeting(v), title].map(ctx.cleanParam)
   const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
     components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } })
   await ctx.log({ recipient: to, audience: 'vendor', template_key: t.key, body: ctx.render(t.body, vars),
@@ -567,7 +567,7 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
   const link = briefLink(iss.brief_token)
   const out = { ok: true, winner: false, thanked: 0, notThanked: 0 }
 
-  const { data: v } = await ctx.svc.from('vendors').select('id, name, phone').eq('id', q.vendor_id).maybeSingle()
+  const { data: v } = await ctx.svc.from('vendors').select('id, name, contact_name, phone').eq('id', q.vendor_id).maybeSingle()
   const to = ctx.toE164(String(v?.phone || ''))
   if (to && ctx.ready) {
     const text = `ההצעה שלך נבחרה ✅\nעבודה: ${iss.title}\nכתובת: ${address}${apt}\nאיש קשר בבניין: ${contact}\n`
@@ -582,7 +582,7 @@ export async function awardQuote(ctx: JobCtx, quoteId: string, sentBy: string | 
     } else {
       const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_job_assignment').maybeSingle()
       if (t?.active && t.meta_status === 'APPROVED') {
-        const vars = [v?.name, `${address}${apt}`, `${iss.title} · מחיר סגור ${nis(q.amount)} לפני מע"מ, לעבודה כפי שתוארה`,
+        const vars = [vendorGreeting(v), `${address}${apt}`, `${iss.title} · מחיר סגור ${nis(q.amount)} לפני מע"מ, לעבודה כפי שתוארה`,
           availText(q) || 'יתואם איתך', contact].map(ctx.cleanParam)
         const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
           components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } })
@@ -743,7 +743,7 @@ export async function committeeChoice(ctx: JobCtx, quoteId: string, choice: 'tak
   const contact = choice === 'take' && member?.id
     ? [member.last_name, member.number ? `דירה ${member.number}` : '', member.phone].filter(Boolean).join(' · ') : ''
   const res = await awardQuote(ctx, q.id, actor.uid || null, { contact, coordinate: choice === 'coordinate' })
-  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+  const { data: v } = await ctx.svc.from('vendors').select('name, contact_name, phone').eq('id', q.vendor_id).maybeSingle()
   const e164 = ctx.toE164(String(v?.phone || '')) || ''
 
   if (choice === 'take') {
@@ -857,7 +857,7 @@ export async function jobScheduled(ctx: JobCtx, issueId: string, sentBy: string 
     `נקבע מועד: ${iss.vendor_name} יגיע ב${when}, בליווי איש האחזקה של ועד1`, `נקבע מועד: ${what}`)
 
   let vendor = false
-  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', iss.vendor_id).maybeSingle()
+  const { data: v } = await ctx.svc.from('vendors').select('name, contact_name, phone').eq('id', iss.vendor_id).maybeSingle()
   const to = ctx.toE164(String(v?.phone || ''))
   if (to && ctx.ready) {
     const meta = { vendor_id: iss.vendor_id, building_id: iss.building_id, subject: `נקבע מועד: ${what.slice(0, 100)}`, sent_by: sentBy }
@@ -868,7 +868,7 @@ export async function jobScheduled(ctx: JobCtx, issueId: string, sentBy: string 
     } else {
       const { data: t } = await ctx.svc.from('message_templates').select('*').eq('key', 'vendor_job_assignment').maybeSingle()
       if (t?.active && t.meta_status === 'APPROVED') {
-        const vars = [v?.name, address, `${iss.title}${Number(iss.estimated_cost) > 0 ? ` · מחיר סגור ${nis(iss.estimated_cost)} לפני מע"מ` : ''}`,
+        const vars = [vendorGreeting(v), address, `${iss.title}${Number(iss.estimated_cost) > 0 ? ` · מחיר סגור ${nis(iss.estimated_cost)} לפני מע"מ` : ''}`,
           when, 'ועד1 — איש האחזקה שלנו ילווה אותך בבניין'].map(ctx.cleanParam)
         const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
           components: [{ type: 'body', parameters: vars.map((text) => ({ type: 'text', text })) }] } })
@@ -950,7 +950,7 @@ export async function handleVisitButton(ctx: JobCtx, from: string, payload: stri
   if (q.visit_invited_at) return answerAdmin(`${q.vendor_name} כבר הוזמן לביקור.`)
   const { data: iss } = await ctx.svc.from('issues').select(ISSUE_COLS).eq('id', q.issue_id).maybeSingle()
   if (!iss || DONE.includes(iss.status)) return answerAdmin('התקלה כבר נסגרה.')
-  const { data: v } = await ctx.svc.from('vendors').select('name, phone').eq('id', q.vendor_id).maybeSingle()
+  const { data: v } = await ctx.svc.from('vendors').select('name, contact_name, phone').eq('id', q.vendor_id).maybeSingle()
   const to = ctx.toE164(String(v?.phone || ''))
   const open = !!to && ctx.ready && await windowOpen(ctx.svc, to)
   const meta = { vendor_id: q.vendor_id, building_id: q.building_id }
@@ -1132,7 +1132,7 @@ export async function routeNewIssue(ctx: JobCtx, issueId: string) {
 
 /** Send a new issue to the building's standing contractor. Returns how it went out. */
 async function dispatchContractor(ctx: JobCtx, iss: Record<string, any>, b: Record<string, any> | null, vendorName: string, notifyEmail: string | null) {
-  const { data: v } = await ctx.svc.from('vendors').select('id, name, phone, email, contact_channel').eq('name', vendorName).maybeSingle()
+  const { data: v } = await ctx.svc.from('vendors').select('id, name, contact_name, phone, email, contact_channel').eq('name', vendorName).maybeSingle()
   const ways: string[] = []
   // The category's standing address already got the opening email (analyze-issue).
   if (notifyEmail) ways.push('במייל')
@@ -1144,7 +1144,7 @@ async function dispatchContractor(ctx: JobCtx, iss: Record<string, any>, b: Reco
     const link = briefLink(ib?.brief_token || null)
     const contact = await committeeContact(ctx, iss)
     if (t?.meta_status === 'APPROVED') {
-      const vars = [v.name, addressOf(b), `${iss.priority === 'urgent' ? 'חירום — ' : ''}${[iss.title, iss.description].filter(Boolean).join(' — ')}${link ? ` | פרטים ותמונות: ${link}` : ''}`, contact].map(ctx.cleanParam)
+      const vars = [vendorGreeting(v), addressOf(b), `${iss.priority === 'urgent' ? 'חירום — ' : ''}${[iss.title, iss.description].filter(Boolean).join(' — ')}${link ? ` | פרטים ותמונות: ${link}` : ''}`, contact].map(ctx.cleanParam)
       const r = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
         components: [{ type: 'body', parameters: vars.map((x) => ({ type: 'text', text: x })) }] } })
       await ctx.log({ recipient: to, audience: 'vendor', vendor_id: v.id, building_id: iss.building_id, template_key: 'vendor_issue_dispatch',

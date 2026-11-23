@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useCollection, useBuildingContext } from '@/hooks/useStore'
 import { vendorDistanceKm, formatKm, distanceBand } from '@/lib/geo'
 import { ISSUE_GROUPS, issueGroupOf, issueGroupRank } from '@/lib/vendorGroups'
+import { vendorGreeting } from '@/lib/vendorMatch'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
@@ -93,6 +94,7 @@ const SERVICE_GROUPS = [
 
 const EMPTY_FORM = {
   name: '',
+  contact_name: '',
   category: '',
   phone: '',
   email: '',
@@ -218,7 +220,7 @@ function MembershipBadge({ status }) {
 // Variables for the Meta-approved "vendor_invite" template (official channel).
 const inviteTemplate = (vendor) => ({
   key: 'vendor_invite',
-  variables: [vendor?.name || 'שלום', vendor?.category || 'שירותי תחזוקה לבניינים'],
+  variables: [vendorGreeting(vendor) || 'שלום', vendor?.category || 'שירותי תחזוקה לבניינים'],
 })
 
 function buildInviteMessage(vendor) {
@@ -524,6 +526,7 @@ function Vendors() {
     setEditingId(vendor.id)
     setForm({
       name: vendor.name || '',
+      contact_name: vendor.contact_name || '',
       category: vendor.category || '',
       phone: vendor.phone || '',
       email: vendor.email || '',
@@ -1262,6 +1265,12 @@ function Vendors() {
               value={form.name}
               onChange={setField('name')}
               required
+            />
+            <FormField
+              label="שם לפנייה בהודעות"
+              value={form.contact_name}
+              onChange={setField('contact_name')}
+              placeholder={vendorGreeting({ name: form.name }) || 'איך פונים אליו, למשל: עדן'}
             />
             <FormSelect
               label="התמחות"

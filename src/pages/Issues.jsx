@@ -17,7 +17,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { StatCard } from '@/components/common/StatCard'
 import { FilterPills } from '@/components/common/FilterPills'
 import { formatCurrency, formatDate, sortByUnitNumber } from '@/lib/utils'
-import { rankVendorsForIssue, QUOTE_FANOUT } from '@/lib/vendorMatch'
+import { rankVendorsForIssue, QUOTE_FANOUT, vendorGreeting } from '@/lib/vendorMatch'
 import { decideHandling } from '@/lib/handling'
 import { vendorDistanceKm, formatKm } from '@/lib/geo'
 import { IssueVendorDetails } from '@/components/issues/IssueVendorDetails'
@@ -1163,7 +1163,7 @@ function Issues() {
   const quoteTemplate = (iss, vendor, building) => ({
     key: 'vendor_quote_request',
     variables: [
-      vendor?.name || vendor?.business_name || 'שלום',
+      vendorGreeting(vendor) || vendor?.business_name || 'שלום',
       [building?.name, building?.address].filter(Boolean).join(', ') || 'הבניין',
       [iss?.title, iss?.description, issueBriefLink(iss) ? `פרטים ותמונות: ${issueBriefLink(iss)}` : (iss?.photo_url ? `תמונה: ${iss.photo_url}` : '')].filter(Boolean).join(' — '),
       'ועד הבית',

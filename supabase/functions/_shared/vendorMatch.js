@@ -133,3 +133,22 @@ export function rankVendorsForIssue(issue, vendors, opts = {}) {
     .filter((r) => r.matched)
     .sort((a, b) => b.score - a.score)
 }
+
+/**
+ * How to address a vendor in a message. Names collected from Google are listings
+ * ("חשמלאי מוסמך - עדן האזרד", "X | הדברה בתל אביב…"), not what you call a person.
+ * The saved contact name wins; otherwise the name in brackets, otherwise the
+ * listing without its advertising tail.
+ */
+export function vendorGreeting(vendor) {
+  const contact = String(vendor?.contact_name || vendor?.contactName || '').trim()
+  if (contact) return contact
+  const name = String(vendor?.name || '').trim()
+  const inBrackets = name.match(/\(([^()]{2,30})\)\s*$/)
+  if (inBrackets) return inBrackets[1].trim()
+  const parts = name.split(/\s*\|\s*|\s+[-–—]\s+|-\s+|,\s*/).map((p) => p.trim()).filter(Boolean)
+  // "חשמלאי מוסמך - עדן האזרד": the trade came first, the name is the next part.
+  const TRADE_FIRST = /^(חשמלאי|אינסטלטור|מנעולן|זגג|טכנאי|מדביר|גנן|קבלן|שירותי|תיקון|התקנת|בודק)(\s|$)/
+  const head = parts.length > 1 && TRADE_FIRST.test(parts[0]) ? parts[1] : (parts[0] || '')
+  return head.length >= 4 ? head : name
+}
