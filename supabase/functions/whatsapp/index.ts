@@ -33,7 +33,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/mod.ts'
 import {
   awardQuote, closeQuotes, committeeChoice, handleBestQuoteButton, handleCommitteeAnswer, handleOfferButton, handleOfferText, takeIssue,
-  pickBest, sendJobOffers, sweepQuotes, routeNewIssue, vaad1Decide, handleVaad1Button, handleReminderButton, handleVisitButton, jobScheduled, type JobCtx,
+  pickBest, sendJobOffers, sweepQuotes, routeNewIssue, vaad1Decide, handleVaad1Button, handleReminderButton, handleVisitButton, jobScheduled, taskAction, handleTaskButton, type JobCtx,
 } from './jobs.ts'
 
 const PROVIDER = 'whatsapp_cloud'
@@ -381,6 +381,11 @@ async function handleInbound(svc: SupabaseClient, integ: Integ | null, token: st
   }
   if (payload.startsWith('cr:')) {
     await handleReminderButton(jobCtx(svc, integ, token), from, payload)
+    return
+  }
+  // A recurring task's reminder: "rt:<taskId>:vendor|quotes|done".
+  if (payload.startsWith('rt:')) {
+    await handleTaskButton(jobCtx(svc, integ, token), from, payload)
     return
   }
 
@@ -851,6 +856,17 @@ Deno.serve(async (req: Request) => {
         }
       }
       return json({ ok: true, issues: issues.length, sent, skipped, failed, template: tpl?.meta_status || null })
+    }
+
+    // ── A recurring task: send it to its vendor, ask for quotes, or mark it
+    // done (the committee of that building, from the app) ──────────────────
+    if (action === 'task-action') {
+      const mode = String(body.mode || '')
+      if (!['vendor', 'quotes', 'done'].includes(mode)) return json({ ok: false, text: 'פעולה לא מוכרת.' }, 400)
+      const { data: task } = await svc.from('recurring_tasks').select('building_id').eq('id', String(body.taskId || '')).maybeSingle()
+      if (!task) return json({ ok: false, text: 'המשימה לא נמצאה.' })
+      if (!isAdmin && !(await callerBuildings(svc, uid)).has(task.building_id)) return json({ error: 'forbidden' }, 403)
+      return json(await taskAction(jobCtx(svc, integ, token), String(body.taskId), mode, null))
     }
 
     // ── ועד1 decides an issue waiting for it (admin, from the app) ──────────

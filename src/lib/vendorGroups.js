@@ -1,24 +1,13 @@
 // Vendor trades grouped under the issue categories residents file faults in,
 // so the vendor pool reads the same way the faults do.
 import { ISSUE_CATEGORIES } from './constants'
+// Shared with the WhatsApp server (supabase/functions/_shared): one map.
+import { TRADE_TO_ISSUE, issueGroupOf, taskIssueCategory, taskLeadDays } from '../../supabase/functions/_shared/tradeGroups.js'
 
-const TRADE_TO_ISSUE = {
-  'מעליות': 'מעלית', 'בדיקת מעליות': 'מעלית',
-  'חשמל': 'חשמל ותאורה', 'בדיקת חשמל': 'חשמל ותאורה', 'גנרטור': 'חשמל ותאורה',
-  'אינסטלציה': 'אינסטלציה ומים', 'ביוב ושאיבה': 'אינסטלציה ומים', 'משאבות מים': 'אינסטלציה ומים',
-  'דוד שמש': 'אינסטלציה ומים', 'חיטוי מאגרי מים': 'אינסטלציה ומים', 'גז מרכזי': 'אינסטלציה ומים',
-  'שערים ודלתות אוטומטיות': 'שערים, דלתות וחניה', 'מנעולן': 'שערים, דלתות וחניה', 'זגגות': 'שערים, דלתות וחניה',
-  'אלומיניום, דלתות וחלונות': 'שערים, דלתות וחניה',
-  'ניקיון': 'ניקיון', 'פינוי אשפה ודחסנים': 'ניקיון',
-  'גינון': 'גינון',
-  'הדברה': 'תחזוקה כללית', 'איטום וגגות': 'תחזוקה כללית', 'צבע ושיפוצים': 'תחזוקה כללית', 'בנייה ושיפוצים': 'תחזוקה כללית',
-  'מיזוג אוויר': 'תחזוקה כללית', 'מהנדס בניין': 'תחזוקה כללית', 'אחזקה כללית': 'תחזוקה כללית',
-  'כיבוי וגילוי אש': 'בטיחות וביטחון', 'בטיחות אש - בדיקות ואישורים': 'בטיחות וביטחון',
-  'מצלמות ואזעקות': 'בטיחות וביטחון', 'אינטרקום': 'בטיחות וביטחון', 'יועץ נגישות': 'בטיחות וביטחון',
-  'שירותי חירום': 'בטיחות וביטחון',
-}
+export { issueGroupOf, taskIssueCategory, taskLeadDays }
 
-export const issueGroupOf = (trade) => TRADE_TO_ISSUE[trade] || 'אחר'
+/** Every vendor trade, in the order the map lists them. */
+export const TRADES = Object.keys(TRADE_TO_ISSUE)
 
 export const ISSUE_GROUPS = ISSUE_CATEGORIES.map((key) => ({
   key,

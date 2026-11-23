@@ -24,6 +24,7 @@
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { rankVendorsForIssue, QUOTE_FANOUT, vendorGreeting } from '../_shared/vendorMatch.js'
 import { decideHandling, isDiagnosis, isUrgent, routeFor } from '../_shared/handling.js'
+import { taskIssueCategory, taskLeadDays } from '../_shared/tradeGroups.js'
 
 const APP = 'https://app.vaad1.co.il'
 const OPEN_STAGES = ['offered', 'awaiting_amount', 'visit_requested', 'awaiting_date']
@@ -796,7 +797,8 @@ export async function sweepQuotes(ctx: JobCtx) {
   const reminded = await remindCommittee(ctx)
   const vendorsReminded = await remindVendors(ctx)
   const coordinationReminded = await remindCoordination(ctx)
-  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto, closedNotified, reminded, vendorsReminded, coordinationReminded }
+  const tasksReminded = await remindTasks(ctx)
+  return { ok: true, issues: ids.length, results: out, questionsAlerted: alerted, autoTaken: auto, closedNotified, reminded, vendorsReminded, coordinationReminded, tasksReminded }
 }
 
 // ── ועד1 coordinates the chosen vendor ──────────────────────────────────────
@@ -1394,6 +1396,152 @@ export async function handleReminderButton(ctx: JobCtx, from: string, payload: s
   if (!ctx.ready) return
   const s = await ctx.send({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: text } })
   await ctx.log({ recipient: from, audience: 'resident', subject: 'תזכורת לוועד — תשובה', body: text,
+    status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
+}
+
+// ── Recurring tasks ─────────────────────────────────────────────────────────
+// A task with a due date reminds the committee ahead of time (30 days when the
+// law requires it, 14 otherwise, or what the task says) and once more when the
+// date passes. The reminder is where the work starts: one tap sends it to the
+// task's regular vendor or out for quotes, as an ordinary issue. Closing that
+// issue moves the task to its next date (DB trigger).
+const TASK_COLS = 'id, building_id, title, frequency, next_due_date, is_required_by_law, notes, trade, vendor_id, remind_days, reminded_at, overdue_reminded_at, issue_id'
+const ilToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+const dayDiff = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 86400000)
+const dm = (ymd: string) => `${ymd.slice(8, 10)}.${ymd.slice(5, 7)}`
+
+/** Whoever handles this kind of work in the building: the routing rule's member. */
+async function taskOwner(ctx: JobCtx, buildingId: string, category: string) {
+  const { data: rule } = await ctx.svc.from('issue_routing_rules').select('assigned_to')
+    .eq('building_id', buildingId).eq('category', category).maybeSingle()
+  return (rule?.assigned_to as string) || null
+}
+
+async function remindTasks(ctx: JobCtx) {
+  if (!ctx.ready) return 0
+  // Daytime only, never on Shabbat: a reminder is not an emergency.
+  const il = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
+  const hour = il.getHours(), dow = il.getDay()
+  if (hour < 9 || hour >= 19 || dow === 6 || (dow === 5 && hour >= 13)) return 0
+  const today = ilToday()
+  const horizon = new Date(Date.parse(today + 'T00:00:00Z') + 120 * 86400000).toISOString().slice(0, 10)
+  const { data: rows } = await ctx.svc.from('recurring_tasks').select(TASK_COLS)
+    .not('next_due_date', 'is', null).is('issue_id', null).lte('next_due_date', horizon)
+    .or('reminded_at.is.null,overdue_reminded_at.is.null').order('next_due_date').limit(60)
+  let sent = 0
+  for (const t of rows || []) {
+    const days = dayDiff(String(t.next_due_date), today)
+    const stage = days < 0 ? (t.overdue_reminded_at ? null : 'overdue') : (!t.reminded_at && days <= taskLeadDays(t) ? 'ahead' : null)
+    if (!stage) continue
+    const col = stage === 'overdue' ? 'overdue_reminded_at' : 'reminded_at'
+    const now = new Date().toISOString()
+    // Claim it, so two runs cannot both send. An overdue task skips the "ahead" one.
+    const { data: mine } = await ctx.svc.from('recurring_tasks')
+      .update(stage === 'overdue' ? { overdue_reminded_at: now, reminded_at: t.reminded_at || now } : { reminded_at: now })
+      .eq('id', t.id).is(col, null).select('id').maybeSingle()
+    if (!mine) continue
+    const cat = taskIssueCategory(t.trade)
+    const lift = cat === 'מעלית'
+    const { data: v } = t.vendor_id ? await ctx.svc.from('vendors').select('name').eq('id', t.vendor_id).maybeSingle() : { data: null }
+    const { data: b } = await ctx.svc.from('buildings').select('name').eq('id', t.building_id).maybeSingle()
+    const law = t.is_required_by_law ? ' (חובה בחוק)' : ''
+    const when = stage === 'overdue'
+      ? `המועד עבר ב-${dm(String(t.next_due_date))}, לפני ${-days} ימים.`
+      : days === 0 ? 'המועד היום.' : `לביצוע עד ${dm(String(t.next_due_date))}, בעוד ${days} ימים.`
+    const text = `שלום, כאן ועד1.\nמשימה תקופתית ב${b?.name || 'בניין'}: *${t.title}*${law}\n${when}`
+      + (v?.name ? `\nהספק הקבוע: ${v.name}.` : '') + `\nאפשר גם מהאפליקציה: ${APP}/recurring-tasks`
+    const buttons: [string, string][] = []
+    if (v?.name) buttons.push(['להזמין את הספק', `rt:${t.id}:vendor`])
+    else if (lift) buttons.push(['לחברת המעליות', `rt:${t.id}:vendor`])
+    if (!lift) buttons.push(['הצעות מחיר', `rt:${t.id}:quotes`])
+    buttons.push(['כבר בוצע', `rt:${t.id}:done`])
+    const pseudo = { building_id: t.building_id, assigned_to: await taskOwner(ctx, t.building_id, cat), category: cat, title: t.title, unit_id: null, ticket_no: null }
+    sent += await tellCommittee(ctx, pseudo, text,
+      `משימה תקופתית${law}. ${when} להזמנת ספק או הצעות מחיר: ${APP}/recurring-tasks`,
+      `${stage === 'overdue' ? 'משימה תקופתית באיחור' : 'תזכורת משימה תקופתית'}: ${t.title}`, buttons)
+  }
+  return sent
+}
+
+/**
+ * What the committee chose for a task: its regular vendor, quotes, or "done".
+ * `fromPhone` is the WhatsApp number that pressed the button; null = the app,
+ * where the caller was already checked.
+ */
+export async function taskAction(ctx: JobCtx, taskId: string, mode: string, fromPhone: string | null): Promise<{ ok: boolean; text: string }> {
+  const { data: t } = await ctx.svc.from('recurring_tasks').select(TASK_COLS).eq('id', taskId).maybeSingle()
+  if (!t) return { ok: false, text: 'המשימה לא נמצאה.' }
+  if (fromPhone !== null && !(await isCommitteePhone(ctx.svc, t.building_id, fromPhone))) {
+    return { ok: false, text: 'הפעולה שמורה לחברי ועד הבניין, והמספר הזה לא רשום כחבר ועד.' }
+  }
+  if (mode === 'done') {
+    const { data: next, error } = await ctx.svc.rpc('complete_recurring_task', { p_task: t.id, p_via: fromPhone ? 'whatsapp' : 'app' })
+    if (error || !next) return { ok: false, text: 'לא הצלחנו לעדכן את המשימה. אפשר לסמן באפליקציה.' }
+    return { ok: true, text: `✅ נרשם ש"${t.title}" בוצעה. המועד הבא: ${dm(String(next))}.${String(next).slice(0, 4)}.` }
+  }
+  if (mode !== 'vendor' && mode !== 'quotes') return { ok: false, text: 'פעולה לא מוכרת.' }
+  if (t.issue_id) {
+    const { data: open } = await ctx.svc.from('issues').select('ticket_no, status').eq('id', t.issue_id).maybeSingle()
+    if (open && !DONE.includes(open.status)) {
+      return { ok: false, text: `כבר נפתחה פנייה${open.ticket_no ? ` #${open.ticket_no}` : ''} למשימה "${t.title}". אפשר לעקוב אחריה באפליקציה.` }
+    }
+  }
+  const cat = taskIssueCategory(t.trade)
+  const lift = cat === 'מעלית'
+  const { data: v } = t.vendor_id ? await ctx.svc.from('vendors').select('id, name').eq('id', t.vendor_id).maybeSingle() : { data: null }
+  if (mode === 'quotes' && lift) return { ok: false, text: 'מעליות מטופלות רק מול חברת המעליות של הבניין, בלי הצעות מחיר.' }
+  if (mode === 'vendor' && !v && !lift) return { ok: false, text: `למשימה "${t.title}" לא הוגדר ספק קבוע. אפשר לבקש הצעות מחיר, או להגדיר ספק במסך המשימות.` }
+
+  const today = ilToday()
+  const overdue = !!t.next_due_date && String(t.next_due_date) < today
+  const now = new Date().toISOString()
+  const row: Record<string, unknown> = {
+    building_id: t.building_id, title: t.title,
+    description: [`משימה תקופתית${t.is_required_by_law ? ' (חובה בחוק)' : ''}.`,
+      t.next_due_date ? `${overdue ? 'המועד עבר ב-' : 'לביצוע עד '}${dm(String(t.next_due_date))}.${String(t.next_due_date).slice(0, 4)}.` : '', t.notes || ''].filter(Boolean).join(' '),
+    category: cat, ai_category: t.trade || null, priority: overdue && t.is_required_by_law ? 'high' : 'medium',
+    status: 'reported', reported_at: now, assigned_to: await taskOwner(ctx, t.building_id, cat),
+  }
+  // The committee already chose, so the opening route (its "ועד1 תטפל / הוועד יטפל"
+  // question) is skipped. A lift task with no vendor of its own is the exception:
+  // it opens as an ordinary lift issue and the building's lift rule routes it.
+  if (mode === 'vendor' && v) {
+    Object.assign(row, { route: 'vendor', routed_at: now, handler: 'committee', handler_kind: 'contractor', stage: 'sent_to_vendor',
+      status: 'acknowledged', vendor_name: v.name, vendor_id: v.id, handled_at: now })
+  } else if (mode === 'quotes') {
+    Object.assign(row, { route: 'vaad1', routed_at: now })
+  }
+  const { data: iss, error } = await ctx.svc.from('issues').insert(row).select(ISSUE_COLS).maybeSingle()
+  if (error || !iss) return { ok: false, text: 'לא הצלחנו לפתוח פנייה למשימה. אפשר לנסות שוב מהאפליקציה.' }
+  // Two people pressing at once: the second issue is withdrawn.
+  let link = ctx.svc.from('recurring_tasks').update({ issue_id: iss.id }).eq('id', t.id)
+  link = t.issue_id ? link.eq('issue_id', t.issue_id) : link.is('issue_id', null)
+  const { data: linked } = await link.select('id').maybeSingle()
+  if (!linked) {
+    await ctx.svc.from('issues').update({ status: 'rejected', close_reason: 'כפילות של משימה תקופתית', closed_notified_at: now, resolved_at: now }).eq('id', iss.id)
+    return { ok: false, text: `כבר נפתחה פנייה למשימה "${t.title}". אפשר לעקוב אחריה באפליקציה.` }
+  }
+  const tno = iss.ticket_no ? ` #${iss.ticket_no}` : ''
+  const tail = 'כשהעבודה מסתיימת, סמנו את הפנייה כטופלה והמשימה תעבור למועד הבא.'
+  if (mode === 'vendor' && v) {
+    const { data: b } = await ctx.svc.from('buildings').select('name, street, house_number, city').eq('id', t.building_id).maybeSingle()
+    const how = await dispatchContractor(ctx, iss, b, String(v.name), null)
+    return { ok: true, text: `✅ נפתחה פנייה${tno} ל"${t.title}" ונשלחה ל${v.name} (${how}). ${tail}` }
+  }
+  if (mode === 'quotes') {
+    const r = await executeHandling(ctx, iss.id, 'quotes')
+    return { ok: r.ok, text: r.ok ? `✅ נפתחה פנייה${tno}. ${r.text} ${tail}` : r.text }
+  }
+  return { ok: true, text: `✅ נפתחה פנייה${tno} ל"${t.title}". היא מנותבת לחברת המעליות של הבניין. ${tail}` }
+}
+
+/** The task reminder's buttons: "rt:<taskId>:vendor|quotes|done". */
+export async function handleTaskButton(ctx: JobCtx, from: string, payload: string) {
+  const [, taskId, mode] = payload.split(':')
+  const r = await taskAction(ctx, taskId, mode, from)
+  if (!ctx.ready) return
+  const s = await ctx.send({ messaging_product: 'whatsapp', to: from, type: 'text', text: { body: r.text } })
+  await ctx.log({ recipient: from, audience: 'resident', subject: 'משימה תקופתית — תשובה', body: r.text,
     status: s.ok ? 'sent' : 'failed', delivery_status: s.ok ? 'sent' : null, external_id: s.wamid, error_message: s.error })
 }
 

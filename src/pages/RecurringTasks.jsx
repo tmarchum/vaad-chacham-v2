@@ -12,8 +12,11 @@ import { formatDate } from '@/lib/utils'
 import { StatCard } from '@/components/common/StatCard'
 import { SectionCard } from '@/components/common/SectionCard'
 import { TabGroup } from '@/components/ui/tabs'
-import { Plus, Pencil, Trash2, RefreshCw, CheckCircle2, Scale, CalendarClock, AlertTriangle, History } from 'lucide-react'
-import { toast } from '@/lib/toast'
+import { Plus, Pencil, Trash2, RefreshCw, CheckCircle2, Scale, CalendarClock, AlertTriangle, History, Send, Scale3d, Wrench } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { toast, toastError } from '@/lib/toast'
+import { supabase } from '@/lib/supabase'
+import { TRADES, taskIssueCategory, taskLeadDays } from '@/lib/vendorGroups'
 
 const FREQUENCY_MAP = {
   weekly: { label: 'שבועי', variant: 'default', months: 0, weeks: 1 },
@@ -21,14 +24,16 @@ const FREQUENCY_MAP = {
   quarterly: { label: 'רבעוני', variant: 'info', months: 3 },
   biannually: { label: 'חצי שנתי', variant: 'info', months: 6 },
   annually: { label: 'שנתי', variant: 'warning', months: 12 },
+  yearly: { label: 'שנתי', variant: 'warning', months: 12 },
 }
+const freqKey = (f) => (f === 'annually' ? 'yearly' : f)
 
 const FREQUENCY_OPTIONS = [
   { value: 'weekly', label: 'שבועי' },
   { value: 'monthly', label: 'חודשי' },
   { value: 'quarterly', label: 'רבעוני' },
   { value: 'biannually', label: 'חצי שנתי' },
-  { value: 'annually', label: 'שנתי' },
+  { value: 'yearly', label: 'שנתי' },
 ]
 
 const FREQUENCY_FILTERS = [
@@ -37,8 +42,10 @@ const FREQUENCY_FILTERS = [
   { key: 'monthly', label: 'חודשי' },
   { key: 'quarterly', label: 'רבעוני' },
   { key: 'biannually', label: 'חצי שנתי' },
-  { key: 'annually', label: 'שנתי' },
+  { key: 'yearly', label: 'שנתי' },
 ]
+
+const TRADE_OPTIONS = TRADES.map((t) => ({ value: t, label: t }))
 
 const TASK_CATEGORIES = [
   { value: 'maintenance', label: 'תחזוקה' },
@@ -58,6 +65,9 @@ const EMPTY_FORM = {
   notes: '',
   category: '',
   law_reference: '',
+  trade: '',
+  vendor_id: '',
+  remind_days: '',
 }
 
 function isOverdue(dateStr) {
@@ -84,23 +94,13 @@ function isDueThisWeek(task) {
   return d >= 0 && d <= 7
 }
 
-function getNextDate(currentDateStr, frequency) {
-  const freq = FREQUENCY_MAP[frequency]
-  const date = new Date(currentDateStr)
-  if (frequency === 'weekly') {
-    date.setDate(date.getDate() + 7)
-  } else {
-    date.setMonth(date.getMonth() + (freq?.months || 1))
-  }
-  return date.toISOString().slice(0, 10)
-}
-
 function RecurringTasks() {
   const { buildings, selectedBuilding } = useBuildingContext()
   // Building-scoped SERVER-SIDE; unselected building yields [].
   const scope = { building_id: selectedBuilding?.id }
-  const { data: allTasks, create, update, remove, isSaving, isLoading } = useCollection('recurringTasks', scope)
-  const issuesCollection = useCollection('issues', scope)
+  const { data: allTasks, create, update, remove, refresh, isSaving, isLoading } = useCollection('recurringTasks', scope)
+  const { data: vendorRows } = useCollection('vendors')
+  const [busyAction, setBusyAction] = useState('')
 
   const [search, setSearch] = useState('')
   // Data is already scoped to the sidebar's building.
@@ -133,7 +133,7 @@ function RecurringTasks() {
     }
 
     if (frequencyFilter !== 'all') {
-      result = result.filter((t) => t.frequency === frequencyFilter)
+      result = result.filter((t) => freqKey(t.frequency) === frequencyFilter)
     }
 
     if (statusFilter === 'overdue') result = result.filter((t) => isOverdue(t.next_due_date))
@@ -178,12 +178,15 @@ function RecurringTasks() {
     setForm({
       buildingId: task.buildingId || '',
       title: task.title || '',
-      frequency: task.frequency || 'monthly',
+      frequency: freqKey(task.frequency) || 'monthly',
       next_due_date: task.next_due_date ? task.next_due_date.slice(0, 10) : '',
       is_required_by_law: task.is_required_by_law || false,
       notes: task.notes || '',
       category: task.category || '',
       law_reference: task.law_reference || '',
+      trade: task.trade || '',
+      vendor_id: task.vendor_id || '',
+      remind_days: task.remind_days === null || task.remind_days === undefined ? '' : String(task.remind_days),
     })
     setFormOpen(true)
     setDetailTask(null)
@@ -191,7 +194,14 @@ function RecurringTasks() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const data = { ...form }
+    const data = {
+      ...form,
+      // Empty inputs are '' — not a date, a uuid or a number.
+      next_due_date: form.next_due_date || null,
+      trade: form.trade || null,
+      vendor_id: form.vendor_id || null,
+      remind_days: form.remind_days === '' ? null : Math.max(0, Number(form.remind_days) || 0),
+    }
     if (editingId) {
       await update(editingId, data)
     } else {
@@ -212,26 +222,61 @@ function RecurringTasks() {
     }
   }
 
-  const handleCreateIssue = async (task) => {
-    if (!selectedBuilding) return
-    await issuesCollection.create({
-      title: task.title,
-      description: `נוצר אוטומטית ממשימה תקופתית פגת תוקף: ${task.title}`,
-      building_id: selectedBuilding.id || task.building_id,
-      priority: task.is_required_by_law ? 'high' : 'medium',
-      status: 'open',
-      reported_at: new Date().toISOString(),
-    })
-    toast('תקלה נוצרה בהצלחה')
+  // The task becomes an ordinary issue: to its regular vendor, or out for
+  // quotes. The server opens it, sends it and links it back, so closing the
+  // issue moves the task to its next date.
+  const runTaskAction = async (task, mode) => {
+    setBusyAction(task.id + mode)
+    const { data, error } = await supabase.functions.invoke('whatsapp', { body: { action: 'task-action', taskId: task.id, mode } })
+    setBusyAction('')
+    if (error || !data?.ok) toastError(data?.text || 'הפעולה נכשלה')
+    else toast(data.text)
+    await refresh()
+    return !error && !!data?.ok
   }
 
   const handleMarkDone = async (task) => {
-    const nextDate = getNextDate(task.next_due_date || new Date().toISOString().slice(0, 10), task.frequency)
-    const history = Array.isArray(task.completion_history) ? [...task.completion_history] : []
-    history.push({ completed_at: new Date().toISOString(), previous_due: task.next_due_date })
-    await update(task.id, { next_due_date: nextDate, completion_history: history })
+    const ok = await runTaskAction(task, 'done')
     setConfirmMarkDone(null)
-    if (detailTask?.id === task.id) setDetailTask(null)
+    if (ok && detailTask?.id === task.id) setDetailTask(null)
+  }
+
+  const vendorById = (id) => (vendorRows || []).find((v) => v.id === id)
+  const vendorOptions = (vendorRows || [])
+    .filter((v) => !v.is_blacklisted && (!form.trade || v.category === form.trade || v.id === form.vendor_id))
+    .map((v) => ({ value: v.id, label: form.trade ? v.name : `${v.name} · ${v.category || ''}` }))
+  const isLiftTask = (task) => taskIssueCategory(task.trade) === 'מעלית'
+  // Worth acting on: overdue, or inside the task's own reminder window.
+  const isActionable = (task) => !!task.next_due_date && !task.issue_id && daysUntil(task.next_due_date) <= taskLeadDays(task)
+  const actionButtons = (task, size = 'row') => {
+    if (task.issue_id) {
+      return (
+        <Link to={`/issues?open=${task.issue_id}`} onClick={(e) => e.stopPropagation()}
+          className="h-7 px-2 rounded-[var(--radius)] border border-[var(--primary)]/30 text-[11px] font-semibold text-[var(--primary)] hover:bg-[var(--surface-secondary)] inline-flex items-center gap-1 whitespace-nowrap">
+          <Wrench className="h-3 w-3" />פנייה פתוחה
+        </Link>
+      )
+    }
+    if (size === 'row' && !isActionable(task)) return null
+    const cls = 'h-7 px-2 rounded-[var(--radius)] border text-[11px] font-semibold inline-flex items-center gap-1 whitespace-nowrap disabled:opacity-50'
+    const lift = isLiftTask(task)
+    return (
+      <>
+        {(task.vendor_id || lift) && (
+          <button disabled={!!busyAction} onClick={() => runTaskAction(task, 'vendor')}
+            title={task.vendor_id ? `פותח פנייה ושולח ל${vendorById(task.vendor_id)?.name || 'ספק הקבוע'}` : 'פותח פנייה לחברת המעליות של הבניין'}
+            className={`${cls} border-[var(--primary)]/30 text-[var(--primary)] hover:bg-[var(--surface-secondary)]`}>
+            <Send className="h-3 w-3" />{lift && !task.vendor_id ? 'לחברת המעליות' : 'הזמן ספק קבוע'}
+          </button>
+        )}
+        {!lift && (
+          <button disabled={!!busyAction} onClick={() => runTaskAction(task, 'quotes')} title="פותח פנייה ומבקש הצעות מחיר מספקים בתחום"
+            className={`${cls} border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]`}>
+            <Scale3d className="h-3 w-3" />הצעות מחיר
+          </button>
+        )}
+      </>
+    )
   }
 
   if (isLoading) return (
@@ -282,11 +327,7 @@ function RecurringTasks() {
   }
   const rowActions = (task) => (
     <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-      {isOverdue(task.next_due_date) && (
-        <button onClick={() => handleCreateIssue(task)} title="צור תקלה" className="h-7 px-2 rounded-[var(--radius)] border border-[var(--danger)]/30 text-[11px] font-semibold text-[var(--danger)] hover:bg-[var(--danger-light)] inline-flex items-center gap-1 whitespace-nowrap">
-          <Plus className="h-3 w-3" />צור תקלה
-        </button>
-      )}
+      {actionButtons(task)}
       <button onClick={() => setConfirmMarkDone(task)} title="סמן כבוצע" className="p-1.5 rounded-[var(--radius)] text-[var(--success)] hover:bg-[var(--success-light)]"><CheckCircle2 className="h-3.5 w-3.5" /></button>
       <button onClick={() => openEdit(task)} title="עריכה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]"><Pencil className="h-3.5 w-3.5" /></button>
       <button onClick={() => setDeleteTarget(task)} title="מחיקה" className="p-1.5 rounded-[var(--radius)] text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-light)]"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -396,12 +437,11 @@ function RecurringTasks() {
                 <div className="overflow-x-auto">
                   <table className="ds-table">
                     <thead>
-                      <tr><th>משימה</th><th>קטגוריה</th><th>תדירות</th><th>ביצוע הבא</th><th>סטטוס</th><th></th></tr>
+                      <tr><th>משימה</th><th>תחום וספק</th><th>תדירות</th><th>ביצוע הבא</th><th>סטטוס</th><th></th></tr>
                     </thead>
                     <tbody>
                       {filtered.map((task) => {
                         const overdue = isOverdue(task.next_due_date)
-                        const cat = TASK_CATEGORIES.find((c) => c.value === task.category)?.label || task.category
                         return (
                           <tr key={task.id} onClick={() => setDetailTask(task)} className={`cursor-pointer ${overdue ? '!bg-[var(--danger-light)]/40' : ''}`}>
                             <td className="min-w-[200px]">
@@ -411,7 +451,10 @@ function RecurringTasks() {
                               </span>
                               {task.notes && <span className="block text-[11px] text-[var(--text-muted)] line-clamp-1">{task.notes}</span>}
                             </td>
-                            <td className="whitespace-nowrap text-[12px]">{cat || <span className="text-[var(--text-muted)]">—</span>}</td>
+                            <td className="text-[12px]">
+                              {task.trade || <span className="text-[var(--text-muted)]">—</span>}
+                              {task.vendor_id && <span className="block text-[11px] text-[var(--text-muted)]">{vendorById(task.vendor_id)?.name}</span>}
+                            </td>
                             <td className="whitespace-nowrap">{freqChip(task)}</td>
                             <td className="whitespace-nowrap">
                               <span className="block text-[12px] font-semibold num-tabular">{task.next_due_date ? formatDate(task.next_due_date) : '—'}</span>
@@ -520,6 +563,9 @@ function RecurringTasks() {
                 )
               }
             />
+            <DetailRow label="תחום" value={detailTask.trade} />
+            <DetailRow label="ספק קבוע" value={detailTask.vendor_id ? vendorById(detailTask.vendor_id)?.name : null} />
+            <DetailRow label="תזכורת לוועד" value={`${taskLeadDays(detailTask)} ימים לפני המועד, בוואטסאפ`} />
             <DetailRow label="הערות" value={detailTask.notes} />
             {detailTask.category && (
               <DetailRow label="קטגוריה" value={TASK_CATEGORIES.find(c => c.value === detailTask.category)?.label || detailTask.category} />
@@ -541,7 +587,8 @@ function RecurringTasks() {
                 </div>
               </div>
             )}
-            <div className="flex gap-2 pt-4">
+            <div className="flex flex-wrap gap-2 pt-4">{actionButtons(detailTask, 'detail')}</div>
+            <div className="flex gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => openEdit(detailTask)}>
                 <Pencil className="h-3.5 w-3.5" />
                 עריכה
@@ -640,12 +687,40 @@ function RecurringTasks() {
               value={form.is_required_by_law}
               onChange={setField('is_required_by_law')}
             />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormSelect
+                label="תחום (מי מבצע)"
+                value={form.trade}
+                onChange={(e) => { const v = e?.target?.value !== undefined ? e.target.value : e; setForm((prev) => ({ ...prev, trade: v, vendor_id: '' })) }}
+                options={TRADE_OPTIONS}
+                placeholder="בחר תחום"
+              />
+              <FormSelect
+                label="ספק קבוע (רשות)"
+                value={form.vendor_id}
+                onChange={setField('vendor_id')}
+                options={vendorOptions}
+                placeholder="בלי ספק קבוע — הצעות מחיר"
+              />
+            </div>
+            <div className="space-y-1">
+              <FormField
+                label="תזכורת לוועד: כמה ימים לפני המועד"
+                type="number"
+                value={form.remind_days}
+                onChange={setField('remind_days')}
+                placeholder={form.is_required_by_law ? '30' : '14'}
+              />
+              <p className="text-[11px] text-[var(--text-muted)]">
+                ריק = {form.is_required_by_law ? '30' : '14'} ימים. התזכורת נשלחת בוואטסאפ לחבר הוועד שאחראי על התחום, ועוד אחת אם המועד עבר.
+              </p>
+            </div>
             <FormSelect
-              label="קטגוריה"
+              label="סוג משימה"
               value={form.category}
               onChange={setField('category')}
               options={TASK_CATEGORIES}
-              placeholder="בחר קטגוריה"
+              placeholder="בחר סוג"
             />
             <FormField
               label="הפניה לחוק (אופציונלי)"
