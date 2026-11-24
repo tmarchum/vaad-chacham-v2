@@ -6,7 +6,7 @@ import { initTheme } from '@/lib/theme'
 import { initTextSize } from '@/lib/textSize'
 import { capturePollFromUrl } from '@/lib/polls'
 import { installGlobalErrorLog } from '@/lib/errorLog'
-import { startVersionWatch, reloadForNewBuild } from '@/lib/appVersion'
+import { startVersionWatch } from '@/lib/appVersion'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 capturePollFromUrl()
@@ -31,7 +31,10 @@ installGlobalErrorLog()
 // Notice a new deploy in the background so moving between screens never hits
 // a chunk that no longer exists (see lib/appVersion.js).
 startVersionWatch()
-window.addEventListener('vite:preloadError', (e) => { if (reloadForNewBuild()) e.preventDefault() })
+// No vite:preloadError handler here: preventDefault() there makes the failed
+// import() resolve to undefined, and React.lazy then crashes on `.default`
+// before the reload lands. The rejected import reaches ErrorBoundary, which
+// shows "מעדכן לגרסה חדשה" and reloads.
 
 import { AuthProvider } from '@/hooks/useAuth'
 import { ConfirmProvider } from '@/components/ui/confirm'
