@@ -1413,7 +1413,7 @@ export async function handleReminderButton(ctx: JobCtx, from: string, payload: s
 // date passes. The reminder is where the work starts: one tap sends it to the
 // task's regular vendor or out for quotes, as an ordinary issue. Closing that
 // issue moves the task to its next date (DB trigger).
-const TASK_COLS = 'id, building_id, title, frequency, next_due_date, is_required_by_law, notes, trade, vendor_id, remind_days, reminded_at, overdue_reminded_at, issue_id'
+const TASK_COLS = 'id, building_id, title, frequency, next_due_date, is_required_by_law, notes, trade, vendor_id, remind_days, reminded_at, last_reminded_at, overdue_reminded_at, issue_id'
 const ilToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
 const dayDiff = (a: string, b: string) => Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 86400000)
 const dm = (ymd: string) => `${ymd.slice(8, 10)}.${ymd.slice(5, 7)}`
@@ -1439,13 +1439,18 @@ async function remindTasks(ctx: JobCtx) {
   let sent = 0
   for (const t of rows || []) {
     const days = dayDiff(String(t.next_due_date), today)
-    const stage = days < 0 ? (t.overdue_reminded_at ? null : 'overdue') : (!t.reminded_at && days <= taskLeadDays(t) ? 'ahead' : null)
+    // 'last': a week before, when the first reminder (sent at least three days
+    // ago, on a longer notice) brought no action.
+    const lead = taskLeadDays(t)
+    const stage = days < 0 ? (t.overdue_reminded_at ? null : 'overdue')
+      : !t.reminded_at ? (days <= lead ? 'ahead' : null)
+      : (!t.last_reminded_at && lead > 7 && days <= 7 && Date.now() - Date.parse(String(t.reminded_at)) > 3 * 86400000 ? 'last' : null)
     if (!stage) continue
-    const col = stage === 'overdue' ? 'overdue_reminded_at' : 'reminded_at'
+    const col = stage === 'overdue' ? 'overdue_reminded_at' : stage === 'last' ? 'last_reminded_at' : 'reminded_at'
     const now = new Date().toISOString()
     // Claim it, so two runs cannot both send. An overdue task skips the "ahead" one.
     const { data: mine } = await ctx.svc.from('recurring_tasks')
-      .update(stage === 'overdue' ? { overdue_reminded_at: now, reminded_at: t.reminded_at || now } : { reminded_at: now })
+      .update(stage === 'overdue' ? { overdue_reminded_at: now, reminded_at: t.reminded_at || now } : { [col]: now })
       .eq('id', t.id).is(col, null).select('id').maybeSingle()
     if (!mine) continue
     const cat = taskIssueCategory(t.trade)
@@ -1456,7 +1461,7 @@ async function remindTasks(ctx: JobCtx) {
     const when = stage === 'overdue'
       ? `המועד עבר ב-${dm(String(t.next_due_date))}, לפני ${-days} ימים.`
       : days === 0 ? 'המועד היום.' : `לביצוע עד ${dm(String(t.next_due_date))}, בעוד ${days} ימים.`
-    const text = `שלום, כאן ועד1.\nמשימה תקופתית ב${b?.name || 'בניין'}: *${t.title}*${law}\n${when}`
+    const text = `שלום, כאן ועד1.\n${stage === 'last' ? 'תזכורת נוספת, המשימה עדיין לא טופלה.\n' : ''}משימה תקופתית ב${b?.name || 'בניין'}: *${t.title}*${law}\n${when}`
       + (v?.name ? `\nהספק הקבוע: ${v.name}.` : '') + `\nאפשר גם מהאפליקציה: ${APP}/recurring-tasks`
     const buttons: [string, string][] = []
     if (v?.name) buttons.push(['להזמין את הספק', `rt:${t.id}:vendor`])
@@ -1466,13 +1471,13 @@ async function remindTasks(ctx: JobCtx) {
     const pseudo = { building_id: t.building_id, assigned_to: await taskOwner(ctx, t.building_id, cat), category: cat, title: t.title, unit_id: null, ticket_no: null }
     sent += await tellCommittee(ctx, pseudo, text,
       `משימה תקופתית${law}. ${when} להזמנת ספק או הצעות מחיר: ${APP}/recurring-tasks`,
-      `${stage === 'overdue' ? 'משימה תקופתית באיחור' : 'תזכורת משימה תקופתית'}: ${t.title}`, buttons,
+      `${stage === 'overdue' ? 'משימה תקופתית באיחור' : stage === 'last' ? 'תזכורת שנייה למשימה תקופתית' : 'תזכורת משימה תקופתית'}: ${t.title}`, buttons,
       // Outside the 24h window: the reminder's own template. Its three buttons
       // are fixed, so a task with no regular vendor (or a lift, for quotes)
       // gets the explanation when the button is pressed.
       { key: 'committee_task_reminder', ids: [`rt:${t.id}:vendor`, `rt:${t.id}:quotes`, `rt:${t.id}:done`],
         vars: (greet, building) => [greet, building, `${t.title}${law}`,
-          stage === 'overdue' ? `עבר ב-${dm(String(t.next_due_date))}, לפני ${-days} ימים` : days === 0 ? 'היום' : `עד ${dm(String(t.next_due_date))}, בעוד ${days} ימים`,
+          stage === 'overdue' ? `עבר ב-${dm(String(t.next_due_date))}, לפני ${-days} ימים` : days === 0 ? 'היום' : `עד ${dm(String(t.next_due_date))}, בעוד ${days} ימים${stage === 'last' ? ' (תזכורת שנייה)' : ''}`,
           v?.name || (lift ? 'חברת המעליות של הבניין' : 'לא הוגדר')] })
   }
   return sent
