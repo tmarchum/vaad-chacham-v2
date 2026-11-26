@@ -624,9 +624,6 @@ function Issues() {
   const [quoteDescription, setQuoteDescription] = useState('')
   const [scheduleDialogIssue, setScheduleDialogIssue] = useState(null)
   const [scheduleDate, setScheduleDate] = useState('')
-  const [completeDialogIssue, setCompleteDialogIssue] = useState(null)
-  const [completeCost, setCompleteCost] = useState('')
-  const [completeNote, setCompleteNote] = useState('')
   const [finalCloseIssue, setFinalCloseIssue] = useState(null)
   const [finalCloseNote, setFinalCloseNote] = useState('')
 
@@ -646,7 +643,7 @@ function Issues() {
   const [closeNoFixIssue, setCloseNoFixIssue] = useState(null)
   const [closeReason, setCloseReason] = useState('')
   const [finishIssue, setFinishIssue] = useState(null)
-  const [finishForm, setFinishForm] = useState({ kind: 'handyman', hours: 1, offHours: false, photoUrl: '', note: '' })
+  const [finishForm, setFinishForm] = useState({ who: 'handyman', escort: false, hours: 1, offHours: false, photoUrl: '', note: '', vendorCost: '', agreed: null })
   const [finishBalance, setFinishBalance] = useState(null)
   const [finishBilling, setFinishBilling] = useState(null)
   // Parts used on the visit: stock items at the catalogue price, anything
@@ -688,10 +685,6 @@ function Issues() {
     setVendorAssignIssue(iss); setSelectedVendorName('')
   }, [isAdmin])
   const handleOpenSchedule = useCallback((iss) => { setScheduleDialogIssue(iss); setScheduleDate('') }, [])
-  // The cost starts empty: most of what a committee closes by itself cost
-  // nothing, and a pre-filled estimate got saved as if it had been paid.
-  const handleOpenComplete = useCallback((iss) => { setCompleteDialogIssue(iss); setCompleteCost(''); setCompleteNote(iss.close_reason || '') }, [])
-
   // Maps
   const buildingMap = useMemo(() => {
     const map = {}
@@ -1538,21 +1531,6 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     }
   }
 
-  const handleComplete = async () => {
-    if (!completeDialogIssue) return
-    await update(completeDialogIssue.id, {
-      status: 'completed',
-      resolvedAt: new Date().toISOString(),
-      cost: completeCost !== '' ? Number(completeCost) : null,
-      close_reason: completeNote.trim() || null,
-    })
-    // Close the loop with the reporting resident (email + push, server-derived).
-    notifyIssueStatus(completeDialogIssue.id, 'resolved')
-    setCompleteDialogIssue(null)
-    setCompleteCost('')
-    setCompleteNote('')
-  }
-
   // ── Handling choice: the committee's three options on a new issue ──────────
   const handleSelfHandle = useCallback((iss) => {
     update(iss.id, { handler: 'committee', stage: null, status: 'in_progress', handled_at: new Date().toISOString() })
@@ -1693,9 +1671,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // ── Finish and punch (management side) ─────────────────────────────────────
   const handleOpenFinish = useCallback((iss) => {
     setFinishIssue(iss)
+    // One closing window for every case. Who handled it is taken from the issue
+    // (the user can change it), and a price agreed in a quote arrives filled in:
+    // it may have moved while the job was coordinated, so it stays editable and
+    // estimated_cost keeps what was agreed. An AI estimate is never filled in.
+    const won = (quotesByIssue[iss.id] || []).find((q) => q.stage === 'won' || q.status === 'accepted')
+    const who = iss.handler_kind === 'handyman' && isAdmin ? 'handyman'
+      : (['vendor', 'contractor'].includes(iss.handler_kind) || iss.vendor_name) ? 'vendor'
+      : iss.handler === 'management' && isAdmin ? 'handyman' : 'committee'
     setFinishForm({
-      kind: iss.handler_kind || 'handyman', hours: 1,
+      who, escort: isAdmin && who === 'vendor' && won?.committee_choice === 'coordinate', hours: 1,
       offHours: isOffHours(new Date(), serviceCfg.settings), photoUrl: '', note: iss.close_reason || '',
+      vendorCost: won?.amount != null ? String(won.amount) : '', agreed: won?.amount ?? null,
     })
     setFinishParts([])
     setFinishBalance(null)
@@ -1707,7 +1694,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setVisitIds(allIssues
       .filter((o) => o.id !== iss.id && o.buildingId === iss.buildingId && o.stage === 'queued_for_visit' && !isDone(o.status) && o.status !== 'completed')
       .map((o) => o.id))
-  }, [serviceCfg.settings, allIssues])
+  }, [serviceCfg.settings, allIssues, quotesByIssue, isAdmin])
 
   // Other issues in the same building that the management side holds and
   // could close on this same visit.
@@ -1725,18 +1712,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     return (new Date(finishIssue.reopened_at) - new Date(finishIssue.resolvedAt)) / 864e5 <= days
   }, [finishIssue, serviceCfg.settings, visitIds.length])
 
-  // "vendor_escort" exists only in this form: a vendor did the work and ועד1's
-  // handyman was there with him. The issue is saved as a vendor job (that is who
-  // fixed it), and the escort hours are charged and logged like any visit.
-  const finishEscorted = finishForm.kind === 'vendor_escort'
-  const finishWithHours = finishForm.kind === 'handyman' || finishEscorted
+  // ועד1 charges only when its handyman was there: doing the job, or escorting
+  // a vendor. Parts and "same visit" issues belong to those cases alone.
+  const finishEscorted = finishForm.who === 'vendor' && !!finishForm.escort
+  const finishWithHours = finishForm.who === 'handyman' || finishEscorted
+  const finishPartsUsed = finishWithHours ? finishParts : []
   const finishPunches = finishIsFreeRevisit ? 0 : punchesFor(
-    { kind: finishWithHours ? 'handyman' : finishForm.kind, hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
+    { kind: finishWithHours ? 'handyman' : 'vendor', hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
 
   const handlingPct = Number(serviceCfg.settings?.parts_handling_pct ?? 10)
   const partsApprovalThreshold = Number(serviceCfg.settings?.parts_approval_threshold) || 0
   const lineTotal = (l) => partLineTotal({ qty: l.qty, unitCost: l.unitCost, handlingPct: l.source === 'receipt' ? handlingPct : 0 })
-  const finishPartsTotal = finishParts.reduce((sum, l) => sum + lineTotal(l), 0)
+  const finishPartsTotal = finishPartsUsed.reduce((sum, l) => sum + lineTotal(l), 0)
   const finishPlan = serviceCfg.plans.find((p) => p.key === finishBilling?.service_plan) || null
   const finishPolicy = finishBilling?.card_exhausted_policy || 'bill_hourly'
   const finishCovered = finishBalance ? Math.min(Math.max(finishBalance.balance, 0), finishPunches) : finishPunches
@@ -1754,13 +1741,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
   const handleFinishWork = async () => {
     if (!finishIssue || finishBusy) return
-    const badPart = finishParts.find((l) => !String(l.label).trim() || l.unitCost === '' || !(Number(l.unitCost) >= 0) || !(Number(l.qty) > 0))
+    const badPart = finishPartsUsed.find((l) => !String(l.label).trim() || l.unitCost === '' || !(Number(l.unitCost) >= 0) || !(Number(l.qty) > 0))
     if (badPart) { toastError('בכל חלק צריך שם, כמות ומחיר'); return }
     setFinishBusy(true)
     try {
-      const others = visitCandidates.filter((o) => visitIds.includes(o.id))
+      const others = finishWithHours ? visitCandidates.filter((o) => visitIds.includes(o.id)) : []
       const visitId = crypto.randomUUID()
-      const isVendor = finishForm.kind === 'vendor' || finishForm.kind === 'contractor'
+      const isVendor = !finishWithHours
       const hours = isVendor ? null : Number(finishForm.hours) || 0
       const offHours = isVendor ? false : !!finishForm.offHours
       const baseNote = others.length
@@ -1781,7 +1768,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       }
 
       // Parts: one line each, so the committee sees what was fitted and why.
-      for (const l of finishParts) {
+      for (const l of finishPartsUsed) {
         const total = lineTotal(l)
         const pct = l.source === 'receipt' ? handlingPct : 0
         const label = String(l.label).trim()
@@ -1808,7 +1795,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         const { error: hErr } = await supabase.rpc('log_handyman_work', {
           p_building: finishIssue.buildingId, p_issue: others.length ? null : finishIssue.id, p_visit: visitId,
           p_hours: hours, p_note: note,
-          p_parts: finishParts.filter((l) => l.source === 'receipt' && l.paidByHandyman !== false).map((l) => ({
+          p_parts: finishPartsUsed.filter((l) => l.source === 'receipt' && l.paidByHandyman !== false).map((l) => ({
             label: String(l.label).trim(), amount: Math.round((Number(l.qty) || 1) * (Number(l.unitCost) || 0) * 100) / 100,
             receipt: (l.receiptUrl || '').trim() || null,
           })),
@@ -1816,19 +1803,27 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         if (hErr) toastError('ההתחשבנות עם איש האחזקה לא נרשמה — רשמו אותה ידנית')
       }
 
-      const done = {
-        status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
-        handler: 'management', handler_kind: finishEscorted ? 'vendor' : finishForm.kind, visit_id: visitId,
-      }
+      // ועד1's side of the record only where ועד1 held the issue or its handyman
+      // was there; what the committee closed by itself stays the committee's.
+      const managed = finishForm.who !== 'committee' && (finishIssue.handler === 'management' || finishWithHours)
+      const savedKind = finishForm.who === 'handyman' ? 'handyman'
+        : finishIssue.handler_kind === 'contractor' && !finishEscorted ? 'contractor' : 'vendor'
+      const done = managed
+        ? { status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
+            handler: 'management', handler_kind: savedKind, visit_id: visitId }
+        : { status: 'completed', resolvedAt: new Date().toISOString() }
       const partsTotal = Math.round(finishPartsTotal * 100) / 100
+      // What was actually paid: the vendor's final price (or the committee's own
+      // outlay) plus any part ועד1 supplied.
+      const paid = finishForm.who !== 'handyman' && finishForm.vendorCost !== '' ? Number(finishForm.vendorCost) || 0 : null
       await update(finishIssue.id, {
         ...done, work_hours: hours, off_hours: offHours,
         punches_charged: (Number(finishIssue.punches_charged) || 0) + finishPunches,
-        parts_cost: partsTotal || null, ...(partsTotal ? { cost: partsTotal } : {}),
+        parts_cost: partsTotal || null, ...(paid != null || partsTotal ? { cost: Math.round(((paid || 0) + partsTotal) * 100) / 100 } : {}),
         after_photo_url: finishForm.photoUrl.trim() || null,
         close_reason: (finishForm.note || '').trim() || null,
-      })
-      for (const o of others) await update(o.id, done)
+      }, { silent: true })
+      for (const o of others) await update(o.id, done, { silent: true })
       for (const o of [finishIssue, ...others]) notifyIssueStatus(o.id, 'resolved')
 
       const bits = [others.length ? `ביקור הסתיים · ${others.length + 1} תקלות` : 'הטיפול הסתיים']
@@ -1923,7 +1918,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     else if (key === 'quote') handleOpenQuoteDialog(iss)
     else if (key === 'vendor') handleOpenVendorAssign(iss)
     else if (key === 'sched') handleOpenSchedule(iss)
-    else if (key === 'complete') handleOpenComplete(iss)
+    else if (key === 'complete') handleOpenFinish(iss)
     else if (key === 'close') handleClose(iss)
   }
   const selCls = 'h-[38px] rounded-[var(--radius)] border border-[var(--outline-variant)] bg-[var(--surface)] px-2.5 text-[12px] text-[var(--text-primary)]'
@@ -2071,7 +2066,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 onOpenQuoteDialog={handleOpenQuoteDialog}
                 onOpenVendorAssign={handleOpenVendorAssign}
                 onOpenSchedule={handleOpenSchedule}
-                onOpenComplete={handleOpenComplete}
+                onOpenComplete={handleOpenFinish}
                 onClose={handleClose}
                 svc={svc}
                 onSelfHandle={handleSelfHandle}
@@ -2112,7 +2107,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                         onOpenQuoteDialog={handleOpenQuoteDialog}
                         onOpenVendorAssign={handleOpenVendorAssign}
                         onOpenSchedule={handleOpenSchedule}
-                        onOpenComplete={handleOpenComplete}
+                        onOpenComplete={handleOpenFinish}
                         onClose={handleClose}
                 svc={svc}
                 onSelfHandle={handleSelfHandle}
@@ -2302,7 +2297,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </Button>
                 )}
                 {['scheduled','in_progress'].includes(iss.status) && flowFor(iss, svc) === 'legacy' && (
-                  <Button variant="outline" size="sm" onClick={() => handleOpenComplete(iss)}>
+                  <Button variant="outline" size="sm" onClick={() => { setDetailIssue(null); handleOpenFinish(iss) }}>
                     <CheckCircle2 className="h-3.5 w-3.5" /> סמן כבוצע
                   </Button>
                 )}
@@ -3044,11 +3039,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       <Dialog open={!!finishIssue} onOpenChange={(o) => { if (!o) setFinishIssue(null) }}>
         <DialogContent className="w-full max-w-sm">
           <DialogHeader>
-            <DialogTitle>סיום ביקור</DialogTitle>
+            <DialogTitle>סיום הטיפול בפנייה</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm font-semibold">{finishIssue?.title}</p>
-            {visitCandidates.length > 0 && (
+            {finishWithHours && visitCandidates.length > 0 && (
               <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
                 <p className="text-[13px] font-semibold">טופלו באותו ביקור:</p>
                 {visitCandidates.map((o) => (
@@ -3061,26 +3056,46 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 ))}
               </div>
             )}
-            {/* A list, not a dropdown: the choice decides what the building is
-                charged, so each option says so next to its name. */}
-            <fieldset className="space-y-1.5">
-              <legend className="mb-1 text-[13px] font-semibold">מי ביצע</legend>
-              {[
-                { value: 'handyman', label: 'איש אחזקה', hint: 'שעות העבודה יורדות מהכרטיסייה.' },
-                { value: 'vendor', label: 'ספק בטיפול ועד1', hint: 'ללא חיוב שעות. את הספק משלם הוועד ישירות.' },
-                { value: 'vendor_escort', label: 'ספק בליווי איש אחזקה', hint: 'הספק תיקן, ושעות הליווי יורדות מהכרטיסייה.' },
-                { value: 'contractor', label: 'הספק הקבוע של הבניין', hint: 'ללא חיוב מצד ועד1.' },
-              ].map((o) => (
-                <label key={o.value} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-sm ${finishForm.kind === o.value ? 'border-[var(--primary)] bg-[var(--surface-secondary)]' : 'border-[var(--border)]'}`}>
-                  <input type="radio" name="finish-kind" className="mt-0.5 h-4 w-4 accent-[var(--primary)]" value={o.value}
-                    checked={finishForm.kind === o.value} onChange={() => setFinishForm((f) => ({ ...f, kind: o.value }))} />
-                  <span>
-                    <span className="block font-medium">{o.label}</span>
-                    <span className="block text-[12px] text-[var(--text-muted)]">{o.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+            {/* Who handled it comes from the issue; the fields below follow it. */}
+            <div className="space-y-1.5">
+              <p className="text-[13px] font-semibold">טופל על ידי</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { value: 'vendor', label: finishIssue?.vendor_name ? `ספק: ${finishIssue.vendor_name}` : 'ספק חיצוני' },
+                  ...(isAdmin ? [{ value: 'handyman', label: 'איש האחזקה של ועד1' }] : []),
+                  { value: 'committee', label: 'הוועד בעצמו' },
+                ].map((o) => (
+                  <button key={o.value} type="button" aria-pressed={finishForm.who === o.value}
+                    onClick={() => setFinishForm((f) => ({ ...f, who: o.value }))}
+                    className={`rounded-lg border px-3 py-1.5 text-sm ${finishForm.who === o.value ? 'border-[var(--primary)] bg-[var(--primary)] text-white font-semibold' : 'border-[var(--border)] hover:bg-[var(--surface-hover)]'}`}>
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {finishForm.who !== 'handyman' && (
+              <div className="space-y-1">
+                <FormField
+                  label={finishForm.who === 'vendor' ? 'מחיר סופי לספק, כולל חלקים (לפני מע"מ, לא חובה)' : 'עלות, אם הייתה (לפני מע"מ, לא חובה)'}
+                  type="number"
+                  value={finishForm.vendorCost}
+                  onChange={(e) => setFinishForm((f) => ({ ...f, vendorCost: e.target.value }))}
+                />
+                {finishForm.who === 'vendor' && finishForm.agreed != null && (
+                  <p className="text-[12px] text-[var(--text-muted)]">סוכם בהצעת המחיר: {formatCurrency(finishForm.agreed)}. אם המחיר השתנה בתיאום, מעדכנים כאן.</p>
+                )}
+              </div>
+            )}
+            {finishForm.who === 'vendor' && isAdmin && (
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-[var(--border)] p-2 text-sm">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--primary)]" checked={!!finishForm.escort}
+                  onChange={(e) => setFinishForm((f) => ({ ...f, escort: e.target.checked }))} />
+                <span>
+                  <span className="block font-medium">איש האחזקה של ועד1 ליווה את הספק</span>
+                  <span className="block text-[12px] text-[var(--text-muted)]">שעות הליווי יורדות מהכרטיסייה של הבניין.</span>
+                </span>
+              </label>
+            )}
             {finishWithHours && (
               <>
                 <FormField
@@ -3096,8 +3111,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 </label>
               </>
             )}
+            {finishWithHours && (
             <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
-              <p className="text-[13px] font-semibold">חלקים</p>
+              <p className="text-[13px] font-semibold">חלקים שאיש האחזקה הביא</p>
               {finishParts.map((l) => (
                 <div key={l.key} className="rounded-md bg-[var(--surface-secondary)] p-2 space-y-1.5">
                   <div className="flex items-center gap-2">
@@ -3150,6 +3166,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 <Button type="button" variant="outline" size="sm" onClick={addReceiptPart}><Plus className="h-4 w-4" />חלק לפי קבלה</Button>
               </div>
             </div>
+            )}
             <div className="space-y-1">
               <label className="block text-[13px] font-semibold">תמונת סיום (לא חובה)
                 <input type="file" accept="image/*" className="mt-1 block w-full text-[12px] font-normal"
@@ -3159,13 +3176,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               {finishForm.photoUrl && <a href={finishForm.photoUrl} target="_blank" rel="noreferrer" className="text-[12px] text-[var(--primary)]">התמונה הועלתה — לצפייה</a>}
             </div>
             <FormTextarea
-              label="אופן הטיפול (לא חובה)"
+              label="מה נעשה (לא חובה, נשלח לדייר)"
               value={finishForm.note || ''}
               onChange={(e) => setFinishForm((f) => ({ ...f, note: e.target.value }))}
               rows={2}
             />
             <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
-              <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא חיוב שעות' : finishPunches ? `${finishPunches} שעות` : 'ללא שעות לחיוב'}
+              <p className="font-bold">חיוב ועד1: {finishIsFreeRevisit && finishWithHours ? 'ביקור חוזר, ללא חיוב שעות' : finishPunches ? `${finishPunches} שעות` : 'ללא'}
                 {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} תקלות` : ''}</p>
               {finishWithHours && !finishIsFreeRevisit && (
                 <p className="text-[12px] text-[var(--text-muted)]">מינימום {Number(serviceCfg.settings?.visit_min_punches) || 1} שעה לביקור · כל שעה שמתחילה נספרת{finishForm.offHours ? ` · פי ${Number(serviceCfg.settings?.off_hours_multiplier) || 2} מחוץ לשעות` : ''}</p>
@@ -3183,7 +3200,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             <div className="flex gap-3">
               <Button onClick={handleFinishWork} disabled={finishBusy || !!finishUploading}>
                 <CheckCircle2 className="h-4 w-4" />
-                {finishBusy ? 'שומר...' : 'סיום ביקור'}
+                {finishBusy ? 'שומר...' : 'סיום טיפול'}
               </Button>
               <Button variant="outline" onClick={() => setFinishIssue(null)}>
                 ביטול
@@ -3219,38 +3236,6 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         </DialogContent>
       </Dialog>
 
-      {/* Complete Dialog */}
-      <Dialog open={!!completeDialogIssue} onOpenChange={() => setCompleteDialogIssue(null)}>
-        <DialogContent className="w-full max-w-sm">
-          <DialogHeader>
-            <DialogTitle>סימון כבוצע</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <FormTextarea
-              label="אופן הטיפול או סיבת הסגירה (לא חובה)"
-              value={completeNote}
-              onChange={(e) => setCompleteNote(e.target.value)}
-              rows={3}
-            />
-            <FormField
-              label="עלות בפועל, אם הייתה (לא חובה)"
-              type="number"
-              value={completeCost}
-              onChange={(e) => setCompleteCost(e.target.value)}
-            />
-            <p className="text-xs text-[var(--text-muted)]">הדייר שדיווח יקבל הודעה שהפנייה טופלה, עם מה שכתבתם כאן.</p>
-            <div className="flex gap-3">
-              <Button onClick={handleComplete}>
-                <CheckCircle2 className="h-4 w-4" />
-                סמן כבוצע
-              </Button>
-              <Button variant="outline" onClick={() => setCompleteDialogIssue(null)}>
-                ביטול
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Create/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
