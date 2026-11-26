@@ -2289,7 +2289,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 )}
                 {/* Rarely needed: kept out of the way, behind "⋯". */}
                 {/* Opens in the flow, not as a popover: a popover got clipped by the modal's edge. */}
-                <details className="basis-full">
+                {/* It sits at the bottom of a scrolling modal, so the options opened
+                    below the fold; bring them into view instead of making the user scroll. */}
+                <details className="basis-full"
+                  onToggle={(e) => { if (e.currentTarget.open) e.currentTarget.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }}>
                   <summary className="inline-block list-none cursor-pointer select-none rounded-md border border-[var(--border)] px-2.5 py-1 text-sm text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]" aria-label="פעולות נוספות">⋯ עוד</summary>
                   <div className="mt-2 flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
                     <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-[var(--surface-hover)]" onClick={() => openEdit(iss)}>
