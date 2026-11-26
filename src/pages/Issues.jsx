@@ -471,6 +471,9 @@ function nextAction(iss, svc) {
   if (s === 'approved') return { key: 'sched', label: 'תזמן', icon: Calendar }
   if (['scheduled', 'in_progress'].includes(s)) return { key: 'complete', label: 'סמן כבוצע', icon: CheckCircle2 }
   if (s === 'completed') return { key: 'close', label: 'סגור', icon: X }
+  // No open issue is left without a next step: one that fell between the
+  // cases above (a vendor chosen, a visit date gone by) can still be finished.
+  if (!isDone(s)) return { key: 'complete', label: 'סיום טיפול', icon: CheckCircle2 }
   return null
 }
 
@@ -2277,7 +2280,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   as two quotes. */}
               {iss.estimatedCost != null && iss.estimatedCost !== ''
                 ? <DetailRow label={issueQuotes.some((q) => q.stage === 'won' || q.status === 'accepted') ? 'מחיר שסוכם עם הספק' : 'עלות משוערת (הוזנה ידנית)'} value={`${formatCurrency(iss.estimatedCost)} לפני מע"מ`} />
-                : <DetailRow label="הערכת AI (לא מחיר)" value={iss.ai_cost_estimate || null} />}
+                : <DetailRow label="הערכת AI (לא מחיר)" value={iss.ai_cost_estimate ? <span dir="ltr">{iss.ai_cost_estimate}</span> : null} />}
               <DetailRow label="עלות בפועל" value={iss.cost != null && iss.cost !== '' ? formatCurrency(iss.cost) : null} />
               <DetailRow label={iss.status === 'rejected' ? 'סיבת הסגירה' : 'אופן הטיפול'} value={iss.close_reason || null} />
               <details className="pt-1">
