@@ -1358,7 +1358,7 @@ async function notifyClosed(ctx: JobCtx) {
     if (!to || !/^9725\d{8}$/.test(to)) continue
     const news = i.status === 'rejected'
       ? `הפנייה נסגרה ללא טיפול${i.close_reason ? `: ${i.close_reason}` : ''}. לשאלות אפשר לפנות לוועד הבית. ועד1`
-      : 'הפנייה טופלה ונסגרה. אם התקלה חזרה, אפשר לפתוח אותה מחדש באפליקציה. ועד1'
+      : `הפנייה טופלה ונסגרה${i.close_reason ? `: ${i.close_reason}` : ''}. אם התקלה חזרה, אפשר לפתוח אותה מחדש באפליקציה. ועד1`
     const vars = [r?.last_name ? `משפחת ${r.last_name}` : 'דייר/ת', String(i.ticket_no || '—'), String(i.title || ''), news].map(ctx.cleanParam)
     const s = await ctx.send({ messaging_product: 'whatsapp', to, type: 'template', template: { name: t.meta_name, language: { code: t.language || 'he' },
       components: [{ type: 'body', parameters: vars.map((x) => ({ type: 'text', text: x })) }] } })

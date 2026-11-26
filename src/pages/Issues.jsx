@@ -626,6 +626,7 @@ function Issues() {
   const [scheduleDate, setScheduleDate] = useState('')
   const [completeDialogIssue, setCompleteDialogIssue] = useState(null)
   const [completeCost, setCompleteCost] = useState('')
+  const [completeNote, setCompleteNote] = useState('')
 
   // Service plans / punch cards. `svc.ready` is false until migration 030 is
   // applied, and then every issue keeps the old buttons.
@@ -685,7 +686,9 @@ function Issues() {
     setVendorAssignIssue(iss); setSelectedVendorName('')
   }, [isAdmin])
   const handleOpenSchedule = useCallback((iss) => { setScheduleDialogIssue(iss); setScheduleDate('') }, [])
-  const handleOpenComplete = useCallback((iss) => { setCompleteDialogIssue(iss); setCompleteCost(iss.estimatedCost ?? '') }, [])
+  // The cost starts empty: most of what a committee closes by itself cost
+  // nothing, and a pre-filled estimate got saved as if it had been paid.
+  const handleOpenComplete = useCallback((iss) => { setCompleteDialogIssue(iss); setCompleteCost(''); setCompleteNote(iss.close_reason || '') }, [])
 
   // Maps
   const buildingMap = useMemo(() => {
@@ -1539,11 +1542,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       status: 'completed',
       resolvedAt: new Date().toISOString(),
       cost: completeCost !== '' ? Number(completeCost) : null,
+      close_reason: completeNote.trim() || null,
     })
     // Close the loop with the reporting resident (email + push, server-derived).
     notifyIssueStatus(completeDialogIssue.id, 'resolved')
     setCompleteDialogIssue(null)
     setCompleteCost('')
+    setCompleteNote('')
   }
 
   // ── Handling choice: the committee's three options on a new issue ──────────
@@ -2148,6 +2153,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               <DetailRow label="הערכת עלות (AI)" value={iss.ai_cost_estimate || null} />
               <DetailRow label="עלות משוערת" value={iss.estimatedCost != null && iss.estimatedCost !== '' ? formatCurrency(iss.estimatedCost) : null} />
               <DetailRow label="עלות בפועל" value={iss.cost != null && iss.cost !== '' ? formatCurrency(iss.cost) : null} />
+              <DetailRow label={iss.status === 'rejected' ? 'סיבת הסגירה' : 'אופן הטיפול'} value={iss.close_reason || null} />
               <DetailRow label="תאריך דיווח" value={iss.reportedAt ? formatDate(iss.reportedAt) : null} />
               <DetailRow label="תאריך מתוזמן" value={iss.scheduledDate ? formatDate(iss.scheduledDate) : null} />
               <DetailRow label="תאריך פתרון" value={iss.resolvedAt ? formatDate(iss.resolvedAt) : null} />
@@ -3156,12 +3162,19 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             <DialogTitle>סימון כבוצע</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <FormTextarea
+              label="אופן הטיפול או סיבת הסגירה (לא חובה)"
+              value={completeNote}
+              onChange={(e) => setCompleteNote(e.target.value)}
+              rows={3}
+            />
             <FormField
-              label="עלות בפועל"
+              label="עלות בפועל, אם הייתה (לא חובה)"
               type="number"
               value={completeCost}
               onChange={(e) => setCompleteCost(e.target.value)}
             />
+            <p className="text-xs text-[var(--text-muted)]">הדייר שדיווח יקבל הודעה שהפנייה טופלה, עם מה שכתבתם כאן.</p>
             <div className="flex gap-3">
               <Button onClick={handleComplete}>
                 <CheckCircle2 className="h-4 w-4" />

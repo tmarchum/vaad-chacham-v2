@@ -185,6 +185,10 @@ const ISSUE_STATUS_COPY: Record<string, { headline: string; lead: string; subjec
   },
 }
 
+// Every message about an issue carries its number: it is what the resident
+// quotes when they call the committee, and what tells two "תאורה" reports apart.
+const withTicket = (text: string, no: unknown) => (no ? `${text} (פנייה ${no})` : text)
+
 function issueStatusHtml(issue: Record<string, unknown>, kind: string, buildingName: string): string {
   const copy = ISSUE_STATUS_COPY[kind] || ISSUE_STATUS_COPY.closed
   const headline = copy.headline
@@ -195,6 +199,8 @@ function issueStatusHtml(issue: Record<string, unknown>, kind: string, buildingN
       </div>
       <div style="background:#f8fafc;padding:18px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
         <p style="margin:0 0 10px;"><b>${esc(issue.title)}</b></p>
+        ${issue.ticket_no ? `<p style="margin:0 0 6px;color:#64748b;">מספר פנייה: <b style="color:#0f172a;">${esc(issue.ticket_no)}</b></p>` : ''}
+        ${issue.close_reason && (kind === 'resolved' || kind === 'closed') ? `<p style="margin:0 0 6px;color:#64748b;">${kind === 'resolved' ? 'אופן הטיפול' : 'סיבת הסגירה'}: <b style="color:#0f172a;">${esc(issue.close_reason)}</b></p>` : ''}
         ${issue.category ? `<p style="margin:0 0 6px;color:#64748b;">קטגוריה: ${esc(issue.category)}</p>` : ''}
         ${issue.vendor_name ? `<p style="margin:0 0 6px;color:#64748b;">טופל ע"י: ${esc(issue.vendor_name)}</p>` : ''}
         ${buildingName ? `<p style="margin:0 0 6px;color:#64748b;">${esc(buildingName)}</p>` : ''}
@@ -214,7 +220,7 @@ async function buildIssueStatusNotification(
 ) {
   const { data: issue } = await svc
     .from('issues')
-    .select('id, building_id, unit_id, title, category, vendor_name, reported_by, status, scheduled_date')
+    .select('id, building_id, unit_id, title, category, vendor_name, reported_by, status, scheduled_date, ticket_no, close_reason')
     .eq('id', issueId)
     .maybeSingle()
   if (!issue) return null
@@ -242,11 +248,11 @@ async function buildIssueStatusNotification(
     issue,
     buildingName,
     email,
-    subject: copy.subject(String(issue.title || '')),
+    subject: withTicket(copy.subject(String(issue.title || '')), issue.ticket_no),
     html: issueStatusHtml(issue, kind, buildingName),
     push: {
       title: copy.push,
-      body: String(issue.title || ''),
+      body: withTicket(String(issue.title || ''), issue.ticket_no),
       data: { type: 'issue_status', issueId: String(issue.id) },
     },
   }
@@ -593,7 +599,7 @@ Deno.serve(async (req) => {
       for (const p of built.parties) {
         if (skip.has(p.id)) { results.push({ id: p.id, skipped: true }); continue }
         const copy = ISSUE_OPENED_COPY[p.id] || ISSUE_OPENED_COPY.routing_email
-        const subject = copy.subject(String(built.issue.title || ''))
+        const subject = withTicket(copy.subject(String(built.issue.title || '')), built.issue.ticket_no)
         // The address and a committee contact only matter to whoever has to
         // drive over; residents already know where they live.
         const external = p.id === 'routing_email' || p.id === 'handler'

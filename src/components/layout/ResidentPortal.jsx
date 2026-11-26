@@ -1056,8 +1056,8 @@ function ReportIssueSection({ issues, open, onToggle, onCreated, profile, user }
                     {!i.scheduled_date && i.stage === 'queued_for_visit' ? ' · ממתין לביקור הבא של איש האחזקה' : ''}
                   </p>
                 )}
-                {['rejected', 'declined'].includes(i.status) && i.close_reason && (
-                  <p className="mt-1 text-[12px] text-slate-500">סיבת הסגירה: {i.close_reason}</p>
+                {['rejected', 'declined', 'completed', 'closed'].includes(i.status) && i.close_reason && (
+                  <p className="mt-1 text-[12px] text-slate-500">{['rejected', 'declined'].includes(i.status) ? 'סיבת הסגירה' : 'אופן הטיפול'}: {i.close_reason}</p>
                 )}
                 {/* Late photo attach — only while the fault is still open and has no photo */}
                 {stillOpen && !i.photo_url && (
