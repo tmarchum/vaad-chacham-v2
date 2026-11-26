@@ -29,6 +29,10 @@ export const ISSUE_CATEGORIES = [
   'אינסטלציה ומים',
   'שערים, דלתות וחניה',
   'ניקיון',
+  // The rubbish chute is the most reported fault in a tower (a quarter of all
+  // issues in the pilot building) and was scattered over "אחר", "ניקיון",
+  // "אינסטלציה" and "חשמל" — so nobody could see it was one recurring problem.
+  'פיר אשפה',
   'גינון',
   'תחזוקה כללית',
   'בטיחות וביטחון',
