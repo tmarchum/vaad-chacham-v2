@@ -2257,7 +2257,16 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </div>
                 </details>
               </div>
-              {isCommitteeUser && <IssueVendorDetails issue={iss} />}
+              {/* The vendor's work sheet matters once a vendor is in the picture.
+                  Before that it is one fold away, not the centre of the screen. */}
+              {isCommitteeUser && (iss.vendor_name || ['vendor', 'contractor'].includes(iss.handler_kind) || issueQuotes.length > 0
+                ? <IssueVendorDetails issue={iss} />
+                : (
+                  <details className="pt-1">
+                    <summary className="cursor-pointer select-none text-[13px] text-[var(--text-secondary)]">פרטים ותמונות לספק</summary>
+                    <IssueVendorDetails issue={iss} />
+                  </details>
+                ))}
               <DetailRow
                 label="עדיפות"
                 value={
