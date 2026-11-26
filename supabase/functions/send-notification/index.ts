@@ -286,8 +286,10 @@ type Party = {
   pushTo?: string | null
 }
 
+// How a person is addressed and named in a message: by family, never by first
+// name (the building's rule: a flat number and a family name identify someone).
 const fullName = (r: Record<string, unknown> | null | undefined) =>
-  `${r?.first_name || ''} ${r?.last_name || ''}`.trim()
+  r?.last_name ? `משפחת ${String(r.last_name).trim()}` : ''
 
 // priority is stored in English; an email to a contractor should not be.
 const PRIORITY_HE: Record<string, string> = {

@@ -311,7 +311,7 @@ const IssueCard = React.memo(function IssueCard({
   const slaBadge = iss.reportedAt && !isDone(iss.status) ? (
     <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-green-600'}`}>
       <Clock className="h-3 w-3" />
-      {isOverdue ? 'חריגת SLA' : 'בזמן'}
+      {isOverdue ? 'באיחור' : 'בזמן'}
     </span>
   ) : null
 
@@ -520,7 +520,7 @@ const IssueRow = React.memo(function IssueRow({ iss, unit, onOpen, onAction, svc
           <span className="text-[12px] text-[var(--success)] font-medium">{iss.resolvedAt ? formatDate(iss.resolvedAt) : 'טופל'}</span>
         ) : (
           <>
-            <span className={`text-[12px] font-semibold ${overdue ? 'text-[var(--danger)]' : 'text-[var(--text-secondary)]'}`}>{overdue ? 'חריגת SLA' : 'בזמן'}</span>
+            <span className={`text-[12px] font-semibold ${overdue ? 'text-[var(--danger)]' : 'text-[var(--text-secondary)]'}`}>{overdue ? 'באיחור' : 'בזמן'}</span>
             {iss.reportedAt && <span className="block text-[11px] text-[var(--text-muted)]">{timeAgo(iss.reportedAt)}</span>}
           </>
         )}
@@ -845,8 +845,11 @@ function Issues() {
       )
     }
 
-    // Sort: urgent first, then by date
+    // Sort: what still needs handling first, then urgent, then newest
     result = [...result].sort((a, b) => {
+      const da = isDone(a.status) ? 1 : 0
+      const db = isDone(b.status) ? 1 : 0
+      if (da !== db) return da - db
       const oa = PRIORITY_MAP[a.priority]?.order ?? 5
       const ob = PRIORITY_MAP[b.priority]?.order ?? 5
       if (oa !== ob) return oa - ob
@@ -959,6 +962,12 @@ function Issues() {
     const errs = validateForm()
     if (Object.keys(errs).length > 0) { setFormErrors(errs); return }
     setFormErrors({})
+    const original = editingId ? allIssues.find((i) => i.id === editingId) : null
+    const dayToMoment = (day, was) => {
+      if (!day) return null
+      if (was && String(was).slice(0, 10) === day) return was
+      return day === new Date().toISOString().slice(0, 10) ? new Date().toISOString() : new Date(day).toISOString()
+    }
     const data = {
       ...form,
       unitId: form.unitId || null,
@@ -967,8 +976,8 @@ function Issues() {
       assigned_to: form.assigned_to || null,
       cost: form.cost !== '' ? Number(form.cost) : null,
       estimatedCost: form.estimatedCost !== '' ? Number(form.estimatedCost) : null,
-      reportedAt: form.reportedAt ? new Date(form.reportedAt).toISOString() : null,
-      resolvedAt: form.resolvedAt ? new Date(form.resolvedAt).toISOString() : null,
+      reportedAt: dayToMoment(form.reportedAt, original?.reportedAt),
+      resolvedAt: dayToMoment(form.resolvedAt, original?.resolvedAt),
       scheduledDate: form.scheduledDate || null,
       photo_url: form.photo_url || null,
     }
@@ -1720,7 +1729,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // a vendor. Parts and "same visit" issues belong to those cases alone.
   const finishEscorted = finishForm.who === 'vendor' && !!finishForm.escort
   const finishWithHours = finishForm.who === 'handyman' || finishEscorted
-  const finishPartsUsed = finishWithHours ? finishParts : []
+  // Parts only when the handyman did the job: escorting a vendor, he brings none.
+  const finishPartsUsed = finishForm.who === 'handyman' ? finishParts : []
   const finishPunches = finishIsFreeRevisit ? 0 : punchesFor(
     { kind: finishWithHours ? 'handyman' : 'vendor', hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
 
@@ -1988,7 +1998,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         <StatCard
           label="דחופות / בטיפול חירום" icon={ShieldAlert} color={stats.urgent ? 'red' : 'emerald'} value={String(stats.urgent)}
           note={stats.urgent ? <span className="px-2 py-0.5 rounded-full bg-[var(--danger-light)] text-[var(--danger)]">● דורש תשומת לב מיידית</span> : null}
-          sub={stats.overdue ? `${stats.overdue} בחריגת SLA` : 'אין חריגות SLA'}
+          sub={stats.overdue ? `${stats.overdue} באיחור` : 'אין פניות באיחור'}
         />
         <StatCard
           label="ממתינות להצעת מחיר" icon={FileText} color="amber" value={String(stats.pendingQuotes)}
@@ -2049,13 +2059,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between bg-[var(--surface-secondary)]/50">
               <h2 className="text-[14px] font-bold text-[var(--text-primary)]">רשימת הפניות <span className="font-medium text-[var(--text-muted)]">({filtered.length} מוצגות)</span></h2>
-              <span className="text-[11px] text-[var(--text-muted)]">ממוין לפי עדיפות ודחיפות</span>
+              <span className="text-[11px] text-[var(--text-muted)]">פתוחות תחילה, לפי עדיפות</span>
             </div>
             <div className="overflow-x-auto">
               <table className="ds-table">
                 <thead>
                   <tr>
-                    <th>פנייה</th><th>תיאור וקטגוריה</th><th>דירה ודייר</th><th>עדיפות</th><th>סטטוס</th><th>ספק מוקצה</th><th>SLA / מועד</th><th>פעולה הבאה</th>
+                    <th>פנייה</th><th>תיאור וקטגוריה</th><th>דירה ודייר</th><th>עדיפות</th><th>סטטוס</th><th>ספק מוקצה</th><th>מועד</th><th>פעולה הבאה</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2276,11 +2286,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               <DetailRow label="תאריך מתוזמן" value={iss.scheduledDate ? formatDate(iss.scheduledDate) : null} />
               <DetailRow label="תאריך פתרון" value={iss.resolvedAt ? formatDate(iss.resolvedAt) : null} />
               <DetailRow label="זמן שחלף" value={iss.reportedAt ? timeAgo(iss.reportedAt) : null} />
-              <DetailRow label="SLA" value={
+              <DetailRow label="עמידה בזמן" value={
                 iss.status !== 'completed' && iss.status !== 'closed' ? (
                   <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdueSLA(iss) ? 'text-red-600' : 'text-green-600'}`}>
                     <Clock className="h-3 w-3" />
-                    {isOverdueSLA(iss) ? 'חריגת SLA' : 'בזמן'}
+                    {isOverdueSLA(iss) ? 'באיחור' : 'בזמן'}
                   </span>
                 ) : null
               } />
@@ -3135,7 +3145,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 </label>
               </>
             )}
-            {finishWithHours && (
+            {finishForm.who === 'handyman' && (
             <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
               <p className="text-[13px] font-semibold">חלקים שאיש האחזקה הביא</p>
               {finishParts.map((l) => (
@@ -3341,7 +3351,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 options={PRIORITY_OPTIONS}
                 error={formErrors.priority}
               />
-              <FormSelect
+              {editingId && <FormSelect
                 label="סטטוס"
                 value={bucketOf(form.status)}
                 onChange={(e) => {
@@ -3358,8 +3368,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   ))
                 }}
                 options={STATUS_OPTIONS}
-              />
+              />}
             </div>
+            {editingId && (<>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 label="תאריך דיווח"
@@ -3380,6 +3391,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               value={form.resolvedAt}
               onChange={setField('resolvedAt')}
             />
+            </>)}
             {emergencyVendor && emergencyVendor.phone && (
               <a href={`tel:${emergencyVendor.phone}`}
                 className="flex items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 hover:bg-red-100 transition-colors">
@@ -3389,7 +3401,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 <span className="text-xs text-red-600">{emergencyVendor.phone} ›</span>
               </a>
             )}
-            {isAdmin && suggestedVendors.length > 0 && (
+            {isAdmin && editingId && suggestedVendors.length > 0 && (
               <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
                 <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לפנייה זו</p>
                 <div className="space-y-1.5">
@@ -3408,6 +3420,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 </div>
               </div>
             )}
+            {editingId && (<>
             <FormSelect
               label="חבר ועד מלווה (אחראי לסגירה)"
               value={form.assigned_to}
@@ -3436,6 +3449,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 onChange={setField('cost')}
               />
             </div>
+            </>)}
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={isSaving}>{isSaving ? 'שומר...' : editingId ? 'שמור שינויים' : 'צור פנייה'}</Button>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>

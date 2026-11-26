@@ -84,7 +84,7 @@ export function GlobalSearch({ buildingId, className }) {
         onChange={(e) => { setQ(e.target.value); setOpen(true); setCursor(0) }}
         onFocus={() => { setArmed(true); setOpen(true) }}
         onKeyDown={onKeyDown}
-        placeholder="חיפוש דייר, דירה, קריאה או ספק..."
+        placeholder="חיפוש דייר, דירה, פנייה או ספק..."
         className="w-full h-[38px] pr-10 pl-8 bg-[var(--bg)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/80 border border-[var(--outline-variant)] rounded-[var(--radius)] text-[12px] focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)] transition-colors"
       />
       {q && (
