@@ -2163,8 +2163,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 }
               />
               <DetailRow label="ספק" value={iss.vendor_name} />
-              <DetailRow label="הערכת עלות (AI)" value={iss.ai_cost_estimate || null} />
-              <DetailRow label="עלות משוערת" value={iss.estimatedCost != null && iss.estimatedCost !== '' ? formatCurrency(iss.estimatedCost) : null} />
+              {/* One price line at a time: the AI's rough range until somebody has
+                  named a price, then that price. Two numbers side by side read
+                  as two quotes. */}
+              {iss.estimatedCost != null && iss.estimatedCost !== ''
+                ? <DetailRow label={issueQuotes.some((q) => q.stage === 'won' || q.status === 'accepted') ? 'מחיר שסוכם עם הספק' : 'עלות משוערת (הוזנה ידנית)'} value={`${formatCurrency(iss.estimatedCost)} לפני מע"מ`} />
+                : <DetailRow label="הערכת AI (לא מחיר)" value={iss.ai_cost_estimate || null} />}
               <DetailRow label="עלות בפועל" value={iss.cost != null && iss.cost !== '' ? formatCurrency(iss.cost) : null} />
               <DetailRow label={iss.status === 'rejected' ? 'סיבת הסגירה' : 'אופן הטיפול'} value={iss.close_reason || null} />
               <DetailRow label="תאריך דיווח" value={iss.reportedAt ? formatDate(iss.reportedAt) : null} />

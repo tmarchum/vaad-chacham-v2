@@ -151,11 +151,12 @@ ${categories.map((c) => `- ${c}`).join('\n')}
     const max = Number(parsed.cost_max)
     const hasCost = Number.isFinite(min) && Number.isFinite(max) && max > 0
     const costEstimate = hasCost ? `₪${Math.round(min).toLocaleString()}–₪${Math.round(max).toLocaleString()}` : null
-    const costMid = hasCost ? Math.round((min + max) / 2) : null
 
     const update: Record<string, unknown> = { ai_search_terms: searchTerms || null }
     if (category) update.ai_category = category
-    if (costEstimate) { update.ai_cost_estimate = costEstimate; update.estimated_cost = costMid }
+    // The range only. estimated_cost belongs to a price somebody named (a quote,
+    // or the committee by hand): the midpoint of a guess, stored there, read as one.
+    if (costEstimate) update.ai_cost_estimate = costEstimate
     const { error: updErr } = await svc.from('issues').update(update).eq('id', issueId)
     if (updErr) return json({ error: `update_failed: ${updErr.message}` }, 500)
 
