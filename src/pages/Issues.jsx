@@ -1673,7 +1673,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // the issue was closed, and "why" is the first thing they will ask.
   const handleCloseNoFix = async () => {
     if (!closeNoFixIssue || !closeReason.trim()) return
-    await update(closeNoFixIssue.id, { status: 'rejected', close_reason: closeReason.trim() })
+    // A failed save (network drop) must not be reported as "closed": the store
+    // already showed the error, so keep the dialog open for another try.
+    const saved = await update(closeNoFixIssue.id, { status: 'rejected', close_reason: closeReason.trim() }, { silent: true })
+    if (!saved) return
     notifyIssueStatus(closeNoFixIssue.id, 'closed')
     toast('התקלה נסגרה ללא טיפול')
     setCloseNoFixIssue(null)
