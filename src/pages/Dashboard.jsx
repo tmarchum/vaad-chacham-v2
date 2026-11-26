@@ -449,7 +449,7 @@ function Dashboard() {
         <SectionCard
           className="lg:col-span-5"
           icon={HardHat}
-          title="קריאות שירות ומעקב טיפול"
+          title="פניות ומעקב טיפול"
           subtitle="תקלות פעילות הדורשות פיקוח"
           actions={
             <Link to="/issues?new=1" className="h-8 px-2.5 rounded-[var(--radius)] bg-[var(--surface-secondary)] hover:bg-[var(--surface-container)] text-[var(--primary)] text-[11px] font-semibold flex items-center gap-1 transition-colors">

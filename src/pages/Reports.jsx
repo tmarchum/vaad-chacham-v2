@@ -532,9 +532,9 @@ function MaintenanceTab({ issues, period, buildingId, customFrom, customTo, peri
     const MAP = {
       new:              { label: 'חדשה',          variant: 'default' },
       in_progress:      { label: 'בטיפול',         variant: 'info'    },
-      awaiting_payment: { label: 'לתשלום וסגירה',  variant: 'warning' },
+      awaiting_payment: { label: 'טופלה',          variant: 'warning' },
       closed:           { label: 'סגורה',          variant: 'success' },
-      rejected:         { label: 'נדחתה',          variant: 'default' },
+      rejected:         { label: 'נסגרה ללא טיפול', variant: 'default' },
     }
     const s = MAP[BUCKET[status] || 'new']
     return <Badge variant={s.variant}>{s.label}</Badge>

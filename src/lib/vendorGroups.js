@@ -2,9 +2,9 @@
 // so the vendor pool reads the same way the faults do.
 import { ISSUE_CATEGORIES } from './constants'
 // Shared with the WhatsApp server (supabase/functions/_shared): one map.
-import { TRADE_TO_ISSUE, issueGroupOf, taskIssueCategory, taskLeadDays } from '../../supabase/functions/_shared/tradeGroups.js'
+import { TRADE_TO_ISSUE, issueGroupOf, taskIssueCategory, taskLeadDays, slaDaysFor } from '../../supabase/functions/_shared/tradeGroups.js'
 
-export { issueGroupOf, taskIssueCategory, taskLeadDays }
+export { issueGroupOf, taskIssueCategory, taskLeadDays, slaDaysFor }
 
 /** Every vendor trade, in the order the map lists them. */
 export const TRADES = Object.keys(TRADE_TO_ISSUE)

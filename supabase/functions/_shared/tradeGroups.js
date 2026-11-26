@@ -19,6 +19,24 @@ export const TRADE_TO_ISSUE = {
 
 export const issueGroupOf = (trade) => TRADE_TO_ISSUE[trade] || 'אחר'
 
+// How long a category may sit before it is late. A blocked rubbish chute is
+// not a lift trapping someone, and treating them the same makes the whole list
+// easy to ignore. One table for the screen's "late" badge and the weekly
+// digest, so an issue is never late in one and on time in the other.
+export const ISSUE_SLA_DAYS = {
+  'מעלית': 2,
+  'בטיחות וביטחון': 3,
+  'אינסטלציה ומים': 5,
+  'חשמל ותאורה': 7,
+  'שערים, דלתות וחניה': 14,
+  'ניקיון': 7,
+  'פיר אשפה': 7,
+  'גינון': 14,
+  'תחזוקה כללית': 14,
+  'אחר': 14,
+}
+export const slaDaysFor = (category) => ISSUE_SLA_DAYS[category] ?? 14
+
 // The issue a recurring task opens. A certified lift inspector is not the
 // building's lift company: filed under "מעלית" the inspection would be routed
 // straight to that company, so it goes under safety like the other statutory

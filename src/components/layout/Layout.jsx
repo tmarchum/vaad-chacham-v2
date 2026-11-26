@@ -175,7 +175,7 @@ function Layout() {
               className="h-[38px] px-3 sm:px-3.5 rounded-[var(--radius)] bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-[12px] font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-[var(--shadow)]"
             >
               <PlusCircle className="h-[18px] w-[18px]" strokeWidth={1.75} />
-              <span className="hidden sm:inline">קריאה חדשה</span>
+              <span className="hidden sm:inline">פנייה חדשה</span>
             </Link>
           </div>
         </header>

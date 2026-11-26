@@ -233,14 +233,18 @@ async function buildIssueStatusNotification(
 
   // Email: the unit's primary resident (falls back to any resident with email).
   let email = ''
+  let phone = ''
   if (issue.unit_id) {
     const { data: residents } = await svc
       .from('unit_residents')
-      .select('email, is_primary')
+      .select('email, phone, is_primary')
       .eq('unit_id', issue.unit_id)
       .eq('archived', false)
     const primary = residents?.find((r) => r.is_primary && r.email) || residents?.find((r) => r.email)
     email = primary?.email || ''
+    // The closing WhatsApp goes to the primary resident's mobile (whatsapp/jobs.ts).
+    const withPhone = residents?.find((r) => r.is_primary && r.phone) || residents?.find((r) => r.phone)
+    phone = String(withPhone?.phone || '')
   }
 
   const copy = ISSUE_STATUS_COPY[kind] || ISSUE_STATUS_COPY.closed
@@ -248,6 +252,7 @@ async function buildIssueStatusNotification(
     issue,
     buildingName,
     email,
+    phone,
     subject: withTicket(copy.subject(String(issue.title || '')), issue.ticket_no),
     html: issueStatusHtml(issue, kind, buildingName),
     push: {
@@ -526,6 +531,27 @@ Deno.serve(async (req) => {
       if (!n) return json({ error: 'issue_not_found' }, 404)
 
       const pushOut = await sendPushToUser(supabase, n.issue.reported_by as string | null, n.push)
+
+      // A closing is also sent on WhatsApp a few minutes later (whatsapp/jobs.ts,
+      // notifyClosed). Where that will reach the resident, the same news by email
+      // is the second message about one thing, so the email steps aside. It stays
+      // the fallback: no mobile, template not approved, or a channel that has not
+      // delivered anything lately.
+      let viaWhatsapp = false
+      const kindNow = String(body.kind || 'resolved')
+      if ((kindNow === 'resolved' || kindNow === 'closed')) {
+        const digits = n.phone.replace(/\D/g, '')
+        const mobile = /^(972|0)5\d{8}$/.test(digits)
+        if (mobile) {
+          const { data: tpl } = await supabase.from('message_templates').select('meta_status, active').eq('key', 'resident_issue_update').maybeSingle()
+          const { count } = await supabase.from('notification_log').select('id', { count: 'exact', head: true })
+            .eq('channel', 'whatsapp').eq('status', 'sent').gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+          viaWhatsapp = tpl?.meta_status === 'APPROVED' && tpl?.active !== false && (count || 0) > 0
+        }
+      }
+      if (viaWhatsapp) {
+        return json({ success: true, email: false, push: pushOut, via: 'whatsapp' })
+      }
 
       let emailOk = false, emailErr = ''
       if (n.email && GMAIL_USER && GMAIL_APP_PASSWORD) {

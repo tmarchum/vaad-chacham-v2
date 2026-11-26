@@ -52,7 +52,7 @@ export function GlobalSearch({ buildingId, className }) {
     issues
       .filter((i) => hit(i.title) || hit(i.category))
       .slice(0, 5)
-      .forEach((i) => out.push({ key: `i${i.id}`, icon: Wrench, group: 'תקלות', label: i.title, sub: i.category, to: `/issues?open=${i.id}` }))
+      .forEach((i) => out.push({ key: `i${i.id}`, icon: Wrench, group: 'פניות', label: i.title, sub: i.category, to: `/issues?open=${i.id}` }))
     vendors
       .filter((v) => hit(v.name) || hit(v.category))
       .slice(0, 5)

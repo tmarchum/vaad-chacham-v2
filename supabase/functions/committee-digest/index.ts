@@ -18,6 +18,7 @@
 // the app (JWT). { dryRun: true } returns the digest without sending.
 
 import { corsHeaders, json, serviceClient, timingSafeEqual, identifyCaller, isPrivileged } from '../_shared/mod.ts'
+import { slaDaysFor } from '../_shared/tradeGroups.js'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -28,22 +29,6 @@ const ils = (n: number) =>
 const daysSince = (d: string | null) =>
   d ? Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) : 0
 
-// How long a category may sit before it is late. A blocked rubbish chute is
-// not a lift trapping someone, and treating them the same makes the whole
-// list easy to ignore.
-const SLA_DAYS: Record<string, number> = {
-  'מעלית': 2,
-  'בטיחות וביטחון': 3,
-  'אינסטלציה ומים': 5,
-  'חשמל ותאורה': 7,
-  'שערים, דלתות וחניה': 14,
-  'ניקיון': 7,
-  'פיר אשפה': 7,
-  'גינון': 14,
-  'תחזוקה כללית': 14,
-  'אחר': 14,
-}
-const DEFAULT_SLA = 14
 
 const FREQ_DAYS: Record<string, number> = {
   weekly: 7, monthly: 30, quarterly: 91, yearly: 365,
@@ -99,7 +84,7 @@ Deno.serve(async (req) => {
         .in('status', OPEN_STATUSES)
 
       const late = (issues || [])
-        .map((i) => ({ ...i, age: daysSince(i.reported_at), sla: SLA_DAYS[i.category] ?? DEFAULT_SLA }))
+        .map((i) => ({ ...i, age: daysSince(i.reported_at), sla: slaDaysFor(i.category) }))
         .filter((i) => i.age > i.sla)
         .sort((x, y) => y.age - x.age)
 

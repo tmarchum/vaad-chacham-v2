@@ -29,9 +29,9 @@ export const ISSUE_STATUS_LABELS = {
   new: 'חדשה', open: 'חדשה',
   approved_for_quotes: 'בטיפול', quoted: 'בטיפול', approved: 'בטיפול',
   scheduled: 'בטיפול', in_progress: 'בטיפול',
-  completed: 'הושלמה', awaiting_payment: 'לתשלום וסגירה',
+  completed: 'הושלמה', awaiting_payment: 'טופלה',
   closed: 'סגורה', resolved: 'טופלה',
-  rejected: 'נדחתה', declined: 'נדחתה',
+  rejected: 'נסגרה ללא טיפול', declined: 'נסגרה ללא טיפול',
 }
 
 export const issueStatusLabel = (s) => ISSUE_STATUS_LABELS[s] || s

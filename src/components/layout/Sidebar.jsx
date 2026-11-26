@@ -27,7 +27,7 @@ import { enterResidentPreview } from '@/lib/residentPreview'
 // and its residents; vendors and dispatch are the management side's work.
 const PRIMARY_NAV = [
   { to: '/',              label: 'דשבורד',     icon: LayoutDashboard },
-  { to: '/issues',        label: 'תקלות',       icon: Wrench,     badge: 'issues' },
+  { to: '/issues',        label: 'פניות',       icon: Wrench,     badge: 'issues' },
   { to: '/payments',      label: 'גבייה',        icon: CreditCard, badge: 'collection' },
   { to: '/announcements', label: 'הודעות',      icon: Megaphone },
   { to: '/polls',         label: 'הצבעות',      icon: Vote },
@@ -228,7 +228,7 @@ function Sidebar({ open, onClose, pulse = {} }) {
             className="w-full h-10 px-4 rounded-[var(--radius-lg)] bg-[var(--primary)] text-white text-[14px] font-semibold flex items-center justify-center gap-2 hover:bg-[var(--primary-hover)] active:scale-[0.98] transition-all shadow-[var(--shadow)]"
           >
             <Plus className="h-[18px] w-[18px]" />
-            קריאה חדשה
+            פנייה חדשה
           </button>
 
           {/* Navigation */}

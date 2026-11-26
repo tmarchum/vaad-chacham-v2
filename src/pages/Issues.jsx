@@ -32,6 +32,7 @@ import {
   HANDLER_LABELS, HANDLER_KIND_LABELS, stageLabel,
 } from '@/lib/servicePlans'
 import { ISSUE_CATEGORIES } from '@/lib/constants'
+import { slaDaysFor } from '@/lib/vendorGroups'
 import { isEmergency, emergencyVendorFor } from '@/lib/emergency'
 import { analyzeQuotes } from '@/lib/quotes'
 import { toast, toastError } from '@/lib/toast'
@@ -79,9 +80,9 @@ const STATUSES = ['reported', 'pending_committee', 'acknowledged', 'approved_for
 const STATUS_BUCKETS = [
   { key: 'new',              label: 'חדשה',          variant: 'danger'  },
   { key: 'in_progress',      label: 'בטיפול',         variant: 'info'    },
-  { key: 'awaiting_payment', label: 'לתשלום וסגירה',  variant: 'warning' },
+  { key: 'awaiting_payment', label: 'טופלה',          variant: 'warning' },
   { key: 'closed',           label: 'סגורה',          variant: 'success' },
-  { key: 'rejected',         label: 'נדחתה',          variant: 'default' },
+  { key: 'rejected',         label: 'נסגרה ללא טיפול', variant: 'default' },
 ]
 const BUCKET_MAP = Object.fromEntries(STATUS_BUCKETS.map((b) => [b.key, b]))
 const STATUS_TO_BUCKET = {
@@ -162,8 +163,6 @@ const PRIORITY_MAP = {
   urgent: { label: 'דחוף', variant: 'danger', order: 1, color: 'bg-red-100 text-red-800' },
 }
 
-// SLA hours per priority
-const SLA_HOURS = { urgent: 24, high: 48, medium: 7 * 24, low: 14 * 24 }
 
 const CATEGORY_OPTIONS = ISSUE_CATEGORIES.map((c) => ({ value: c, label: c }))
 
@@ -252,7 +251,8 @@ function timeAgo(dateStr) {
 
 function isOverdueSLA(issue) {
   if (!issue.reportedAt || issue.status === 'completed' || issue.status === 'closed') return false
-  const slaHours = SLA_HOURS[issue.priority] || SLA_HOURS.medium
+  // The same rule as the weekly digest: days allowed per category.
+  const slaHours = slaDaysFor(issue.category) * 24
   const now = new Date()
   const reported = new Date(issue.reportedAt)
   const diffHours = (now - reported) / (1000 * 60 * 60)
@@ -306,10 +306,7 @@ const IssueCard = React.memo(function IssueCard({
     : iss.estimatedCost != null && iss.estimatedCost !== '' ? iss.estimatedCost : null
 
   // SLA badge (inlined)
-  const isOverdue = iss.reportedAt && !isDone(iss.status) && (() => {
-    const slaHours = SLA_HOURS[iss.priority] || SLA_HOURS.medium
-    return (Date.now() - new Date(iss.reportedAt)) / 3600000 > slaHours
-  })()
+  const isOverdue = !isDone(iss.status) && isOverdueSLA(iss)
 
   const slaBadge = iss.reportedAt && !isDone(iss.status) ? (
     <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-green-600'}`}>
@@ -330,6 +327,9 @@ const IssueCard = React.memo(function IssueCard({
       </Button>,
       <Button key="self" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onSelfHandle(iss) }}>
         <Wrench className="h-3.5 w-3.5" /> הוועד מטפל
+      </Button>,
+      <Button key="done" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onOpenComplete(iss) }}>
+        <CheckCircle2 className="h-3.5 w-3.5" /> כבר טופל
       </Button>,
       <Button key="nofix" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onCloseNoFix(iss) }}>
         <X className="h-3.5 w-3.5" /> סגור ללא טיפול
@@ -1043,7 +1043,7 @@ function Issues() {
         await remove(deleteTarget.id)
       } catch (err) {
         console.error('Failed to delete issue:', err)
-        toastError('שגיאה במחיקת תקלה')
+        toastError('שגיאה במחיקת פנייה')
       }
       setDeleteTarget(null)
     }
@@ -1222,7 +1222,7 @@ function Issues() {
     if (error || !data?.ok) { toastError('השליחה לספקים נכשלה'); return 0 }
     await refreshQuotes()
     const busy = (data.skipped || []).filter((x) => x.reason === 'in_progress').length
-    if (busy) toast(`${busy} ספקים כבר באמצע הגשת הצעה לתקלה הזאת — לא נשלח להם שוב`, 'info')
+    if (busy) toast(`${busy} ספקים כבר באמצע הגשת הצעה לפנייה הזאת — לא נשלח להם שוב`, 'info')
     return data.sent || 0
   }
 
@@ -1315,8 +1315,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // resident hears "נסגרה", not a verdict, and is pointed at the committee for
   // the reason. This was the one transition out of ten that told the reporter
   // nothing at all: they reported a fault and it went quiet for good.
-  const closeByCommittee = (iss) => {
-    update(iss.id, { status: 'rejected' })
+  const closeByCommittee = async (iss) => {
+    const saved = await update(iss.id, { status: 'rejected' })
+    if (!saved) return
     notifyIssueStatus(iss.id, 'closed')
     setWorkflowIssue(null)
   }
@@ -1342,9 +1343,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   }
 
   // Quick actions
-  const handleAcknowledge = useCallback((iss) => {
-    update(iss.id, { status: 'acknowledged' })
-    notifyIssueStatus(iss.id, 'acknowledged')
+  const handleAcknowledge = useCallback(async (iss) => {
+    const saved = await update(iss.id, { status: 'acknowledged' })
+    if (saved) notifyIssueStatus(iss.id, 'acknowledged')
   }, [update])
 
   const handleOpenQuoteDialog = useCallback((iss) => {
@@ -1458,7 +1459,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       estimatedCost: quote.amount,
       vendor_name: quote.vendorName,
       status: 'approved',
-    })
+    }, { silent: true })
     // Refresh detail issue
     setDetailIssue((prev) => prev ? { ...prev, estimatedCost: quote.amount, vendor_name: quote.vendorName, status: 'approved' } : null)
   }
@@ -1518,7 +1519,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     // A job ועד1 coordinates for the committee: they were promised the date,
     // and the vendor needs it in writing. One toast says who was told.
     const coordinated = iss.handler === 'management' && iss.handler_kind === 'vendor' && !!iss.vendor_name
-    await update(iss.id, { scheduledDate: scheduleDate, status: 'scheduled', ...(iss.stage ? { stage: 'scheduled' } : {}) }, { silent: coordinated })
+    const saved = await update(iss.id, { scheduledDate: scheduleDate, status: 'scheduled', ...(iss.stage ? { stage: 'scheduled' } : {}) }, { silent: coordinated })
+    if (!saved) return
     // The resident asked when someone is coming — this is the answer.
     notifyIssueStatus(iss.id, 'scheduled')
     setScheduleDialogIssue(null)
@@ -1532,10 +1534,11 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   }
 
   // ── Handling choice: the committee's three options on a new issue ──────────
-  const handleSelfHandle = useCallback((iss) => {
-    update(iss.id, { handler: 'committee', stage: null, status: 'in_progress', handled_at: new Date().toISOString() })
+  const handleSelfHandle = useCallback(async (iss) => {
+    const saved = await update(iss.id, { handler: 'committee', stage: null, status: 'in_progress', handled_at: new Date().toISOString() }, { silent: true })
+    if (!saved) return
     notifyIssueStatus(iss.id, 'acknowledged')
-    toast('התקלה בטיפול הוועד')
+    toast('הפנייה בטיפול הוועד')
   }, [update])
 
   // Transfer asks one question (who handles it) and shows the balance and the
@@ -1579,7 +1582,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       if (transferMode === 'quotes') {
         const { error } = await supabase.rpc('transfer_issue', { p_issue: iss.id, p_mode: 'vendor', p_vendor: null })
         if (error) { toastError('ההעברה נכשלה'); return }
-        await update(iss.id, { handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: new Date().toISOString() })
+        await update(iss.id, { handler: 'management', handler_kind: 'vendor', stage: 'awaiting_quote_approval', status: 'acknowledged', handled_at: new Date().toISOString() }, { silent: true })
         const ranked = rankVendorsForIssue(iss, allVendors.filter((v) => v.membership_status === 'agreed' && waNumber(v.phone)), { building: buildingOf(iss.buildingId) })
           .slice(0, QUOTE_FANOUT).map((r) => r.vendor.id)
         const { data } = ranked.length
@@ -1593,7 +1596,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       }
       // The lift: the building's own lift company, routed by ועד1 by hand.
       if (transferMode === 'admin') {
-        await update(iss.id, { handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: new Date().toISOString() })
+        const saved = await update(iss.id, { handler: 'management', handler_kind: 'contractor', stage: 'awaiting_assignment', status: 'acknowledged', handled_at: new Date().toISOString() }, { silent: true })
+        if (!saved) return
         toast('ועד1 מטפלת · תעביר לחברת המעליות של הבניין')
         setTransferIssue(null)
         return
@@ -1612,7 +1616,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         handler_kind: transferMode === 'contractor' ? 'contractor' : transferMode === 'vendor' ? 'vendor' : 'handyman',
         stage: { next_visit: 'queued_for_visit', urgent: 'awaiting_assignment', contractor: 'sent_to_vendor', vendor: 'awaiting_assignment' }[transferMode],
         ...(vendor ? { vendor_name: vendor } : {}),
-      })
+      }, { silent: true })
       notifyIssueStatus(iss.id, 'acknowledged')
       if (transferMode === 'contractor') {
         // Server-built message, sent the way this contractor asked to be
@@ -1642,7 +1646,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   [allIssues, selectedBuilding?.id])
   const sendPendingToCommittee = async () => {
     if (!selectedBuilding?.id || decisionBusy) return
-    if (!window.confirm(`לשלוח לחברי הוועד בוואטסאפ ${pendingDecisionCount} תקלות שממתינות להחלטה? כל תקלה נשלחת כהודעה עם שלושה כפתורי החלטה.`)) return
+    if (!window.confirm(`לשלוח לחברי הוועד בוואטסאפ ${pendingDecisionCount} פניות שממתינות להחלטה? כל פנייה נשלחת כהודעה עם שלושה כפתורי החלטה.`)) return
     setDecisionBusy(true)
     try {
       const { data } = await supabase.functions.invoke('whatsapp', { body: { action: 'issue-decision', buildingId: selectedBuilding.id } })
@@ -1663,7 +1667,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     const saved = await update(closeNoFixIssue.id, { status: 'rejected', close_reason: closeReason.trim() }, { silent: true })
     if (!saved) return
     notifyIssueStatus(closeNoFixIssue.id, 'closed')
-    toast('התקלה נסגרה ללא טיפול')
+    toast('הפנייה נסגרה ללא טיפול')
     setCloseNoFixIssue(null)
     setCloseReason('')
   }
@@ -1751,7 +1755,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       const hours = isVendor ? null : Number(finishForm.hours) || 0
       const offHours = isVendor ? false : !!finishForm.offHours
       const baseNote = others.length
-        ? `ביקור · ${others.length + 1} תקלות: ${[finishIssue, ...others].map((o) => o.title).join(', ')}`
+        ? `ביקור · ${others.length + 1} פניות: ${[finishIssue, ...others].map((o) => o.title).join(', ')}`
         : finishIssue.title || ''
       const note = finishEscorted ? `ליווי ספק · ${baseNote}` : baseNote
 
@@ -1763,7 +1767,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           p_building: finishIssue.buildingId, p_visit: visitId, p_issue: others.length ? null : finishIssue.id,
           p_punches: finishPunches, p_hours: hours, p_off_hours: offHours, p_note: note,
         })
-        if (error) { toastError('רישום השעות נכשל — התקלות לא נסגרו'); return }
+        if (error) { toastError('רישום השעות נכשל — הפניות לא נסגרו'); return }
         settled = data
       }
 
@@ -1808,25 +1812,36 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       const managed = finishForm.who !== 'committee' && (finishIssue.handler === 'management' || finishWithHours)
       const savedKind = finishForm.who === 'handyman' ? 'handyman'
         : finishIssue.handler_kind === 'contractor' && !finishEscorted ? 'contractor' : 'vendor'
-      const done = managed
-        ? { status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
-            handler: 'management', handler_kind: savedKind, visit_id: visitId }
-        : { status: 'completed', resolvedAt: new Date().toISOString() }
-      const partsTotal = Math.round(finishPartsTotal * 100) / 100
       // What was actually paid: the vendor's final price (or the committee's own
       // outlay) plus any part ועד1 supplied.
       const paid = finishForm.who !== 'handyman' && finishForm.vendorCost !== '' ? Number(finishForm.vendorCost) || 0 : null
-      await update(finishIssue.id, {
+      // Nothing left to pay and somebody answers for it: there is no second,
+      // book-keeping "close" step to remember. Money owed keeps it open.
+      const autoClose = !managed && !(paid > 0) && !!finishIssue.assigned_to
+      const nowIso = new Date().toISOString()
+      const done = managed
+        ? { status: 'completed', resolvedAt: nowIso, stage: 'done_awaiting_confirmation',
+            handler: 'management', handler_kind: savedKind, visit_id: visitId }
+        : { status: autoClose ? 'closed' : 'completed', resolvedAt: nowIso,
+            ...(finishIssue.handler ? {} : { handler: 'committee', handled_at: nowIso }) }
+      const partsTotal = Math.round(finishPartsTotal * 100) / 100
+      const savedIssue = await update(finishIssue.id, {
         ...done, work_hours: hours, off_hours: offHours,
         punches_charged: (Number(finishIssue.punches_charged) || 0) + finishPunches,
         parts_cost: partsTotal || null, ...(paid != null || partsTotal ? { cost: Math.round(((paid || 0) + partsTotal) * 100) / 100 } : {}),
         after_photo_url: finishForm.photoUrl.trim() || null,
         close_reason: (finishForm.note || '').trim() || null,
       }, { silent: true })
+      if (!savedIssue) {
+        toastError(finishPunches > 0
+          ? 'השעות נרשמו, אבל הפנייה לא נשמרה כטופלה. לא לסיים שוב: יש לעדכן את הסטטוס בעריכה.'
+          : 'השמירה נכשלה, הפנייה לא סומנה כטופלה')
+        return
+      }
       for (const o of others) await update(o.id, done, { silent: true })
       for (const o of [finishIssue, ...others]) notifyIssueStatus(o.id, 'resolved')
 
-      const bits = [others.length ? `ביקור הסתיים · ${others.length + 1} תקלות` : 'הטיפול הסתיים']
+      const bits = [others.length ? `ביקור הסתיים · ${others.length + 1} פניות` : autoClose ? 'הפנייה טופלה ונסגרה' : 'הטיפול הסתיים']
       if (settled?.covered) bits.push(`${settled.covered} שעות מהכרטיסייה`)
       if (settled?.billed) bits.push(`${settled.billed} שעות לחיוב`)
       if (settled?.card_id) bits.push('נקנתה כרטיסייה חדשה')
@@ -1839,7 +1854,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
   // Closing is the accompanying committee member's responsibility — require one.
   const handleClose = useCallback((iss) => {
     if (!iss.assigned_to) {
-      toastError('יש לשייך חבר ועד מלווה לפני סגירת התקלה — הוא האחראי לסגירה')
+      toastError('יש לשייך חבר ועד מלווה לפני סגירת הפנייה — הוא האחראי לסגירה')
       return
     }
     setFinalCloseIssue(iss)
@@ -1849,7 +1864,6 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     if (!finalCloseIssue) return
     const saved = await update(finalCloseIssue.id, { status: 'closed', close_reason: finalCloseNote.trim() || null }, { silent: true })
     if (!saved) return
-    notifyIssueStatus(finalCloseIssue.id, 'closed')
     toast('הפנייה נסגרה')
     setFinalCloseIssue(null)
     setFinalCloseNote('')
@@ -1886,7 +1900,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
   if (isLoading) return (
     <div className="p-6">
-      <PageHeader icon={AlertTriangle} iconColor="purple" title="תקלות" />
+      <PageHeader icon={AlertTriangle} iconColor="purple" title="פניות" />
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--primary)] border-t-transparent" />
@@ -1901,7 +1915,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     return m
   }, {})
   const exportCsv = () => {
-    const rows = [['קריאה', 'כותרת', 'קטגוריה', 'דירה', 'דייר', 'עדיפות', 'סטטוס', 'ספק', 'דווח', 'עלות']]
+    const rows = [['פנייה', 'כותרת', 'קטגוריה', 'דירה', 'דייר', 'עדיפות', 'סטטוס', 'ספק', 'דווח', 'עלות']]
     filtered.forEach((i) => {
       const u = dir.byId[i.unitId]
       rows.push([i.ticket_no, i.title, i.category, u?.number, u?.name, PRIORITY_MAP[i.priority]?.label, bucketInfo(i.status).label, i.vendor_name, i.reportedAt ? formatDate(i.reportedAt) : '', i.cost ?? i.estimatedCost ?? ''])
@@ -1929,7 +1943,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">תקלות וקריאות שירות</h1>
+            <h1 className="text-[24px] leading-8 font-bold tracking-[-0.015em] text-[var(--text-primary)]">פניות</h1>
             <span className="px-2.5 py-0.5 rounded-full bg-[var(--surface-container)] text-[var(--primary)] text-[12px] font-semibold num-tabular">{stats.open} פעילות</span>
           </div>
           <p className="text-[13px] text-[var(--text-secondary)] mt-1">
@@ -1943,12 +1957,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           </Link>
           {pendingDecisionCount > 0 && (
             <Button variant="outline" onClick={sendPendingToCommittee} disabled={decisionBusy}
-              title="שולח לחברי הוועד בוואטסאפ כל תקלה שממתינה להחלטה, עם כפתורי החלטה">
+              title="שולח לחברי הוועד בוואטסאפ כל פנייה שממתינה להחלטה, עם כפתורי החלטה">
               💬 {decisionBusy ? 'שולח...' : `להחלטת הוועד בוואטסאפ (${pendingDecisionCount})`}
             </Button>
           )}
           <Button variant="outline" onClick={() => setShowTemplates(true)}><FileText className="h-4 w-4" />מתבנית</Button>
-          <Button onClick={openCreate}><Plus className="h-4 w-4" />תקלה חדשה</Button>
+          <Button onClick={openCreate}><Plus className="h-4 w-4" />פנייה חדשה</Button>
         </div>
       </div>
 
@@ -1957,7 +1971,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       {upgradeHint?.show && (
         <div className="rounded-[var(--radius)] border border-[var(--primary)] bg-[var(--surface-hover)] p-4 text-[13px] flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <p className="min-w-0">
-            <strong>העברתם לוועד1 יותר מ-3 תקלות בכל אחד משלושת החודשים האחרונים</strong> ({(upgradeHint.counts || []).join(' · ')}).
+            <strong>העברתם לוועד1 יותר מ-3 פניות בכל אחד משלושת החודשים האחרונים</strong> ({(upgradeHint.counts || []).join(' · ')}).
             {' '}במסלול ליווי הצעות מספקים כלולות ושעת אחזקה זולה יותר — כנראה ישתלם לכם.
           </p>
           <Link to="/charges" className="shrink-0 h-[34px] px-3 rounded-[var(--radius)] bg-[var(--primary)] text-white text-[13px] font-semibold inline-flex items-center">לפרטים</Link>
@@ -1967,7 +1981,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
-          label="קריאות פתוחות" icon={ClipboardList} color="blue" value={String(stats.open)}
+          label="פניות פתוחות" icon={ClipboardList} color="blue" value={String(stats.open)}
           note={<span className="px-2 py-0.5 rounded-full bg-[var(--surface-container)] text-[var(--primary-dark)]">{stats.inProgress} בטיפול • {stats.open - stats.inProgress} ממתינות</span>}
           progress={stats.open ? Math.round((stats.inProgress / stats.open) * 100) : 0}
         />
@@ -1984,7 +1998,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         <StatCard
           label="זמן סגירה ממוצע" icon={Timer} color="emerald"
           value={avgResolutionDays !== null ? `${avgResolutionDays} ימים` : '—'}
-          sub={avgResolutionDays !== null ? 'מדיווח ועד סגירה' : 'אין עדיין תקלות סגורות'}
+          sub={avgResolutionDays !== null ? 'מדיווח ועד סגירה' : 'אין עדיין פניות סגורות'}
         />
       </div>
 
@@ -2024,9 +2038,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       {filtered.length === 0 ? (
         <EmptyState
           icon={AlertTriangle}
-          title="אין תקלות"
-          description={search ? 'לא נמצאו תוצאות לחיפוש' : 'לא דווחו תקלות'}
-          actionLabel={!search ? 'דווח תקלה' : undefined}
+          title="אין פניות"
+          description={search ? 'לא נמצאו תוצאות לחיפוש' : 'לא דווחו פניות'}
+          actionLabel={!search ? 'פנייה חדשה' : undefined}
           onAction={!search ? openCreate : undefined}
         />
       ) : viewMode === 'list' ? (
@@ -2034,14 +2048,14 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           {/* Desktop: dense ledger */}
           <div className="hidden md:block rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow)] overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between bg-[var(--surface-secondary)]/50">
-              <h2 className="text-[14px] font-bold text-[var(--text-primary)]">רשימת קריאות שירות <span className="font-medium text-[var(--text-muted)]">({filtered.length} מוצגות)</span></h2>
+              <h2 className="text-[14px] font-bold text-[var(--text-primary)]">רשימת הפניות <span className="font-medium text-[var(--text-muted)]">({filtered.length} מוצגות)</span></h2>
               <span className="text-[11px] text-[var(--text-muted)]">ממוין לפי עדיפות ודחיפות</span>
             </div>
             <div className="overflow-x-auto">
               <table className="ds-table">
                 <thead>
                   <tr>
-                    <th>קריאה</th><th>תיאור וקטגוריה</th><th>דירה ודייר</th><th>עדיפות</th><th>סטטוס</th><th>ספק מוקצה</th><th>SLA / מועד</th><th>פעולה הבאה</th>
+                    <th>פנייה</th><th>תיאור וקטגוריה</th><th>דירה ודייר</th><th>עדיפות</th><th>סטטוס</th><th>ספק מוקצה</th><th>SLA / מועד</th><th>פעולה הבאה</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2092,7 +2106,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 <div className="space-y-3">
                   {columnIssues.length === 0 ? (
                     <div className="text-center text-xs text-[var(--text-muted)] py-8 border border-dashed border-[var(--border)] rounded-[var(--radius)]">
-                      אין תקלות
+                      אין פניות
                     </div>
                   ) : (
                     columnIssues.map((iss) => (
@@ -2145,114 +2159,8 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   <img src={iss.photo_url} alt="תמונת התקלה" className="mt-1 max-h-48 rounded-lg border border-[var(--border)] object-cover" />
                 </a>
               )}
-              {isCommitteeUser && <IssueVendorDetails issue={iss} />}
-              <DetailRow
-                label="עדיפות"
-                value={
-                  <Badge variant={PRIORITY_MAP[iss.priority]?.variant}>
-                    {PRIORITY_MAP[iss.priority]?.label}
-                  </Badge>
-                }
-              />
-              <DetailRow
-                label="סטטוס"
-                value={
-                  <Badge variant={bucketInfo(iss.status).variant}>
-                    {bucketInfo(iss.status).label}
-                  </Badge>
-                }
-              />
-              <DetailRow label="ספק" value={iss.vendor_name} />
-              {/* One price line at a time: the AI's rough range until somebody has
-                  named a price, then that price. Two numbers side by side read
-                  as two quotes. */}
-              {iss.estimatedCost != null && iss.estimatedCost !== ''
-                ? <DetailRow label={issueQuotes.some((q) => q.stage === 'won' || q.status === 'accepted') ? 'מחיר שסוכם עם הספק' : 'עלות משוערת (הוזנה ידנית)'} value={`${formatCurrency(iss.estimatedCost)} לפני מע"מ`} />
-                : <DetailRow label="הערכת AI (לא מחיר)" value={iss.ai_cost_estimate || null} />}
-              <DetailRow label="עלות בפועל" value={iss.cost != null && iss.cost !== '' ? formatCurrency(iss.cost) : null} />
-              <DetailRow label={iss.status === 'rejected' ? 'סיבת הסגירה' : 'אופן הטיפול'} value={iss.close_reason || null} />
-              <DetailRow label="תאריך דיווח" value={iss.reportedAt ? formatDate(iss.reportedAt) : null} />
-              <DetailRow label="תאריך מתוזמן" value={iss.scheduledDate ? formatDate(iss.scheduledDate) : null} />
-              <DetailRow label="תאריך פתרון" value={iss.resolvedAt ? formatDate(iss.resolvedAt) : null} />
-              <DetailRow label="זמן שחלף" value={iss.reportedAt ? timeAgo(iss.reportedAt) : null} />
-              <DetailRow label="SLA" value={
-                iss.status !== 'completed' && iss.status !== 'closed' ? (
-                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdueSLA(iss) ? 'text-red-600' : 'text-green-600'}`}>
-                    <Clock className="h-3 w-3" />
-                    {isOverdueSLA(iss) ? 'חריגת SLA' : 'בזמן'}
-                  </span>
-                ) : null
-              } />
-
-              {/* Quote Management Panel */}
-              {issueQuotes.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-[var(--border)]">
-                  <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">הצעות מחיר ({issueQuotes.length})</h4>
-                  {(() => {
-                    const a = analyzeQuotes(issueQuotes.map(q => ({ ...q, valid_until: q.validUntil, amount: q.amount })), { requireMin: 3 })
-                    if (a.count === 0) return null
-                    // From the WhatsApp flow the committee sees one quote; a comparison box means nothing to them.
-                    if (!isAdmin && issueQuotes.some((q) => q.stage)) return null
-                    return (
-                      <div className="mb-3 rounded-lg bg-[var(--bg-secondary)] p-2.5 text-xs space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[var(--text-secondary)]">מומלצת (הזולה התקפה)</span>
-                          <span className="font-bold text-emerald-600">{a.recommended.vendorName} · {formatCurrency(a.recommended.amount)}</span>
-                        </div>
-                        {a.count > 1 && <div className="flex items-center justify-between"><span className="text-[var(--text-secondary)]">פער בין הצעות</span><span className={a.spreadPct > 30 ? 'text-amber-600 font-medium' : 'text-[var(--text-muted)]'}>{a.spreadPct}%</span></div>}
-                        {a.outliers.length > 0 && <p className="text-amber-600">⚠ {a.outliers.length} הצעות גבוהות ב-30%+ מהחציון</p>}
-                        {a.needsMore && <p className="text-red-600">⚠ חסרות {a.missing} הצעות (מומלץ 3 לפני אישור)</p>}
-                      </div>
-                    )
-                  })()}
-                  {isAdmin && issueQuotes.some((q) => q.stage === 'submitted') && !issueQuotes.some((q) => q.recommended || q.stage === 'won') && (
-                    <div className="mb-2 flex flex-wrap justify-end gap-2">
-                      <Button size="sm" variant="outline" onClick={() => handlePickNow(iss)}>שלח לוועד את הזולה עכשיו</Button>
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    {issueQuotes.map((q) => (
-                      <div key={q.id} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[var(--surface-hover)] text-sm">
-                        <div className="space-y-0.5 min-w-0">
-                          <p className="font-medium text-[var(--text-primary)]">{q.vendorName}</p>
-                          <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-[var(--text-secondary)]">
-                            {q.amount != null && <span>{formatCurrency(q.amount)} לפני מע"מ</span>}
-                            <Badge variant={q.status === 'accepted' ? 'success' : ['rejected', 'declined', 'expired'].includes(q.status) ? 'danger' : q.stage === 'submitted' ? 'info' : 'warning'}>
-                              {q.recommended && !q.committee_choice ? 'נשלחה לוועד' : (QUOTE_STAGE_LABELS[q.stage] || QUOTE_STATUS_LABELS[q.status] || q.status)}
-                            </Badge>
-                            {q.committee_choice && <span>{QUOTE_CHOICE_LABELS[q.committee_choice]}</span>}
-                            {q.available_when && <span>{q.available_by ? 'ביצוע' : 'מועד'}: {q.available_when}</span>}
-                            {q.deadline && ['offered', 'awaiting_amount', 'visit_requested'].includes(q.stage) && (
-                              <span>עד {new Date(q.deadline).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                            )}
-                            {q.validUntil && <span>בתוקף עד: {formatDate(q.validUntil)}</span>}
-                          </div>
-                        </div>
-                        {q.recommended && !q.committee_choice && q.stage === 'submitted' && (
-                          <div className="flex flex-wrap gap-1.5 justify-end">
-                            <Button size="sm" onClick={() => handleQuoteChoice(q, 'take')} style={{ background: 'var(--primary)', color: 'white' }}>
-                              <Check className="h-3 w-3" />
-                              סוגרים איתו
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleQuoteChoice(q, 'coordinate')}>תאמו ולוו אותנו</Button>
-                            <Button size="sm" variant="ghost" onClick={() => handleQuoteChoice(q, 'reject')}>לא מתאים</Button>
-                          </div>
-                        )}
-                        {/* Quotes the committee recorded itself (not from the WhatsApp flow) are accepted directly. */}
-                        {!q.stage && (q.status === 'received' || (q.status === 'pending' && q.amount != null && q.amount > 0)) && (
-                          <Button size="sm" variant="outline" onClick={() => handleAcceptQuote(q)}>
-                            <Check className="h-3 w-3" />
-                            קבל הצעה
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="flex flex-wrap gap-2 pt-4">
+              {/* What to do next comes first: it used to sit under every detail row, below the fold. */}
+              <div className="flex flex-wrap gap-2 py-2">
                 {/* One button per step. The AI analysis runs by itself when the issue opens. */}
                 {flowFor(iss, svc) === 'triage' && (
                   <>
@@ -2261,6 +2169,9 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => { handleSelfHandle(iss); setDetailIssue(null) }}>
                       <Wrench className="h-3.5 w-3.5" /> הוועד מטפל
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { setDetailIssue(null); handleOpenFinish(iss) }}>
+                      <CheckCircle2 className="h-3.5 w-3.5" /> כבר טופל
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => { setDetailIssue(null); handleOpenCloseNoFix(iss) }}>
                       <X className="h-3.5 w-3.5" /> סגור ללא טיפול
@@ -2333,6 +2244,115 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                   </div>
                 </details>
               </div>
+              {isCommitteeUser && <IssueVendorDetails issue={iss} />}
+              <DetailRow
+                label="עדיפות"
+                value={
+                  <Badge variant={PRIORITY_MAP[iss.priority]?.variant}>
+                    {PRIORITY_MAP[iss.priority]?.label}
+                  </Badge>
+                }
+              />
+              <DetailRow
+                label="סטטוס"
+                value={
+                  <Badge variant={bucketInfo(iss.status).variant}>
+                    {bucketInfo(iss.status).label}
+                  </Badge>
+                }
+              />
+              <DetailRow label="ספק" value={iss.vendor_name} />
+              {/* One price line at a time: the AI's rough range until somebody has
+                  named a price, then that price. Two numbers side by side read
+                  as two quotes. */}
+              {iss.estimatedCost != null && iss.estimatedCost !== ''
+                ? <DetailRow label={issueQuotes.some((q) => q.stage === 'won' || q.status === 'accepted') ? 'מחיר שסוכם עם הספק' : 'עלות משוערת (הוזנה ידנית)'} value={`${formatCurrency(iss.estimatedCost)} לפני מע"מ`} />
+                : <DetailRow label="הערכת AI (לא מחיר)" value={iss.ai_cost_estimate || null} />}
+              <DetailRow label="עלות בפועל" value={iss.cost != null && iss.cost !== '' ? formatCurrency(iss.cost) : null} />
+              <DetailRow label={iss.status === 'rejected' ? 'סיבת הסגירה' : 'אופן הטיפול'} value={iss.close_reason || null} />
+              <details className="pt-1">
+                <summary className="cursor-pointer select-none text-[13px] text-[var(--text-secondary)]">תאריכים ופרטים נוספים</summary>
+              <DetailRow label="תאריך דיווח" value={iss.reportedAt ? formatDate(iss.reportedAt) : null} />
+              <DetailRow label="תאריך מתוזמן" value={iss.scheduledDate ? formatDate(iss.scheduledDate) : null} />
+              <DetailRow label="תאריך פתרון" value={iss.resolvedAt ? formatDate(iss.resolvedAt) : null} />
+              <DetailRow label="זמן שחלף" value={iss.reportedAt ? timeAgo(iss.reportedAt) : null} />
+              <DetailRow label="SLA" value={
+                iss.status !== 'completed' && iss.status !== 'closed' ? (
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium ${isOverdueSLA(iss) ? 'text-red-600' : 'text-green-600'}`}>
+                    <Clock className="h-3 w-3" />
+                    {isOverdueSLA(iss) ? 'חריגת SLA' : 'בזמן'}
+                  </span>
+                ) : null
+              } />
+              </details>
+
+              {/* Quote Management Panel */}
+              {issueQuotes.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-[var(--border)]">
+                  <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">הצעות מחיר ({issueQuotes.length})</h4>
+                  {(() => {
+                    const a = analyzeQuotes(issueQuotes.map(q => ({ ...q, valid_until: q.validUntil, amount: q.amount })), { requireMin: 3 })
+                    if (a.count === 0) return null
+                    // From the WhatsApp flow the committee sees one quote; a comparison box means nothing to them.
+                    if (!isAdmin && issueQuotes.some((q) => q.stage)) return null
+                    return (
+                      <div className="mb-3 rounded-lg bg-[var(--bg-secondary)] p-2.5 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[var(--text-secondary)]">מומלצת (הזולה התקפה)</span>
+                          <span className="font-bold text-emerald-600">{a.recommended.vendorName} · {formatCurrency(a.recommended.amount)}</span>
+                        </div>
+                        {a.count > 1 && <div className="flex items-center justify-between"><span className="text-[var(--text-secondary)]">פער בין הצעות</span><span className={a.spreadPct > 30 ? 'text-amber-600 font-medium' : 'text-[var(--text-muted)]'}>{a.spreadPct}%</span></div>}
+                        {a.outliers.length > 0 && <p className="text-amber-600">⚠ {a.outliers.length} הצעות גבוהות ב-30%+ מהחציון</p>}
+                        {a.needsMore && <p className="text-red-600">⚠ חסרות {a.missing} הצעות (מומלץ 3 לפני אישור)</p>}
+                      </div>
+                    )
+                  })()}
+                  {isAdmin && issueQuotes.some((q) => q.stage === 'submitted') && !issueQuotes.some((q) => q.recommended || q.stage === 'won') && (
+                    <div className="mb-2 flex flex-wrap justify-end gap-2">
+                      <Button size="sm" variant="outline" onClick={() => handlePickNow(iss)}>שלח לוועד את הזולה עכשיו</Button>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {issueQuotes.map((q) => (
+                      <div key={q.id} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[var(--surface-hover)] text-sm">
+                        <div className="space-y-0.5 min-w-0">
+                          <p className="font-medium text-[var(--text-primary)]">{q.vendorName}</p>
+                          <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs text-[var(--text-secondary)]">
+                            {q.amount != null && <span>{formatCurrency(q.amount)} לפני מע"מ</span>}
+                            <Badge variant={q.status === 'accepted' ? 'success' : ['rejected', 'declined', 'expired'].includes(q.status) ? 'danger' : q.stage === 'submitted' ? 'info' : 'warning'}>
+                              {q.recommended && !q.committee_choice ? 'נשלחה לוועד' : (QUOTE_STAGE_LABELS[q.stage] || QUOTE_STATUS_LABELS[q.status] || q.status)}
+                            </Badge>
+                            {q.committee_choice && <span>{QUOTE_CHOICE_LABELS[q.committee_choice]}</span>}
+                            {q.available_when && <span>{q.available_by ? 'ביצוע' : 'מועד'}: {q.available_when}</span>}
+                            {q.deadline && ['offered', 'awaiting_amount', 'visit_requested'].includes(q.stage) && (
+                              <span>עד {new Date(q.deadline).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                            )}
+                            {q.validUntil && <span>בתוקף עד: {formatDate(q.validUntil)}</span>}
+                          </div>
+                        </div>
+                        {q.recommended && !q.committee_choice && q.stage === 'submitted' && (
+                          <div className="flex flex-wrap gap-1.5 justify-end">
+                            <Button size="sm" onClick={() => handleQuoteChoice(q, 'take')} style={{ background: 'var(--primary)', color: 'white' }}>
+                              <Check className="h-3 w-3" />
+                              סוגרים איתו
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handleQuoteChoice(q, 'coordinate')}>תאמו ולוו אותנו</Button>
+                            <Button size="sm" variant="ghost" onClick={() => handleQuoteChoice(q, 'reject')}>לא מתאים</Button>
+                          </div>
+                        )}
+                        {/* Quotes the committee recorded itself (not from the WhatsApp flow) are accepted directly. */}
+                        {!q.stage && (q.status === 'received' || (q.status === 'pending' && q.amount != null && q.amount > 0)) && (
+                          <Button size="sm" variant="outline" onClick={() => handleAcceptQuote(q)}>
+                            <Check className="h-3 w-3" />
+                            קבל הצעה
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </>
           )
         })()}
@@ -2343,7 +2363,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         open={!!deleteTarget}
         onOpenChange={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        itemName={deleteTarget ? (deleteTarget.title || 'תקלה') : ''}
+        itemName={deleteTarget ? (deleteTarget.title || 'פנייה') : ''}
       />
 
       {/* Full Issue Workflow Dialog */}
@@ -2484,7 +2504,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                     })}
                   </select>
                   {!workflowIssue.assigned_to && (
-                    <p className="text-xs text-amber-600 mt-1">חובה לשייך מלווה — הוא האחראי לסגירת התקלה.</p>
+                    <p className="text-xs text-amber-600 mt-1">חובה לשייך מלווה — הוא האחראי לסגירת הפנייה.</p>
                   )}
                 </div>
 
@@ -2563,7 +2583,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 {matchedVendors.length === 0 && (
                   <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
                     לא נמצא ספק תואם במאגר לקטגוריה "{category || 'כללי'}". הוסף ספק חדש במסך
-                    "ספקים" — כל התקלות מנותבות למאגר הספקים של הבניין ללא חיפוש ברשת.
+                    "ספקים" — כל הפניות מנותבות למאגר הספקים של הבניין ללא חיפוש ברשת.
                   </div>
                 )}
 
@@ -2814,7 +2834,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
           {quoteDialogIssue && (
             <div className="space-y-4">
               <p className="text-sm text-[var(--text-secondary)]">
-                תקלה: {quoteDialogIssue.title}
+                פנייה: {quoteDialogIssue.title}
               </p>
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-[var(--text-secondary)]">בחר ספקים</label>
@@ -3001,7 +3021,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               <p className="text-[12px] font-semibold text-[var(--text-muted)]">ועד1 — לשנות את ההחלטה:</p>
               {[
                 contractorName && { key: 'contractor', title: `הספק הקבוע: ${contractorName}`, sub: 'ללא חיוב.' },
-                { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `עם שאר התקלות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים.` },
+                { key: 'next_visit', title: 'איש אחזקה — בביקור הבא', sub: `עם שאר הפניות הממתינות, עד ${Number(serviceCfg.settings?.batch_max_days) || 7} ימים.` },
                 { key: 'urgent', title: 'איש אחזקה — דחוף', sub: 'ביקור נפרד בהקדם, לפחות שעה.' },
                 { key: 'quotes', title: 'הצעות מספקים', sub: '3 ספקים מתאימים; הוועד מקבל את הזולה לאישור.' },
                 { key: 'admin', title: 'חברת המעליות / ידני', sub: 'ועד1 מעבירה בעצמה.' },
@@ -3103,7 +3123,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             {finishWithHours && (
               <>
                 <FormField
-                  label={finishEscorted ? 'שעות הליווי של איש האחזקה' : visitIds.length ? 'סה״כ שעות בביקור (כל התקלות יחד)' : 'שעות עבודה'}
+                  label={finishEscorted ? 'שעות הליווי של איש האחזקה' : visitIds.length ? 'סה״כ שעות בביקור (כל הפניות יחד)' : 'שעות עבודה'}
                   type="number"
                   value={finishForm.hours}
                   onChange={(e) => setFinishForm((f) => ({ ...f, hours: e.target.value }))}
@@ -3187,7 +3207,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             />
             <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
               <p className="font-bold">חיוב ועד1: {finishIsFreeRevisit && finishWithHours ? 'ביקור חוזר, ללא חיוב שעות' : finishPunches ? `${finishPunches} שעות` : 'ללא'}
-                {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} תקלות` : ''}</p>
+                {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} פניות` : ''}</p>
               {finishWithHours && !finishIsFreeRevisit && (
                 <p className="text-[12px] text-[var(--text-muted)]">מינימום {Number(serviceCfg.settings?.visit_min_punches) || 1} שעה לביקור · כל שעה שמתחילה נספרת{finishForm.offHours ? ` · פי ${Number(serviceCfg.settings?.off_hours_multiplier) || 2} מחוץ לשעות` : ''}</p>
               )}
@@ -3245,7 +3265,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="w-full max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingId ? 'עריכת תקלה' : 'תקלה חדשה'}</DialogTitle>
+            <DialogTitle>{editingId ? 'עריכת פנייה' : 'פנייה חדשה'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <FormSelect
@@ -3371,7 +3391,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             )}
             {isAdmin && suggestedVendors.length > 0 && (
               <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
-                <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לתקלה זו</p>
+                <p className="text-xs font-semibold text-blue-700 mb-2">ספקים מומלצים לפנייה זו</p>
                 <div className="space-y-1.5">
                   {suggestedVendors.map(({ vendor, reasons, warnings }) => (
                     <button
@@ -3417,7 +3437,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               />
             </div>
             <div className="flex gap-3 pt-2">
-              <Button type="submit" disabled={isSaving}>{isSaving ? 'שומר...' : editingId ? 'שמור שינויים' : 'צור תקלה'}</Button>
+              <Button type="submit" disabled={isSaving}>{isSaving ? 'שומר...' : editingId ? 'שמור שינויים' : 'צור פנייה'}</Button>
               <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
                 ביטול
               </Button>
