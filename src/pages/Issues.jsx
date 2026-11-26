@@ -3067,7 +3067,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               <legend className="mb-1 text-[13px] font-semibold">מי ביצע</legend>
               {[
                 { value: 'handyman', label: 'איש אחזקה', hint: 'שעות העבודה יורדות מהכרטיסייה.' },
-                { value: 'vendor', label: 'ספק בטיפול ועד1', hint: 'ללא שעות. דמי הטיפול נגבו כשהפנייה הועברה.' },
+                { value: 'vendor', label: 'ספק בטיפול ועד1', hint: 'ללא חיוב שעות. את הספק משלם הוועד ישירות.' },
                 { value: 'vendor_escort', label: 'ספק בליווי איש אחזקה', hint: 'הספק תיקן, ושעות הליווי יורדות מהכרטיסייה.' },
                 { value: 'contractor', label: 'הספק הקבוע של הבניין', hint: 'ללא חיוב מצד ועד1.' },
               ].map((o) => (

@@ -119,8 +119,10 @@ export function isOffHours(date, settings) {
  * own bill goes to the building against an approved quote.
  */
 export function punchesFor({ kind, hours, offHours }, settings) {
-  // Contractors cost nothing; handling a vendor is a money fee charged at
-  // transfer ("ועד1 תטפל"), so neither takes a punch.
+  // Neither takes a punch, and the building is charged nothing for a vendor
+  // ועד1 arranged: nothing is collected at transfer either. A handling fee, when
+  // it comes, is taken from the vendor (referral fees, built and switched off),
+  // never from the building.
   if (kind === 'contractor' || kind === 'vendor') return 0
   const unitMinutes = Number(settings?.punch_minutes) || 60
   const minPunches = Number(settings?.visit_min_punches) || 1
