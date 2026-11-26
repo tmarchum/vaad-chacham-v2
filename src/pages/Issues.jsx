@@ -627,6 +627,8 @@ function Issues() {
   const [completeDialogIssue, setCompleteDialogIssue] = useState(null)
   const [completeCost, setCompleteCost] = useState('')
   const [completeNote, setCompleteNote] = useState('')
+  const [finalCloseIssue, setFinalCloseIssue] = useState(null)
+  const [finalCloseNote, setFinalCloseNote] = useState('')
 
   // Service plans / punch cards. `svc.ready` is false until migration 030 is
   // applied, and then every issue keeps the old buttons.
@@ -644,7 +646,7 @@ function Issues() {
   const [closeNoFixIssue, setCloseNoFixIssue] = useState(null)
   const [closeReason, setCloseReason] = useState('')
   const [finishIssue, setFinishIssue] = useState(null)
-  const [finishForm, setFinishForm] = useState({ kind: 'handyman', hours: 1, offHours: false, photoUrl: '' })
+  const [finishForm, setFinishForm] = useState({ kind: 'handyman', hours: 1, offHours: false, photoUrl: '', note: '' })
   const [finishBalance, setFinishBalance] = useState(null)
   const [finishBilling, setFinishBilling] = useState(null)
   // Parts used on the visit: stock items at the catalogue price, anything
@@ -1693,7 +1695,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     setFinishIssue(iss)
     setFinishForm({
       kind: iss.handler_kind || 'handyman', hours: 1,
-      offHours: isOffHours(new Date(), serviceCfg.settings), photoUrl: '',
+      offHours: isOffHours(new Date(), serviceCfg.settings), photoUrl: '', note: iss.close_reason || '',
     })
     setFinishParts([])
     setFinishBalance(null)
@@ -1818,6 +1820,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
         punches_charged: (Number(finishIssue.punches_charged) || 0) + finishPunches,
         parts_cost: partsTotal || null, ...(partsTotal ? { cost: partsTotal } : {}),
         after_photo_url: finishForm.photoUrl.trim() || null,
+        close_reason: (finishForm.note || '').trim() || null,
       })
       for (const o of others) await update(o.id, done)
       for (const o of [finishIssue, ...others]) notifyIssueStatus(o.id, 'resolved')
@@ -1838,9 +1841,18 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       toastError('יש לשייך חבר ועד מלווה לפני סגירת התקלה — הוא האחראי לסגירה')
       return
     }
-    update(iss.id, { status: 'closed' })
-    notifyIssueStatus(iss.id, 'closed')
-  }, [update])
+    setFinalCloseIssue(iss)
+    setFinalCloseNote(iss.close_reason || '')
+  }, [])
+  const confirmFinalClose = async () => {
+    if (!finalCloseIssue) return
+    const saved = await update(finalCloseIssue.id, { status: 'closed', close_reason: finalCloseNote.trim() || null }, { silent: true })
+    if (!saved) return
+    notifyIssueStatus(finalCloseIssue.id, 'closed')
+    toast('הפנייה נסגרה')
+    setFinalCloseIssue(null)
+    setFinalCloseNote('')
+  }
 
   // Deep links from the shell (header/sidebar "קריאה חדשה", global search,
   // dashboard cards): ?new=1 opens the create form, ?open=<id> the issue.
@@ -3126,6 +3138,12 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
               {finishUploading === 'after' && <p className="text-[11px] text-[var(--text-muted)]">מעלה...</p>}
               {finishForm.photoUrl && <a href={finishForm.photoUrl} target="_blank" rel="noreferrer" className="text-[12px] text-[var(--primary)]">התמונה הועלתה — לצפייה</a>}
             </div>
+            <FormTextarea
+              label="אופן הטיפול (לא חובה)"
+              value={finishForm.note || ''}
+              onChange={(e) => setFinishForm((f) => ({ ...f, note: e.target.value }))}
+              rows={2}
+            />
             <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
               <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא חיוב שעות' : finishPunches ? `${finishPunches} שעות` : 'ללא שעות לחיוב'}
                 {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} תקלות` : ''}</p>
@@ -3148,6 +3166,32 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 {finishBusy ? 'שומר...' : 'סיום ביקור'}
               </Button>
               <Button variant="outline" onClick={() => setFinishIssue(null)}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Final close: the same optional note as every other way of closing. */}
+      <Dialog open={!!finalCloseIssue} onOpenChange={() => setFinalCloseIssue(null)}>
+        <DialogContent className="w-full max-w-sm">
+          <DialogHeader>
+            <DialogTitle>סגירת הפנייה</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <FormTextarea
+              label="אופן הטיפול או סיבת הסגירה (לא חובה)"
+              value={finalCloseNote}
+              onChange={(e) => setFinalCloseNote(e.target.value)}
+              rows={3}
+            />
+            <div className="flex gap-3">
+              <Button onClick={confirmFinalClose}>
+                <X className="h-4 w-4" />
+                סגור
+              </Button>
+              <Button variant="outline" onClick={() => setFinalCloseIssue(null)}>
                 ביטול
               </Button>
             </div>
