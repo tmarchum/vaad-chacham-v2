@@ -1725,8 +1725,13 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
     return (new Date(finishIssue.reopened_at) - new Date(finishIssue.resolvedAt)) / 864e5 <= days
   }, [finishIssue, serviceCfg.settings, visitIds.length])
 
+  // "vendor_escort" exists only in this form: a vendor did the work and ועד1's
+  // handyman was there with him. The issue is saved as a vendor job (that is who
+  // fixed it), and the escort hours are charged and logged like any visit.
+  const finishEscorted = finishForm.kind === 'vendor_escort'
+  const finishWithHours = finishForm.kind === 'handyman' || finishEscorted
   const finishPunches = finishIsFreeRevisit ? 0 : punchesFor(
-    { kind: finishForm.kind, hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
+    { kind: finishWithHours ? 'handyman' : finishForm.kind, hours: finishForm.hours, offHours: finishForm.offHours }, serviceCfg.settings)
 
   const handlingPct = Number(serviceCfg.settings?.parts_handling_pct ?? 10)
   const partsApprovalThreshold = Number(serviceCfg.settings?.parts_approval_threshold) || 0
@@ -1758,9 +1763,10 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       const isVendor = finishForm.kind === 'vendor' || finishForm.kind === 'contractor'
       const hours = isVendor ? null : Number(finishForm.hours) || 0
       const offHours = isVendor ? false : !!finishForm.offHours
-      const note = others.length
+      const baseNote = others.length
         ? `ביקור · ${others.length + 1} תקלות: ${[finishIssue, ...others].map((o) => o.title).join(', ')}`
         : finishIssue.title || ''
+      const note = finishEscorted ? `ליווי ספק · ${baseNote}` : baseNote
 
       // Hours: off the card first; what the card does not cover follows the
       // building's own choice (billed by the hour, a new card, or debt).
@@ -1798,7 +1804,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
       }
 
       // ועד1's own side: what the handyman is owed for this visit.
-      if (finishForm.kind === 'handyman') {
+      if (finishWithHours) {
         const { error: hErr } = await supabase.rpc('log_handyman_work', {
           p_building: finishIssue.buildingId, p_issue: others.length ? null : finishIssue.id, p_visit: visitId,
           p_hours: hours, p_note: note,
@@ -1812,7 +1818,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
 
       const done = {
         status: 'completed', resolvedAt: new Date().toISOString(), stage: 'done_awaiting_confirmation',
-        handler: 'management', handler_kind: finishForm.kind, visit_id: visitId,
+        handler: 'management', handler_kind: finishEscorted ? 'vendor' : finishForm.kind, visit_id: visitId,
       }
       const partsTotal = Math.round(finishPartsTotal * 100) / 100
       await update(finishIssue.id, {
@@ -3055,16 +3061,30 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                 ))}
               </div>
             )}
-            <FormSelect
-              label="מי ביצע"
-              value={finishForm.kind}
-              onChange={(e) => setFinishForm((f) => ({ ...f, kind: e.target.value }))}
-              options={[{ value: 'handyman', label: 'איש אחזקה' }, { value: 'vendor', label: 'ספק בטיפול ועד1 (דמי הטיפול נגבו בהעברה)' }, { value: 'contractor', label: 'הספק הקבוע של הבניין (ללא חיוב)' }]}
-            />
-            {finishForm.kind === 'handyman' && (
+            {/* A list, not a dropdown: the choice decides what the building is
+                charged, so each option says so next to its name. */}
+            <fieldset className="space-y-1.5">
+              <legend className="mb-1 text-[13px] font-semibold">מי ביצע</legend>
+              {[
+                { value: 'handyman', label: 'איש אחזקה', hint: 'שעות העבודה יורדות מהכרטיסייה.' },
+                { value: 'vendor', label: 'ספק בטיפול ועד1', hint: 'ללא שעות. דמי הטיפול נגבו כשהפנייה הועברה.' },
+                { value: 'vendor_escort', label: 'ספק בליווי איש אחזקה', hint: 'הספק תיקן, ושעות הליווי יורדות מהכרטיסייה.' },
+                { value: 'contractor', label: 'הספק הקבוע של הבניין', hint: 'ללא חיוב מצד ועד1.' },
+              ].map((o) => (
+                <label key={o.value} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-sm ${finishForm.kind === o.value ? 'border-[var(--primary)] bg-[var(--surface-secondary)]' : 'border-[var(--border)]'}`}>
+                  <input type="radio" name="finish-kind" className="mt-0.5 h-4 w-4 accent-[var(--primary)]" value={o.value}
+                    checked={finishForm.kind === o.value} onChange={() => setFinishForm((f) => ({ ...f, kind: o.value }))} />
+                  <span>
+                    <span className="block font-medium">{o.label}</span>
+                    <span className="block text-[12px] text-[var(--text-muted)]">{o.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {finishWithHours && (
               <>
                 <FormField
-                  label={visitIds.length ? 'סה״כ שעות בביקור (כל התקלות יחד)' : 'שעות עבודה'}
+                  label={finishEscorted ? 'שעות הליווי של איש האחזקה' : visitIds.length ? 'סה״כ שעות בביקור (כל התקלות יחד)' : 'שעות עבודה'}
                   type="number"
                   value={finishForm.hours}
                   onChange={(e) => setFinishForm((f) => ({ ...f, hours: e.target.value }))}
@@ -3104,7 +3124,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
                       </label>
                       {finishUploading === l.key && <p className="text-[11px] text-[var(--text-muted)]">מעלה...</p>}
                       {l.receiptUrl && <a href={l.receiptUrl} target="_blank" rel="noreferrer" className="text-[12px] text-[var(--primary)]">הקבלה הועלתה — לצפייה</a>}
-                      {finishForm.kind === 'handyman' && (
+                      {finishWithHours && (
                         <label className="flex items-center gap-2 text-[12px]">
                           <input type="checkbox" className="accent-[var(--primary)]" checked={l.paidByHandyman !== false}
                             onChange={(e) => setPart(l.key, { paidByHandyman: e.target.checked })} />
@@ -3147,7 +3167,7 @@ ${analysis ? `🔍 *אבחון:* ${analysis.diagnosis}
             <div className="rounded-lg bg-[var(--surface-secondary)] p-3 text-sm space-y-1">
               <p className="font-bold">{finishIsFreeRevisit ? 'ביקור חוזר — ללא חיוב שעות' : finishPunches ? `${finishPunches} שעות` : 'ללא שעות לחיוב'}
                 {visitIds.length > 0 && !finishIsFreeRevisit ? ` על ${visitIds.length + 1} תקלות` : ''}</p>
-              {finishForm.kind === 'handyman' && !finishIsFreeRevisit && (
+              {finishWithHours && !finishIsFreeRevisit && (
                 <p className="text-[12px] text-[var(--text-muted)]">מינימום {Number(serviceCfg.settings?.visit_min_punches) || 1} שעה לביקור · כל שעה שמתחילה נספרת{finishForm.offHours ? ` · פי ${Number(serviceCfg.settings?.off_hours_multiplier) || 2} מחוץ לשעות` : ''}</p>
               )}
               {finishBalance && finishPunches > 0 && (
